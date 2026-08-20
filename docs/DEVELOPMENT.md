@@ -131,6 +131,25 @@ pnpm tauri build
 
 仓库的 `.github/workflows/build-desktop.yml` 在版本标签或手动触发时分别使用原生 runner 构建 macOS ARM64、Windows x64 和 Linux x64 产物；推送 `v*` 标签时会额外发布 GitHub Release。涉及原生依赖、Tauri 配置或发布打包的改动，应至少验证对应平台构建。标签发布的完整流程见[发布流程](release.md)。
 
+## 清理本地构建缓存
+
+`src-tauri/target/` 只增不减：依赖升级后旧版本的编译产物会原地保留，增量编译缓存也持续累积，占用几十 GB 属于常见现象。磁盘不紧张时无需处理——这些产物是日常增量编译速度的来源。注意 `cargo check`、`clippy`、`test` 与 rust-analyzer 的 feature 组合不同，同一 crate 会产生多份不同哈希的产物，因此即使目录很"新"体积也会很大；`cargo sweep` 只清理超龄产物，对刚重建过的目录无效。需要回收空间时按激进程度选择：
+
+```bash
+# 温和：只清增量编译缓存，下次构建稍慢一次
+rm -rf src-tauri/target/debug/incremental
+
+# 中度：用 cargo-sweep 保留最近 30 天的产物（推荐在依赖升级后执行）
+cargo install cargo-sweep --locked
+cd src-tauri && cargo sweep --dry-run --time 30   # 先预览将删除的内容
+cargo sweep --time 30
+
+# 彻底：全部清掉，下次构建从零开始
+cd src-tauri && cargo clean
+```
+
+这与 CI 的 rust-cache 无关：CI 缓存保存前会自动修剪增量和过期产物，体积远小于本地 `target/`。
+
 ## 代码与测试约定
 
 - 遵循 `.editorconfig`：UTF-8、LF、文件末尾换行；TypeScript 使用两空格，Rust 使用四空格并交由 `rustfmt` 格式化。

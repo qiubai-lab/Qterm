@@ -3,6 +3,35 @@
 version = 4
 
 [[package]]
+name = "Qterm"
+version = "0.1.1"
+dependencies = [
+ "aes-gcm",
+ "argon2 0.5.3",
+ "atomic-write-file",
+ "base64 0.23.1",
+ "dirs",
+ "getrandom 0.4.3",
+ "portable-pty",
+ "russh",
+ "russh-sftp",
+ "secrecy",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-clipboard-manager",
+ "tauri-plugin-dialog",
+ "tauri-plugin-window-state",
+ "tempfile",
+ "tokio",
+ "uuid",
+ "windows 0.61.3",
+ "windows-version",
+ "zeroize",
+]
+
+[[package]]
 name = "adler2"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4866,35 +4895,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5fed54709c5b3a53d09bb1c113ea4f5ceafd1e772ddcb0030a82e1d56c087b08"
 dependencies = [
  "new_debug_unreachable",
-]
-
-[[package]]
-name = "terminal-demo"
-version = "0.1.0"
-dependencies = [
- "aes-gcm",
- "argon2 0.5.3",
- "atomic-write-file",
- "base64 0.23.1",
- "dirs",
- "getrandom 0.4.3",
- "portable-pty",
- "russh",
- "russh-sftp",
- "secrecy",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tauri-plugin-clipboard-manager",
- "tauri-plugin-dialog",
- "tauri-plugin-window-state",
- "tempfile",
- "tokio",
- "uuid",
- "windows 0.61.3",
- "windows-version",
- "zeroize",
 ]
 
 [[package]]
