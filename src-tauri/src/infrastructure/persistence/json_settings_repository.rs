@@ -8,7 +8,8 @@ use crate::{
     ports::settings_repository::{DataDirectoryRepository, SettingsRepository},
 };
 
-const VERSION: u64 = 1;
+const SETTINGS_VERSION: u64 = 2;
+const DATA_DIRECTORY_VERSION: u64 = 1;
 const MAX_BYTES: u64 = 64 * 1024;
 
 pub struct JsonDataDirectoryRepository {
@@ -21,7 +22,7 @@ impl JsonDataDirectoryRepository {
     }
 
     fn document(&self) -> Result<Option<DataDirectoryDocument>, SettingsError> {
-        read_document(&self.path)
+        read_document(&self.path, DATA_DIRECTORY_VERSION)
     }
 }
 
@@ -42,7 +43,7 @@ impl DataDirectoryRepository for JsonDataDirectoryRepository {
         write_document(
             &self.path,
             &DataDirectoryDocument {
-                schema_version: VERSION,
+                schema_version: DATA_DIRECTORY_VERSION,
                 data_directory: directory.path().to_string_lossy().into_owned(),
             },
         )
@@ -59,7 +60,16 @@ impl JsonSettingsRepository {
     }
 
     fn document(&self) -> Result<Option<Document>, SettingsError> {
-        read_document(&self.path)
+        match read_document(&self.path, SETTINGS_VERSION) {
+            Err(SettingsError::UnsupportedVersion)
+                if read_schema_version(&self.path)?
+                    .is_some_and(|version| version < SETTINGS_VERSION) =>
+            {
+                fs::remove_file(&self.path).map_err(|_| SettingsError::StorageUnavailable)?;
+                Ok(None)
+            }
+            result => result,
+        }
     }
 }
 
@@ -68,8 +78,8 @@ impl SettingsRepository for JsonSettingsRepository {
         self.document()?
             .map(|document| {
                 SecuritySettings::new(
-                    document.security.lock_on_windows_session_lock,
-                    document.security.auto_lock_after_seconds,
+                    document.security.credential_auto_lock_after_seconds,
+                    document.security.terminal_auto_lock_after_seconds,
                 )
             })
             .transpose()
@@ -80,10 +90,10 @@ impl SettingsRepository for JsonSettingsRepository {
             self.document()?;
         }
         let document = Document {
-            schema_version: VERSION,
+            schema_version: SETTINGS_VERSION,
             security: SecurityRecord {
-                lock_on_windows_session_lock: settings.lock_on_windows_session_lock,
-                auto_lock_after_seconds: settings.auto_lock_after_seconds,
+                credential_auto_lock_after_seconds: settings.credential_auto_lock_after_seconds,
+                terminal_auto_lock_after_seconds: settings.terminal_auto_lock_after_seconds,
             },
         };
         write_document(&self.path, &document)
@@ -92,6 +102,7 @@ impl SettingsRepository for JsonSettingsRepository {
 
 fn read_document<T: for<'de> Deserialize<'de>>(
     path: &std::path::Path,
+    expected_version: u64,
 ) -> Result<Option<T>, SettingsError> {
     let metadata = match fs::metadata(path) {
         Ok(value) => value,
@@ -107,13 +118,22 @@ fn read_document<T: for<'de> Deserialize<'de>>(
     if value
         .get("schemaVersion")
         .and_then(serde_json::Value::as_u64)
-        != Some(VERSION)
+        != Some(expected_version)
     {
         return Err(SettingsError::UnsupportedVersion);
     }
     serde_json::from_value(value)
         .map(Some)
         .map_err(|_| SettingsError::Corrupt)
+}
+
+fn read_schema_version(path: &std::path::Path) -> Result<Option<u64>, SettingsError> {
+    let bytes = fs::read(path).map_err(|_| SettingsError::StorageUnavailable)?;
+    let value: serde_json::Value =
+        serde_json::from_slice(&bytes).map_err(|_| SettingsError::Corrupt)?;
+    Ok(value
+        .get("schemaVersion")
+        .and_then(serde_json::Value::as_u64))
 }
 
 fn write_document<T: Serialize>(path: &std::path::Path, document: &T) -> Result<(), SettingsError> {
@@ -139,8 +159,8 @@ struct Document {
 #[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 struct SecurityRecord {
-    lock_on_windows_session_lock: bool,
-    auto_lock_after_seconds: Option<u32>,
+    credential_auto_lock_after_seconds: Option<u32>,
+    terminal_auto_lock_after_seconds: Option<u32>,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -165,16 +185,27 @@ mod tests {
         let dir = tempdir().expect("dir");
         let repository = JsonSettingsRepository::new(dir.path().join("settings.json"));
         assert_eq!(repository.load().expect("load"), None);
-        let settings = SecuritySettings::new(false, Some(900)).expect("settings");
+        let settings = SecuritySettings::new(Some(900), Some(1800)).expect("settings");
         repository.save(settings).expect("save");
         assert_eq!(repository.load().expect("load"), Some(settings));
     }
 
     #[test]
-    fn corrupt_or_sensitive_documents_are_not_overwritten() {
+    fn old_settings_schema_is_cleared_without_migration() {
         let dir = tempdir().expect("dir");
         let path = dir.path().join("settings.json");
-        let bytes = br#"{"schemaVersion":1,"security":{"lockOnWindowsSessionLock":true,"autoLockAfterSeconds":3600,"masterPassword":"secret"}}"#;
+        let bytes = br#"{"schemaVersion":1,"security":{"lockOnWindowsSessionLock":true,"autoLockAfterSeconds":3600}}"#;
+        fs::write(&path, bytes).expect("fixture");
+        let repository = JsonSettingsRepository::new(path.clone());
+        assert_eq!(repository.load().expect("load"), None);
+        assert!(!path.exists());
+    }
+
+    #[test]
+    fn current_sensitive_documents_are_not_overwritten() {
+        let dir = tempdir().expect("dir");
+        let path = dir.path().join("settings.json");
+        let bytes = br#"{"schemaVersion":2,"security":{"credentialAutoLockAfterSeconds":3600,"terminalAutoLockAfterSeconds":null,"masterPassword":"secret"}}"#;
         fs::write(&path, bytes).expect("fixture");
         let repository = JsonSettingsRepository::new(path.clone());
         assert_eq!(repository.load(), Err(SettingsError::Corrupt));
@@ -182,6 +213,17 @@ mod tests {
             repository.save(SecuritySettings::default()),
             Err(SettingsError::Corrupt)
         );
+        assert_eq!(fs::read(path).expect("read"), bytes);
+    }
+
+    #[test]
+    fn future_settings_schema_is_preserved() {
+        let dir = tempdir().expect("dir");
+        let path = dir.path().join("settings.json");
+        let bytes = br#"{"schemaVersion":3,"security":{}}"#;
+        fs::write(&path, bytes).expect("fixture");
+        let repository = JsonSettingsRepository::new(path.clone());
+        assert_eq!(repository.load(), Err(SettingsError::UnsupportedVersion));
         assert_eq!(fs::read(path).expect("read"), bytes);
     }
 

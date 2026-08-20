@@ -143,6 +143,46 @@ describe("FileBrowserPane", () => {
     }
   });
 
+  it("bounds mounted rows and restores a path anchor in a large directory", async () => {
+    const entries = Array.from({ length: 1000 }, (_, index) => ({
+      name: `item-${index.toString().padStart(4, "0")}`,
+      path: `/home/dev/item-${index.toString().padStart(4, "0")}`,
+      isDirectory: true,
+      isSymlink: false,
+      size: 0,
+      modifiedAt: null,
+      permissionMode: 0o755,
+    }));
+    const updatedEntries = [
+      { name: "added", path: "/home/dev/added", isDirectory: true, isSymlink: false, size: 0, modifiedAt: null, permissionMode: 0o755 },
+      ...entries,
+    ];
+    listRemoteDirectory
+      .mockResolvedValueOnce({ path: "/home/dev", entries })
+      .mockResolvedValueOnce({ path: "/home/dev/item-0500", entries: [] })
+      .mockResolvedValueOnce({ path: "/home/dev", entries: updatedEntries });
+    const view = render(<FileBrowserPane initialPath="/home/dev" runtime={{ ...localRuntime, kind: "sftp", sessionId: "files-1" }} onPathChange={vi.fn()}/>);
+    const ui = within(view.container);
+    const first = await ui.findByRole("listitem", { name: /item-0000/ });
+    const content = view.container.querySelector<HTMLElement>(".file-browser-content")!;
+    Object.defineProperty(content, "clientHeight", { configurable: true, value: 270 });
+
+    expect(view.container.querySelectorAll(".file-row").length).toBeLessThan(80);
+    const anchorScrollTop = 3 + 500 * 27;
+    content.scrollTop = anchorScrollTop;
+    fireEvent.scroll(content);
+    await waitFor(() => expect(view.container.querySelector('[data-entry-path="/home/dev/item-0500"]')).toBeInTheDocument());
+    expect(first).not.toBeInTheDocument();
+
+    fireEvent.doubleClick(view.container.querySelector('[data-entry-path="/home/dev/item-0500"]')!);
+    await waitFor(() => expect(listRemoteDirectory).toHaveBeenLastCalledWith("files-1", "/home/dev/item-0500"));
+    fireEvent.click(ui.getByRole("button", { name: "返回上级文件夹" }));
+
+    await waitFor(() => expect(content.scrollTop).toBe(anchorScrollTop + 27));
+    await waitFor(() => expect(view.container.querySelector('[data-entry-path="/home/dev/item-0500"]')).toBeInTheDocument());
+    expect(view.container.querySelectorAll(".file-row").length).toBeLessThan(80);
+  });
+
   it("clears the forward branch after opening a different directory", async () => {
     const parentEntries = [
       { name: "alpha", path: "/home/dev/alpha", isDirectory: true, isSymlink: false, size: 0, modifiedAt: null, permissionMode: 0o755 },

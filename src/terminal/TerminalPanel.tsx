@@ -24,6 +24,8 @@ interface TerminalView {
 const terminalViews = new Map<string, TerminalView>();
 const CLEAR_SCREEN_INPUT = "\x1bcls\r";
 const FALLBACK_TERMINAL_FONT_FAMILY = "SFMono-Regular, Menlo, Monaco, Consolas, monospace";
+const FALLBACK_TERMINAL_FONT_SIZE = 13;
+const FALLBACK_TERMINAL_LINE_HEIGHT = 1.22;
 
 export function TerminalPanel({ blockId, sessionKey, visible, local }: { blockId: string; sessionKey: string; visible: boolean; local: boolean }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -122,11 +124,10 @@ function acquireTerminalView(sessionKey: string, container: HTMLElement, windows
     return existing;
   }
 
+  const typography = terminalTypography();
   const terminal = new Terminal({
     cursorBlink: true,
-    fontFamily: terminalFontFamily(),
-    fontSize: 13,
-    lineHeight: 1.22,
+    ...typography,
     scrollback: 8000,
     ...(windowsPty ? { windowsPty } : {}),
     allowTransparency: true,
@@ -181,9 +182,17 @@ function acquireTerminalView(sessionKey: string, container: HTMLElement, windows
   return view;
 }
 
-function terminalFontFamily(): string {
-  return getComputedStyle(document.documentElement).getPropertyValue("--terminal-font-family").trim()
-    || FALLBACK_TERMINAL_FONT_FAMILY;
+function terminalTypography(): { fontFamily: string; fontSize: number; lineHeight: number } {
+  const style = getComputedStyle(document.documentElement);
+  const number = (property: string, fallback: number) => {
+    const value = Number.parseFloat(style.getPropertyValue(property));
+    return Number.isFinite(value) && value > 0 ? value : fallback;
+  };
+  return {
+    fontFamily: style.getPropertyValue("--terminal-font-family").trim() || FALLBACK_TERMINAL_FONT_FAMILY,
+    fontSize: number("--terminal-font-size", FALLBACK_TERMINAL_FONT_SIZE),
+    lineHeight: number("--terminal-line-height", FALLBACK_TERMINAL_LINE_HEIGHT),
+  };
 }
 
 function scheduleTerminalViewDisposal(sessionKey: string, view: TerminalView) {

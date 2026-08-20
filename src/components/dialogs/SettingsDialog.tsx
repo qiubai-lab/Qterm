@@ -11,10 +11,11 @@ import {
 import { Icon } from "../Icon";
 import { DialogFrame } from "./DialogFrame";
 
-const durations = [300, 900, 1800, 3600, 7200, 14400, 28800, 86400];
+const credentialDurations = [300, 900, 1800, 3600, 7200, 14400, 28800, 86400];
+const terminalIdleDurations = [300, 900, 1800, 3600, 7200];
 type SettingsCategory = "general" | "security";
 
-export function SettingsDialog({ onClose }: { onClose: () => void }) {
+export function SettingsDialog({ onClose, onSecuritySettingsChanged }: { onClose: () => void; onSecuritySettingsChanged?: (settings: SecuritySettings) => void }) {
   const [category, setCategory] = useState<SettingsCategory>("general");
   const [general, setGeneral] = useState<GeneralSettings | null>(null);
   const [dataDirectory, setDataDirectory] = useState("");
@@ -57,6 +58,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
         ? await updateDataDirectory({ path: dataDirectory })
         : await updateSecuritySettings(security);
       applySnapshot(snapshot);
+      if (category === "security") onSecuritySettingsChanged?.(snapshot.security);
       if (snapshot.general.restartRequired) {
         setStatus("已初始化所选目录。请手动迁移 connections.json、network-forwards.json 与 secrets.vault，重启 Qterm 后生效。");
       }
@@ -71,7 +73,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
       <nav className="settings-sidebar" aria-label="设置分类">
         <span className="settings-sidebar-label">设置</span>
         <SettingsNavItem category="general" current={category} icon="settings" title="通用" subtitle="数据与存储" onSelect={setCategory}/>
-        <SettingsNavItem category="security" current={category} icon="lock" title="安全" subtitle="凭证锁定" onSelect={setCategory}/>
+        <SettingsNavItem category="security" current={category} icon="lock" title="安全" subtitle="凭证与终端锁定" onSelect={setCategory}/>
       </nav>
       <section className="settings-content" aria-labelledby={`${category}-settings-title`}>
         <div className="settings-content-scroll">
@@ -90,10 +92,10 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
               <p>Qterm 不会自动迁移或覆盖 connections.json、network-forwards.json 与 secrets.vault。known-hosts.json 与 workspaces.json 仍保存在系统默认位置，不受此设置影响。</p>
             </div>
           </> : <>
-            <div className="settings-section-heading"><h3 id="security-settings-title">安全</h3><p>管理本机凭证库的自动锁定策略。</p></div>
+            <div className="settings-section-heading"><h3 id="security-settings-title">安全</h3><p>管理凭证库有效期与终端空闲锁定策略。</p></div>
             {security ? <div className="settings-rows">
-              <div className="settings-row"><span><strong>Windows 锁屏后锁定凭证</strong><small>收到系统会话锁定事件时，立即清除运行时密钥。</small></span><SettingsSwitch label="Windows 锁屏后锁定凭证" checked={security.lockOnWindowsSessionLock} onChange={(checked) => setSecurity({ ...security, lockOnWindowsSessionLock: checked })}/></div>
-              <div className="settings-row"><span><strong>定时锁定凭证</strong><small>从最近一次成功解锁或修改主密码开始计时，不因操作续期。</small></span><div className="settings-timeout-control" role="group" aria-label="定时锁定控制"><select aria-label="凭证锁定时长" disabled={security.autoLockAfterSeconds === null} value={security.autoLockAfterSeconds ?? 3600} onChange={(event) => setSecurity({ ...security, autoLockAfterSeconds: Number(event.target.value) })}>{durations.map((seconds) => <option value={seconds} key={seconds}>{durationLabel(seconds)}</option>)}</select><SettingsSwitch label="启用定时锁定凭证" checked={security.autoLockAfterSeconds !== null} onChange={(checked) => setSecurity({ ...security, autoLockAfterSeconds: checked ? 3600 : null })}/></div></div>
+              <div className="settings-row"><span><strong>凭证库有效期</strong><small>从最近一次成功解锁或修改主密码开始计时，普通操作不会延长有效期。</small></span><div className="settings-timeout-control" role="group" aria-label="凭证库有效期控制"><select aria-label="凭证库有效期" disabled={security.credentialAutoLockAfterSeconds === null} value={security.credentialAutoLockAfterSeconds ?? 3600} onChange={(event) => setSecurity({ ...security, credentialAutoLockAfterSeconds: Number(event.target.value) })}>{credentialDurations.map((seconds) => <option value={seconds} key={seconds}>{durationLabel(seconds)}</option>)}</select><SettingsSwitch label="启用凭证库有效期" checked={security.credentialAutoLockAfterSeconds !== null} onChange={(checked) => setSecurity({ ...security, credentialAutoLockAfterSeconds: checked ? 3600 : null })}/></div></div>
+              <div className="settings-row"><span><strong>无操作后锁定终端</strong><small>键盘、指针或滚轮无操作达到设定时长后，锁定终端和凭证；后台会话继续运行。</small></span><div className="settings-timeout-control" role="group" aria-label="终端空闲锁定控制"><select aria-label="终端空闲时长" disabled={security.terminalAutoLockAfterSeconds === null} value={security.terminalAutoLockAfterSeconds ?? 900} onChange={(event) => setSecurity({ ...security, terminalAutoLockAfterSeconds: Number(event.target.value) })}>{terminalIdleDurations.map((seconds) => <option value={seconds} key={seconds}>{durationLabel(seconds)}</option>)}</select><SettingsSwitch label="启用无操作后锁定终端" checked={security.terminalAutoLockAfterSeconds !== null} onChange={(checked) => setSecurity({ ...security, terminalAutoLockAfterSeconds: checked ? 900 : null })}/></div></div>
             </div> : <p className="dialog-note">正在读取设置…</p>}
           </>}
           {error && <p className="inline-message settings-message" role="alert">{error}</p>}

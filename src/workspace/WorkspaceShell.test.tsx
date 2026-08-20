@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   lockVault: vi.fn(),
   unlockVault: vi.fn(),
   onVaultStatusChanged: vi.fn(),
+  getSettings: vi.fn(),
   closeCurrentWindow: vi.fn(),
   minimizeCurrentWindow: vi.fn(),
   toggleMaximizeCurrentWindow: vi.fn(),
@@ -34,6 +35,7 @@ vi.mock("./WorkspaceProvider", () => ({ useWorkspace: () => ({
 vi.mock("../components/dialogs/ConnectionAuthDialog", () => ({ ConnectionAuthDialog: ({ profile: item }: { profile: typeof connectionProfile }) => <div role="dialog" aria-label={`认证 ${item.name}`}/> }));
 vi.mock("../components/dialogs/MasterPasswordDialog", () => ({ MasterPasswordDialog: ({ mode, onSuccess }: { mode: string; onSuccess: () => void }) => <div role="dialog" aria-label="解锁凭证库">{mode}<button onClick={onSuccess}>解锁</button></div> }));
 vi.mock("../lib/tauri/credentials", () => ({ getVaultStatus: mocks.getVaultStatus, lockVault: mocks.lockVault, unlockVault: mocks.unlockVault, onVaultStatusChanged: mocks.onVaultStatusChanged }));
+vi.mock("../lib/tauri/settings", () => ({ getSettings: mocks.getSettings }));
 vi.mock("../lib/tauri/window", () => ({ closeCurrentWindow: mocks.closeCurrentWindow, minimizeCurrentWindow: mocks.minimizeCurrentWindow, startDraggingCurrentWindow: vi.fn(), toggleMaximizeCurrentWindow: mocks.toggleMaximizeCurrentWindow }));
 
 import { WorkspaceShell } from "./WorkspaceShell";
@@ -43,9 +45,14 @@ beforeEach(() => {
   mocks.lockVault.mockResolvedValue(undefined);
   mocks.unlockVault.mockResolvedValue(undefined);
   mocks.onVaultStatusChanged.mockResolvedValue(() => undefined);
+  mocks.getSettings.mockResolvedValue({
+    general: { dataDirectory: "", activeDataDirectory: "", restartRequired: false },
+    security: { credentialAutoLockAfterSeconds: 3600, terminalAutoLockAfterSeconds: null },
+    warning: null,
+  });
 });
 
-afterEach(() => { cleanup(); vi.clearAllMocks(); requestedProfile = connectionProfile; });
+afterEach(() => { cleanup(); vi.useRealTimers(); vi.clearAllMocks(); requestedProfile = connectionProfile; });
 
 describe("WorkspaceShell configured connection routing", () => {
   it("tries configured authentication first and opens the prompt only after failure", async () => {
@@ -91,6 +98,81 @@ describe("WorkspaceShell configured connection routing", () => {
 });
 
 describe("WorkspaceShell utility rail", () => {
+  it("locks the terminal and vault after the configured inactivity deadline", async () => {
+    vi.useFakeTimers();
+    mocks.getSettings.mockResolvedValue({
+      general: { dataDirectory: "", activeDataDirectory: "", restartRequired: false },
+      security: { credentialAutoLockAfterSeconds: 3600, terminalAutoLockAfterSeconds: 300 },
+      warning: null,
+    });
+    render(<WorkspaceShell/>);
+    await act(async () => undefined);
+
+    await act(async () => { vi.advanceTimersByTime(300_000); });
+
+    expect(mocks.lockVault).toHaveBeenCalledOnce();
+    expect(screen.getByRole("dialog", { name: "终端已锁定" })).toBeInTheDocument();
+  });
+
+  it("renews terminal inactivity only for user input", async () => {
+    vi.useFakeTimers();
+    mocks.getSettings.mockResolvedValue({
+      general: { dataDirectory: "", activeDataDirectory: "", restartRequired: false },
+      security: { credentialAutoLockAfterSeconds: 3600, terminalAutoLockAfterSeconds: 300 },
+      warning: null,
+    });
+    render(<WorkspaceShell/>);
+    await act(async () => undefined);
+
+    act(() => vi.advanceTimersByTime(299_000));
+    fireEvent.keyDown(window, { key: "Shift" });
+    act(() => vi.advanceTimersByTime(299_000));
+    fireEvent.pointerDown(window);
+    act(() => vi.advanceTimersByTime(299_000));
+    fireEvent.wheel(window);
+    act(() => vi.advanceTimersByTime(299_000));
+    expect(mocks.lockVault).not.toHaveBeenCalled();
+    await act(async () => { vi.advanceTimersByTime(1_000); });
+
+    expect(mocks.lockVault).toHaveBeenCalledOnce();
+  });
+
+  it("checks the absolute inactivity deadline when the window regains focus", async () => {
+    vi.useFakeTimers();
+    const startedAt = new Date("2026-08-20T00:00:00Z");
+    vi.setSystemTime(startedAt);
+    mocks.getSettings.mockResolvedValue({
+      general: { dataDirectory: "", activeDataDirectory: "", restartRequired: false },
+      security: { credentialAutoLockAfterSeconds: 3600, terminalAutoLockAfterSeconds: 300 },
+      warning: null,
+    });
+    render(<WorkspaceShell/>);
+    await act(async () => undefined);
+
+    vi.setSystemTime(new Date(startedAt.getTime() + 301_000));
+    await act(async () => { fireEvent.focus(window); });
+
+    expect(mocks.lockVault).toHaveBeenCalledOnce();
+    expect(screen.getByRole("dialog", { name: "终端已锁定" })).toBeInTheDocument();
+  });
+
+  it("does not show a false terminal lock when automatic vault locking fails", async () => {
+    vi.useFakeTimers();
+    mocks.lockVault.mockRejectedValue(new Error("vault lock failed"));
+    mocks.getSettings.mockResolvedValue({
+      general: { dataDirectory: "", activeDataDirectory: "", restartRequired: false },
+      security: { credentialAutoLockAfterSeconds: 3600, terminalAutoLockAfterSeconds: 300 },
+      warning: null,
+    });
+    render(<WorkspaceShell/>);
+    await act(async () => undefined);
+
+    await act(async () => { vi.advanceTimersByTime(300_000); });
+
+    expect(mocks.lockVault).toHaveBeenCalledOnce();
+    expect(screen.queryByRole("dialog", { name: "终端已锁定" })).not.toBeInTheDocument();
+  });
+
   it("shows the terminal lock action directly above system settings", async () => {
     render(<WorkspaceShell/>);
 
@@ -101,7 +183,7 @@ describe("WorkspaceShell utility rail", () => {
     const lockButton = await screen.findByRole("button", { name: "锁定终端" });
     const settingsButton = screen.getByRole("button", { name: "系统设置" });
     expect(lockButton.compareDocumentPosition(settingsButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(screen.getByRole("button", { name: "关于 Qterm" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "关于" })).toBeInTheDocument();
   });
 
   it("offers both scopes and can lock only the credential vault", async () => {

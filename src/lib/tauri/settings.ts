@@ -1,8 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
 
 export interface SecuritySettings {
-  lockOnWindowsSessionLock: boolean;
-  autoLockAfterSeconds: number | null;
+  credentialAutoLockAfterSeconds: number | null;
+  terminalAutoLockAfterSeconds: number | null;
 }
 
 export interface GeneralSettings {

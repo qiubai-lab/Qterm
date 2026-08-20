@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 pub const DEFAULT_DATA_DIRECTORY_NAME: &str = ".qterm";
 pub const MIN_AUTO_LOCK_SECONDS: u32 = 60;
 pub const MAX_AUTO_LOCK_SECONDS: u32 = 86_400;
-pub const DEFAULT_AUTO_LOCK_SECONDS: u32 = 3_600;
+pub const DEFAULT_CREDENTIAL_AUTO_LOCK_SECONDS: u32 = 3_600;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DataDirectory(PathBuf);
@@ -46,32 +46,37 @@ impl DataDirectory {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SecuritySettings {
-    pub lock_on_windows_session_lock: bool,
-    pub auto_lock_after_seconds: Option<u32>,
+    pub credential_auto_lock_after_seconds: Option<u32>,
+    pub terminal_auto_lock_after_seconds: Option<u32>,
 }
 
 impl Default for SecuritySettings {
     fn default() -> Self {
         Self {
-            lock_on_windows_session_lock: true,
-            auto_lock_after_seconds: Some(DEFAULT_AUTO_LOCK_SECONDS),
+            credential_auto_lock_after_seconds: Some(DEFAULT_CREDENTIAL_AUTO_LOCK_SECONDS),
+            terminal_auto_lock_after_seconds: None,
         }
     }
 }
 
 impl SecuritySettings {
     pub fn new(
-        lock_on_windows_session_lock: bool,
-        auto_lock_after_seconds: Option<u32>,
+        credential_auto_lock_after_seconds: Option<u32>,
+        terminal_auto_lock_after_seconds: Option<u32>,
     ) -> Result<Self, SettingsError> {
-        if auto_lock_after_seconds.is_some_and(|seconds| {
-            !(MIN_AUTO_LOCK_SECONDS..=MAX_AUTO_LOCK_SECONDS).contains(&seconds)
-        }) {
+        if [
+            credential_auto_lock_after_seconds,
+            terminal_auto_lock_after_seconds,
+        ]
+        .into_iter()
+        .flatten()
+        .any(|seconds| !(MIN_AUTO_LOCK_SECONDS..=MAX_AUTO_LOCK_SECONDS).contains(&seconds))
+        {
             return Err(SettingsError::InvalidAutoLockDuration);
         }
         Ok(Self {
-            lock_on_windows_session_lock,
-            auto_lock_after_seconds,
+            credential_auto_lock_after_seconds,
+            terminal_auto_lock_after_seconds,
         })
     }
 }
@@ -88,8 +93,8 @@ pub enum SettingsError {
 #[cfg(test)]
 mod tests {
     use super::{
-        DEFAULT_AUTO_LOCK_SECONDS, DataDirectory, MAX_AUTO_LOCK_SECONDS, MIN_AUTO_LOCK_SECONDS,
-        SecuritySettings, SettingsError,
+        DEFAULT_CREDENTIAL_AUTO_LOCK_SECONDS, DataDirectory, MAX_AUTO_LOCK_SECONDS,
+        MIN_AUTO_LOCK_SECONDS, SecuritySettings, SettingsError,
     };
 
     #[test]
@@ -97,19 +102,24 @@ mod tests {
         assert_eq!(
             SecuritySettings::default(),
             SecuritySettings {
-                lock_on_windows_session_lock: true,
-                auto_lock_after_seconds: Some(DEFAULT_AUTO_LOCK_SECONDS),
+                credential_auto_lock_after_seconds: Some(DEFAULT_CREDENTIAL_AUTO_LOCK_SECONDS),
+                terminal_auto_lock_after_seconds: None,
             }
         );
     }
 
     #[test]
     fn validates_timeout_range_and_allows_disabled() {
-        assert!(SecuritySettings::new(true, None).is_ok());
-        assert!(SecuritySettings::new(true, Some(MIN_AUTO_LOCK_SECONDS)).is_ok());
-        assert!(SecuritySettings::new(true, Some(MAX_AUTO_LOCK_SECONDS)).is_ok());
+        assert!(SecuritySettings::new(None, None).is_ok());
+        assert!(
+            SecuritySettings::new(Some(MIN_AUTO_LOCK_SECONDS), Some(MAX_AUTO_LOCK_SECONDS)).is_ok()
+        );
         assert_eq!(
-            SecuritySettings::new(true, Some(MIN_AUTO_LOCK_SECONDS - 1)),
+            SecuritySettings::new(Some(MIN_AUTO_LOCK_SECONDS - 1), None),
+            Err(SettingsError::InvalidAutoLockDuration)
+        );
+        assert_eq!(
+            SecuritySettings::new(None, Some(MAX_AUTO_LOCK_SECONDS + 1)),
             Err(SettingsError::InvalidAutoLockDuration)
         );
     }

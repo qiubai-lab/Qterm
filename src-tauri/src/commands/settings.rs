@@ -40,8 +40,8 @@ impl SettingsState {
 #[derive(Clone, Copy, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct SecuritySettingsDto {
-    lock_on_windows_session_lock: bool,
-    auto_lock_after_seconds: Option<u32>,
+    credential_auto_lock_after_seconds: Option<u32>,
+    terminal_auto_lock_after_seconds: Option<u32>,
 }
 
 #[derive(Deserialize)]
@@ -69,8 +69,8 @@ struct GeneralSettingsOutputDto {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct SecuritySettingsOutputDto {
-    lock_on_windows_session_lock: bool,
-    auto_lock_after_seconds: Option<u32>,
+    credential_auto_lock_after_seconds: Option<u32>,
+    terminal_auto_lock_after_seconds: Option<u32>,
 }
 
 #[tauri::command]
@@ -85,8 +85,8 @@ pub fn settings_update_security(
     state: State<'_, SettingsState>,
 ) -> Result<SettingsSnapshotDto, IpcError> {
     let settings = SecuritySettings::new(
-        input.lock_on_windows_session_lock,
-        input.auto_lock_after_seconds,
+        input.credential_auto_lock_after_seconds,
+        input.terminal_auto_lock_after_seconds,
     )?;
     let snapshot = state
         .service
@@ -146,8 +146,10 @@ impl From<SettingsSnapshot> for SettingsSnapshotDto {
                 restart_required: value.data_directory != value.active_data_directory,
             },
             security: SecuritySettingsOutputDto {
-                lock_on_windows_session_lock: value.security.lock_on_windows_session_lock,
-                auto_lock_after_seconds: value.security.auto_lock_after_seconds,
+                credential_auto_lock_after_seconds: value
+                    .security
+                    .credential_auto_lock_after_seconds,
+                terminal_auto_lock_after_seconds: value.security.terminal_auto_lock_after_seconds,
             },
             warning: value.warning.map(|warning| match warning {
                 SettingsWarning::Corrupt => "corrupt",
@@ -167,8 +169,8 @@ mod tests {
     fn settings_input_rejects_unknown_and_sensitive_fields() {
         assert!(
             serde_json::from_value::<SecuritySettingsDto>(json!({
-                "lockOnWindowsSessionLock": true,
-                "autoLockAfterSeconds": 3600,
+                "credentialAutoLockAfterSeconds": 3600,
+                "terminalAutoLockAfterSeconds": 900,
                 "masterPassword": "forbidden"
             }))
             .is_err()

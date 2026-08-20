@@ -106,7 +106,7 @@ describe("NetworkPane", () => {
 
     await user.click(screen.getByRole("button", { name: /SOCKS5 动态代理/ }));
     expect(screen.getByRole("dialog", { name: "创建网络规则" })).toBeInTheDocument();
-    expect(screen.getByText("SOCKS5 动态代理", { selector: ".network-selected-type strong" })).toBeInTheDocument();
+    expect(screen.getByText("SOCKS5 动态代理", { selector: ".network-rule-flow strong" })).toBeInTheDocument();
     expect(screen.getByLabelText("监听端口")).toHaveValue(1080);
     expect(screen.queryByLabelText("目标地址")).not.toBeInTheDocument();
 
@@ -165,7 +165,7 @@ describe("NetworkPane", () => {
     await user.click(screen.getByRole("menuitem", { name: "编辑规则" }));
     expect(screen.queryByRole("dialog", { name: "选择网络模式" })).not.toBeInTheDocument();
     expect(screen.getByRole("dialog", { name: "编辑网络规则" })).toBeInTheDocument();
-    expect(screen.getByText("本地端口转发", { selector: ".network-selected-type strong" })).toBeInTheDocument();
+    expect(screen.getByText("本地端口转发", { selector: ".network-rule-flow strong" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "返回选择" })).not.toBeInTheDocument();
     await user.keyboard("{Escape}");
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();

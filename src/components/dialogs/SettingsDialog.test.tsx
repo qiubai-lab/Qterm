@@ -15,11 +15,11 @@ vi.mock("../../lib/tauri/settings", () => mocks);
 beforeEach(() => {
   mocks.getSettings.mockResolvedValue({
     general: { dataDirectory: "C:\\Users\\demo\\.qterm", activeDataDirectory: "C:\\Users\\demo\\.qterm", restartRequired: false },
-    security: { lockOnWindowsSessionLock: true, autoLockAfterSeconds: 3600 }, warning: null,
+    security: { credentialAutoLockAfterSeconds: 3600, terminalAutoLockAfterSeconds: null }, warning: null,
   });
   mocks.updateDataDirectory.mockImplementation(async ({ path }: { path: string }) => ({
     general: { dataDirectory: path || "C:\\Users\\demo\\.qterm", activeDataDirectory: "C:\\Users\\demo\\.qterm", restartRequired: Boolean(path) },
-    security: { lockOnWindowsSessionLock: true, autoLockAfterSeconds: 3600 }, warning: null,
+    security: { credentialAutoLockAfterSeconds: 3600, terminalAutoLockAfterSeconds: null }, warning: null,
   }));
   mocks.updateSecuritySettings.mockImplementation(async (security) => ({
     general: { dataDirectory: "C:\\Users\\demo\\.qterm", activeDataDirectory: "C:\\Users\\demo\\.qterm", restartRequired: false },
@@ -36,7 +36,9 @@ describe("SettingsDialog", () => {
     expect(within(navigation).getByRole("button", { name: /安全/ })).not.toHaveAttribute("aria-current");
     await userEvent.click(within(navigation).getByRole("button", { name: /安全/ }));
     const securityPanel = await screen.findByRole("region", { name: "安全" });
-    expect(await within(securityPanel).findByRole("switch", { name: "Windows 锁屏后锁定凭证" })).toBeInTheDocument();
+    expect(await within(securityPanel).findByRole("switch", { name: "启用凭证库有效期" })).toBeInTheDocument();
+    expect(within(securityPanel).getByRole("switch", { name: "启用无操作后锁定终端" })).toBeInTheDocument();
+    expect(within(securityPanel).queryByText(/Windows 锁屏/)).not.toBeInTheDocument();
     expect(within(securityPanel).getByRole("button", { name: "保存设置" })).toBeInTheDocument();
   });
 
@@ -70,25 +72,28 @@ describe("SettingsDialog", () => {
     expect(await screen.findByRole("status")).toHaveTextContent("重启 Qterm 后生效");
   });
 
-  it("shows secure defaults and persists an explicit disabled timeout", async () => {
+  it("shows the new defaults and persists both independent lock policies", async () => {
     const user = userEvent.setup();
     render(<SettingsDialog onClose={vi.fn()}/>);
     await user.click(await screen.findByRole("button", { name: /安全/ }));
-    expect(await screen.findByRole("switch", { name: "Windows 锁屏后锁定凭证" })).toBeChecked();
-    expect(screen.getByLabelText("凭证锁定时长")).toHaveValue("3600");
-    await user.click(screen.getByRole("switch", { name: "启用定时锁定凭证" }));
-    expect(screen.getByLabelText("凭证锁定时长")).toBeDisabled();
+    expect(await screen.findByRole("switch", { name: "启用凭证库有效期" })).toBeChecked();
+    expect(screen.getByRole("switch", { name: "启用无操作后锁定终端" })).not.toBeChecked();
+    expect(screen.getByLabelText("凭证库有效期")).toHaveValue("3600");
+    await user.click(screen.getByRole("switch", { name: "启用凭证库有效期" }));
+    await user.click(screen.getByRole("switch", { name: "启用无操作后锁定终端" }));
+    expect(screen.getByLabelText("凭证库有效期")).toBeDisabled();
+    expect(screen.getByLabelText("终端空闲时长")).toHaveValue("900");
     await user.click(screen.getByRole("button", { name: "保存设置" }));
-    await waitFor(() => expect(mocks.updateSecuritySettings).toHaveBeenCalledWith({ lockOnWindowsSessionLock: true, autoLockAfterSeconds: null }));
+    await waitFor(() => expect(mocks.updateSecuritySettings).toHaveBeenCalledWith({ credentialAutoLockAfterSeconds: null, terminalAutoLockAfterSeconds: 900 }));
     expect(screen.getByRole("button", { name: "✓ 已保存" })).toBeInTheDocument();
   });
 
   it("places the timeout select before the right-aligned switch", async () => {
     render(<SettingsDialog onClose={vi.fn()}/>);
     await userEvent.click(await screen.findByRole("button", { name: /安全/ }));
-    const controls = await screen.findByRole("group", { name: "定时锁定控制" });
-    const select = within(controls).getByRole("combobox", { name: "凭证锁定时长" });
-    const toggle = within(controls).getByRole("switch", { name: "启用定时锁定凭证" });
+    const controls = await screen.findByRole("group", { name: "凭证库有效期控制" });
+    const select = within(controls).getByRole("combobox", { name: "凭证库有效期" });
+    const toggle = within(controls).getByRole("switch", { name: "启用凭证库有效期" });
     expect(controls.firstElementChild).toBe(select);
     expect(controls.lastElementChild).toContainElement(toggle);
   });
@@ -96,7 +101,7 @@ describe("SettingsDialog", () => {
   it("surfaces safe-default fallback warnings", async () => {
     mocks.getSettings.mockResolvedValue({
       general: { dataDirectory: "C:\\Users\\demo\\.qterm", activeDataDirectory: "C:\\Users\\demo\\.qterm", restartRequired: false },
-      security: { lockOnWindowsSessionLock: true, autoLockAfterSeconds: 3600 }, warning: "corrupt",
+      security: { credentialAutoLockAfterSeconds: 3600, terminalAutoLockAfterSeconds: null }, warning: "corrupt",
     });
     render(<SettingsDialog onClose={vi.fn()}/>);
     expect(await screen.findByRole("alert")).toHaveTextContent("不会覆盖原文件");

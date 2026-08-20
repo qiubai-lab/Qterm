@@ -18,10 +18,6 @@ use crate::{
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LockReason {
     Manual,
-    // Only constructed from the Windows-only session-lock listener
-    // (`infrastructure::windows::session_lock`).
-    #[cfg_attr(not(windows), expect(dead_code))]
-    WindowsSession,
     Timeout,
 }
 
@@ -29,7 +25,6 @@ impl LockReason {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Manual => "manual",
-            Self::WindowsSession => "windowsSession",
             Self::Timeout => "timeout",
         }
     }
@@ -131,7 +126,7 @@ impl<V: CredentialVault> CredentialLifecycle<V> {
         session.generation = session.generation.wrapping_add(1);
         session.unlocked_at = Some(Instant::now());
         settings
-            .auto_lock_after_seconds
+            .credential_auto_lock_after_seconds
             .map(|seconds| LockSchedule {
                 generation: session.generation,
                 delay: Duration::from_secs(u64::from(seconds)),
@@ -144,7 +139,7 @@ impl<V: CredentialVault> CredentialLifecycle<V> {
         let Some(unlocked_at) = session.unlocked_at else {
             return Reschedule::None;
         };
-        let Some(seconds) = settings.auto_lock_after_seconds else {
+        let Some(seconds) = settings.credential_auto_lock_after_seconds else {
             return Reschedule::None;
         };
         let ttl = Duration::from_secs(u64::from(seconds));
@@ -318,7 +313,7 @@ mod tests {
     #[test]
     fn stale_deadline_cannot_lock_new_unlock_session() {
         let lifecycle = CredentialLifecycle::new(FakeVault::default());
-        let settings = SecuritySettings::new(true, Some(3600)).expect("settings");
+        let settings = SecuritySettings::new(Some(3600), Some(900)).expect("settings");
         let first = lifecycle
             .unlock(SecretText::new("first password".into()), settings)
             .expect("unlock")
@@ -335,13 +330,13 @@ mod tests {
     #[test]
     fn disabling_timeout_cancels_by_advancing_generation() {
         let lifecycle = CredentialLifecycle::new(FakeVault::default());
-        let enabled = SecuritySettings::new(true, Some(3600)).expect("settings");
+        let enabled = SecuritySettings::new(Some(3600), Some(900)).expect("settings");
         let schedule = lifecycle
             .unlock(SecretText::new("password".into()), enabled)
             .expect("unlock")
             .expect("schedule");
         assert!(matches!(
-            lifecycle.reschedule(SecuritySettings::new(true, None).expect("settings")),
+            lifecycle.reschedule(SecuritySettings::new(None, Some(900)).expect("settings")),
             Reschedule::None
         ));
         assert!(!lifecycle.lock_if_generation(schedule.generation));
@@ -350,13 +345,13 @@ mod tests {
     #[test]
     fn shortening_timeout_past_the_original_unlock_time_locks_now() {
         let lifecycle = CredentialLifecycle::new(FakeVault::default());
-        let enabled = SecuritySettings::new(true, Some(3600)).expect("settings");
+        let enabled = SecuritySettings::new(Some(3600), Some(900)).expect("settings");
         lifecycle
             .unlock(SecretText::new("password".into()), enabled)
             .expect("unlock");
         lifecycle.session().unlocked_at = Some(Instant::now() - Duration::from_secs(61));
         assert!(matches!(
-            lifecycle.reschedule(SecuritySettings::new(true, Some(60)).expect("settings")),
+            lifecycle.reschedule(SecuritySettings::new(Some(60), Some(900)).expect("settings")),
             Reschedule::LockNow
         ));
     }
@@ -364,7 +359,7 @@ mod tests {
     #[test]
     fn recovery_reset_starts_a_new_unlock_session() {
         let lifecycle = CredentialLifecycle::new(FakeVault::default());
-        let settings = SecuritySettings::new(true, Some(3600)).expect("settings");
+        let settings = SecuritySettings::new(Some(3600), Some(900)).expect("settings");
         let schedule = lifecycle
             .reset_master_password(
                 RecoveryKeyFile::new(vec![1]),

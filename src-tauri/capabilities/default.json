@@ -9,6 +9,14 @@
     "core:window:allow-toggle-maximize",
     "core:window:allow-close",
     "core:window:allow-start-dragging",
-    "clipboard-manager:allow-write-text"
+    "clipboard-manager:allow-write-text",
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [
+        {
+          "url": "https://github.com/qiubai-lab/Qterm/releases/latest"
+        }
+      ]
+    }
   ]
 }

@@ -92,7 +92,8 @@ impl DataPaths {
 pub fn run() {
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_clipboard_manager::init())
-        .plugin(tauri_plugin_dialog::init());
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init());
     #[cfg(desktop)]
     let builder = builder.plugin(
         tauri_plugin_window_state::Builder::default()
@@ -140,8 +141,6 @@ pub fn run() {
                 JsonKnownHostRepository::new(paths.known_hosts),
             )));
             app.manage(LocalSessionState::new(LocalSessionManager::default()));
-            #[cfg(windows)]
-            infrastructure::windows::session_lock::install(app.handle())?;
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

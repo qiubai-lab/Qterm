@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 
 import { Icon, type IconName } from "../components/Icon";
 import { ConnectionDialog } from "../components/dialogs/ConnectionDialog";
@@ -11,6 +11,7 @@ import { MasterPasswordDialog, type MasterPasswordMode } from "../components/dia
 import { TerminalLockChoiceDialog, TerminalLockScreen } from "../components/dialogs/TerminalLockDialogs";
 import { getVaultStatus, lockVault, onVaultStatusChanged, type VaultStatus } from "../lib/tauri/credentials";
 import type { ConnectionProfile } from "../lib/tauri/profiles";
+import { getSettings, type SecuritySettings } from "../lib/tauri/settings";
 import { closeCurrentWindow, minimizeCurrentWindow, startDraggingCurrentWindow, toggleMaximizeCurrentWindow } from "../lib/tauri/window";
 import { WorkspaceCanvas, type ConnectionOwner } from "./LayoutView";
 import { resolveConfiguredAuth } from "./configuredAuth";
@@ -34,10 +35,15 @@ export function WorkspaceShell() {
   const [vaultLockError, setVaultLockError] = useState("");
   const [lockChoiceOpen, setLockChoiceOpen] = useState(false);
   const [terminalLocked, setTerminalLocked] = useState(false);
+  const [securitySettings, setSecuritySettings] = useState<SecuritySettings | null>(null);
   const [draggedWorkspace, setDraggedWorkspace] = useState<string | null>(null);
   const workspaceDragRef = useRef<{ id: string; pointerId: number; x: number; y: number; active: boolean } | null>(null);
   const workspaceDragCleanupRef = useRef<(() => void) | null>(null);
   const automaticAttemptsRef = useRef(new Set<string>());
+  const vaultStatusRef = useRef<VaultStatus | null>(null);
+  const vaultLockBusyRef = useRef(false);
+  const terminalLastActivityRef = useRef<number | null>(null);
+  const previousTerminalLockedRef = useRef(false);
   const terminalHostPrompt = Object.entries(runtimes).find(([, runtime]) => runtime.hostKeyPrompt);
   const fileHostPrompt = Object.entries(fileRuntimes).find(([, runtime]) => runtime.hostKeyPrompt);
   const networkHostPrompt = Object.entries(networkRuntimes).find(([, runtime]) => runtime.hostKeyPrompt);
@@ -116,7 +122,45 @@ export function WorkspaceShell() {
     void startDraggingCurrentWindow();
   }
 
+  const commitVaultStatus = useCallback((status: VaultStatus) => {
+    vaultStatusRef.current = status;
+    setVaultStatus(status);
+  }, []);
+
+  const applyLockScope = useCallback(async (scope: "vault" | "terminalAndVault") => {
+    const currentStatus = vaultStatusRef.current;
+    if (!currentStatus?.initialized || currentStatus.legacy || vaultLockBusyRef.current || (scope === "vault" && !currentStatus.unlocked)) return false;
+    vaultLockBusyRef.current = true;
+    setVaultLockBusy(true);
+    setVaultLockError("");
+    try {
+      if (currentStatus.unlocked) await lockVault();
+      const lockedStatus = { initialized: true, unlocked: false, legacy: false };
+      commitVaultStatus(lockedStatus);
+      setLockChoiceOpen(false);
+      if (scope === "terminalAndVault") {
+        setTool(null);
+        setTerminalLocked(true);
+      }
+      return true;
+    } catch (error) {
+      setVaultLockError(errorMessage(error));
+      return false;
+    } finally {
+      vaultLockBusyRef.current = false;
+      setVaultLockBusy(false);
+    }
+  }, [commitVaultStatus]);
+
   useEffect(() => () => workspaceDragCleanupRef.current?.(), []);
+
+  useEffect(() => {
+    let disposed = false;
+    void getSettings().then((snapshot) => {
+      if (!disposed) setSecuritySettings(snapshot.security);
+    }).catch(() => undefined);
+    return () => { disposed = true; };
+  }, []);
 
   useEffect(() => {
     let disposed = false;
@@ -125,14 +169,72 @@ export function WorkspaceShell() {
     void onVaultStatusChanged((event) => {
       if (disposed) return;
       statusEventReceived = true;
-      setVaultStatus((current) => ({ initialized: current?.initialized ?? true, unlocked: event.unlocked, legacy: current?.legacy ?? false }));
+      const current = vaultStatusRef.current;
+      commitVaultStatus({ initialized: current?.initialized ?? true, unlocked: event.unlocked, legacy: current?.legacy ?? false });
       setVaultLockError("");
     }).then((value) => { if (disposed) value(); else unlisten = value; }).catch(() => undefined);
     void getVaultStatus().then((status) => {
-      if (!disposed && !statusEventReceived) setVaultStatus(status);
+      if (!disposed && !statusEventReceived) {
+        commitVaultStatus(status);
+      }
     }).catch(() => undefined);
     return () => { disposed = true; unlisten?.(); };
-  }, []);
+  }, [commitVaultStatus]);
+
+  useEffect(() => {
+    terminalLastActivityRef.current = Date.now();
+  }, [securitySettings?.terminalAutoLockAfterSeconds]);
+
+  useEffect(() => {
+    if (previousTerminalLockedRef.current && !terminalLocked) terminalLastActivityRef.current = Date.now();
+    previousTerminalLockedRef.current = terminalLocked;
+  }, [terminalLocked]);
+
+  useEffect(() => {
+    const seconds = securitySettings?.terminalAutoLockAfterSeconds;
+    if (seconds === null || seconds === undefined || terminalLocked || !vaultStatus?.initialized || vaultStatus.legacy) return;
+    let timer: number | undefined;
+    let locking = false;
+    const attemptLock = () => {
+      if (locking) return;
+      locking = true;
+      void applyLockScope("terminalAndVault").finally(() => { locking = false; });
+    };
+    const schedule = () => {
+      if (timer !== undefined) window.clearTimeout(timer);
+      const lastActivity = terminalLastActivityRef.current ?? Date.now();
+      const remaining = Math.max(0, lastActivity + seconds * 1000 - Date.now());
+      timer = window.setTimeout(attemptLock, remaining);
+    };
+    const recordActivity = () => {
+      if (locking) return;
+      terminalLastActivityRef.current = Date.now();
+      schedule();
+    };
+    const checkDeadline = () => {
+      const lastActivity = terminalLastActivityRef.current ?? Date.now();
+      if (Date.now() >= lastActivity + seconds * 1000) {
+        if (timer !== undefined) window.clearTimeout(timer);
+        attemptLock();
+      } else {
+        schedule();
+      }
+    };
+    window.addEventListener("keydown", recordActivity);
+    window.addEventListener("pointerdown", recordActivity);
+    window.addEventListener("wheel", recordActivity, { passive: true });
+    window.addEventListener("focus", checkDeadline);
+    globalThis.document.addEventListener("visibilitychange", checkDeadline);
+    schedule();
+    return () => {
+      if (timer !== undefined) window.clearTimeout(timer);
+      window.removeEventListener("keydown", recordActivity);
+      window.removeEventListener("pointerdown", recordActivity);
+      window.removeEventListener("wheel", recordActivity);
+      window.removeEventListener("focus", checkDeadline);
+      globalThis.document.removeEventListener("visibilitychange", checkDeadline);
+    };
+  }, [applyLockScope, securitySettings?.terminalAutoLockAfterSeconds, terminalLocked, vaultStatus?.initialized, vaultStatus?.legacy]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -213,28 +315,9 @@ export function WorkspaceShell() {
     }
   }
 
-  async function applyLockScope(scope: "vault" | "terminalAndVault") {
-    if (!vaultStatus?.initialized || vaultStatus.legacy || vaultLockBusy || (scope === "vault" && !vaultStatus.unlocked)) return;
-    setVaultLockBusy(true);
-    setVaultLockError("");
-    try {
-      if (vaultStatus.unlocked) await lockVault();
-      setVaultStatus((current) => ({ initialized: current?.initialized ?? true, unlocked: false, legacy: current?.legacy ?? false }));
-      setLockChoiceOpen(false);
-      if (scope === "terminalAndVault") {
-        setTool(null);
-        setTerminalLocked(true);
-      }
-    } catch (error) {
-      setVaultLockError(errorMessage(error));
-    } finally {
-      setVaultLockBusy(false);
-    }
-  }
-
   function closeVaultAwareTool() {
     setTool(null);
-    void getVaultStatus().then(setVaultStatus).catch(() => undefined);
+    void getVaultStatus().then(commitVaultStatus).catch(() => undefined);
   }
 
   const terminalLockLabel = vaultLockBusy
@@ -284,12 +367,12 @@ export function WorkspaceShell() {
           <span className="rail-spacer"/>
           <RailActionButton icon="lock" label="锁定终端" accessibleLabel={terminalLockLabel} title={terminalLockLabel} disabled={!vaultStatus?.initialized || vaultStatus.legacy || vaultLockBusy} onClick={() => { setVaultLockError(""); setLockChoiceOpen(true); }}/>
           <RailButton tool="settings" icon="settings" label="系统设置" active={tool === "settings"} onClick={setTool}/>
-          <RailButton tool="help" icon="help" label="关于 Qterm" active={tool === "help"} onClick={setTool}/>
+          <RailButton tool="help" icon="help" label="关于" active={tool === "help"} onClick={setTool}/>
         </aside>
       </div>
       {terminalLocked && (
         <TerminalLockScreen onUnlocked={() => {
-          setVaultStatus({ initialized: true, unlocked: true, legacy: false });
+          commitVaultStatus({ initialized: true, unlocked: true, legacy: false });
           setTerminalLocked(false);
         }}/>
       )}
@@ -307,11 +390,11 @@ export function WorkspaceShell() {
     )}
     {vaultUnlockRequest && <MasterPasswordDialog mode={vaultUnlockRequest.mode} onClose={() => setVaultUnlockRequest(null)} onSuccess={() => {
       const request = vaultUnlockRequest;
-      setVaultStatus({ initialized: true, unlocked: true, legacy: false });
+      commitVaultStatus({ initialized: true, unlocked: true, legacy: false });
       setVaultUnlockRequest(null);
       void requestConfiguredConnection(request.owner, request.blockId, request.profile);
     }}/>}
-    {tool === "settings" && <SettingsDialog onClose={() => setTool(null)}/>}
+    {tool === "settings" && <SettingsDialog onClose={() => setTool(null)} onSecuritySettingsChanged={setSecuritySettings}/>}
     {tool === "help" && <HelpDialog onClose={() => setTool(null)}/>}
     {lockChoiceOpen && <TerminalLockChoiceDialog vaultUnlocked={Boolean(vaultStatus?.unlocked)} busy={vaultLockBusy} message={vaultLockError} onClose={() => { setLockChoiceOpen(false); setVaultLockError(""); }} onLockVault={() => void applyLockScope("vault")} onLockTerminalAndVault={() => void applyLockScope("terminalAndVault")}/>}
     {closeRequest && <DialogFrame title={closeRequest.title} subtitle="未保存的终端输出无法恢复" onClose={() => setCloseRequest(null)}><p className="confirm-copy">{closeRequest.detail}</p><p className="callout">将断开 {connectedCount(closeRequest.ids)} 个活动会话。</p><footer className="dialog-actions end"><button className="secondary-button" onClick={() => setCloseRequest(null)}>取消</button><button className="danger-button filled" onClick={() => void confirmClose()}>关闭并断开</button></footer></DialogFrame>}

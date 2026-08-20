@@ -200,7 +200,7 @@ Status: accepted
 
 ## 2026-08-19 — Windows 首期使用设备本地安全设置管理凭证锁定
 
-Status: accepted
+Status: superseded by “跨平台凭证有效期与终端空闲锁分离” (2026-08-20)
 
 系统设置以 app-data `settings.json` 独立保存设备级安全策略，不进入 Workspace 或 `~/.qterm`。Windows 锁屏自动锁定默认开启；凭证解锁会话默认 3600 秒后到期，截止时间从最近一次成功解锁或主密码变更开始，普通键鼠活动不续期。Windows 使用原生 WTS session-lock 通知，不以 window blur 近似；系统解锁不自动解锁 vault。手动、系统和超时锁定统一清除 zeroized runtime data key 与前端 reveal 状态，但不删除凭证或终止既有 SSH/SFTP 会话。主密码变更只用新 Argon2id KEK 重新包装原 data key，不逐条重加密凭证。
 
@@ -215,6 +215,12 @@ Status: accepted
 Status: accepted
 
 右侧工具轨的锁定入口先让用户选择只锁定凭证库，或同时锁定终端界面与凭证。后者在 vault lock 成功后由 WorkspaceShell 设置不可持久化的进程内锁屏状态；锁屏只覆盖 `workspace-stage`，其底层工作区内容使用 inert 和辅助技术隐藏阻断交互，顶部 `app-chrome` 的 Workspace 切换/新建与窗口最小化、最大化、关闭保持可用。SSH/SFTP/local PTY 与后台输出继续运行。锁屏不可由 Escape 或背景点击退出，用户输入主密码后复用既有 vault unlock，同时恢复终端和凭证库。该能力只提供应用内隐私与误操作防护，不替代操作系统会话锁，应用重启后默认退出锁屏。
+
+## 2026-08-20 — 跨平台凭证有效期与终端空闲锁分离
+
+Status: accepted
+
+系统设置不再暴露或安装 Windows WTS session-lock 策略。设备级安全设置使用 schema v2 分别保存凭证库固定有效期和终端空闲锁时长：凭证有效期默认 3600 秒，由 Rust credential lifecycle 从最近成功解锁或修改主密码开始计算，普通操作不续期；终端空闲锁默认关闭，由 WorkspaceShell 只根据 Qterm 内键盘、指针按下和滚轮输入续期，终端输出与网络活动不续期，并在页面恢复可见或窗口重新获得焦点时按绝对时间补检。终端空闲到期复用既有“锁定终端和凭证”流程，只有 vault lock 成功后才显示遮罩。当前锁屏状态和最后活动时间不持久化。开发期不迁移旧安全设置，schema v1 文件可直接删除并采用新默认值。
 
 ## 2026-08-20 — Network Block 使用 profile 全局规则与独立 SSH 运行时
 

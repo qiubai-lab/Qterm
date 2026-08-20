@@ -1,12 +1,13 @@
 import type { ReactNode } from "react";
 
-export type IconName = "workspace" | "plus" | "terminal" | "computer" | "server" | "network" | "connections" | "files" | "file" | "filePlus" | "folderPlus" | "edit" | "save" | "check" | "copy" | "upload" | "key" | "lock" | "trash" | "clear" | "back" | "forward" | "refresh" | "settings" | "help" | "splitHorizontal" | "splitVertical" | "menu" | "windowMinimize" | "windowMaximize" | "close" | "more" | "eye" | "eyeOff";
+export type IconName = "workspace" | "plus" | "terminal" | "browser" | "computer" | "server" | "network" | "connections" | "files" | "file" | "filePlus" | "folderPlus" | "edit" | "save" | "check" | "copy" | "upload" | "key" | "lock" | "trash" | "clear" | "back" | "forward" | "refresh" | "settings" | "help" | "splitHorizontal" | "splitVertical" | "menu" | "windowMinimize" | "windowMaximize" | "close" | "more" | "eye" | "eyeOff";
 
 export function Icon({ name, size = 16 }: { name: IconName; size?: number }) {
   const paths: Record<IconName, ReactNode> = {
     workspace: <><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M8 4v16"/></>,
     plus: <path d="M12 5v14M5 12h14"/>,
     terminal: <><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3M13 15h4"/></>,
+    browser: <><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M3 9h18M7 6.5h.01M10 6.5h.01"/></>,
     computer: <><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></>,
     server: <><rect x="4" y="3" width="16" height="7" rx="2"/><rect x="4" y="14" width="16" height="7" rx="2"/><path d="M8 6.5h.01M8 17.5h.01M12 6.5h5M12 17.5h5"/></>,
     network: <><circle cx="5" cy="12" r="2.5"/><circle cx="19" cy="6" r="2.5"/><circle cx="19" cy="18" r="2.5"/><path d="m7.5 11 9-4M7.5 13l9 4"/></>,

@@ -3,5 +3,3 @@
 pub mod local;
 pub mod persistence;
 pub mod ssh;
-#[cfg(windows)]
-pub mod windows;

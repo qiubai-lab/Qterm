@@ -12,9 +12,9 @@ describe("settings IPC client", () => {
     invoke.mockResolvedValue(undefined);
     await getSettings();
     expect(invoke).toHaveBeenCalledWith("settings_get");
-    await updateSecuritySettings({ lockOnWindowsSessionLock: false, autoLockAfterSeconds: 900 });
+    await updateSecuritySettings({ credentialAutoLockAfterSeconds: 900, terminalAutoLockAfterSeconds: 1800 });
     expect(invoke).toHaveBeenLastCalledWith("settings_update_security", {
-      input: { lockOnWindowsSessionLock: false, autoLockAfterSeconds: 900 },
+      input: { credentialAutoLockAfterSeconds: 900, terminalAutoLockAfterSeconds: 1800 },
     });
     await updateDataDirectory({ path: "D:\\Qterm Data" });
     expect(invoke).toHaveBeenLastCalledWith("settings_update_data_directory", {

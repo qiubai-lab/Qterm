@@ -22,8 +22,15 @@ type SortState = { key: SortKey; direction: SortDirection } | null;
 type ContextMenuState = { entry: FileEntry; anchorX: number; anchorY: number; x: number; y: number; placement: "above" | "below" };
 type DirectoryLocation = { scrollTop: number; selectedPath: string | null; anchorPath: string | null; anchorOffset: number };
 type PendingDirectoryLocation = { key: string; location: DirectoryLocation };
+type VirtualRange = { start: number; end: number };
 
 const LOCAL_ROOTS_LOCATION = "\0local-roots";
+const FILE_LIST_PADDING = 3;
+const FILE_ROW_HEIGHT = 27;
+const FILE_HEADER_HEIGHT = 25;
+const FILE_VIRTUALIZATION_THRESHOLD = 200;
+const FILE_VIRTUAL_OVERSCAN = 8;
+const FILE_VIRTUAL_FALLBACK_ROWS = 20;
 
 const CodeEditor = lazy(() => import("./CodeEditor").then((module) => ({ default: module.CodeEditor })));
 const MarkdownPreview = lazy(() => import("./MarkdownPreview").then((module) => ({ default: module.MarkdownPreview })));
@@ -34,6 +41,7 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
   const [localRoots, setLocalRoots] = useState<LocalRoot[]>([]);
   const [showLocalRoots, setShowLocalRoots] = useState(false);
   const [forwardPaths, setForwardPaths] = useState<string[]>([]);
+  const [virtualRange, setVirtualRange] = useState<VirtualRange>({ start: 0, end: FILE_VIRTUAL_FALLBACK_ROWS + FILE_VIRTUAL_OVERSCAN });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [editingPath, setEditingPath] = useState(false);
@@ -76,15 +84,24 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
     permissionMode: null,
   })), [localRoots]);
   const displayedRootEntries = useMemo(() => sortEntries(rootEntries, sort), [rootEntries, sort]);
+  const activeEntries = showLocalRoots ? displayedRootEntries : displayedEntries;
+  const activeEntryIndexes = useMemo(() => new Map(activeEntries.map((entry, index) => [entry.path, index])), [activeEntries]);
+  const activeEntriesRef = useRef(activeEntries);
   pathRef.current = path;
   listingRef.current = listing;
   selectedPathRef.current = selectedPath;
   showLocalRootsRef.current = showLocalRoots;
+  activeEntriesRef.current = activeEntries;
+
+  const updateVirtualRange = useCallback((container: HTMLElement, entryCount: number) => {
+    const next = fileVirtualRange(container.scrollTop, container.clientHeight, entryCount);
+    setVirtualRange((current) => current.start === next.start && current.end === next.end ? current : next);
+  }, []);
 
   const rememberDirectoryLocation = useCallback(() => {
     const key = showLocalRootsRef.current ? LOCAL_ROOTS_LOCATION : listingRef.current?.path ?? pathRef.current;
     const container = listScroll.current;
-    const anchor = container ? visibleRowAnchor(container) : null;
+    const anchor = container ? fileListAnchor(container.scrollTop, activeEntriesRef.current) : null;
     directoryLocations.current.set(key, {
       scrollTop: container?.scrollTop ?? 0,
       selectedPath: selectedPathRef.current,
@@ -176,14 +193,23 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
     const container = listScroll.current;
     if (!pending || !key || pending.key !== key || !container) return;
     pendingDirectoryLocation.current = null;
-    container.scrollTop = pending.location.scrollTop;
-    if (!pending.location.anchorPath) return;
-    const row = Array.from(container.querySelectorAll<HTMLElement>(".file-row[data-entry-path]"))
-      .find((candidate) => candidate.dataset.entryPath === pending.location.anchorPath);
-    if (!row) return;
-    const viewportTop = fileListViewportTop(container);
-    container.scrollTop += row.getBoundingClientRect().top - viewportTop - pending.location.anchorOffset;
-  }, [listing, localRoots, showLocalRoots]);
+    const anchorIndex = pending.location.anchorPath ? activeEntryIndexes.get(pending.location.anchorPath) : undefined;
+    container.scrollTop = anchorIndex === undefined
+      ? pending.location.scrollTop
+      : FILE_LIST_PADDING + anchorIndex * FILE_ROW_HEIGHT - pending.location.anchorOffset;
+    updateVirtualRange(container, activeEntries.length);
+  }, [activeEntries.length, activeEntryIndexes, listing, showLocalRoots, updateVirtualRange]);
+
+  useLayoutEffect(() => {
+    const container = listScroll.current;
+    if (!container) return;
+    const update = () => updateVirtualRange(container, activeEntries.length);
+    update();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(update);
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [activeEntries.length, updateVirtualRange]);
 
   useEffect(() => {
     if (!contextMenu) return;
@@ -449,7 +475,7 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
     </nav>
     {connectionError && <div className="file-browser-inline-error" role="alert">{connectionError}</div>}
     {!connectionError && error && (listing || (showLocalRoots && localRoots.length > 0)) && <div className="file-browser-inline-error" role="alert">{error}</div>}
-    <div className="file-browser-content" ref={listScroll} onPointerEnter={() => setEditingPath(false)} onScroll={() => setEditingPath(false)}>
+    <div className="file-browser-content" ref={listScroll} onPointerEnter={() => setEditingPath(false)} onScroll={(event) => { setEditingPath(false); updateVirtualRange(event.currentTarget, activeEntries.length); }}>
       <div className="file-browser-columns" aria-label="文件排序">
         <FileSortHeader label="名称" sortKey="name" sort={sort} onChange={cycleSort}/>
         <FileSortHeader label="大小" sortKey="size" sort={sort} onChange={cycleSort}/>
@@ -459,11 +485,11 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
       {showLocalRoots && loading && <div className="file-browser-state">正在读取本机位置…</div>}
       {showLocalRoots && !loading && error && localRoots.length === 0 && <div className="file-browser-state error"><Icon name="files" size={22}/><span>{error}</span><button onClick={() => void openLocalRoots()}>重试</button></div>}
       {showLocalRoots && !loading && !error && localRoots.length === 0 && <div className="file-browser-state">没有可用的本机位置</div>}
-      {showLocalRoots && !loading && localRoots.length > 0 && <div className="file-list" role="list" aria-label="本机根目录">{displayedRootEntries.map((entry) => <FileRow key={entry.path} entry={entry} selected={selectedPath === entry.path} onSelect={() => setSelectedPath(entry.path)} onOpen={() => void navigateTo(entry.path, true)} onContextMenu={(event) => event.preventDefault()} onContextMenuKey={() => undefined}/>)}</div>}
+      {showLocalRoots && !loading && localRoots.length > 0 && <FileList entries={displayedRootEntries} range={virtualRange} ariaLabel="本机根目录" selectedPath={selectedPath} onSelect={(entry) => setSelectedPath(entry.path)} onOpen={(entry) => void navigateTo(entry.path, true)} onContextMenu={(event) => event.preventDefault()} onContextMenuKey={() => undefined}/>}
       {!showLocalRoots && loading && !listing && <div className="file-browser-state">正在读取文件夹…</div>}
       {!showLocalRoots && !connectionError && error && !listing && <div className="file-browser-state error"><Icon name="files" size={22}/><span>{error}</span><button onClick={() => void load(path)}>重试</button></div>}
       {!showLocalRoots && !error && listing?.entries.length === 0 && <div className="file-browser-state">此文件夹为空</div>}
-      {!showLocalRoots && listing && <div className="file-list" role="list" aria-label={`文件夹 ${listing.path}`}>{displayedEntries.map((entry) => <FileRow key={entry.path} entry={entry} selected={selectedPath === entry.path} onSelect={() => setSelectedPath(entry.path)} onOpen={() => entry.isDirectory ? void navigateTo(entry.path) : void openFile(entry, "preview")} onContextMenu={(event) => openContextMenu(event, entry)} onContextMenuKey={(event) => openContextMenuFromKeyboard(event, entry)}/>)}</div>}
+      {!showLocalRoots && listing && <FileList entries={displayedEntries} range={virtualRange} ariaLabel={`文件夹 ${listing.path}`} selectedPath={selectedPath} onSelect={(entry) => setSelectedPath(entry.path)} onOpen={(entry) => entry.isDirectory ? void navigateTo(entry.path) : void openFile(entry, "preview")} onContextMenu={openContextMenu} onContextMenuKey={openContextMenuFromKeyboard}/>}
       {!showLocalRoots && dropActive && <div className="file-upload-drop-overlay" role="status"><Icon name="upload" size={24}/><strong>上传到当前目录</strong><span>{visiblePath}</span><small>释放鼠标以上传文件或文件夹</small></div>}
     </div>
     {contextMenu && <div ref={menuRef} className="file-context-menu" data-placement={contextMenu.placement} role="menu" aria-label={`${contextMenu.entry.name} 文件菜单`} style={{ left: contextMenu.x, top: contextMenu.y }} onContextMenu={(event) => event.preventDefault()}>
@@ -511,24 +537,51 @@ function FileSortHeader({ label, sortKey, sort, onChange }: { label: string; sor
   </button>;
 }
 
-function FileRow({ entry, selected, onSelect, onOpen, onContextMenu, onContextMenuKey }: { entry: FileEntry; selected: boolean; onSelect: () => void; onOpen: () => void; onContextMenu: (event: MouseEvent<HTMLButtonElement>) => void; onContextMenuKey: (event: KeyboardEvent<HTMLButtonElement>) => void }) {
-  return <button className="file-row" data-entry-kind={entry.isDirectory ? "directory" : "file"} data-entry-path={entry.path} data-selected={selected || undefined} role="listitem" title={entry.path} onClick={() => { if (!entry.isDirectory && selected) onOpen(); else onSelect(); }} onDoubleClick={() => { if (entry.isDirectory) onOpen(); }} onContextMenu={onContextMenu} onKeyDown={(event) => { onContextMenuKey(event); if (event.key === "Enter") onOpen(); }}>
+function FileList({ entries, range, ariaLabel, selectedPath, onSelect, onOpen, onContextMenu, onContextMenuKey }: {
+  entries: FileEntry[];
+  range: VirtualRange;
+  ariaLabel: string;
+  selectedPath: string | null;
+  onSelect: (entry: FileEntry) => void;
+  onOpen: (entry: FileEntry) => void;
+  onContextMenu: (event: MouseEvent<HTMLButtonElement>, entry: FileEntry) => void;
+  onContextMenuKey: (event: KeyboardEvent<HTMLButtonElement>, entry: FileEntry) => void;
+}) {
+  const virtualized = entries.length > FILE_VIRTUALIZATION_THRESHOLD;
+  const start = virtualized ? Math.min(range.start, entries.length) : 0;
+  const end = virtualized ? Math.min(Math.max(range.end, start), entries.length) : entries.length;
+  const visibleEntries = entries.slice(start, end);
+  return <div className={`file-list${virtualized ? " file-list-virtual" : ""}`} role="list" aria-label={ariaLabel} style={virtualized ? { height: entries.length * FILE_ROW_HEIGHT + FILE_LIST_PADDING * 2 } : undefined}>
+    {visibleEntries.map((entry, visibleIndex) => {
+      const index = start + visibleIndex;
+      return <FileRow key={entry.path} entry={entry} selected={selectedPath === entry.path} onSelect={() => onSelect(entry)} onOpen={() => onOpen(entry)} onContextMenu={(event) => onContextMenu(event, entry)} onContextMenuKey={(event) => onContextMenuKey(event, entry)} position={virtualized ? index : null} setSize={virtualized ? entries.length : undefined}/>;
+    })}
+  </div>;
+}
+
+function FileRow({ entry, selected, onSelect, onOpen, onContextMenu, onContextMenuKey, position, setSize }: { entry: FileEntry; selected: boolean; onSelect: () => void; onOpen: () => void; onContextMenu: (event: MouseEvent<HTMLButtonElement>) => void; onContextMenuKey: (event: KeyboardEvent<HTMLButtonElement>) => void; position: number | null; setSize?: number }) {
+  return <button className="file-row" data-entry-kind={entry.isDirectory ? "directory" : "file"} data-entry-path={entry.path} data-selected={selected || undefined} role="listitem" aria-posinset={position === null ? undefined : position + 1} aria-setsize={setSize} style={position === null ? undefined : { transform: `translateY(${FILE_LIST_PADDING + position * FILE_ROW_HEIGHT}px)` }} title={entry.path} onClick={() => { if (!entry.isDirectory && selected) onOpen(); else onSelect(); }} onDoubleClick={() => { if (entry.isDirectory) onOpen(); }} onContextMenu={onContextMenu} onKeyDown={(event) => { onContextMenuKey(event); if (event.key === "Enter") onOpen(); }}>
     <span className="file-name"><Icon name={entry.isDirectory ? "files" : "file"} size={14}/><span>{entry.name}</span>{entry.isSymlink && <small>链接</small>}</span>
     <span>{entry.isDirectory ? "—" : formatSize(entry.size)}</span><span className="file-permission file-permission-column">{formatPermissions(entry.permissionMode)}</span><span>{entry.modifiedAt ? new Date(entry.modifiedAt * 1000).toLocaleString() : "—"}</span>
   </button>;
 }
 
-function fileListViewportTop(container: HTMLElement): number {
-  return container.querySelector<HTMLElement>(".file-browser-columns")?.getBoundingClientRect().bottom
-    ?? container.getBoundingClientRect().top;
+function fileVirtualRange(scrollTop: number, clientHeight: number, entryCount: number): VirtualRange {
+  if (entryCount <= FILE_VIRTUALIZATION_THRESHOLD) return { start: 0, end: entryCount };
+  const visibleStart = Math.min(entryCount - 1, Math.max(0, Math.floor((scrollTop - FILE_LIST_PADDING) / FILE_ROW_HEIGHT)));
+  const viewportRows = clientHeight > FILE_HEADER_HEIGHT
+    ? Math.ceil((clientHeight - FILE_HEADER_HEIGHT) / FILE_ROW_HEIGHT)
+    : FILE_VIRTUAL_FALLBACK_ROWS;
+  return {
+    start: Math.max(0, visibleStart - FILE_VIRTUAL_OVERSCAN),
+    end: Math.min(entryCount, visibleStart + viewportRows + FILE_VIRTUAL_OVERSCAN + 1),
+  };
 }
 
-function visibleRowAnchor(container: HTMLElement): { path: string; offset: number } | null {
-  const viewportTop = fileListViewportTop(container);
-  const row = Array.from(container.querySelectorAll<HTMLElement>(".file-row[data-entry-path]"))
-    .find((candidate) => candidate.getBoundingClientRect().bottom > viewportTop);
-  const path = row?.dataset.entryPath;
-  return row && path ? { path, offset: row.getBoundingClientRect().top - viewportTop } : null;
+function fileListAnchor(scrollTop: number, entries: FileEntry[]): { path: string; offset: number } | null {
+  if (entries.length === 0) return null;
+  const index = Math.min(entries.length - 1, Math.max(0, Math.floor((scrollTop - FILE_LIST_PADDING) / FILE_ROW_HEIGHT)));
+  return { path: entries[index].path, offset: FILE_LIST_PADDING + index * FILE_ROW_HEIGHT - scrollTop };
 }
 
 function previewKindFor(name: string): PreviewKind {

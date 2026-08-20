@@ -99,6 +99,18 @@ describe("application layout styles", () => {
     expect(declarations(".network-type-route")).toContain("height:16px");
     expect(declarations(".network-type-route-endpoint svg")).toContain("flex:none");
     expect(declarations(".network-type-route-endpoint>span")).toContain("font-size:8px");
+    expect(declarations(".network-rule-flow-route")).toContain("grid-template-columns:auto minmax(28px,1fr) auto minmax(28px,1fr) auto");
+    expect(declarations(".network-rule-flow-route")).toContain("column-gap:6px");
+    expect(declarations(".network-rule-flow-node")).toContain("min-width:0");
+    expect(declarations(".network-rule-flow-node")).toContain("width:max-content");
+    expect(declarations(".network-rule-flow-node")).toContain("max-width:145px");
+    expect(declarations(".network-rule-flow-node code")).toContain("text-overflow:ellipsis");
+    expect(declarations(".network-rule-field-label svg")).toContain("flex:none");
+    expect(declarations(".network-rule-flow-connector::before")).toContain("height:1px");
+    expect(declarations(".network-rule-flow-connector::after")).toContain("animation:network-rule-flow-packet 1.8s");
+    expect(declarations(".network-rule-flow-connector::after")).toContain("transform:translateX(-100%)");
+    expect(styles).toContain("@keyframes network-rule-flow-packet");
+    expect(styles).toMatch(/prefers-reduced-motion:reduce[\s\S]*\.network-rule-flow-connector::after\{animation:none!important/);
     expect(styles).toMatch(/max-width:620px[\s\S]*\.network-type-options\{grid-template-columns:1fr\}/);
     expect(styles).toMatch(/prefers-reduced-transparency:reduce[\s\S]*\.terminal-block,.terminal-surface,.file-browser,.network-pane\{background:#050708\}/);
   });
@@ -275,6 +287,18 @@ describe("application layout styles", () => {
     expect(styles).toContain(".connection-context-menu,.file-context-menu,.network-context-menu{animation:none}");
   });
 
+  it("shares terminal typography with the file code editor without replacing editor rendering states", () => {
+    const root = declarations(":root");
+    const editor = declarations(".file-code-editor .cm-editor");
+    expect(root).toContain("--terminal-font-size:13px");
+    expect(root).toContain("--terminal-line-height:1.22");
+    expect(editor).toContain("font-family:var(--terminal-font-family)");
+    expect(editor).toContain("font-size:var(--terminal-font-size)");
+    expect(editor).toContain("line-height:var(--terminal-line-height)");
+    expect(declarations(".file-code-editor .cm-activeLine,.file-code-editor .cm-activeLineGutter")).toContain("background:#15191c");
+    expect(declarations(".file-code-editor .cm-selectionBackground")).toContain("background:#244b44!important");
+  });
+
   it("keeps path editing inline and anchors refresh to the far edge", () => {
     expect(declarations(".file-browser-navigation")).toContain("display:grid");
     expect(declarations(".file-browser-navigation")).toContain("grid-template-columns:25px 25px minmax(0,1fr) 25px 25px 25px");
@@ -322,6 +346,14 @@ describe("application layout styles", () => {
     expect(declarations('.file-row[data-entry-kind="directory"] .file-name svg')).toContain("fill:currentColor");
     expect(declarations('.file-row[data-entry-kind="directory"] .file-name svg')).toContain("stroke:currentColor");
     expect(declarations(".file-name svg")).not.toContain("fill:");
+  });
+
+  it("keeps virtual file rows inside the existing scroll surface", () => {
+    expect(declarations(".file-list-virtual")).toContain("position:relative");
+    expect(declarations(".file-list-virtual")).toContain("padding:0");
+    expect(declarations(".file-list-virtual>.file-row")).toContain("position:absolute");
+    expect(declarations(".file-list-virtual>.file-row")).toContain("height:27px");
+    expect(declarations(".file-browser-content")).toContain("overflow:auto");
   });
 
   it("keeps native file-drop feedback inside the file content surface", () => {
