@@ -3,6 +3,9 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const styles = readFileSync("src/app/app.css", "utf8");
+const tauriConfig = JSON.parse(readFileSync("src-tauri/tauri.conf.json", "utf8")) as {
+  app: { windows: Array<{ theme?: string; transparent?: boolean; windowEffects?: { effects: string[]; state?: string; radius?: number } }> };
+};
 
 function declarations(selector: string): string {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -10,6 +13,35 @@ function declarations(selector: string): string {
 }
 
 describe("application layout styles", () => {
+  it("uses native window material behind a lightly tinted, rounded webview shell", () => {
+    const appShell = declarations(".app-shell");
+    const chrome = declarations(".app-chrome");
+    const utilityRail = declarations(".utility-rail");
+    const workspaceCanvas = declarations(".workspace-canvas");
+    const terminalHeader = declarations(".terminal-block-header");
+    const dialog = declarations(".dialog-frame");
+    const window = tauriConfig.app.windows[0];
+
+    expect(appShell).toContain("border-radius:var(--shell-radius)");
+    expect(appShell).toContain("background:transparent");
+    expect(appShell).not.toContain("border:");
+    expect(appShell).not.toContain("isolation:isolate");
+    expect(chrome).not.toContain("backdrop-filter:");
+    expect(utilityRail).not.toContain("backdrop-filter:");
+    expect(workspaceCanvas).toContain("background:rgba(5,7,9,.18)");
+    expect(terminalHeader).not.toContain("backdrop-filter:");
+    expect(dialog).toContain("backdrop-filter:blur(30px)");
+    expect(window.theme).toBe("Dark");
+    expect(window.transparent).toBe(true);
+    expect(window.windowEffects).toEqual({
+      effects: ["hudWindow", "mica", "acrylic", "blur"],
+      state: "followsWindowActiveState",
+      radius: 12,
+    });
+    expect(styles).toMatch(/prefers-reduced-transparency:reduce[\s\S]*\.app-shell\{background:#090a0c\}/);
+    expect(styles).toMatch(/prefers-contrast:more[\s\S]*\.app-shell\{background:#090a0cf5;box-shadow:inset 0 0 0 1px #737a84\}/);
+  });
+
   it("fills tall terminal blocks with one continuous terminal surface", () => {
     const terminalSurface = declarations(".terminal-surface");
     const xtermSurface = declarations(".terminal-surface>.xterm");
@@ -23,7 +55,7 @@ describe("application layout styles", () => {
   });
 
   it("keeps canvas and split gutters compact", () => {
-    expect(declarations(".workspace-canvas")).toContain("padding:2px");
+    expect(declarations(".workspace-canvas")).toContain("padding:5px");
     expect(styles).not.toContain(".terminal-block.maximized");
     expect(styles).not.toContain(".terminal-block.hidden-by-maximize");
     expect(declarations(".split-horizontal>.split-divider")).toContain("width:3px");

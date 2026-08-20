@@ -10,6 +10,7 @@
     "frontendDist": "../dist"
   },
   "app": {
+    "macOSPrivateApi": true,
     "windows": [
       {
         "title": "Qterm",
@@ -18,7 +19,14 @@
         "minWidth": 720,
         "minHeight": 520,
         "resizable": true,
-        "decorations": false
+        "decorations": false,
+        "theme": "Dark",
+        "transparent": true,
+        "windowEffects": {
+          "effects": ["hudWindow", "mica", "acrylic", "blur"],
+          "state": "followsWindowActiveState",
+          "radius": 12
+        }
       }
     ],
     "security": {
