@@ -44,7 +44,9 @@ tauri-plugin-window-state = "=2.4.1"
 
 [target.'cfg(windows)'.dependencies]
 windows-version = "0.1.7"
-windows = { version = "=0.62.2", features = ["Win32_Foundation", "Win32_System_RemoteDesktop", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
+# Pinned to match the `windows` version used by tauri/tao so HWND and other
+# handle types stay identical across the dependency graph.
+windows = { version = "=0.61.3", features = ["Win32_Foundation", "Win32_System_RemoteDesktop", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
 
 [dev-dependencies]
 tempfile = "3.27.0"
