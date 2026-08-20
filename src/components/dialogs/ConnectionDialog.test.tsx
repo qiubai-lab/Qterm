@@ -164,6 +164,27 @@ describe("ConnectionDialog", () => {
     expect(screen.getByRole("tabpanel", { name: "认证方式" })).toBeInTheDocument();
   });
 
+  it("keeps mouse, keyboard, and context-menu profile selection inside the manager", async () => {
+    const second = { ...profile, id: "profile-2", name: "备用服务器", host: "backup.example" };
+    workspaceProfiles = [profile, second];
+    const user = userEvent.setup();
+    render(<ConnectionDialog onClose={vi.fn()}/>);
+
+    expect(await screen.findByText("管理 SSH 连接配置")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Production", { selector: ".connection-group-toggle strong" }).closest("button")!);
+    const originalItem = screen.getByRole("button", { name: /K8S服务器/ });
+    const secondItem = screen.getByRole("button", { name: /备用服务器/ });
+
+    await user.click(secondItem);
+    expect(screen.getByLabelText("名称")).toHaveValue("备用服务器");
+    fireEvent.keyDown(originalItem, { key: "Enter" });
+    expect(screen.getByLabelText("名称")).toHaveValue("K8S服务器");
+    fireEvent.contextMenu(secondItem);
+    await user.click(within(screen.getByRole("menu", { name: "备用服务器 连接菜单" })).getByRole("menuitem", { name: "编辑连接" }));
+    expect(screen.getByLabelText("名称")).toHaveValue("备用服务器");
+    expect(mocks.selectBlockTarget).not.toHaveBeenCalled();
+  });
+
   it("selects a reusable credential reference without exposing password viewing", async () => {
     const user = userEvent.setup();
     mocks.getVaultStatus.mockResolvedValue({ initialized: true, unlocked: true });
@@ -209,6 +230,7 @@ describe("ConnectionDialog", () => {
     expect(await screen.findByRole("button", { name: "保存成功" })).toHaveAttribute("data-state", "success");
     expect(authTab).toHaveAttribute("aria-selected", "true");
     expect(screen.queryByText("连接配置已保存")).not.toBeInTheDocument();
+    expect(mocks.selectBlockTarget).not.toHaveBeenCalled();
     await waitFor(() => expect(screen.getByRole("button", { name: "保存配置" })).toHaveAttribute("data-state", "idle"), { timeout: 2000 });
   });
 
@@ -268,6 +290,7 @@ describe("ConnectionDialog", () => {
       name: "server.example",
       host: "  server.example  ",
     })));
+    expect(mocks.selectBlockTarget).not.toHaveBeenCalled();
   });
 
   it("requires confirmation before deleting a saved profile", async () => {
@@ -439,7 +462,7 @@ describe("ConnectionDialog", () => {
     expect(mocks.refreshProfiles).toHaveBeenCalled();
     expect(screen.getByLabelText("名称")).toHaveValue("K8S服务器 副本 2");
     expect(screen.getByRole("alert")).toHaveTextContent("已复制“K8S服务器”为“K8S服务器 副本 2”");
-    expect(mocks.selectBlockTarget).toHaveBeenCalledWith("workspace-1", "block-1", "profile-copy");
+    expect(mocks.selectBlockTarget).not.toHaveBeenCalled();
   });
 
   it("keeps the current selection and reports an error when copying fails", async () => {

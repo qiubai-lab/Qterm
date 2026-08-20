@@ -48,6 +48,7 @@ Frontend -> Tauri Commands -> Application -> Domain / Ports <- Infrastructure
 - 高频终端字节直接进入 block-scoped xterm runtime，不进入 Workspace reducer 或持久化 model。
 - Workspace、layout、Terminal/Files/Network 的 profile 引用与文件路径可以持久化；Network 规则由独立 repository 按 profile 保存。session id、listener、活动转发、终端 buffer 和私钥口令禁止持久化。用户明确保存的密码只能进入独立加密 vault，不得进入 Workspace/profile/network rule。
 - 前端组合入口只装配 workspace shell。layout tree 变换、terminal runtime registry、工具弹窗和持久化 IPC 必须拥有独立模块边界。
+- ConnectionDialog 只编排 profile/group CRUD 与管理器内部编辑状态；浏览、编辑、保存和复制 profile 不得调用 Workspace 的 Terminal/Files/Network target selection 或 session connection API。Block header 的目标选择器拥有目标切换与连接发起职责。
 - WorkspaceShell 拥有不可持久化的应用内终端锁状态与最后活动时间：锁屏挂载在 `workspace-stage`，只有工作区内容必须 inert 且隐藏于辅助技术；顶部 `app-chrome` 位于锁定边界外，Workspace 切换/新建与窗口控制保持可用。Escape、背景点击和终端操作快捷键不得绕过锁屏；专用锁屏只短暂持有主密码输入并复用 credential unlock IPC。settings 只保存空闲策略，当前锁定状态和活动时间不得进入 Workspace reducer 或 persistence。
 - SSH session 必须带显式用途。`Terminal` 用途可以申请 PTY/shell并接受 write/resize；`Files` 用途不得申请 PTY/shell，只接受 SFTP 目录和传输控制；`Network` 用途不得申请 PTY/shell/SFTP，只接受有界的 TCP forwarding start/stop/close 控制。
 - 远程 Files leaf 初次创建或切换 profile 时必须自动请求自身的 SFTP 会话，不复用来源终端 session；本机 Files leaf 不触发认证。

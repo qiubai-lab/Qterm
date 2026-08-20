@@ -16,14 +16,14 @@
 ## Design
 
 - 在连接菜单的非破坏性操作区增加“复制连接”，删除项继续由分隔线隔开。
-- 由连接弹窗将 `ConnectionProfile` 映射为现有 `ProfileInput`，仅替换为不重名的副本名称；调用 `createProfile` 后刷新列表并复用选择目标的交互。
+- 由连接弹窗将 `ConnectionProfile` 映射为现有 `ProfileInput`，仅替换为不重名的副本名称；调用 `createProfile` 后刷新列表并更新管理器内部编辑对象，不修改 Workspace Block 目标。
 - 复制命名只属于管理界面的便捷展示规则；profile 校验、ID 生成和持久化保持在现有后端边界，不引入新抽象。
 
 ## Acceptance To Verification
 
 - 菜单顺序与键盘可用性：Testing Library 查询 menuitem 并触发操作。
 - 字段、凭证引用与分组完整复制：断言 `createProfile` 输入。
-- 名称重名与编辑状态：准备已有“副本”，断言递增名称及表单/当前目标。
+- 名称重名与编辑状态：准备已有“副本”，断言递增名称、表单选中副本且当前 Block 目标未改变。
 - 失败不产生伪选择：mock 创建失败，断言错误反馈和未刷新/未切换。
 - 既有编辑、Escape、删除确认：保留并运行现有上下文菜单测试。
 

@@ -57,6 +57,7 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const pointerDragRef = useRef<PointerDragState | null>(null);
   const suppressClickRef = useRef(false);
+  const initializedSelectionRef = useRef(false);
   const saveResetTimerRef = useRef<number | null>(null);
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [message, setMessage] = useState("");
@@ -79,9 +80,9 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
     }).catch((error) => setMessage(errorMessage(error)));
   }, []);
   useEffect(() => {
-    const activeLeafProfile = findProfileId(activeWorkspace.layout, terminalBlockId);
-    const profile = profiles.find((item) => item.id === activeLeafProfile);
-    if (profile) void chooseProfile(profile, false);
+    if (initializedSelectionRef.current || profiles.length === 0) return;
+    initializedSelectionRef.current = true;
+    chooseProfile(profiles[0]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profiles]);
   useEffect(() => {
@@ -99,12 +100,11 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
     if (saveResetTimerRef.current !== null) window.clearTimeout(saveResetTimerRef.current);
   }, []);
 
-  async function chooseProfile(profile: ConnectionProfile, changeTarget = true) {
+  function chooseProfile(profile: ConnectionProfile) {
     const changedProfile = profile.id !== selectedId;
     setSelectedId(profile.id);
     setEditor({ name: profile.name, host: profile.host, port: profile.port, username: profile.username, authPreference: profile.authPreference, credentialId: profile.credentialId, groupId: profile.groupId });
-    if (changedProfile && (changeTarget || saveState === "idle")) { setEditorTab("connection"); setTabMotion("idle"); }
-    if (changeTarget) await selectBlockTarget(activeWorkspace.id, terminalBlockId, profile.id);
+    if (changedProfile && saveState === "idle") { setEditorTab("connection"); setTabMotion("idle"); }
   }
 
   async function refreshCredentialSummaries() {
@@ -135,7 +135,7 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
       const input = { ...editor, name: editor.name.trim() || editor.host.trim() };
       setEditor(input);
       const profile = selectedId ? await updateProfile(selectedId, input) : await createProfile(input);
-      await refreshProfiles(); setSelectedId(profile.id); await selectBlockTarget(activeWorkspace.id, terminalBlockId, profile.id);
+      await refreshProfiles(); setSelectedId(profile.id);
       setSaveState("success");
       saveResetTimerRef.current = window.setTimeout(() => { setSaveState("idle"); saveResetTimerRef.current = null; }, 1400);
     } catch (error) { setSaveState("idle"); setMessage(errorMessage(error)); }
@@ -302,7 +302,7 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
       } else {
         setUngroupedCollapsed(false);
       }
-      await chooseProfile(duplicate);
+      chooseProfile(duplicate);
       setMessage(`已复制“${profile.name}”为“${duplicate.name}”`);
     } catch (error) { setMessage(errorMessage(error)); }
   }
@@ -313,12 +313,12 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
       role="button"
       tabIndex={0}
       className={`${selectedId === profile.id ? "connection-item selected" : "connection-item"}${pointerDrag?.active && pointerDrag.profile.id === profile.id ? " dragging" : ""}`}
-      onClick={(event) => { if (suppressClickRef.current) { event.preventDefault(); return; } void chooseProfile(profile); }}
+      onClick={(event) => { if (suppressClickRef.current) { event.preventDefault(); return; } chooseProfile(profile); }}
       onMouseDown={(event) => { if (event.button === 2) openContextMenu(event, { type: "profile", profile }); }}
       onContextMenu={(event) => openContextMenu(event, { type: "profile", profile })}
       onKeyDown={(event) => {
         openContextMenuFromKeyboard(event, { type: "profile", profile });
-        if (event.key === "Enter" || event.key === " ") { event.preventDefault(); void chooseProfile(profile); }
+        if (event.key === "Enter" || event.key === " ") { event.preventDefault(); chooseProfile(profile); }
       }}
       onPointerDown={(event) => beginPointerDrag(event, profile)}
       onPointerMove={movePointerDrag}
@@ -331,7 +331,7 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
   return <>
     <DialogFrame
       title="连接管理"
-      subtitle={`连接到当前 Block · ${activeWorkspace.name}`}
+      subtitle="管理 SSH 连接配置"
       headerActions={<span className={`vault-status-button ${vaultStatus.initialized ? "initialized" : "uninitialized"}`}><span aria-hidden="true"/>{vaultStatus.unlocked ? "凭证库已解锁" : vaultStatus.initialized ? "凭证库已锁定" : vaultStatus.legacy ? "旧版凭证库" : "凭证库未初始化"}</span>}
       onClose={credentialManagerOpen || credentialUnlockOpen || deleteRequested || groupEditor || groupDeleteRequested || contextMenu ? () => undefined : onClose}
       wide
@@ -420,7 +420,7 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
         <div className="connection-context-menu-separator" role="separator"/>
         <button className="danger" role="menuitem" onClick={() => { setContextMenu(null); setGroupDeleteRequested(contextGroup); }}>删除分组</button>
       </> : contextProfile ? <>
-        <button role="menuitem" onClick={() => { setContextMenu(null); void chooseProfile(contextProfile); }}>编辑连接</button>
+        <button role="menuitem" onClick={() => { setContextMenu(null); chooseProfile(contextProfile); }}>编辑连接</button>
         <button role="menuitem" onClick={() => void duplicateProfile(contextProfile)}>复制连接</button>
         <div className="connection-context-menu-separator" role="separator"/>
         <button className="danger" role="menuitem" onClick={() => { setContextMenu(null); setDeleteRequested(contextProfile); }}>删除连接</button>
