@@ -1,7 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Qterm",
-  "version": "0.1.1",
   "identifier": "com.qiubai.qterm",
   "build": {
     "beforeDevCommand": "pnpm dev",

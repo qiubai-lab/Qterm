@@ -75,6 +75,12 @@ describe("application layout styles", () => {
     expect(declarations(".network-rule-item")).toContain("min-height:58px");
     expect(declarations(".network-rule-item+.network-rule-item")).toContain("margin-top:3px");
     expect(declarations(".network-rule-copy")).toContain("flex-direction:column");
+    expect(declarations('.network-rule-item[data-state="running"] .network-rule-route-highlight')).toContain("animation:network-route-character-flow 6.4s");
+    expect(declarations(".network-rule-route-highlight")).toContain("mask-image:linear-gradient");
+    expect(styles).toContain("@keyframes network-route-character-flow");
+    expect(styles).not.toContain("network-route-content-flow");
+    expect(styles).not.toContain("mix-blend-mode:screen");
+    expect(styles).toMatch(/prefers-reduced-motion:reduce[\s\S]*\.network-rule-route-highlight\{animation:none!important;opacity:0!important\}/);
     expect(declarations(".network-rule-list.empty")).toContain("display:flex");
     expect(declarations(".network-rule-list.empty>.network-empty")).toContain("width:100%");
     expect(declarations(".network-rule-list.empty>.network-empty")).toContain("flex:1");

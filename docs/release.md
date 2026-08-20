@@ -20,19 +20,16 @@
    cargo test --all-targets --all-features
    ```
 
-3. 同步版本号，三处保持一致：
-   - `src-tauri/tauri.conf.json` 的 `version`（安装包元数据以此为准）
-   - `package.json` 的 `version`
-   - `src-tauri/Cargo.toml` 的 `version`（修改后运行一次 `cargo check` 刷新 `Cargo.lock` 并一并提交）
+3. 修改唯一版本源 `src-tauri/Cargo.toml` 的 `package.version`，然后运行一次 `cargo check` 刷新 `Cargo.lock` 并一并提交。Tauri 安装包版本会自动读取该 Cargo 包版本。
 
-版本号遵循语义化版本，标签格式为 `vX.Y.Z`，与 `tauri.conf.json` 的版本一致。
+版本号遵循语义化版本，标签格式为 `vX.Y.Z`，并与 `Cargo.toml` 的版本一致。标签发布流水线会在构建前自动校验二者；不一致时发布立即失败。
 
 ## 发布步骤
 
 ```bash
 git switch main && git pull
 
-# 更新上述三处版本号后提交
+# 更新 src-tauri/Cargo.toml 并运行 cargo check 后提交
 git commit -am "chore: release v0.2.0"
 git push origin main
 
@@ -45,7 +42,8 @@ git push origin v0.2.0
 
 ## 流水线行为
 
-- `build` job：三个原生 runner 并行构建（`fail-fast: false`，单平台失败不影响其他平台），产物先上传为 workflow artifacts，命名为 `qterm-{平台}-{commit sha}`。
+- `validate-release-version` job：标签触发时读取 Cargo 包版本并校验标签；手动触发时直接通过。
+- `build` job：版本校验通过后三个原生 runner 并行构建（`fail-fast: false`，单平台失败不影响其他平台），产物先上传为 workflow artifacts，命名为 `qterm-{平台}-{commit sha}`。
 - `release` job：仅在标签推送（`refs/tags/v*`）时运行，等待全部平台构建成功后，下载所有 artifacts 并通过 `softprops/action-gh-release` 把安装包附加到该标签的 Release。该 job 单独持有 `contents: write` 权限。
 - Release 标题与正文由 action 默认生成，发布后可手动在 Releases 页面编辑补充更新说明。
 
@@ -72,6 +70,6 @@ git push origin v0.2.0
 
 ## 注意事项
 
-- 不要在 CI 未绿、版本号未同步的情况下打标签；标签推送即发布，没有二次确认。
+- 不要在 CI 未绿、Cargo 版本未提交的情况下打标签；标签推送即发布，没有二次确认。
 - workflow artifacts 仅用于调试，14 天后自动删除；对外分发一律以 GitHub Release 为准。
 - 涉及原生依赖、Tauri 配置或打包的改动，发布前应先用手动触发验证三平台构建。

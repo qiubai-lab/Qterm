@@ -182,14 +182,17 @@ function NetworkRuleRoute({ rule }: { rule: NetworkRule }) {
   const [source, target] = routeEndpoints(rule);
   const label = `${source.label} ${source.address} → ${target.label} ${target.address}`;
   return <div className="network-rule-route" aria-label={label} title={label}>
-    <RouteEndpointView endpoint={source}/>
-    <span className="network-rule-route-arrow" aria-hidden="true">→</span>
-    <RouteEndpointView endpoint={target}/>
+    <NetworkRuleRouteContent source={source} target={target}/>
+    <span className="network-rule-route-highlight" aria-hidden="true"><NetworkRuleRouteContent source={source} target={target}/></span>
   </div>;
 }
 
+function NetworkRuleRouteContent({ source, target }: { source: RouteEndpoint; target: RouteEndpoint }) {
+  return <span className="network-rule-route-content"><RouteEndpointView endpoint={source}/><span className="network-rule-route-arrow" aria-hidden="true">→</span><RouteEndpointView endpoint={target}/></span>;
+}
+
 function RouteEndpointView({ endpoint }: { endpoint: RouteEndpoint }) {
-  return <span className="network-rule-endpoint"><Icon name={endpoint.icon} size={11}/><span>{endpoint.label}</span><code>{endpoint.address}</code></span>;
+  return <span className="network-rule-endpoint"><span className="network-rule-endpoint-icon"><Icon name={endpoint.icon} size={11}/></span><span className="network-rule-endpoint-label">{endpoint.label}</span><code>{endpoint.address}</code></span>;
 }
 
 function routeEndpoints(rule: NetworkRule): [RouteEndpoint, RouteEndpoint] {

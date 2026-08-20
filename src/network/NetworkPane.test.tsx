@@ -82,6 +82,7 @@ describe("NetworkPane", () => {
     const localRoute = await screen.findByLabelText("本地 127.0.0.1:8080 → 远程 localhost:80");
     expect(localRoute.querySelector('[data-icon="computer"]')).toBeInTheDocument();
     expect(localRoute.querySelector('[data-icon="server"]')).toBeInTheDocument();
+    expect(localRoute.querySelector('.network-rule-route-highlight[aria-hidden="true"]')).toBeInTheDocument();
 
     const remoteRoute = screen.getByLabelText("远程 0.0.0.0:9000 → 本地 localhost:3000");
     expect(remoteRoute.querySelector('[data-icon="server"]')).toBeInTheDocument();
