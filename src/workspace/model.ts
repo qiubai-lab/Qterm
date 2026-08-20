@@ -13,6 +13,12 @@ export interface FilesNode {
   path: string;
 }
 
+export interface NetworkNode {
+  type: "network";
+  blockId: string;
+  profileId: string | null;
+}
+
 export interface SplitNode {
   type: "split";
   id: string;
@@ -22,7 +28,7 @@ export interface SplitNode {
   second: LayoutNode;
 }
 
-export type LayoutLeaf = TerminalNode | FilesNode;
+export type LayoutLeaf = TerminalNode | FilesNode | NetworkNode;
 export type LayoutNode = LayoutLeaf | SplitNode;
 
 export interface Workspace {
@@ -33,7 +39,7 @@ export interface Workspace {
 }
 
 export interface WorkspaceDocument {
-  schemaVersion: 4;
+  schemaVersion: 5;
   activeWorkspaceId: string;
   workspaces: Workspace[];
 }
@@ -50,6 +56,10 @@ export function createFilesNode(profileId: string | null, path: string): FilesNo
   return { type: "files", blockId: createId("files"), profileId, path };
 }
 
+export function createNetworkNode(profileId: string | null): NetworkNode {
+  return { type: "network", blockId: createId("network"), profileId };
+}
+
 export function createWorkspace(name = "Workspace 1"): Workspace {
   const terminal = createTerminalNode();
   return { id: createId("workspace"), name, activeBlockId: terminal.blockId, layout: terminal };
@@ -57,5 +67,5 @@ export function createWorkspace(name = "Workspace 1"): Workspace {
 
 export function createWorkspaceDocument(): WorkspaceDocument {
   const workspace = createWorkspace();
-  return { schemaVersion: 4, activeWorkspaceId: workspace.id, workspaces: [workspace] };
+  return { schemaVersion: 5, activeWorkspaceId: workspace.id, workspaces: [workspace] };
 }

@@ -51,4 +51,15 @@ describe("workspace reducer", () => {
     expect(local.workspaces[0].layout).toMatchObject({ second: { type: "files", profileId: null } });
     expect(workspaceReducer(opened, { type: "closeBlock", workspaceId: workspace.id, blockId: workspace.activeBlockId })).toEqual(opened);
   });
+
+  it("opens and retargets a persisted network leaf", () => {
+    const initial = createWorkspaceDocument();
+    const workspace = initial.workspaces[0];
+    const opened = workspaceReducer(initial, { type: "openNetwork", workspaceId: workspace.id, anchorBlockId: workspace.activeBlockId, profileId: "profile-1" });
+    const current = opened.workspaces[0];
+    expect(current.activeBlockId).toMatch(/^network-/);
+    expect(current.layout).toMatchObject({ second: { type: "network", profileId: "profile-1" } });
+    const retargeted = workspaceReducer(opened, { type: "setNetworkProfile", workspaceId: workspace.id, blockId: current.activeBlockId, profileId: "profile-2" });
+    expect(retargeted.workspaces[0].layout).toMatchObject({ second: { type: "network", profileId: "profile-2" } });
+  });
 });

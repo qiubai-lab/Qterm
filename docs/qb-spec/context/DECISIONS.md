@@ -190,7 +190,7 @@ profile 增加 `manual` 连接策略。该策略每次连接都先打开认证�
 
 Status: accepted
 
-`connections.json` v4、`secrets.vault` v3 与 `workspaces.json` v4 的 reader 只接受精确当前版本。运行时不复制旧 app-data 文件，也不读取或迁移旧 profile、vault、workspace records。旧版 vault 只在用户进入凭证管理并完成现有破坏性确认后清除，同时解除 credential references；未来版本或其他不兼容文件仍返回稳定版本错误并保持原始字节不变。
+`connections.json` v4、`secrets.vault` v3、`network-forwards.json` v1 与 `workspaces.json` v5 的 reader 只接受精确当前版本。运行时不复制旧 app-data 文件，也不读取或迁移旧 profile、network rule、vault、workspace records。旧版 vault 只在用户进入凭证管理并完成现有破坏性确认后清除，同时解除 credential references；未来版本或其他不兼容文件仍返回稳定版本错误并保持原始字节不变。
 
 ## 2026-08-20 — 凭证库使用用户保管且可轮换的恢复密钥
 
@@ -208,10 +208,16 @@ Status: accepted
 
 Status: accepted
 
-只有 `connections.json` 与 `secrets.vault` 跟随可配置的迁移目录，默认目录为 `~/.qterm`；应用 known-hosts、Workspace 与设备安全设置继续使用系统 app-data，不受该配置影响。固定系统 app-config 只保存 schema-versioned 的 `storage-location.json`，使组合根能在载入连接与凭证前确定迁移目录。用户可输入绝对路径或通过系统目录选择器修改；空值、`~` 与 `~/.qterm` 均恢复默认。保存时初始化目标目录，但不复制、移动、覆盖或删除旧数据，路径在重启后生效，用户必须按界面提示手动迁移 `connections.json` 与 `secrets.vault`。损坏或不兼容的定位文件不被覆盖，启动回退到默认迁移目录并向设置 UI 暴露警告。
+只有 `connections.json`、`secrets.vault` 与 `network-forwards.json` 跟随可配置的迁移目录，默认目录为 `~/.qterm`；应用 known-hosts、Workspace 与设备安全设置继续使用系统 app-data，不受该配置影响。固定系统 app-config 只保存 schema-versioned 的 `storage-location.json`，使组合根能在载入连接、凭证与网络规则前确定迁移目录。用户可输入绝对路径或通过系统目录选择器修改；空值、`~` 与 `~/.qterm` 均恢复默认。保存时初始化目标目录，但不复制、移动、覆盖或删除旧数据，路径在重启后生效，用户必须按界面提示手动迁移 `connections.json`、`secrets.vault` 与 `network-forwards.json`。损坏或不兼容的定位文件不被覆盖，启动回退到默认迁移目录并向设置 UI 暴露警告。
 
 ## 2026-08-20 — 终端锁采用进程内遮罩并与凭证同时解锁
 
 Status: accepted
 
 右侧工具轨的锁定入口先让用户选择只锁定凭证库，或同时锁定终端界面与凭证。后者在 vault lock 成功后由 WorkspaceShell 设置不可持久化的进程内锁屏状态；锁屏只覆盖 `workspace-stage`，其底层工作区内容使用 inert 和辅助技术隐藏阻断交互，顶部 `app-chrome` 的 Workspace 切换/新建与窗口最小化、最大化、关闭保持可用。SSH/SFTP/local PTY 与后台输出继续运行。锁屏不可由 Escape 或背景点击退出，用户输入主密码后复用既有 vault unlock，同时恢复终端和凭证库。该能力只提供应用内隐私与误操作防护，不替代操作系统会话锁，应用重启后默认退出锁屏。
+
+## 2026-08-20 — Network Block 使用 profile 全局规则与独立 SSH 运行时
+
+Status: accepted
+
+Network 是与 Terminal、Files 并列的一等 Workspace leaf。转发规则按 `profileId` 全局共享并保存到可迁移目录的独立 `network-forwards.json`，Workspace Network leaf 只保存 `blockId/profileId`；listener、活动转发、子 channel、session id 和认证材料不持久化。每个 Network Block 使用独立 SSH session，同一 Block 内的 Local、Remote 与 SOCKS5 规则共享该 session，不复用来源 Terminal/Files session。规则恢复后默认停止，不自动启动或无限重连。本地与 SOCKS5 listener、远程 listener 均默认 loopback；非 loopback 需要显式风险提示。profile 仍被规则引用时禁止删除，不跨独立配置文件静默级联。

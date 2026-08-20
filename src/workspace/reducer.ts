@@ -1,5 +1,5 @@
-import { blockIds, closeTerminal, findLeaf, moveTerminal, setFilesPath, setFilesProfile, setTerminalProfile, splitTerminal, terminalBlockIds, updateSplitRatio, type DropPosition } from "./layout";
-import { createFilesNode, createId, createTerminalNode, createWorkspace, type SplitDirection, type Workspace, type WorkspaceDocument } from "./model";
+import { blockIds, closeTerminal, findLeaf, moveTerminal, setFilesPath, setFilesProfile, setNetworkProfile, setTerminalProfile, splitTerminal, terminalBlockIds, updateSplitRatio, type DropPosition } from "./layout";
+import { createFilesNode, createId, createNetworkNode, createTerminalNode, createWorkspace, type SplitDirection, type Workspace, type WorkspaceDocument } from "./model";
 
 export type WorkspaceAction =
   | { type: "hydrate"; document: WorkspaceDocument }
@@ -11,11 +11,13 @@ export type WorkspaceAction =
   | { type: "selectBlock"; workspaceId: string; blockId: string }
   | { type: "splitBlock"; workspaceId: string; blockId: string; direction: SplitDirection }
   | { type: "openFiles"; workspaceId: string; anchorBlockId: string; profileId: string | null; path: string }
+  | { type: "openNetwork"; workspaceId: string; anchorBlockId: string; profileId: string | null }
   | { type: "closeBlock"; workspaceId: string; blockId: string }
   | { type: "resizeSplit"; workspaceId: string; splitId: string; ratio: number }
   | { type: "setBlockProfile"; workspaceId: string; blockId: string; profileId: string | null }
   | { type: "setFilesPath"; workspaceId: string; blockId: string; path: string }
   | { type: "setFilesProfile"; workspaceId: string; blockId: string; profileId: string | null }
+  | { type: "setNetworkProfile"; workspaceId: string; blockId: string; profileId: string | null }
   | { type: "moveBlock"; workspaceId: string; sourceId: string; targetId: string; position: DropPosition };
 
 export function workspaceReducer(state: WorkspaceDocument, action: WorkspaceAction): WorkspaceDocument {
@@ -47,6 +49,10 @@ export function workspaceReducer(state: WorkspaceDocument, action: WorkspaceActi
       const files = createFilesNode(action.profileId, action.path);
       return { ...workspace, activeBlockId: files.blockId, layout: splitTerminal(workspace.layout, action.anchorBlockId, "horizontal", files, createId("split")) };
     });
+    case "openNetwork": return mapWorkspace(state, action.workspaceId, (workspace) => {
+      const network = createNetworkNode(action.profileId);
+      return { ...workspace, activeBlockId: network.blockId, layout: splitTerminal(workspace.layout, action.anchorBlockId, "horizontal", network, createId("split")) };
+    });
     case "closeBlock": return mapWorkspace(state, action.workspaceId, (workspace) => {
       if (blockIds(workspace.layout).length === 1) return workspace;
       if (findLeaf(workspace.layout, action.blockId)?.type === "terminal" && terminalBlockIds(workspace.layout).length === 1) return workspace;
@@ -59,6 +65,7 @@ export function workspaceReducer(state: WorkspaceDocument, action: WorkspaceActi
     case "setBlockProfile": return mapWorkspace(state, action.workspaceId, (workspace) => ({ ...workspace, layout: setTerminalProfile(workspace.layout, action.blockId, action.profileId) }));
     case "setFilesPath": return mapWorkspace(state, action.workspaceId, (workspace) => ({ ...workspace, layout: setFilesPath(workspace.layout, action.blockId, action.path) }));
     case "setFilesProfile": return mapWorkspace(state, action.workspaceId, (workspace) => ({ ...workspace, layout: setFilesProfile(workspace.layout, action.blockId, action.profileId) }));
+    case "setNetworkProfile": return mapWorkspace(state, action.workspaceId, (workspace) => ({ ...workspace, layout: setNetworkProfile(workspace.layout, action.blockId, action.profileId) }));
     case "moveBlock": return mapWorkspace(state, action.workspaceId, (workspace) => ({ ...workspace, activeBlockId: action.sourceId, layout: moveTerminal(workspace.layout, action.sourceId, action.targetId, action.position, createId("split")) }));
   }
 }

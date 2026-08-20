@@ -107,7 +107,7 @@ function swapTerminals(
 
 export function terminalBlockIds(node: LayoutNode): string[] {
   if (node.type === "terminal") return [node.blockId];
-  if (node.type === "files") return [];
+  if (node.type === "files" || node.type === "network") return [];
   return [...terminalBlockIds(node.first), ...terminalBlockIds(node.second)];
 }
 
@@ -126,6 +126,15 @@ export function setFilesProfile(node: LayoutNode, blockId: string, profileId: st
     ...node,
     first: setFilesProfile(node.first, blockId, profileId),
     second: setFilesProfile(node.second, blockId, profileId),
+  };
+}
+
+export function setNetworkProfile(node: LayoutNode, blockId: string, profileId: string | null): LayoutNode {
+  if (node.type !== "split") return node.type === "network" && node.blockId === blockId ? { ...node, profileId } : node;
+  return {
+    ...node,
+    first: setNetworkProfile(node.first, blockId, profileId),
+    second: setNetworkProfile(node.second, blockId, profileId),
   };
 }
 

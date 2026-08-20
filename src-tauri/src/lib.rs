@@ -21,6 +21,10 @@ use commands::local_session::{
     LocalSessionState, local_session_close, local_session_connect, local_session_resize,
     local_session_write, local_terminal_capabilities,
 };
+use commands::network::{
+    NetworkState, network_rule_create, network_rule_delete, network_rule_list, network_rule_start,
+    network_rule_stop, network_rule_update, network_session_connect,
+};
 use commands::profile::{
     ProfileState, profile_create, profile_delete, profile_group_create, profile_group_delete,
     profile_group_list, profile_group_update, profile_list, profile_update,
@@ -43,6 +47,7 @@ use domain::settings::DataDirectory;
 use infrastructure::local::pty::LocalSessionManager;
 use infrastructure::persistence::json_credential_vault::JsonCredentialVault;
 use infrastructure::persistence::json_known_host_repository::JsonKnownHostRepository;
+use infrastructure::persistence::json_network_repository::JsonNetworkRepository;
 use infrastructure::persistence::json_profile_repository::JsonProfileRepository;
 use infrastructure::persistence::json_settings_repository::{
     JsonDataDirectoryRepository, JsonSettingsRepository,
@@ -63,6 +68,7 @@ fn persisted_window_state_flags() -> StateFlags {
 struct DataPaths {
     profiles: std::path::PathBuf,
     credentials: std::path::PathBuf,
+    network: std::path::PathBuf,
     known_hosts: std::path::PathBuf,
     workspaces: std::path::PathBuf,
     settings: std::path::PathBuf,
@@ -73,6 +79,7 @@ impl DataPaths {
         Self {
             profiles: portable_root.join("connections.json"),
             credentials: portable_root.join("secrets.vault"),
+            network: portable_root.join("network-forwards.json"),
             known_hosts: local_root.join("known-hosts.json"),
             workspaces: local_root.join("workspaces.json"),
             settings: local_root.join("settings.json"),
@@ -118,6 +125,7 @@ pub fn run() {
             app.manage(CredentialState::new(JsonCredentialVault::new(
                 paths.credentials,
             )));
+            app.manage(NetworkState::new(JsonNetworkRepository::new(paths.network)));
             app.manage(SettingsState::new(
                 JsonSettingsRepository::new(paths.settings),
                 data_directory_repository,
@@ -145,6 +153,13 @@ pub fn run() {
             profile_group_create,
             profile_group_update,
             profile_group_delete,
+            network_rule_list,
+            network_rule_create,
+            network_rule_update,
+            network_rule_delete,
+            network_session_connect,
+            network_rule_start,
+            network_rule_stop,
             credential_vault_status,
             credential_vault_initialize,
             credential_vault_unlock,
@@ -205,13 +220,14 @@ mod tests {
     use tauri_plugin_window_state::StateFlags;
 
     #[test]
-    fn only_connections_and_credentials_follow_the_portable_root() {
+    fn connections_credentials_and_network_rules_follow_the_portable_root() {
         let portable_root = std::path::Path::new("portable-root");
         let local_root = std::path::Path::new("local-root");
         let paths = DataPaths::from_roots(portable_root, local_root);
 
         assert_eq!(paths.profiles.parent(), Some(portable_root));
         assert_eq!(paths.credentials.parent(), Some(portable_root));
+        assert_eq!(paths.network.parent(), Some(portable_root));
         assert_eq!(paths.known_hosts.parent(), Some(local_root));
         assert_eq!(paths.workspaces.parent(), Some(local_root));
         assert_eq!(paths.settings.parent(), Some(local_root));

@@ -7,6 +7,9 @@ import type { Workspace } from "./model";
 const dispatch = vi.fn();
 const selectBlockTarget = vi.fn().mockResolvedValue(undefined);
 const selectFileTarget = vi.fn().mockResolvedValue(undefined);
+const selectNetworkTarget = vi.fn().mockResolvedValue(undefined);
+const startNetworkBlockRule = vi.fn().mockResolvedValue(undefined);
+const stopNetworkBlockRule = vi.fn().mockResolvedValue(undefined);
 const clearBlockBuffer = vi.fn();
 const profiles = [
   { id: "password-profile", name: "Password Server", host: "password.example", port: 22, username: "root", authPreference: "password" as const, credentialId: null, groupId: null },
@@ -14,6 +17,7 @@ const profiles = [
 ];
 const connectedLocalRuntime = { sessionId: "local-1", kind: "local" as const, status: "connected" as const, hostKeyPrompt: null, notice: "", cwd: "C:/work" };
 let terminalRuntimes: Record<string, typeof connectedLocalRuntime> = { "block-1": connectedLocalRuntime };
+let networkRuntimes: Record<string, { sessionId: string | null; status: "closed" | "connected"; hostKeyPrompt: null; notice: string; ruleStates: Record<string, "stopped" | "running"> }> = {};
 
 vi.mock("../terminal/TerminalPanel", () => ({
   TerminalPanel: () => <div aria-label="测试终端"/>,
@@ -23,14 +27,22 @@ vi.mock("../files/FileBrowserPane", () => ({
   FileBrowserPane: () => <div aria-label="测试文件窗口"/>,
 }));
 
+vi.mock("../network/NetworkPane", () => ({
+  NetworkPane: ({ onStart }: { onStart?: (rule: { id: string }) => void }) => <button onClick={() => onStart?.({ id: "rule-1" })}>启动测试规则</button>,
+}));
+
 vi.mock("./WorkspaceProvider", () => ({
   useWorkspace: () => ({
     dispatch,
     runtimes: terminalRuntimes,
     fileRuntimes: {},
+    networkRuntimes,
     profiles,
     selectBlockTarget,
     selectFileTarget,
+    selectNetworkTarget,
+    startNetworkBlockRule,
+    stopNetworkBlockRule,
     clearBlockBuffer,
   }),
 }));
@@ -49,8 +61,12 @@ describe("WorkspaceCanvas terminal actions", () => {
     dispatch.mockClear();
     selectBlockTarget.mockClear();
     selectFileTarget.mockClear();
+    selectNetworkTarget.mockClear();
+    startNetworkBlockRule.mockClear();
+    stopNetworkBlockRule.mockClear();
     clearBlockBuffer.mockClear();
     terminalRuntimes = { "block-1": connectedLocalRuntime };
+    networkRuntimes = {};
   });
   it("does not expose terminal maximize or restore controls", () => {
     render(<WorkspaceCanvas workspace={workspace} visible onRequestClose={vi.fn()} onRequestAuthConnection={vi.fn()}/>);
@@ -64,6 +80,32 @@ describe("WorkspaceCanvas terminal actions", () => {
     const view = render(<WorkspaceCanvas workspace={workspace} visible onRequestClose={vi.fn()} onRequestAuthConnection={vi.fn()}/>);
     within(view.container).getByRole("button", { name: "打开当前文件夹" }).click();
     expect(dispatch).toHaveBeenCalledWith({ type: "openFiles", workspaceId: "workspace-1", anchorBlockId: "block-1", profileId: null, path: "C:/work" });
+  });
+
+  it("allows only a remote terminal to create a network leaf inheriting its profile", async () => {
+    const user = userEvent.setup();
+    const localView = render(<WorkspaceCanvas workspace={workspace} visible onRequestClose={vi.fn()} onRequestAuthConnection={vi.fn()}/>);
+    expect(within(localView.container).getByRole("button", { name: "打开网络窗口" })).toBeDisabled();
+    localView.unmount();
+
+    const remoteWorkspace: Workspace = { ...workspace, layout: { type: "terminal", blockId: "block-1", profileId: "password-profile" } };
+    const remoteView = render(<WorkspaceCanvas workspace={remoteWorkspace} visible onRequestClose={vi.fn()} onRequestAuthConnection={vi.fn()}/>);
+    await user.click(within(remoteView.container).getByRole("button", { name: "打开网络窗口" }));
+    expect(dispatch).toHaveBeenCalledWith({ type: "openNetwork", workspaceId: "workspace-1", anchorBlockId: "block-1", profileId: "password-profile" });
+  });
+
+  it("connects a persisted network leaf only when a rule is started", async () => {
+    const user = userEvent.setup();
+    const onRequestAuthConnection = vi.fn();
+    const networkWorkspace: Workspace = { ...workspace, activeBlockId: "network-1", layout: { type: "network", blockId: "network-1", profileId: "password-profile" } };
+    const view = render(<WorkspaceCanvas workspace={networkWorkspace} visible onRequestClose={vi.fn()} onRequestAuthConnection={onRequestAuthConnection}/>);
+    expect(onRequestAuthConnection).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "启动测试规则" }));
+    expect(onRequestAuthConnection).toHaveBeenCalledWith("network", "network-1", profiles[0]);
+
+    networkRuntimes = { "network-1": { sessionId: "network-session", status: "connected", hostKeyPrompt: null, notice: "", ruleStates: {} } };
+    view.rerender(<WorkspaceCanvas workspace={networkWorkspace} visible onRequestClose={vi.fn()} onRequestAuthConnection={onRequestAuthConnection}/>);
+    await waitFor(() => expect(startNetworkBlockRule).toHaveBeenCalledWith("network-1", "rule-1"));
   });
 
   it("renders a persisted files leaf", () => {

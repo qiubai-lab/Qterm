@@ -129,6 +129,7 @@ pub(crate) fn build_connect_request(
         username,
         auth,
         purpose,
+        profile_id: None,
         terminal_output,
     })
 }
@@ -200,7 +201,7 @@ fn invalid_target(_: crate::domain::session::SessionValidationError) -> IpcError
     ))
 }
 
-fn control_error(error: SessionControlError) -> IpcError {
+pub(crate) fn control_error(error: SessionControlError) -> IpcError {
     let application_error = match error {
         SessionControlError::SessionNotFound => ApplicationError::new(
             ApplicationErrorCode::SessionNotFound,
@@ -240,6 +241,11 @@ fn control_error(error: SessionControlError) -> IpcError {
         | SessionControlError::FileConflict => ApplicationError::new(
             ApplicationErrorCode::TerminalBusy,
             "SSH 会话暂时无法处理文件请求",
+            true,
+        ),
+        SessionControlError::NetworkUnavailable => ApplicationError::new(
+            ApplicationErrorCode::NetworkForwardUnavailable,
+            "无法启动或停止网络转发，请检查端口占用与服务器策略",
             true,
         ),
         SessionControlError::NoHostKeyDecision => ApplicationError::new(

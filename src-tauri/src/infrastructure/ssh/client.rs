@@ -6,8 +6,8 @@ use std::{
 };
 
 use russh::{
-    ChannelMsg, Disconnect,
-    client::{self, Config, Handler},
+    Channel, ChannelMsg, ChannelOpenFailure, Disconnect,
+    client::{self, ChannelOpenHandle, Config, Handler, Msg},
     keys::{HashAlg, PublicKey},
 };
 use russh_sftp::{client::SftpSession, protocol::FileAttributes};
@@ -20,6 +20,7 @@ use crate::{
     domain::{
         auth::AuthRequest,
         files::{DirectoryListing, FileDocument, FileEntry, content_revision},
+        network::ForwardRuleKind,
         session::{
             HostEndpoint, HostKeyCheck, PresentedHostKey, SessionEvent, SessionFailure,
             SessionState, SessionStateMachine, TerminalSize,
@@ -27,7 +28,17 @@ use crate::{
         transfer::{RemotePath, TransferEvent},
     },
     infrastructure::{
-        persistence::json_known_host_repository::JsonKnownHostRepository, ssh::auth::authenticate,
+        persistence::json_known_host_repository::JsonKnownHostRepository,
+        ssh::{
+            auth::authenticate,
+            forwarding::{
+                DirectConnection, ForwardPermits, ForwardTaskRegistry,
+                MAX_ACTIVE_FORWARD_CONNECTIONS, RemoteForwardMap, RunningListener,
+                abort_forward_tasks, acknowledge_socks5, new_forward_permits,
+                pump_forwarded_channel, pump_tcp_channel, remote_target, spawn_forward_task,
+                start_listener,
+            },
+        },
     },
 };
 
@@ -41,6 +52,7 @@ pub struct SessionConnectRequest {
     pub username: String,
     pub auth: AuthRequest,
     pub purpose: SessionPurpose,
+    pub profile_id: Option<String>,
     pub terminal_output: Arc<dyn Fn(Vec<u8>) + Send + Sync>,
 }
 
@@ -48,6 +60,7 @@ pub struct SessionConnectRequest {
 pub enum SessionPurpose {
     Terminal,
     Files,
+    Network,
 }
 
 type EventSink = Arc<dyn Fn(SessionEvent) + Send + Sync>;
@@ -76,6 +89,7 @@ impl SshSessionManager {
         let entry = Arc::new(SessionEntry::new(
             request.endpoint.clone(),
             request.purpose,
+            request.profile_id.clone(),
             events,
             cancel_sender,
             control_sender,
@@ -176,6 +190,56 @@ impl SshSessionManager {
             .control
             .try_send(SessionControl::Resize(size))
             .map_err(|_| SessionControlError::ControlQueueUnavailable)
+    }
+
+    pub async fn start_network_rule(
+        &self,
+        id: &str,
+        rule_id: String,
+        rule_profile_id: &str,
+        kind: ForwardRuleKind,
+    ) -> Result<(), SessionControlError> {
+        let entry = self.entry(id)?;
+        if entry.purpose != SessionPurpose::Network {
+            return Err(SessionControlError::NetworkUnavailable);
+        }
+        if entry.profile_id.as_deref() != Some(rule_profile_id) {
+            return Err(SessionControlError::NetworkUnavailable);
+        }
+        if entry.state() != SessionState::Connected {
+            return Err(SessionControlError::SessionNotConnected);
+        }
+        let (reply, response) = oneshot::channel();
+        entry
+            .control
+            .try_send(SessionControl::StartNetworkRule {
+                rule_id,
+                kind,
+                reply,
+            })
+            .map_err(|_| SessionControlError::ControlQueueUnavailable)?;
+        response
+            .await
+            .map_err(|_| SessionControlError::SessionFinished)?
+    }
+
+    pub async fn stop_network_rule(
+        &self,
+        id: &str,
+        rule_id: String,
+    ) -> Result<(), SessionControlError> {
+        let entry = self.entry(id)?;
+        if entry.purpose != SessionPurpose::Network {
+            return Err(SessionControlError::NetworkUnavailable);
+        }
+        let (reply, response) = oneshot::channel();
+        entry
+            .control
+            .try_send(SessionControl::StopNetworkRule { rule_id, reply })
+            .map_err(|_| SessionControlError::ControlQueueUnavailable)?;
+        response
+            .await
+            .map_err(|_| SessionControlError::SessionFinished)?
     }
 
     pub fn start_transfer(
@@ -390,6 +454,7 @@ pub enum SessionControlError {
     FileUnavailable,
     FileTooLarge,
     FileConflict,
+    NetworkUnavailable,
 }
 
 pub enum TransferRequest {
@@ -414,6 +479,7 @@ pub enum TransferRequest {
 struct SessionEntry {
     endpoint: HostEndpoint,
     purpose: SessionPurpose,
+    profile_id: Option<String>,
     state: Mutex<SessionStateMachine>,
     pending: Mutex<Option<PendingHostKey>>,
     cancel: Mutex<Option<oneshot::Sender<()>>>,
@@ -426,6 +492,7 @@ impl SessionEntry {
     fn new(
         endpoint: HostEndpoint,
         purpose: SessionPurpose,
+        profile_id: Option<String>,
         events: EventSink,
         cancel: oneshot::Sender<()>,
         control: mpsc::Sender<SessionControl>,
@@ -433,6 +500,7 @@ impl SessionEntry {
         Self {
             endpoint,
             purpose,
+            profile_id,
             state: Mutex::new(SessionStateMachine::new()),
             pending: Mutex::new(None),
             cancel: Mutex::new(Some(cancel)),
@@ -578,6 +646,15 @@ enum SessionControl {
         request: RemoteMutation,
         reply: oneshot::Sender<Result<(), SessionControlError>>,
     },
+    StartNetworkRule {
+        rule_id: String,
+        kind: ForwardRuleKind,
+        reply: oneshot::Sender<Result<(), SessionControlError>>,
+    },
+    StopNetworkRule {
+        rule_id: String,
+        reply: oneshot::Sender<Result<(), SessionControlError>>,
+    },
 }
 
 enum RemoteMutation {
@@ -602,6 +679,9 @@ enum RemoteMutation {
 struct ClientHandler {
     entry: Arc<SessionEntry>,
     host_keys: Arc<KnownHostService>,
+    remote_forwards: RemoteForwardMap,
+    forward_tasks: ForwardTaskRegistry,
+    forward_permits: ForwardPermits,
 }
 
 impl Handler for ClientHandler {
@@ -656,6 +736,36 @@ impl Handler for ClientHandler {
             }
         }
     }
+
+    async fn server_channel_open_forwarded_tcpip(
+        &mut self,
+        channel: Channel<Msg>,
+        connected_address: &str,
+        connected_port: u32,
+        _originator_address: &str,
+        _originator_port: u32,
+        reply: ChannelOpenHandle,
+        _session: &mut client::Session,
+    ) -> Result<(), Self::Error> {
+        if let Some((rule_id, target_host, target_port)) =
+            remote_target(&self.remote_forwards, connected_address, connected_port)
+        {
+            let Ok(permit) = Arc::clone(&self.forward_permits).try_acquire_owned() else {
+                reply.reject(ChannelOpenFailure::ResourceShortage).await;
+                return Ok(());
+            };
+            reply.accept().await;
+            spawn_forward_task(&self.forward_tasks, rule_id, async move {
+                let _permit = permit;
+                pump_forwarded_channel(channel, target_host, target_port).await;
+            });
+        } else {
+            reply
+                .reject(ChannelOpenFailure::AdministrativelyProhibited)
+                .await;
+        }
+        Ok(())
+    }
 }
 
 async fn run_session(
@@ -665,6 +775,17 @@ async fn run_session(
     mut cancel: oneshot::Receiver<()>,
     mut controls: mpsc::Receiver<SessionControl>,
 ) {
+    let remote_forwards = RemoteForwardMap::default();
+    let forward_tasks = ForwardTaskRegistry::default();
+    let forward_permits = new_forward_permits();
+    let (direct_sender, direct_receiver) = mpsc::channel(MAX_ACTIVE_FORWARD_CONNECTIONS);
+    let network_runtime = NetworkForwardRuntime {
+        direct_sender,
+        direct_receiver,
+        remote_forwards,
+        forward_tasks,
+        forward_permits,
+    };
     let config = Arc::new(Config {
         inactivity_timeout: Some(Duration::from_secs(300)),
         keepalive_interval: Some(Duration::from_secs(30)),
@@ -676,6 +797,9 @@ async fn run_session(
     let handler = ClientHandler {
         entry: Arc::clone(&entry),
         host_keys,
+        remote_forwards: Arc::clone(&network_runtime.remote_forwards),
+        forward_tasks: Arc::clone(&network_runtime.forward_tasks),
+        forward_permits: Arc::clone(&network_runtime.forward_permits),
     };
     let connection =
         tokio::time::timeout(CONNECT_TIMEOUT, client::connect(config, address, handler));
@@ -791,7 +915,7 @@ async fn run_session(
                             _ => { let _ = reply.send(Err(SessionControlError::FileUnavailable)); }
                         }
                     }
-                    Some(SessionControl::Write(_) | SessionControl::Resize(_)) => {}
+                    Some(SessionControl::Write(_) | SessionControl::Resize(_) | SessionControl::StartNetworkRule { .. } | SessionControl::StopNetworkRule { .. }) => {}
                     None => {
                         entry.transition(SessionState::Closing);
                     }
@@ -802,6 +926,18 @@ async fn run_session(
             .disconnect(Disconnect::ByApplication, "file session closed", "en")
             .await;
         entry.transition(SessionState::Closed);
+        return;
+    }
+
+    if request.purpose == SessionPurpose::Network {
+        run_network_session(
+            &entry,
+            &mut handle,
+            &mut cancel,
+            &mut controls,
+            network_runtime,
+        )
+        .await;
         return;
     }
 
@@ -900,6 +1036,9 @@ async fn run_session(
                         _ => { let _ = reply.send(Err(SessionControlError::FileUnavailable)); }
                     }
                 }
+                Some(SessionControl::StartNetworkRule { reply, .. }) | Some(SessionControl::StopNetworkRule { reply, .. }) => {
+                    let _ = reply.send(Err(SessionControlError::NetworkUnavailable));
+                }
                 None => {
                     entry.transition(SessionState::Closing);
                 }
@@ -919,6 +1058,157 @@ async fn run_session(
     let _ = terminal_write.close().await;
     let _ = handle
         .disconnect(Disconnect::ByApplication, "session closed", "en")
+        .await;
+    entry.transition(SessionState::Closed);
+}
+
+enum RunningNetworkRule {
+    Listener(RunningListener),
+    Remote { bind_host: String, bind_port: u16 },
+}
+
+struct NetworkForwardRuntime {
+    direct_sender: mpsc::Sender<DirectConnection>,
+    direct_receiver: mpsc::Receiver<DirectConnection>,
+    remote_forwards: RemoteForwardMap,
+    forward_tasks: ForwardTaskRegistry,
+    forward_permits: ForwardPermits,
+}
+
+async fn run_network_session(
+    entry: &Arc<SessionEntry>,
+    handle: &mut client::Handle<ClientHandler>,
+    cancel: &mut oneshot::Receiver<()>,
+    controls: &mut mpsc::Receiver<SessionControl>,
+    mut runtime: NetworkForwardRuntime,
+) {
+    let mut rules: HashMap<String, RunningNetworkRule> = HashMap::new();
+    entry.transition(SessionState::Connected);
+    while entry.state() == SessionState::Connected {
+        tokio::select! {
+            _ = &mut *cancel => { entry.transition(SessionState::Closing); }
+            control = controls.recv() => match control {
+                Some(SessionControl::StartNetworkRule { rule_id, kind, reply }) => {
+                    if rules.contains_key(&rule_id) {
+                        let _ = reply.send(Ok(()));
+                        continue;
+                    }
+                    let result = match &kind {
+                        ForwardRuleKind::Local { .. } | ForwardRuleKind::Socks5 { .. } => {
+                            start_listener(&rule_id, &kind, runtime.direct_sender.clone()).await
+                                .map(RunningNetworkRule::Listener)
+                                .map_err(|_| SessionControlError::NetworkUnavailable)
+                        }
+                        ForwardRuleKind::Remote { bind_host, bind_port, target_host, target_port } => {
+                            match handle.tcpip_forward(bind_host.clone(), (*bind_port).into()).await {
+                                Ok(_) => {
+                                    runtime.remote_forwards
+                                        .lock()
+                                        .unwrap_or_else(|poisoned| poisoned.into_inner())
+                                        .insert((bind_host.clone(), (*bind_port).into()), (rule_id.clone(), target_host.clone(), *target_port));
+                                    Ok(RunningNetworkRule::Remote { bind_host: bind_host.clone(), bind_port: *bind_port })
+                                }
+                                Err(_) => Err(SessionControlError::NetworkUnavailable),
+                            }
+                        }
+                    };
+                    match result {
+                        Ok(running) => { rules.insert(rule_id, running); let _ = reply.send(Ok(())); }
+                        Err(error) => { let _ = reply.send(Err(error)); }
+                    }
+                }
+                Some(SessionControl::StopNetworkRule { rule_id, reply }) => {
+                    let result = match rules.remove(&rule_id) {
+                        Some(RunningNetworkRule::Listener(listener)) => {
+                            listener.stop();
+                            abort_forward_tasks(&runtime.forward_tasks, &rule_id);
+                            Ok(())
+                        }
+                        Some(RunningNetworkRule::Remote { bind_host, bind_port }) => {
+                            runtime.remote_forwards
+                                .lock()
+                                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                                .remove(&(bind_host.clone(), bind_port.into()));
+                            abort_forward_tasks(&runtime.forward_tasks, &rule_id);
+                            handle.cancel_tcpip_forward(bind_host, bind_port.into()).await
+                                .map_err(|_| SessionControlError::NetworkUnavailable)
+                        }
+                        None => {
+                            abort_forward_tasks(&runtime.forward_tasks, &rule_id);
+                            Ok(())
+                        },
+                    };
+                    let _ = reply.send(result);
+                }
+                Some(SessionControl::Write(_) | SessionControl::Resize(_) | SessionControl::StartTransfer { .. } | SessionControl::ListDirectory { .. } | SessionControl::ReadFile { .. } | SessionControl::WriteTextFile { .. } | SessionControl::MutateEntry { .. }) => {}
+                None => { entry.transition(SessionState::Closing); }
+            },
+            connection = runtime.direct_receiver.recv() => {
+                let Some(mut connection) = connection else { continue };
+                if !rules.contains_key(&connection.rule_id) {
+                    continue;
+                }
+                let Ok(permit) = Arc::clone(&runtime.forward_permits).try_acquire_owned() else {
+                    if connection.socks5 {
+                        let _ = acknowledge_socks5(&mut connection.stream, false).await;
+                    }
+                    continue;
+                };
+                let opened = tokio::time::timeout(CONNECT_TIMEOUT, handle.channel_open_direct_tcpip(
+                    connection.target_host.clone(),
+                    connection.target_port.into(),
+                    connection.originator_host.clone(),
+                    connection.originator_port.into(),
+                )).await;
+                match opened {
+                    Ok(Ok(channel)) => {
+                        if connection.socks5 && acknowledge_socks5(&mut connection.stream, true).await.is_err() {
+                            continue;
+                        }
+                        spawn_forward_task(&runtime.forward_tasks, connection.rule_id, async move {
+                            let _permit = permit;
+                            let _ = pump_tcp_channel(connection.stream, channel).await;
+                        });
+                    }
+                    _ => {
+                        if connection.socks5 {
+                            let _ = acknowledge_socks5(&mut connection.stream, false).await;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    for (_, rule) in rules.drain() {
+        match rule {
+            RunningNetworkRule::Listener(listener) => listener.stop(),
+            RunningNetworkRule::Remote {
+                bind_host,
+                bind_port,
+            } => {
+                let _ = handle
+                    .cancel_tcpip_forward(bind_host, bind_port.into())
+                    .await;
+            }
+        }
+    }
+    for rule_id in runtime
+        .forward_tasks
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .keys()
+        .cloned()
+        .collect::<Vec<_>>()
+    {
+        abort_forward_tasks(&runtime.forward_tasks, &rule_id);
+    }
+    runtime
+        .remote_forwards
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .clear();
+    let _ = handle
+        .disconnect(Disconnect::ByApplication, "network session closed", "en")
         .await;
     entry.transition(SessionState::Closed);
 }
@@ -1826,6 +2116,7 @@ where
 mod tests {
     use std::{
         fs,
+        io::{Read, Write},
         net::{TcpListener, TcpStream},
         process::{Child, Command, Stdio},
         sync::{Arc, Mutex},
@@ -1843,6 +2134,7 @@ mod tests {
     use crate::{
         domain::{
             auth::{AuthRequest, SecretText},
+            network::ForwardRuleKind,
             session::{HostEndpoint, PresentedHostKey, SessionEvent, SessionFailure, SessionState},
             transfer::{RemotePath, TransferEvent},
         },
@@ -1870,6 +2162,7 @@ mod tests {
         let entry = SessionEntry::new(
             HostEndpoint::new("example.com", 22).expect("endpoint"),
             SessionPurpose::Terminal,
+            None,
             Arc::new(|_| {}),
             cancel_sender,
             control_sender,
@@ -1901,6 +2194,7 @@ mod tests {
         let entry = Arc::new(SessionEntry::new(
             HostEndpoint::new("example.com", 22).expect("endpoint"),
             SessionPurpose::Files,
+            None,
             Arc::new(|_| {}),
             cancel_sender,
             control_sender,
@@ -1925,6 +2219,42 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn network_sessions_reject_rules_from_another_profile() {
+        let directory = tempdir().expect("temp directory");
+        let manager = SshSessionManager::new(JsonKnownHostRepository::new(
+            directory.path().join("known-hosts.json"),
+        ));
+        let (cancel_sender, _cancel_receiver) = oneshot::channel();
+        let (control_sender, _control_receiver) = mpsc::channel(1);
+        let entry = Arc::new(SessionEntry::new(
+            HostEndpoint::new("example.com", 22).expect("endpoint"),
+            SessionPurpose::Network,
+            Some("profile-1".into()),
+            Arc::new(|_| {}),
+            cancel_sender,
+            control_sender,
+        ));
+        entry.transition(SessionState::Connected);
+        manager
+            .sessions
+            .lock()
+            .expect("sessions")
+            .insert("network-1".into(), entry);
+
+        assert_eq!(
+            manager
+                .start_network_rule(
+                    "network-1",
+                    "rule-1".into(),
+                    "profile-2",
+                    ForwardRuleKind::socks5("127.0.0.1", 1080).expect("rule"),
+                )
+                .await,
+            Err(super::SessionControlError::NetworkUnavailable)
+        );
+    }
+
+    #[tokio::test]
     async fn failed_tcp_connection_emits_a_terminal_failure_and_can_be_closed_again() {
         let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).expect("reserve port");
         let port = listener.local_addr().expect("local address").port();
@@ -1941,6 +2271,7 @@ mod tests {
                 username: "test".into(),
                 auth: AuthRequest::Password(SecretText::new("temporary".into())),
                 purpose: SessionPurpose::Terminal,
+                profile_id: None,
                 terminal_output: Arc::new(|_| {}),
             },
             Arc::new(move |event| {
@@ -2061,6 +2392,7 @@ mod tests {
                     passphrase: None,
                 },
                 purpose: SessionPurpose::Terminal,
+                profile_id: None,
                 terminal_output: Arc::new(move |data| {
                     let _ = terminal_sender.send(data);
                 }),
@@ -2107,6 +2439,7 @@ mod tests {
                     passphrase: None,
                 },
                 purpose: SessionPurpose::Terminal,
+                profile_id: None,
                 terminal_output: Arc::new(move |data| {
                     let _ = second_terminal_sender.send(data);
                 }),
@@ -2428,6 +2761,159 @@ mod tests {
         manager.close(&session_id).expect("close session");
     }
 
+    #[test]
+    #[ignore = "requires local OpenSSH sshd executable with TCP forwarding enabled"]
+    fn local_openssh_exercises_local_remote_and_socks5_forwarding() {
+        let directory = tempdir().expect("temporary integration directory");
+        let ssh_port = reserve_loopback_port();
+        let client_key = directory.path().join("network-client-key");
+        let host_key = directory.path().join("network-host-key");
+        generate_ed25519_key(&client_key);
+        generate_ed25519_key(&host_key);
+        fs::copy(
+            client_key.with_extension("pub"),
+            directory.path().join("network_authorized_keys"),
+        )
+        .expect("authorized key");
+        let config = directory.path().join("network_sshd_config");
+        fs::write(
+            &config,
+            format!(
+                "Port {ssh_port}\nListenAddress 127.0.0.1\nHostKey {}\nPidFile {}\nAuthorizedKeysFile {}\nStrictModes no\nPasswordAuthentication no\nKbdInteractiveAuthentication no\nPubkeyAuthentication yes\nUsePAM no\nAllowTcpForwarding yes\nGatewayPorts clientspecified\nLogLevel ERROR\n",
+                host_key.display(),
+                directory.path().join("network-sshd.pid").display(),
+                directory.path().join("network_authorized_keys").display(),
+            ),
+        )
+        .expect("sshd config");
+        let server = Command::new("/usr/sbin/sshd")
+            .args(["-D", "-e", "-f"])
+            .arg(&config)
+            .stdout(Stdio::null())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("start local sshd");
+        let mut server = SshdGuard(server);
+        wait_for_sshd(&mut server.0, ssh_port);
+
+        let echo_listener = TcpListener::bind(("127.0.0.1", 0)).expect("echo listener");
+        let echo_port = echo_listener.local_addr().expect("echo address").port();
+        let echo_thread = thread::spawn(move || {
+            for _ in 0..3 {
+                let (mut stream, _) = echo_listener.accept().expect("echo connection");
+                let mut bytes = [0_u8; 32];
+                let count = stream.read(&mut bytes).expect("echo read");
+                stream.write_all(&bytes[..count]).expect("echo write");
+            }
+        });
+
+        let manager = Arc::new(SshSessionManager::new(JsonKnownHostRepository::new(
+            directory.path().join("network-known-hosts.json"),
+        )));
+        let (event_sender, event_receiver) = std::sync::mpsc::channel();
+        let session_id = manager.connect(
+            SessionConnectRequest {
+                endpoint: HostEndpoint::new("127.0.0.1", ssh_port.into()).expect("endpoint"),
+                username: std::env::var("USER").expect("current username"),
+                auth: AuthRequest::PrivateKey {
+                    path: client_key,
+                    passphrase: None,
+                },
+                purpose: SessionPurpose::Network,
+                profile_id: Some("profile-network".into()),
+                terminal_output: Arc::new(|_| {}),
+            },
+            Arc::new(move |event| {
+                let _ = event_sender.send(event);
+            }),
+        );
+        loop {
+            match event_receiver
+                .recv_timeout(Duration::from_secs(10))
+                .expect("network session event")
+            {
+                SessionEvent::HostKeyConfirmationRequired { .. } => manager
+                    .accept_host_key(&session_id)
+                    .expect("accept temporary host key"),
+                SessionEvent::StateChanged(SessionState::Connected) => break,
+                SessionEvent::Failed(failure) => panic!("connection failed: {failure:?}"),
+                _ => {}
+            }
+        }
+
+        let local_port = reserve_loopback_port();
+        tauri::async_runtime::block_on(
+            manager.start_network_rule(
+                &session_id,
+                "local".into(),
+                "profile-network",
+                ForwardRuleKind::local(
+                    "127.0.0.1",
+                    u32::from(local_port),
+                    "127.0.0.1",
+                    u32::from(echo_port),
+                )
+                .expect("local rule"),
+            ),
+        )
+        .expect("start local forwarding");
+        assert_echo(local_port, b"local");
+
+        let socks_port = reserve_loopback_port();
+        tauri::async_runtime::block_on(manager.start_network_rule(
+            &session_id,
+            "socks".into(),
+            "profile-network",
+            ForwardRuleKind::socks5("127.0.0.1", u32::from(socks_port)).expect("socks rule"),
+        ))
+        .expect("start socks forwarding");
+        let mut socks = TcpStream::connect(("127.0.0.1", socks_port)).expect("connect socks");
+        socks.write_all(&[5, 1, 0]).expect("socks greeting");
+        let mut greeting = [0_u8; 2];
+        socks
+            .read_exact(&mut greeting)
+            .expect("socks greeting reply");
+        assert_eq!(greeting, [5, 0]);
+        let mut request = vec![5, 1, 0, 1, 127, 0, 0, 1];
+        request.extend_from_slice(&echo_port.to_be_bytes());
+        socks.write_all(&request).expect("socks connect");
+        let mut reply = [0_u8; 10];
+        socks.read_exact(&mut reply).expect("socks connect reply");
+        assert_eq!(reply[1], 0);
+        socks.write_all(b"socks").expect("socks payload");
+        let mut socks_echo = [0_u8; 5];
+        socks.read_exact(&mut socks_echo).expect("socks echo");
+        assert_eq!(&socks_echo, b"socks");
+        drop(socks);
+
+        let remote_port = reserve_loopback_port();
+        tauri::async_runtime::block_on(
+            manager.start_network_rule(
+                &session_id,
+                "remote".into(),
+                "profile-network",
+                ForwardRuleKind::remote(
+                    "127.0.0.1",
+                    u32::from(remote_port),
+                    "127.0.0.1",
+                    u32::from(echo_port),
+                )
+                .expect("remote rule"),
+            ),
+        )
+        .expect("start remote forwarding");
+        assert_echo(remote_port, b"remote");
+
+        for rule_id in ["local", "socks", "remote"] {
+            tauri::async_runtime::block_on(manager.stop_network_rule(&session_id, rule_id.into()))
+                .expect("stop forwarding");
+        }
+        tauri::async_runtime::block_on(manager.stop_network_rule(&session_id, "remote".into()))
+            .expect("repeated stop is idempotent");
+        manager.close(&session_id).expect("close network session");
+        echo_thread.join().expect("echo thread");
+    }
+
     struct SshdGuard(Child);
 
     impl Drop for SshdGuard {
@@ -2446,6 +2932,22 @@ mod tests {
                 .expect("run ssh-keygen")
                 .success()
         );
+    }
+
+    fn reserve_loopback_port() -> u16 {
+        TcpListener::bind(("127.0.0.1", 0))
+            .expect("reserve port")
+            .local_addr()
+            .expect("local address")
+            .port()
+    }
+
+    fn assert_echo(port: u16, payload: &[u8]) {
+        let mut stream = TcpStream::connect(("127.0.0.1", port)).expect("connect forwarding");
+        stream.write_all(payload).expect("write payload");
+        let mut echoed = vec![0_u8; payload.len()];
+        stream.read_exact(&mut echoed).expect("read echo");
+        assert_eq!(echoed, payload);
     }
 
     fn wait_for_sshd(server: &mut Child, port: u16) {

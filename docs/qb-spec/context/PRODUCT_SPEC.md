@@ -21,8 +21,9 @@
 8. 用户可从终端当前目录或右侧工具轨打开 Files Block，并在文件窗口内独立选择本机或不同远程 SFTP 连接。
 9. 用户选择已配置远程目标时，应用优先按 profile 认证偏好直接连接；“手动”偏好或保存凭据不可用/连接失败时，认证弹窗提供一次性密码、已有凭证或 SSH Agent。临时选择不回写 profile。远程 Files Block 继承目标后自动建立独立 SFTP 会话。
 10. 用户可用一层连接分组整理 profile，在分组内新建或把连接移到其他分组；删除分组只移除组织结构，连接安全回到“未分组”。
-11. 用户可在系统设置的通用分类中修改连接与凭证的可迁移目录；默认使用 `~/.qterm`，新目录在保存时初始化，`connections.json` 与 `secrets.vault` 由用户手动迁移并在重启后生效。
+11. 用户可在系统设置的通用分类中修改连接、凭证与网络转发规则的可迁移目录；默认使用 `~/.qterm`，新目录在保存时初始化，`connections.json`、`secrets.vault` 与 `network-forwards.json` 由用户手动迁移并在重启后生效。
 12. 用户可从右侧工具轨选择只锁定凭证库，或同时锁定当前应用的终端界面与凭证库；终端锁只能通过主密码同时解锁终端和凭证，且不会跨应用重启保留。
+13. 用户可从右侧工具轨或远程 Terminal Block 创建 Network Block，按连接 profile 管理本地端口转发、远程端口转发和本地 SOCKS5 动态代理；配置可跨 Network Block 复用，但每个 Block 独立连接和运行，应用恢复后默认停止。
 
 ## Product Principles
 
@@ -36,5 +37,6 @@
 - 右侧工具轨提供独立凭证管理；整体清除必须要求用户准确输入 `确认清除`，并同时删除保险库、运行时密钥和全部凭证引用，不删除连接与 Workspace。
 - 系统设置提供设备本地安全策略；Windows 锁屏自动锁定默认开启，凭证解锁会话默认 3600 秒后到期。安全设置不随可迁移目录迁移，普通窗口失焦和键鼠活动不替代系统锁屏或续期凭证会话。
 - 终端锁是当前应用进程内的隐私与误操作防护：遮罩只阻断顶部标题栏下方的终端工作区，不暂停或终止 SSH/SFTP/local PTY；顶部 Workspace 切换与窗口控制保持可用。锁定状态不持久化，也不替代操作系统会话锁。
-- 默认可迁移目录为 `~/.qterm`，只包含 `connections.json` 与 `secrets.vault`。用户可选择其他绝对目录；应用只初始化目标目录，不自动迁移、覆盖或删除旧文件，路径变更在重启后生效。known-hosts、Workspace 与安全设置保持系统 app-data 路径，不受该配置影响；固定系统 app-config 只保留用于启动定位的可迁移目录指针。
+- 默认可迁移目录为 `~/.qterm`，只包含 `connections.json`、`secrets.vault` 与 `network-forwards.json`。用户可选择其他绝对目录；应用只初始化目标目录，不自动迁移、覆盖或删除旧文件，路径变更在重启后生效。known-hosts、Workspace 与安全设置保持系统 app-data 路径，不受该配置影响；固定系统 app-config 只保留用于启动定位的可迁移目录指针。
 - Web 和 AI Agent 属于潜在后续方向，不作为当前架构和交付范围的前提。
+- 网络转发规则按连接 profile 全局共享并保存到独立的可迁移配置；Network Block 只选择 profile 并持有当前进程内运行状态。Local/SOCKS5 与 Remote listener 默认只绑定 loopback，非 loopback 必须明确暴露风险，且规则不会随应用启动或 Workspace 恢复自动运行。

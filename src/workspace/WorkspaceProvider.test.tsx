@@ -10,6 +10,9 @@ const mocks = vi.hoisted(() => ({
   writers: [vi.fn(), vi.fn()],
   connectSession: vi.fn(),
   connectFileSession: vi.fn(),
+  connectNetworkSession: vi.fn(),
+  startNetworkRule: vi.fn().mockResolvedValue(undefined),
+  stopNetworkRule: vi.fn().mockResolvedValue(undefined),
   closeSession: vi.fn().mockResolvedValue(undefined),
   connectLocalSession: vi.fn(),
   getLocalTerminalCapabilities: vi.fn().mockResolvedValue({ windowsPty: null }),
@@ -20,6 +23,7 @@ const mocks = vi.hoisted(() => ({
   unregisterWriters: [] as Array<() => void>,
   clearers: [vi.fn(), vi.fn()],
   localConnections: [] as Array<{ event: (event: { type: "stateChanged"; state: "connected" | "closed" }) => void; terminal: (data: Uint8Array) => void }>,
+  networkConnections: [] as Array<{ event: (event: SessionEvent) => void }>,
 }));
 
 vi.mock("../lib/tauri/profiles", () => ({ listProfiles: vi.fn().mockResolvedValue([]) }));
@@ -30,6 +34,11 @@ vi.mock("../lib/tauri/sessions", () => ({
   acceptHostKey: vi.fn().mockResolvedValue(undefined), rejectHostKey: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("../lib/tauri/files", () => ({ connectFileSession: mocks.connectFileSession }));
+vi.mock("../lib/tauri/network", () => ({
+  connectNetworkSession: mocks.connectNetworkSession,
+  startNetworkRule: mocks.startNetworkRule,
+  stopNetworkRule: mocks.stopNetworkRule,
+}));
 vi.mock("../lib/tauri/localSessions", () => ({
   connectLocalSession: mocks.connectLocalSession,
   getLocalTerminalCapabilities: mocks.getLocalTerminalCapabilities,
@@ -43,7 +52,7 @@ import { WorkspaceProvider, useWorkspace } from "./WorkspaceProvider";
 const profile = { id: "profile-1", name: "Server", host: "example.test", port: 22, username: "user", authPreference: "password" as const, credentialId: null, groupId: null };
 
 function Harness() {
-  const { activeWorkspace, dispatch, registerWriter, clearBlockBuffer, startLocalBlock, connectBlock, connectFileBlock, selectBlockTarget, selectFileTarget, writeBlock, resizeBlock, runtimes, fileRuntimes } = useWorkspace();
+  const { activeWorkspace, dispatch, registerWriter, clearBlockBuffer, startLocalBlock, connectBlock, connectFileBlock, connectNetworkBlock, startNetworkBlockRule, selectBlockTarget, selectFileTarget, selectNetworkTarget, writeBlock, resizeBlock, runtimes, fileRuntimes, networkRuntimes } = useWorkspace();
   const ids = blockIds(activeWorkspace.layout);
   return <>
     <output>{ids.length}</output>
@@ -64,8 +73,13 @@ function Harness() {
     <button onClick={() => dispatch({ type: "openFiles", workspaceId: activeWorkspace.id, anchorBlockId: ids[0], profileId: profile.id, path: "/srv" })}>open-files</button>
     <button onClick={() => void connectFileBlock(activeWorkspace.activeBlockId, profile, { method: "password", password: "ephemeral" })}>connect-files</button>
     <button onClick={() => void selectFileTarget(activeWorkspace.id, activeWorkspace.activeBlockId, null)}>files-local</button>
+    <button onClick={() => dispatch({ type: "openNetwork", workspaceId: activeWorkspace.id, anchorBlockId: ids[0], profileId: profile.id })}>open-network</button>
+    <button onClick={() => void connectNetworkBlock(activeWorkspace.activeBlockId, profile, { method: "sshAgent" })}>connect-network</button>
+    <button onClick={() => void startNetworkBlockRule(activeWorkspace.activeBlockId, "rule-1")}>start-network-rule</button>
+    <button onClick={() => void selectNetworkTarget(activeWorkspace.id, activeWorkspace.activeBlockId, null)}>network-clear-target</button>
     <span data-testid="runtime">{runtimes[ids[0]]?.kind}:{runtimes[ids[0]]?.status}</span>
     <span data-testid="file-runtime">{fileRuntimes[activeWorkspace.activeBlockId]?.kind}:{fileRuntimes[activeWorkspace.activeBlockId]?.status}</span>
+    <span data-testid="network-runtime">{networkRuntimes[activeWorkspace.activeBlockId]?.status}:{networkRuntimes[activeWorkspace.activeBlockId]?.ruleStates["rule-1"]}</span>
   </>;
 }
 
@@ -74,6 +88,9 @@ describe("WorkspaceProvider multi-session routing", () => {
     mocks.connectSession.mockReset();
     mocks.connectLocalSession.mockReset();
     mocks.connectFileSession.mockReset();
+    mocks.connectNetworkSession.mockReset();
+    mocks.startNetworkRule.mockClear();
+    mocks.stopNetworkRule.mockClear();
     mocks.closeSession.mockClear();
     mocks.closeLocalSession.mockClear();
     mocks.writeLocalSession.mockClear();
@@ -82,6 +99,7 @@ describe("WorkspaceProvider multi-session routing", () => {
     mocks.clearers.forEach((clearer) => clearer.mockClear());
     mocks.connections.length = 0;
     mocks.localConnections.length = 0;
+    mocks.networkConnections.length = 0;
     mocks.unregisterWriters.length = 0;
   });
 
@@ -310,6 +328,27 @@ describe("WorkspaceProvider multi-session routing", () => {
     await user.click(screen.getByRole("button", { name: "files-local" }));
     await waitFor(() => expect(mocks.closeSession).toHaveBeenCalledWith("files-session-1"));
     expect(screen.getByTestId("file-runtime")).toHaveTextContent("local:connected");
+  });
+
+  it("owns Network SSH state per block and closes it before clearing the profile", async () => {
+    mocks.connectNetworkSession.mockImplementation(async (_profileId, _input, event) => {
+      mocks.networkConnections.push({ event });
+      event({ type: "stateChanged", state: "connected" });
+      return "network-session-1";
+    });
+    const user = userEvent.setup();
+    render(<WorkspaceProvider><Harness/></WorkspaceProvider>);
+
+    await user.click(screen.getByRole("button", { name: "open-network" }));
+    await user.click(screen.getByRole("button", { name: "connect-network" }));
+    await waitFor(() => expect(screen.getByTestId("network-runtime")).toHaveTextContent("connected"));
+    await user.click(screen.getByRole("button", { name: "start-network-rule" }));
+    await waitFor(() => expect(mocks.startNetworkRule).toHaveBeenCalledWith("network-session-1", "rule-1"));
+    expect(screen.getByTestId("network-runtime")).toHaveTextContent("connected:running");
+
+    await user.click(screen.getByRole("button", { name: "network-clear-target" }));
+    await waitFor(() => expect(mocks.closeSession).toHaveBeenCalledWith("network-session-1"));
+    expect(screen.getByTestId("network-runtime")).toHaveTextContent("closed");
   });
 
   it("consumes an asynchronous connection failure fallback only once", async () => {

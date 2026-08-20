@@ -58,7 +58,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
         : await updateSecuritySettings(security);
       applySnapshot(snapshot);
       if (snapshot.general.restartRequired) {
-        setStatus("已初始化所选目录。请手动迁移 connections.json 与 secrets.vault，重启 Qterm 后生效。");
+        setStatus("已初始化所选目录。请手动迁移 connections.json、network-forwards.json 与 secrets.vault，重启 Qterm 后生效。");
       }
       setSaved(true);
       savedTimer.current = window.setTimeout(() => setSaved(false), 1400);
@@ -76,18 +76,18 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
       <section className="settings-content" aria-labelledby={`${category}-settings-title`}>
         <div className="settings-content-scroll">
           {category === "general" ? <>
-            <div className="settings-section-heading"><h3 id="general-settings-title">通用</h3><p>管理连接配置与加密凭证的可迁移存储位置。</p></div>
+            <div className="settings-section-heading"><h3 id="general-settings-title">通用</h3><p>管理连接配置、网络规则与加密凭证的可迁移存储位置。</p></div>
             {general ? <div className="settings-directory-card">
-              <label htmlFor="settings-data-directory"><strong>连接与凭证存储位置</strong><small>仅影响 connections.json 与 secrets.vault；留空或填写 ~/.qterm 将使用默认位置。</small></label>
+              <label htmlFor="settings-data-directory"><strong>连接、网络规则与凭证存储位置</strong><small>影响 connections.json、network-forwards.json 与 secrets.vault；留空或填写 ~/.qterm 将使用默认位置。</small></label>
               <div className="settings-path-control">
                 <input id="settings-data-directory" aria-label="数据存储位置" value={dataDirectory} placeholder="~/.qterm" onChange={(event) => setDataDirectory(event.target.value)}/>
                 <button type="button" className="secondary-button" disabled={busy} onClick={() => void chooseDirectory()}>选择文件夹</button>
               </div>
-              <div className="settings-directory-meta"><span>当前连接与凭证位置</span><code>{general.activeDataDirectory}</code><button type="button" disabled={busy} onClick={() => setDataDirectory("~/.qterm")}>恢复默认</button></div>
+              <div className="settings-directory-meta"><span>当前连接、网络规则与凭证位置</span><code>{general.activeDataDirectory}</code><button type="button" disabled={busy} onClick={() => setDataDirectory("~/.qterm")}>恢复默认</button></div>
             </div> : <p className="dialog-note">正在读取设置…</p>}
             <div className="settings-migration-callout">
-              <strong>连接与凭证需要手动迁移</strong>
-              <p>Qterm 不会自动迁移或覆盖 connections.json 与 secrets.vault。known-hosts.json 与 workspaces.json 仍保存在系统默认位置，不受此设置影响。</p>
+              <strong>连接、网络规则与凭证需要手动迁移</strong>
+              <p>Qterm 不会自动迁移或覆盖 connections.json、network-forwards.json 与 secrets.vault。known-hosts.json 与 workspaces.json 仍保存在系统默认位置，不受此设置影响。</p>
             </div>
           </> : <>
             <div className="settings-section-heading"><h3 id="security-settings-title">安全</h3><p>管理本机凭证库的自动锁定策略。</p></div>

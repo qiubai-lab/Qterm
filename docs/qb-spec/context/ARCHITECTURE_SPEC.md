@@ -35,22 +35,23 @@ Frontend -> Tauri Commands -> Application -> Domain / Ports <- Infrastructure
 - Authentication 使用有限策略边界；一次性 password、stored credential 和 SSH Agent 由 session 请求表达，平台 Agent 协议只存在于 infrastructure adapter。`manual` 只属于 profile 连接策略，不是 session auth variant。
 - profile-auth resolver 把 SSH Agent 或 `credentialId` 解析为无秘密 IPC 请求，并让 `manual` 返回人工认证流程。session command 在 Rust 内通过 credential application service 得到 `AuthRequest`；WorkspaceProvider 和 WebView 不读取私钥或批量凭证。
 - credential application service 拥有凭证实体、保险库生命周期与恢复重置用例；`CredentialVault` port 提供恢复材料准备、初始化、解锁、锁定、主密码重包、恢复轮换、列表元数据、密码/私钥存取和整体 clear。Json adapter 实现 envelope encryption、严格恢复文件格式与 zeroized runtime data key；Tauri command 只拥有系统文件选择和受限文件 I/O。
-- settings domain/application 分别拥有安全策略与可迁移目录规则；固定系统 app-config 中的 `storage-location.json` 只承担启动定位，组合根从可迁移目录派生 `connections.json` 与 `secrets.vault`，从系统 app-data 派生 `known-hosts.json`、`workspaces.json` 与 `settings.json`。默认可迁移目录为 `~/.qterm`，保存新目录只初始化并要求重启，不自动迁移旧数据。credential lifecycle application/runtime coordinator 拥有最近解锁时间、自动锁定 deadline 与统一 lock；React timer、window blur 和 command handler 不拥有这些规则。
+- settings domain/application 分别拥有安全策略与可迁移目录规则；固定系统 app-config 中的 `storage-location.json` 只承担启动定位，组合根从可迁移目录派生 `connections.json`、`secrets.vault` 与 `network-forwards.json`，从系统 app-data 派生 `known-hosts.json`、`workspaces.json` 与 `settings.json`。默认可迁移目录为 `~/.qterm`，保存新目录只初始化并要求重启，不自动迁移旧数据。credential lifecycle application/runtime coordinator 拥有最近解锁时间、自动锁定 deadline 与统一 lock；React timer、window blur 和 command handler 不拥有这些规则。
 - Windows session-lock infrastructure 将 WTS 会话消息转换成无平台类型的锁定事件；Win32 类型停留在 `cfg(windows)` adapter 与组合根。vault 状态事件不含秘密，只用于前端清除缓存，敏感操作始终以后端状态为准。
 - 连接 profile catalog 同时保存独立的一层 `ProfileGroup` 与 profile 的可空 `groupId`。domain 不提供父分组字段；repository 在单次锁定和原子写入内维护引用完整性，删除 group 时清空相关 profile 引用而不删除 profile。
-- `connections.json` schema v4 持久化顶层 `groups`、profile `groupId`、`manual | password | privateKey | sshAgent` 偏好与可空 `credentialId`，不保存私钥路径。profile、vault 和 workspace reader 只接受当前 schema，旧版本不运行时迁移。
+- `connections.json` schema v4 持久化顶层 `groups`、profile `groupId`、`manual | password | privateKey | sshAgent` 偏好与可空 `credentialId`，不保存私钥路径。`network-forwards.json` 使用独立 schema，按 `profileId` 保存非敏感 Local/Remote/SOCKS5 规则，不保存运行状态；它与 connections/vault 位于同一个可迁移目录。profile、network、vault 和 workspace reader 只接受当前 schema，旧版本不运行时迁移。
 
 ## Workspace UI Model
 
-- 长期界面层级固定为 `Workspace → Block layout`。顶部每个标签直接对应 Workspace，不存在下拉 Workspace 管理器或内部终端 Tab。当前 Block 实现 Terminal 与 Files，未来 Web/AI 等类型必须通过显式 widget 边界加入。
-- Workspace 直接拥有可序列化 layout tree 与 active block；Terminal Block 与 Files Block 都以稳定 block id 隔离运行时。Terminal 持有本地 PTY 或交互 SSH session，Files 只持有本机来源或独立 SFTP SSH session。
+- 长期界面层级固定为 `Workspace → Block layout`。顶部每个标签直接对应 Workspace，不存在下拉 Workspace 管理器或内部终端 Tab。当前 Block 实现 Terminal、Files 与 Network，未来 Web/AI 等类型必须通过显式 widget 边界加入。
+- Workspace 直接拥有可序列化 layout tree 与 active block；Terminal、Files 与 Network Block 都以稳定 block id 隔离运行时。Terminal 持有本地 PTY 或交互 SSH session，Files 只持有本机来源或独立 SFTP SSH session，Network 持有独立 SSH session、listener、活动转发与子 channel；Network 运行状态不进入 Workspace reducer。
 - 切换 Workspace 只改变可见性和焦点，不关闭、重建或混用活动 session。显式关闭 Block 才触发对应 session close；关闭 Workspace 必须级联处理其 Block。
 - 高频终端字节直接进入 block-scoped xterm runtime，不进入 Workspace reducer 或持久化 model。
-- Workspace、layout、Terminal/Files 的 profile 引用与文件路径可以持久化；session id、终端 buffer 和私钥口令禁止持久化。用户明确保存的密码只能进入独立加密 vault，不得进入 Workspace/profile。
+- Workspace、layout、Terminal/Files/Network 的 profile 引用与文件路径可以持久化；Network 规则由独立 repository 按 profile 保存。session id、listener、活动转发、终端 buffer 和私钥口令禁止持久化。用户明确保存的密码只能进入独立加密 vault，不得进入 Workspace/profile/network rule。
 - 前端组合入口只装配 workspace shell。layout tree 变换、terminal runtime registry、工具弹窗和持久化 IPC 必须拥有独立模块边界。
 - WorkspaceShell 拥有不可持久化的应用内终端锁状态：锁屏挂载在 `workspace-stage`，只有工作区内容必须 inert 且隐藏于辅助技术；顶部 `app-chrome` 位于锁定边界外，Workspace 切换/新建与窗口控制保持可用。Escape、背景点击和终端操作快捷键不得绕过锁屏；专用锁屏只短暂持有主密码输入并复用 credential unlock IPC。终端锁不得进入 Workspace reducer、settings 或 persistence。
-- SSH session 必须带显式用途。`Terminal` 用途可以申请 PTY/shell并接受 write/resize；`Files` 用途不得申请 PTY/shell，只接受 SFTP 目录和传输控制。
+- SSH session 必须带显式用途。`Terminal` 用途可以申请 PTY/shell并接受 write/resize；`Files` 用途不得申请 PTY/shell，只接受 SFTP 目录和传输控制；`Network` 用途不得申请 PTY/shell/SFTP，只接受有界的 TCP forwarding start/stop/close 控制。
 - 远程 Files leaf 初次创建或切换 profile 时必须自动请求自身的 SFTP 会话，不复用来源终端 session；本机 Files leaf 不触发认证。
+- Network rule 字节只在 Rust TCP socket 与 SSH channel 之间流动，不进入 WebView。一个 Network Block 内的活动规则共享该 Block 的 Network session；不同 Block 和 Terminal/Files runtime 不共享生命周期。规则默认停止，切换 profile 或关闭 Block/Workspace 必须级联取消 listener、remote forward、子 channel 与 session。
 
 ## Streaming Rules
 

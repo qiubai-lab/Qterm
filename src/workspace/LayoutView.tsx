@@ -3,13 +3,14 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type Pointer
 import { Icon } from "../components/Icon";
 import { FileBrowserPane } from "../files/FileBrowserPane";
 import type { ConnectionProfile } from "../lib/tauri/profiles";
+import { NetworkPane } from "../network/NetworkPane";
 import { TerminalPanel } from "../terminal/TerminalPanel";
 import { terminalBlockIds, type DropPosition } from "./layout";
 import type { LayoutNode, SplitNode, Workspace } from "./model";
 import { TerminalTargetPicker } from "./TerminalTargetPicker";
 import { useWorkspace, type FileRuntime } from "./WorkspaceProvider";
 
-export type ConnectionOwner = "terminal" | "files";
+export type ConnectionOwner = "terminal" | "files" | "network";
 
 interface DragState {
   sourceId: string;
@@ -116,6 +117,9 @@ function LayoutBranch(props: { node: LayoutNode; workspace: Workspace; visible: 
   if (props.node.type === "files") {
     return <FilesBlock {...props} blockId={props.node.blockId} profileId={props.node.profileId} path={props.node.path}/>;
   }
+  if (props.node.type === "network") {
+    return <NetworkBlock {...props} blockId={props.node.blockId} profileId={props.node.profileId}/>;
+  }
   return <SplitBranch {...props} node={props.node} />;
 }
 
@@ -194,6 +198,7 @@ function TerminalBlock(props: Omit<Parameters<typeof LayoutBranch>[0], "node"> &
       <div className="block-actions">
         <button aria-label="清除终端缓冲区" title="清除终端缓冲区" onClick={() => clearBlockBuffer(props.blockId)}><Icon name="clear" size={13}/></button>
         <button aria-label="打开当前文件夹" title={runtime?.cwd ? `打开 ${runtime.cwd}` : "打开当前文件夹"} disabled={status !== "connected"} onClick={() => dispatch({ type: "openFiles", workspaceId: props.workspace.id, anchorBlockId: props.blockId, profileId: props.profileId, path: runtime?.cwd ?? "." })}><Icon name="files" size={13}/></button>
+        <button aria-label="打开网络窗口" title={props.profileId ? "使用当前远程连接打开网络窗口" : "本地终端无法创建网络窗口"} disabled={!props.profileId} onClick={() => dispatch({ type: "openNetwork", workspaceId: props.workspace.id, anchorBlockId: props.blockId, profileId: props.profileId })}><Icon name="network" size={13}/></button>
         <button aria-label="左右分割" title="左右分割" onClick={() => dispatch({ type: "splitBlock", workspaceId: props.workspace.id, blockId: props.blockId, direction: "horizontal" })}><Icon name="splitHorizontal" size={13}/></button>
         <button aria-label="上下分割" title="上下分割" onClick={() => dispatch({ type: "splitBlock", workspaceId: props.workspace.id, blockId: props.blockId, direction: "vertical" })}><Icon name="splitVertical" size={13}/></button>
         <button aria-label="关闭终端" title="关闭" disabled={terminalBlockIds(props.workspace.layout).length === 1} onClick={() => props.onRequestClose(props.blockId)}><Icon name="close" size={13}/></button>
@@ -246,6 +251,59 @@ function FilesBlock(props: Omit<Parameters<typeof LayoutBranch>[0], "node"> & { 
       </div>
     </header>
     <FileBrowserPane initialPath={props.path} runtime={runtime} onPathChange={updatePath}/>
+    {drop && <div className={`drop-zone drop-${drop}`} />}
+  </section>;
+}
+
+function NetworkBlock(props: Omit<Parameters<typeof LayoutBranch>[0], "node"> & { blockId: string; profileId: string | null }) {
+  const { dispatch, profiles, networkRuntimes, selectNetworkTarget, startNetworkBlockRule, stopNetworkBlockRule } = useWorkspace();
+  const profile = profiles.find((item) => item.id === props.profileId);
+  const runtime = networkRuntimes[props.blockId];
+  const active = props.workspace.activeBlockId === props.blockId;
+  const drop = props.drag?.targetId === props.blockId ? props.drag.position : null;
+  const status = runtime?.status ?? "closed";
+  const detail = profile ? (status === "connected" ? `${profile.username}@${profile.host}:${profile.port}` : status) : "选择 SSH 连接后管理网络规则";
+  const pendingRuleIdRef = useRef<string | null>(null);
+  const lockedRuleIds = new Set(Object.values(networkRuntimes).flatMap((item) => Object.entries(item.ruleStates)
+    .filter(([, state]) => state === "starting" || state === "running" || state === "stopping")
+    .map(([ruleId]) => ruleId)));
+
+  async function chooseTarget(profileId: string | null) {
+    pendingRuleIdRef.current = null;
+    if (profileId !== props.profileId) await selectNetworkTarget(props.workspace.id, props.blockId, profileId);
+  }
+
+  async function startRule(ruleId: string) {
+    if (!profile) return;
+    if (runtime?.status === "connected") {
+      await startNetworkBlockRule(props.blockId, ruleId);
+      return;
+    }
+    pendingRuleIdRef.current = ruleId;
+    props.onRequestAuthConnection("network", props.blockId, profile);
+  }
+
+  useEffect(() => {
+    const ruleId = pendingRuleIdRef.current;
+    if (!ruleId || status !== "connected") return;
+    pendingRuleIdRef.current = null;
+    void startNetworkBlockRule(props.blockId, ruleId);
+  }, [props.blockId, startNetworkBlockRule, status]);
+
+  return <section
+    className={`terminal-block network-block${active ? " active" : ""}`}
+    data-layout-block={props.blockId}
+    onPointerDown={() => dispatch({ type: "selectBlock", workspaceId: props.workspace.id, blockId: props.blockId })}
+    onFocus={() => dispatch({ type: "selectBlock", workspaceId: props.workspace.id, blockId: props.blockId })}
+    tabIndex={0}
+    aria-label={`网络窗口 ${profile?.name ?? "未选择连接"}`}
+  >
+    <header className="terminal-block-header" onPointerDown={(event) => props.beginDrag(event, props.blockId)}>
+      <TerminalTargetPicker profiles={profiles} selectedProfileId={props.profileId} status={status} detail={detail} onSelect={(profileId) => void chooseTarget(profileId)} icon="network" localName="选择连接" localDetail="Network Block 需要远程 SSH 连接" ariaContext="网络连接" allowLocal={false}/>
+      <div className="block-actions"><button aria-label="关闭网络窗口" title="关闭" onClick={() => props.onRequestClose(props.blockId)}><Icon name="close" size={13}/></button></div>
+    </header>
+    <NetworkPane profileId={props.profileId} runtimeStates={runtime?.ruleStates} lockedRuleIds={lockedRuleIds} onStart={(rule) => void startRule(rule.id)} onStop={(rule) => void stopNetworkBlockRule(props.blockId, rule.id)}/>
+    {runtime?.notice && <div className="block-notice">{runtime.notice}</div>}
     {drop && <div className={`drop-zone drop-${drop}`} />}
   </section>;
 }

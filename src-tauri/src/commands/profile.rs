@@ -2,8 +2,12 @@ use serde::{Deserialize, Serialize};
 use tauri::State;
 
 use crate::{
-    application::profile_service::{ProfileGroupInput, ProfileInput, ProfileService},
+    application::{
+        error::{ApplicationError, ApplicationErrorCode},
+        profile_service::{ProfileGroupInput, ProfileInput, ProfileService},
+    },
     commands::error::IpcError,
+    commands::network::NetworkState,
     domain::profile::{AuthPreference, ConnectionProfile, ProfileGroup},
     infrastructure::persistence::json_profile_repository::JsonProfileRepository,
 };
@@ -28,6 +32,21 @@ impl ProfileState {
         self.service
             .clear_all_credential_references()
             .map_err(IpcError::from)
+    }
+
+    pub(crate) fn profile(&self, id: &str) -> Result<ConnectionProfile, IpcError> {
+        self.service
+            .list()
+            .map_err(IpcError::from)?
+            .into_iter()
+            .find(|profile| profile.id().as_str() == id)
+            .ok_or_else(|| {
+                IpcError::from(ApplicationError::new(
+                    ApplicationErrorCode::ProfileNotFound,
+                    "连接配置不存在",
+                    false,
+                ))
+            })
     }
 }
 
@@ -113,7 +132,18 @@ pub fn profile_update(
 }
 
 #[tauri::command]
-pub fn profile_delete(id: String, state: State<'_, ProfileState>) -> Result<(), IpcError> {
+pub fn profile_delete(
+    id: String,
+    state: State<'_, ProfileState>,
+    network: State<'_, NetworkState>,
+) -> Result<(), IpcError> {
+    if network.has_profile_rules(&id)? {
+        return Err(IpcError::from(ApplicationError::new(
+            ApplicationErrorCode::ProfileHasNetworkRules,
+            "该连接仍有网络转发规则，请先删除相关规则",
+            false,
+        )));
+    }
     state.service.delete(&id).map_err(IpcError::from)
 }
 

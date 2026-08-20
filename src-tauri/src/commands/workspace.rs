@@ -54,6 +54,10 @@ enum LayoutDto {
         profile_id: Option<String>,
         path: String,
     },
+    Network {
+        block_id: String,
+        profile_id: Option<String>,
+    },
     Split {
         id: String,
         direction: DirectionDto,
@@ -86,7 +90,7 @@ pub fn workspace_save(
     document: WorkspaceDocumentDto,
     state: State<'_, WorkspaceState>,
 ) -> Result<(), IpcError> {
-    if document.schema_version != 4 {
+    if document.schema_version != 5 {
         return Err(IpcError::from(
             crate::application::error::ApplicationError::new(
                 crate::application::error::ApplicationErrorCode::InvalidWorkspaceDocument,
@@ -104,7 +108,7 @@ pub fn workspace_save(
 impl WorkspaceDocumentDto {
     fn from_domain(document: &WorkspaceDocument) -> Self {
         Self {
-            schema_version: 4,
+            schema_version: 5,
             active_workspace_id: document.active_workspace_id.clone(),
             workspaces: document
                 .workspaces
@@ -165,6 +169,13 @@ impl LayoutDto {
                 profile_id: profile_id.clone(),
                 path: path.clone(),
             },
+            LayoutNode::Network {
+                block_id,
+                profile_id,
+            } => Self::Network {
+                block_id: block_id.clone(),
+                profile_id: profile_id.clone(),
+            },
             LayoutNode::Split {
                 id,
                 direction,
@@ -198,6 +209,13 @@ impl LayoutDto {
                 block_id,
                 profile_id,
                 path,
+            },
+            Self::Network {
+                block_id,
+                profile_id,
+            } => LayoutNode::Network {
+                block_id,
+                profile_id,
             },
             Self::Split {
                 id,
@@ -242,30 +260,41 @@ mod tests {
 
     fn document() -> serde_json::Value {
         json!({
-            "schemaVersion": 4,
+            "schemaVersion": 5,
             "activeWorkspaceId": "workspace-1",
             "workspaces": [{
                 "id": "workspace-1",
                 "name": "Workspace",
-                "activeBlockId": "block-1",
+                "activeBlockId": "network-1",
                 "layout": {
-                    "type": "terminal",
-                    "blockId": "block-1",
-                    "profileId": null
+                    "type": "split",
+                    "id": "split-1",
+                    "direction": "horizontal",
+                    "ratio": 0.5,
+                    "first": {
+                        "type": "terminal",
+                        "blockId": "block-1",
+                        "profileId": null
+                    },
+                    "second": {
+                        "type": "network",
+                        "blockId": "network-1",
+                        "profileId": "profile-1"
+                    }
                 }
             }]
         })
     }
 
     #[test]
-    fn workspace_dto_accepts_v4_camel_case_layout_fields() {
+    fn workspace_dto_accepts_v5_network_layout_fields() {
         assert!(serde_json::from_value::<WorkspaceDocumentDto>(document()).is_ok());
     }
 
     #[test]
     fn workspace_dto_rejects_runtime_and_secret_fields() {
         let mut value = document();
-        value["workspaces"][0]["layout"]["sessionId"] = json!("forbidden");
+        value["workspaces"][0]["layout"]["second"]["sessionId"] = json!("forbidden");
         assert!(serde_json::from_value::<WorkspaceDocumentDto>(value).is_err());
     }
 }

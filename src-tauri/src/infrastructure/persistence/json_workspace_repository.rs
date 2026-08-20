@@ -14,7 +14,7 @@ use crate::{
     ports::workspace_repository::{WorkspaceRepository, WorkspaceRepositoryError},
 };
 
-const SCHEMA_VERSION: u64 = 4;
+const SCHEMA_VERSION: u64 = 5;
 const MAX_DOCUMENT_BYTES: u64 = 4 * 1024 * 1024;
 
 pub struct JsonWorkspaceRepository {
@@ -131,6 +131,10 @@ enum LayoutRecord {
         profile_id: Option<String>,
         path: String,
     },
+    Network {
+        block_id: String,
+        profile_id: Option<String>,
+    },
     Split {
         id: String,
         direction: DirectionRecord,
@@ -211,6 +215,13 @@ impl LayoutRecord {
                 profile_id: profile_id.clone(),
                 path: path.clone(),
             },
+            LayoutNode::Network {
+                block_id,
+                profile_id,
+            } => Self::Network {
+                block_id: block_id.clone(),
+                profile_id: profile_id.clone(),
+            },
             LayoutNode::Split {
                 id,
                 direction,
@@ -244,6 +255,13 @@ impl LayoutRecord {
                 block_id,
                 profile_id,
                 path,
+            },
+            Self::Network {
+                block_id,
+                profile_id,
+            } => LayoutNode::Network {
+                block_id,
+                profile_id,
             },
             Self::Split {
                 id,
@@ -321,7 +339,7 @@ mod tests {
             workspaces: vec![Workspace {
                 id: "workspace-1".into(),
                 name: "Workspace".into(),
-                active_block_id: "files-1".into(),
+                active_block_id: "network-1".into(),
                 layout: LayoutNode::Split {
                     id: "split-1".into(),
                     direction: crate::domain::workspace::SplitDirection::Horizontal,
@@ -330,10 +348,9 @@ mod tests {
                         block_id: "block-1".into(),
                         profile_id: Some("profile-1".into()),
                     }),
-                    second: Box::new(LayoutNode::Files {
-                        block_id: "files-1".into(),
+                    second: Box::new(LayoutNode::Network {
+                        block_id: "network-1".into(),
                         profile_id: Some("profile-1".into()),
-                        path: "/srv/app".into(),
                     }),
                 },
             }],
@@ -341,7 +358,7 @@ mod tests {
     }
 
     #[test]
-    fn round_trips_v4_schema_without_runtime_or_secret_fields() {
+    fn round_trips_v5_network_schema_without_runtime_or_secret_fields() {
         let directory = tempdir().expect("temporary directory");
         let path = directory.path().join("workspaces.json");
         let repository = JsonWorkspaceRepository::new(path.clone());
@@ -349,7 +366,8 @@ mod tests {
 
         assert_eq!(repository.load().expect("load workspace"), Some(document()));
         let json = fs::read_to_string(path).expect("workspace json");
-        assert!(json.contains("\"schemaVersion\": 4"));
+        assert!(json.contains("\"schemaVersion\": 5"));
+        assert!(json.contains("\"type\": \"network\""));
         assert!(json.contains("\"blockId\": \"block-1\""));
         assert!(json.contains("\"profileId\": \"profile-1\""));
         assert!(!json.contains("sourceBlockId"));
@@ -361,7 +379,7 @@ mod tests {
 
     #[test]
     fn rejects_legacy_workspace_schemas_without_overwriting_source() {
-        for version in [1, 2, 3] {
+        for version in [1, 2, 3, 4] {
             let directory = tempdir().expect("temporary directory");
             let path = directory.path().join("workspaces.json");
             let fixture = format!(

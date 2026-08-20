@@ -81,6 +81,19 @@ fn error_code(code: ApplicationErrorCode) -> &'static str {
             "profileStorageContainsSensitiveData"
         }
         ApplicationErrorCode::ProfileStorageUnavailable => "profileStorageUnavailable",
+        ApplicationErrorCode::InvalidNetworkRule => "invalidNetworkRule",
+        ApplicationErrorCode::NetworkRuleAlreadyExists => "networkRuleAlreadyExists",
+        ApplicationErrorCode::NetworkRuleNotFound => "networkRuleNotFound",
+        ApplicationErrorCode::ProfileHasNetworkRules => "profileHasNetworkRules",
+        ApplicationErrorCode::NetworkStorageCorrupt => "networkStorageCorrupt",
+        ApplicationErrorCode::NetworkStorageVersionUnsupported => {
+            "networkStorageVersionUnsupported"
+        }
+        ApplicationErrorCode::NetworkStorageContainsSensitiveData => {
+            "networkStorageContainsSensitiveData"
+        }
+        ApplicationErrorCode::NetworkStorageUnavailable => "networkStorageUnavailable",
+        ApplicationErrorCode::NetworkForwardUnavailable => "networkForwardUnavailable",
         ApplicationErrorCode::InvalidCredentials => "invalidCredentials",
         ApplicationErrorCode::AuthenticationMethodDisabled => "authenticationMethodDisabled",
         ApplicationErrorCode::PrivateKeyMissing => "privateKeyMissing",

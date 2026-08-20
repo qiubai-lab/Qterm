@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   dispatch: vi.fn(),
   connectBlock: vi.fn().mockResolvedValue(undefined),
   connectFileBlock: vi.fn().mockResolvedValue(undefined),
+  connectNetworkBlock: vi.fn().mockResolvedValue(undefined),
   resolveConfiguredAuth: vi.fn(),
   getVaultStatus: vi.fn(),
   lockVault: vi.fn(),
@@ -25,10 +26,10 @@ const workspace = { id: "workspace-1", name: "Workspace 1", activeBlockId: "bloc
 vi.mock("./configuredAuth", () => ({ resolveConfiguredAuth: mocks.resolveConfiguredAuth }));
 vi.mock("./LayoutView", () => ({ WorkspaceCanvas: ({ onRequestAuthConnection }: { onRequestAuthConnection: (owner: "terminal", blockId: string, profile: typeof requestedProfile) => void }) => <button onClick={() => onRequestAuthConnection("terminal", "block-1", requestedProfile)}>请求远程连接</button> }));
 vi.mock("./WorkspaceProvider", () => ({ useWorkspace: () => ({
-  document: { schemaVersion: 4, activeWorkspaceId: workspace.id, workspaces: [workspace] }, activeWorkspace: workspace,
-  dispatch: mocks.dispatch, runtimes: {}, fileRuntimes: {}, connectBlock: mocks.connectBlock, connectFileBlock: mocks.connectFileBlock,
+  document: { schemaVersion: 5, activeWorkspaceId: workspace.id, workspaces: [workspace] }, activeWorkspace: workspace,
+  dispatch: mocks.dispatch, runtimes: {}, fileRuntimes: {}, networkRuntimes: {}, connectBlock: mocks.connectBlock, connectFileBlock: mocks.connectFileBlock, connectNetworkBlock: mocks.connectNetworkBlock,
   connectedCount: vi.fn().mockReturnValue(0), closeSessions: vi.fn().mockResolvedValue(undefined), blocksForWorkspace: vi.fn().mockReturnValue(["block-1"]),
-  acceptBlockHostKey: vi.fn(), rejectBlockHostKey: vi.fn(), acceptFileHostKey: vi.fn(), rejectFileHostKey: vi.fn(), storageNotice: "", dismissStorageNotice: vi.fn(),
+  acceptBlockHostKey: vi.fn(), rejectBlockHostKey: vi.fn(), acceptFileHostKey: vi.fn(), rejectFileHostKey: vi.fn(), acceptNetworkHostKey: vi.fn(), rejectNetworkHostKey: vi.fn(), storageNotice: "", dismissStorageNotice: vi.fn(),
 }) }));
 vi.mock("../components/dialogs/ConnectionAuthDialog", () => ({ ConnectionAuthDialog: ({ profile: item }: { profile: typeof connectionProfile }) => <div role="dialog" aria-label={`认证 ${item.name}`}/> }));
 vi.mock("../components/dialogs/MasterPasswordDialog", () => ({ MasterPasswordDialog: ({ mode, onSuccess }: { mode: string; onSuccess: () => void }) => <div role="dialog" aria-label="解锁凭证库">{mode}<button onClick={onSuccess}>解锁</button></div> }));

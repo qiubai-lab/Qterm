@@ -29,6 +29,10 @@ pub enum LayoutNode {
         profile_id: Option<String>,
         path: String,
     },
+    Network {
+        block_id: String,
+        profile_id: Option<String>,
+    },
     Split {
         id: String,
         direction: SplitDirection,
@@ -86,7 +90,7 @@ impl WorkspaceDocument {
 fn contains_terminal(node: &LayoutNode) -> bool {
     match node {
         LayoutNode::Terminal { .. } => true,
-        LayoutNode::Files { .. } => false,
+        LayoutNode::Files { .. } | LayoutNode::Network { .. } => false,
         LayoutNode::Split { first, second, .. } => {
             contains_terminal(first) || contains_terminal(second)
         }
@@ -126,6 +130,19 @@ fn validate_layout<'a>(
             }
             if path.is_empty() || path.len() > 4096 || path.chars().any(char::is_control) {
                 return Err(WorkspaceValidationError::Layout);
+            }
+            if blocks.contains(&block_id.as_str()) {
+                return Err(WorkspaceValidationError::Layout);
+            }
+            blocks.push(block_id);
+        }
+        LayoutNode::Network {
+            block_id,
+            profile_id,
+        } => {
+            validate_id(block_id)?;
+            if let Some(profile_id) = profile_id {
+                validate_id(profile_id)?;
             }
             if blocks.contains(&block_id.as_str()) {
                 return Err(WorkspaceValidationError::Layout);

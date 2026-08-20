@@ -35,7 +35,7 @@ getrandom = "0.4.3"
 uuid = { version = "1.24.1", features = ["v4"] }
 russh = { version = "=0.62.6", default-features = false, features = ["ring"] }
 russh-sftp = "=2.4.0"
-tokio = { version = "1.53.1", features = ["fs", "io-util", "sync", "time"] }
+tokio = { version = "1.53.1", features = ["fs", "io-util", "net", "sync", "time"] }
 portable-pty = "=0.9.0"
 tauri-plugin-clipboard-manager = "2.3.2"
 

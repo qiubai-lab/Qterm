@@ -47,7 +47,7 @@ describe("SettingsDialog", () => {
 
     const path = await screen.findByRole("textbox", { name: "数据存储位置" });
     expect(path).toHaveValue("C:\\Users\\demo\\.qterm");
-    expect(screen.getByText(/不会自动迁移或覆盖 connections\.json 与 secrets\.vault/)).toBeInTheDocument();
+    expect(screen.getByText(/不会自动迁移或覆盖 connections\.json、network-forwards\.json 与 secrets\.vault/)).toBeInTheDocument();
     expect(screen.getByText(/known-hosts\.json 与 workspaces\.json 仍保存在系统默认位置/)).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "选择文件夹" }));

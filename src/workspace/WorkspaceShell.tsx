@@ -16,13 +16,14 @@ import { WorkspaceCanvas, type ConnectionOwner } from "./LayoutView";
 import { resolveConfiguredAuth } from "./configuredAuth";
 import { openFileWindowAction } from "./fileWindow";
 import type { Workspace } from "./model";
+import { openNetworkWindowAction } from "./networkWindow";
 import { useWorkspace } from "./WorkspaceProvider";
 
 type Tool = "connections" | "credentials" | "settings" | "help";
 interface CloseRequest { title: string; detail: string; ids: string[]; execute: () => void }
 
 export function WorkspaceShell() {
-  const { document, activeWorkspace, dispatch, runtimes, fileRuntimes, connectBlock, connectFileBlock, connectedCount, closeSessions, blocksForWorkspace, acceptBlockHostKey, rejectBlockHostKey, acceptFileHostKey, rejectFileHostKey, storageNotice, dismissStorageNotice } = useWorkspace();
+  const { document, activeWorkspace, dispatch, runtimes, fileRuntimes, networkRuntimes, connectBlock, connectFileBlock, connectNetworkBlock, connectedCount, closeSessions, blocksForWorkspace, acceptBlockHostKey, rejectBlockHostKey, acceptFileHostKey, rejectFileHostKey, acceptNetworkHostKey, rejectNetworkHostKey, storageNotice, dismissStorageNotice } = useWorkspace();
   const [tool, setTool] = useState<Tool | null>(null);
   const [renaming, setRenaming] = useState<{ id: string; value: string } | null>(null);
   const [closeRequest, setCloseRequest] = useState<CloseRequest | null>(null);
@@ -39,11 +40,14 @@ export function WorkspaceShell() {
   const automaticAttemptsRef = useRef(new Set<string>());
   const terminalHostPrompt = Object.entries(runtimes).find(([, runtime]) => runtime.hostKeyPrompt);
   const fileHostPrompt = Object.entries(fileRuntimes).find(([, runtime]) => runtime.hostKeyPrompt);
+  const networkHostPrompt = Object.entries(networkRuntimes).find(([, runtime]) => runtime.hostKeyPrompt);
   const hostPrompt = terminalHostPrompt
     ? { owner: "terminal" as const, blockId: terminalHostPrompt[0], prompt: terminalHostPrompt[1].hostKeyPrompt! }
     : fileHostPrompt
       ? { owner: "files" as const, blockId: fileHostPrompt[0], prompt: fileHostPrompt[1].hostKeyPrompt! }
-      : null;
+      : networkHostPrompt
+        ? { owner: "network" as const, blockId: networkHostPrompt[0], prompt: networkHostPrompt[1].hostKeyPrompt! }
+        : null;
 
   function requestClose(request: CloseRequest) {
     if (connectedCount(request.ids) === 0) {
@@ -54,8 +58,10 @@ export function WorkspaceShell() {
   }
 
   function closeBlock(blockId: string) {
-    const fileBlock = activeWorkspace.layout && blockId && findBlockType(activeWorkspace, blockId) === "files";
-    requestClose({ title: fileBlock ? "关闭文件窗口？" : "关闭终端？", detail: fileBlock ? "活动文件连接会同时断开。" : "活动终端会话会同时断开，终端缓冲不会保留。", ids: [blockId], execute: () => dispatch({ type: "closeBlock", workspaceId: activeWorkspace.id, blockId }) });
+    const blockType = activeWorkspace.layout && blockId ? findBlockType(activeWorkspace, blockId) : null;
+    const title = blockType === "files" ? "关闭文件窗口？" : blockType === "network" ? "关闭网络窗口？" : "关闭终端？";
+    const detail = blockType === "files" ? "活动文件连接会同时断开。" : blockType === "network" ? "活动网络转发和 SSH 连接会同时停止。" : "活动终端会话会同时断开，终端缓冲不会保留。";
+    requestClose({ title, detail, ids: [blockId], execute: () => dispatch({ type: "closeBlock", workspaceId: activeWorkspace.id, blockId }) });
   }
 
   function closeWorkspace(workspace: Workspace) {
@@ -198,7 +204,8 @@ export function WorkspaceShell() {
       const auth = await resolveConfiguredAuth(profile);
       if (!auth) { showAuthentication(); return; }
       if (owner === "terminal") await connectBlock(blockId, profile, auth, showAuthentication);
-      else await connectFileBlock(blockId, profile, auth, showAuthentication);
+      else if (owner === "files") await connectFileBlock(blockId, profile, auth, showAuthentication);
+      else await connectNetworkBlock(blockId, profile, auth, showAuthentication);
     } catch {
       showAuthentication();
     } finally {
@@ -272,6 +279,7 @@ export function WorkspaceShell() {
           <RailButton tool="connections" icon="connections" label="链接管理" active={tool === "connections"} onClick={setTool}/>
           <RailButton tool="credentials" icon="key" label="凭证管理" active={tool === "credentials"} onClick={setTool}/>
           <RailActionButton icon="files" label="文件管理" onClick={() => dispatch(openFileWindowAction(activeWorkspace))}/>
+          <RailActionButton icon="network" label="网络管理" onClick={() => dispatch(openNetworkWindowAction(activeWorkspace))}/>
           <RailActionButton icon="terminal" label="打开终端" onClick={() => dispatch({ type: "splitBlock", workspaceId: activeWorkspace.id, blockId: activeWorkspace.activeBlockId, direction: "horizontal" })}/>
           <span className="rail-spacer"/>
           <RailActionButton icon="lock" label="锁定终端" accessibleLabel={terminalLockLabel} title={terminalLockLabel} disabled={!vaultStatus?.initialized || vaultStatus.legacy || vaultLockBusy} onClick={() => { setVaultLockError(""); setLockChoiceOpen(true); }}/>
@@ -293,7 +301,8 @@ export function WorkspaceShell() {
       <ConnectionAuthDialog profile={authRequest.profile} onClose={() => setAuthRequest(null)} onConnect={async (auth) => {
         const request = authRequest;
         if (request.owner === "terminal") await connectBlock(request.blockId, request.profile, auth);
-        else await connectFileBlock(request.blockId, request.profile, auth);
+        else if (request.owner === "files") await connectFileBlock(request.blockId, request.profile, auth);
+        else await connectNetworkBlock(request.blockId, request.profile, auth);
       }}/>
     )}
     {vaultUnlockRequest && <MasterPasswordDialog mode={vaultUnlockRequest.mode} onClose={() => setVaultUnlockRequest(null)} onSuccess={() => {
@@ -306,9 +315,17 @@ export function WorkspaceShell() {
     {tool === "help" && <HelpDialog onClose={() => setTool(null)}/>}
     {lockChoiceOpen && <TerminalLockChoiceDialog vaultUnlocked={Boolean(vaultStatus?.unlocked)} busy={vaultLockBusy} message={vaultLockError} onClose={() => { setLockChoiceOpen(false); setVaultLockError(""); }} onLockVault={() => void applyLockScope("vault")} onLockTerminalAndVault={() => void applyLockScope("terminalAndVault")}/>}
     {closeRequest && <DialogFrame title={closeRequest.title} subtitle="未保存的终端输出无法恢复" onClose={() => setCloseRequest(null)}><p className="confirm-copy">{closeRequest.detail}</p><p className="callout">将断开 {connectedCount(closeRequest.ids)} 个活动会话。</p><footer className="dialog-actions end"><button className="secondary-button" onClick={() => setCloseRequest(null)}>取消</button><button className="danger-button filled" onClick={() => void confirmClose()}>关闭并断开</button></footer></DialogFrame>}
-    {hostPrompt && <DialogFrame title="确认主机身份" subtitle="首次连接需要核对主机密钥" onClose={() => void (hostPrompt.owner === "terminal" ? rejectBlockHostKey(hostPrompt.blockId) : rejectFileHostKey(hostPrompt.blockId))}><p className="confirm-copy">请通过可信渠道核对以下指纹：</p><code className="fingerprint">{hostPrompt.prompt.algorithm}<br/>{hostPrompt.prompt.fingerprint}</code><footer className="dialog-actions end"><button className="danger-button" onClick={() => void (hostPrompt.owner === "terminal" ? rejectBlockHostKey(hostPrompt.blockId) : rejectFileHostKey(hostPrompt.blockId))}>拒绝</button><button className="primary-button" onClick={() => void (hostPrompt.owner === "terminal" ? acceptBlockHostKey(hostPrompt.blockId) : acceptFileHostKey(hostPrompt.blockId))}>信任并继续</button></footer></DialogFrame>}
+    {hostPrompt && <DialogFrame title="确认主机身份" subtitle="首次连接需要核对主机密钥" onClose={() => void rejectPromptHostKey(hostPrompt.owner, hostPrompt.blockId)}><p className="confirm-copy">请通过可信渠道核对以下指纹：</p><code className="fingerprint">{hostPrompt.prompt.algorithm}<br/>{hostPrompt.prompt.fingerprint}</code><footer className="dialog-actions end"><button className="danger-button" onClick={() => void rejectPromptHostKey(hostPrompt.owner, hostPrompt.blockId)}>拒绝</button><button className="primary-button" onClick={() => void acceptPromptHostKey(hostPrompt.owner, hostPrompt.blockId)}>信任并继续</button></footer></DialogFrame>}
     {storageNotice && <div className="global-notice" role="status"><span>{storageNotice}</span><button aria-label="关闭提示" onClick={dismissStorageNotice}><Icon name="close" size={13}/></button></div>}
   </main>;
+
+  function acceptPromptHostKey(owner: ConnectionOwner, blockId: string) {
+    return owner === "terminal" ? acceptBlockHostKey(blockId) : owner === "files" ? acceptFileHostKey(blockId) : acceptNetworkHostKey(blockId);
+  }
+
+  function rejectPromptHostKey(owner: ConnectionOwner, blockId: string) {
+    return owner === "terminal" ? rejectBlockHostKey(blockId) : owner === "files" ? rejectFileHostKey(blockId) : rejectNetworkHostKey(blockId);
+  }
 }
 
 function RailButton({ tool, icon, label, active, onClick }: { tool: Tool; icon: IconName; label: string; active: boolean; onClick: (tool: Tool | null) => void }) {
@@ -327,8 +344,8 @@ function isEditable(target: EventTarget | null): boolean {
   return target instanceof HTMLElement && Boolean(target.closest("input,textarea,select,[contenteditable=true]"));
 }
 
-function findBlockType(workspace: Workspace, blockId: string): "terminal" | "files" | null {
-  const visit = (node: Workspace["layout"]): "terminal" | "files" | null => node.type === "split"
+function findBlockType(workspace: Workspace, blockId: string): "terminal" | "files" | "network" | null {
+  const visit = (node: Workspace["layout"]): "terminal" | "files" | "network" | null => node.type === "split"
     ? visit(node.first) ?? visit(node.second)
     : node.blockId === blockId ? node.type : null;
   return visit(workspace.layout);
