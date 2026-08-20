@@ -12,6 +12,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   CARGO_TERM_COLOR: always
 
@@ -34,18 +38,26 @@ jobs:
             libwebkit2gtk-4.1-dev \
             libxdo-dev
 
+      - name: Set up pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@11.0.8 --activate
+
       - name: Set up Node.js
         uses: actions/setup-node@v7
         with:
           node-version: 22.22.2
-
-      - name: Set up pnpm
-        run: npm install --global pnpm@11.0.8
+          cache: pnpm
 
       - name: Set up Rust
         run: |
           rustup toolchain install 1.97.1 --profile minimal --component clippy,rustfmt
           rustup default 1.97.1
+
+      - name: Cache Rust artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
 
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
@@ -99,19 +111,27 @@ jobs:
             libwebkit2gtk-4.1-dev \
             libxdo-dev
 
+      - name: Set up pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@11.0.8 --activate
+
       - name: Set up Node.js
         uses: actions/setup-node@v7
         with:
           node-version: 22.22.2
-
-      - name: Set up pnpm
-        run: npm install --global pnpm@11.0.8
+          cache: pnpm
 
       - name: Set up Rust
         shell: bash
         run: |
           rustup toolchain install 1.97.1 --profile minimal
           rustup default 1.97.1
+
+      - name: Cache Rust artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
 
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
