@@ -1,19 +1,34 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
 
 import { Icon } from "../components/Icon";
 import { DialogFrame } from "../components/dialogs/DialogFrame";
 import { createNetworkRule, deleteNetworkRule, listNetworkRules, updateNetworkRule, type NetworkRule, type NetworkRuleInput, type NetworkRuleRuntimeState } from "../lib/tauri/network";
 import { NetworkRuleDialog } from "./NetworkRuleDialog";
+import { NetworkRuleTypeDialog } from "./NetworkRuleTypeDialog";
+import type { NetworkRuleType } from "./networkRuleTypes";
 
 const NETWORK_RULES_CHANGED_EVENT = "qterm:network-rules-changed";
+
+type ContextMenuState = {
+  rule: NetworkRule;
+  anchorX: number;
+  anchorY: number;
+  x: number;
+  y: number;
+  placement: "above" | "below";
+};
 
 export function NetworkPane({ profileId, runtimeStates = {}, lockedRuleIds = new Set(), onStart, onStop }: { profileId: string | null; runtimeStates?: Record<string, NetworkRuleRuntimeState>; lockedRuleIds?: ReadonlySet<string>; onStart?: (rule: NetworkRule) => void; onStop?: (rule: NetworkRule) => void }) {
   const [rules, setRules] = useState<NetworkRule[]>([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
-  const [editor, setEditor] = useState<NetworkRule | "new" | null>(null);
+  const [editor, setEditor] = useState<NetworkRule | null>(null);
+  const [choosingType, setChoosingType] = useState(false);
+  const [newRuleType, setNewRuleType] = useState<NetworkRuleType | null>(null);
   const [deleteRule, setDeleteRule] = useState<NetworkRule | null>(null);
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [busy, setBusy] = useState(false);
+  const contextMenuRef = useRef<HTMLDivElement | null>(null);
 
   const refresh = useCallback(async () => {
     if (!profileId) { setRules([]); return; }
@@ -35,13 +50,36 @@ export function NetworkPane({ profileId, runtimeStates = {}, lockedRuleIds = new
     window.addEventListener(NETWORK_RULES_CHANGED_EVENT, handleChange);
     return () => window.removeEventListener(NETWORK_RULES_CHANGED_EVENT, handleChange);
   }, [profileId, refresh]);
+  useEffect(() => {
+    if (!contextMenu) return;
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!(event.target instanceof Element) || !event.target.closest(".network-context-menu")) setContextMenu(null);
+    };
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") setContextMenu(null);
+    };
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    window.setTimeout(() => contextMenuRef.current?.querySelector<HTMLButtonElement>("[role='menuitem']:not(:disabled)")?.focus(), 0);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [contextMenu]);
+  useLayoutEffect(() => {
+    if (!contextMenu || !contextMenuRef.current) return;
+    const fitted = fitContextMenu(contextMenu.anchorX, contextMenu.anchorY, contextMenuRef.current);
+    if (fitted.x !== contextMenu.x || fitted.y !== contextMenu.y || fitted.placement !== contextMenu.placement) {
+      setContextMenu((current) => current ? { ...current, ...fitted } : null);
+    }
+  }, [contextMenu]);
 
   async function save(input: NetworkRuleInput) {
     setBusy(true); setMessage("");
     try {
-      if (editor && editor !== "new") await updateNetworkRule(editor.id, input);
+      if (editor) await updateNetworkRule(editor.id, input);
       else await createNetworkRule(input);
-      setEditor(null);
+      setEditor(null); setNewRuleType(null);
       if (profileId) notifyRulesChanged(profileId);
     } catch (error) { setMessage(errorMessage(error)); }
     finally { setBusy(false); }
@@ -55,25 +93,78 @@ export function NetworkPane({ profileId, runtimeStates = {}, lockedRuleIds = new
     finally { setBusy(false); }
   }
 
+  function openContextMenu(event: MouseEvent<HTMLElement>, rule: NetworkRule) {
+    event.preventDefault();
+    setContextMenu({ rule, anchorX: event.clientX, anchorY: event.clientY, x: event.clientX, y: event.clientY, placement: "below" });
+  }
+
+  function openKeyboardContextMenu(event: KeyboardEvent<HTMLElement>, rule: NetworkRule) {
+    if (event.key !== "ContextMenu" && !(event.shiftKey && event.key === "F10")) return;
+    event.preventDefault();
+    const rect = event.currentTarget.getBoundingClientRect();
+    setContextMenu({ rule, anchorX: rect.left + 18, anchorY: rect.top + rect.height / 2, x: rect.left + 18, y: rect.top + rect.height / 2, placement: "below" });
+  }
+
+  function returnToTypeSelection() {
+    if (busy) return;
+    setNewRuleType(null);
+    setChoosingType(true);
+  }
+
+  function closeRuleDialog() {
+    if (busy) return;
+    if (!editor) {
+      returnToTypeSelection();
+      return;
+    }
+    setEditor(null);
+    setNewRuleType(null);
+  }
+
   if (!profileId) return <div className="network-empty"><Icon name="network" size={28}/><strong>选择远程连接</strong><p>网络规则按连接配置保存。选择连接后即可创建端口转发或 SOCKS5 代理。</p></div>;
 
   return <div className="network-pane">
-    <div className="network-toolbar"><div><strong>网络实例</strong><small>{rules.length} 条配置 · 默认停止</small></div><button className="primary-button" onClick={() => setEditor("new")}><Icon name="plus" size={12}/>创建实例</button></div>
+    <div className="network-toolbar"><div className="network-toolbar-summary"><strong>网络实例</strong><span>{rules.length} 条配置 · 默认停止</span></div><button className="network-create-button" aria-label="创建网络实例" title="创建网络实例" onClick={() => setChoosingType(true)}><Icon name="plus" size={12}/></button></div>
     {message && <div className="network-inline-error" role="alert">{message}</div>}
-    <div className="network-rule-list" aria-busy={loading}>
+    <div className={`network-rule-list${!loading && rules.length === 0 ? " empty" : ""}`} role="list" aria-busy={loading}>
       {loading ? <div className="network-empty"><span>正在读取网络规则…</span></div> : rules.length === 0 ? <div className="network-empty"><Icon name="network" size={25}/><strong>暂无网络实例</strong><p>创建本地、远程端口转发或 SOCKS5 动态代理。</p></div> : rules.map((rule) => {
         const state = runtimeStates[rule.id] ?? "stopped";
-        const running = state === "running" || state === "starting" || state === "stopping";
-        const mutationLocked = running || lockedRuleIds.has(rule.id);
-        return <article className="network-rule-item" key={rule.id} data-state={state}>
-          <span className={`network-rule-dot ${state}`}/><div className="network-rule-copy"><strong>{rule.name}</strong><code>{endpointSummary(rule)}</code><small>{typeLabel(rule.type)}{rule.exposed ? " · 对外监听" : " · 仅本机"}</small></div>
-          <span className="network-rule-status">{stateLabel(state)}</span>
-          <div className="network-rule-actions"><button aria-label={`编辑 ${rule.name}`} title={mutationLocked && !running ? "该规则正在其他网络窗口运行" : undefined} disabled={mutationLocked} onClick={() => setEditor(rule)}><Icon name="edit" size={12}/></button><button aria-label={`删除 ${rule.name}`} title={mutationLocked && !running ? "该规则正在其他网络窗口运行" : undefined} disabled={mutationLocked} onClick={() => setDeleteRule(rule)}><Icon name="trash" size={12}/></button>{running ? <button className="network-stop-button" disabled={!onStop || state === "stopping"} onClick={() => onStop?.(rule)}>{state === "stopping" ? "停止中" : "停止"}</button> : <button className="network-start-button" disabled={!onStart} onClick={() => onStart?.(rule)}>启动</button>}</div>
+        const switchOn = state === "running" || state === "starting";
+        const transitioning = state === "starting" || state === "stopping";
+        const switchLabel = state === "starting" ? `正在启动 ${rule.name}` : state === "stopping" ? `正在停止 ${rule.name}` : switchOn ? `停止 ${rule.name}` : `启动 ${rule.name}`;
+        return <article className="network-rule-item" role="listitem" tabIndex={0} aria-label={`${rule.name}，${stateLabel(state)}`} key={rule.id} data-state={state} onContextMenu={(event) => openContextMenu(event, rule)} onKeyDown={(event) => openKeyboardContextMenu(event, rule)}>
+          <span className={`network-rule-dot ${state}`}/><div className="network-rule-copy"><strong>{rule.name}</strong><NetworkRuleRoute rule={rule}/><small>{typeLabel(rule.type)}{rule.exposed ? " · 对外监听" : " · 仅本机"}</small></div>
+          <label className="network-rule-switch" title={switchLabel}>
+            <input className="network-rule-switch-input" type="checkbox" role="switch" aria-label={switchLabel} checked={switchOn} disabled={transitioning || (switchOn ? !onStop : !onStart)} onChange={(event) => event.target.checked ? onStart?.(rule) : onStop?.(rule)}/>
+            <span className="network-rule-switch-track"><span className="network-rule-switch-label on">ON</span><span className="network-rule-switch-label off">OFF</span><span className="network-rule-switch-thumb"/></span>
+          </label>
         </article>;
       })}
     </div>
-    {editor && <NetworkRuleDialog profileId={profileId} rule={editor === "new" ? null : editor} busy={busy} message={message} onClose={() => { if (!busy) setEditor(null); }} onSave={(input) => void save(input)}/>} 
-    {deleteRule && <DialogFrame compact title="删除网络规则？" subtitle="运行状态与配置都会移除" dismissible={!busy} onClose={() => { if (!busy) setDeleteRule(null); }}><p className="confirm-copy">将删除“{deleteRule.name}”。此操作无法撤销，但不会删除连接配置。</p><footer className="dialog-actions end"><button className="secondary-button" disabled={busy} onClick={() => setDeleteRule(null)}>取消</button><button className="danger-button filled" disabled={busy} onClick={() => void confirmDelete()}>{busy ? "正在删除…" : "删除规则"}</button></footer></DialogFrame>}
+    {contextMenu && (() => {
+      const state = runtimeStates[contextMenu.rule.id] ?? "stopped";
+      const mutationLocked = state === "running" || state === "starting" || state === "stopping" || lockedRuleIds.has(contextMenu.rule.id);
+      const lockTitle = lockedRuleIds.has(contextMenu.rule.id) && state === "stopped" ? "该规则正在其他网络窗口运行" : "请先停止该规则";
+      return <div ref={contextMenuRef} className="network-context-menu" role="menu" aria-label={`${contextMenu.rule.name} 网络规则菜单`} data-placement={contextMenu.placement} style={{ left: contextMenu.x, top: contextMenu.y }}>
+        <button role="menuitem" disabled={mutationLocked} title={mutationLocked ? lockTitle : undefined} onClick={() => { setContextMenu(null); setEditor(contextMenu.rule); }}><Icon name="edit" size={13}/><span>编辑规则</span></button>
+        <button className="danger" role="menuitem" disabled={mutationLocked} title={mutationLocked ? lockTitle : undefined} onClick={() => { setContextMenu(null); setDeleteRule(contextMenu.rule); }}><Icon name="trash" size={13}/><span>删除规则</span></button>
+      </div>;
+    })()}
+    {choosingType && <NetworkRuleTypeDialog
+      onClose={() => setChoosingType(false)}
+      onSelect={(type) => { setChoosingType(false); setNewRuleType(type); }}
+    />}
+    {(editor || newRuleType) && <NetworkRuleDialog
+      profileId={profileId}
+      rule={editor}
+      initialType={editor?.type ?? newRuleType ?? "local"}
+      busy={busy}
+      message={message}
+      onBack={!editor ? returnToTypeSelection : undefined}
+      onClose={closeRuleDialog}
+      onSave={(input) => void save(input)}
+    />}
+    {deleteRule && <DialogFrame compact title="删除网络规则？" subtitle="将移除持久化配置" dismissible={!busy} onClose={() => { if (!busy) setDeleteRule(null); }}><p className="confirm-copy">将删除“{deleteRule.name}”。此操作无法撤销，但不会删除连接配置。</p><footer className="dialog-actions end"><button className="secondary-button" disabled={busy} onClick={() => setDeleteRule(null)}>取消</button><button className="danger-button filled" disabled={busy} onClick={() => void confirmDelete()}>{busy ? "正在删除…" : "删除规则"}</button></footer></DialogFrame>}
   </div>;
 }
 
@@ -81,9 +172,44 @@ function notifyRulesChanged(profileId: string) {
   window.dispatchEvent(new CustomEvent(NETWORK_RULES_CHANGED_EVENT, { detail: profileId }));
 }
 
-function endpointSummary(rule: NetworkRule): string {
-  const source = `${rule.bindHost}:${rule.bindPort}`;
-  return rule.type === "socks5" ? `${source} → SSH 动态目标` : `${source} → ${rule.targetHost}:${rule.targetPort}`;
+type RouteEndpoint = {
+  label: string;
+  address: string;
+  icon: "computer" | "server";
+};
+
+function NetworkRuleRoute({ rule }: { rule: NetworkRule }) {
+  const [source, target] = routeEndpoints(rule);
+  const label = `${source.label} ${source.address} → ${target.label} ${target.address}`;
+  return <div className="network-rule-route" aria-label={label} title={label}>
+    <RouteEndpointView endpoint={source}/>
+    <span className="network-rule-route-arrow" aria-hidden="true">→</span>
+    <RouteEndpointView endpoint={target}/>
+  </div>;
+}
+
+function RouteEndpointView({ endpoint }: { endpoint: RouteEndpoint }) {
+  return <span className="network-rule-endpoint"><Icon name={endpoint.icon} size={11}/><span>{endpoint.label}</span><code>{endpoint.address}</code></span>;
+}
+
+function routeEndpoints(rule: NetworkRule): [RouteEndpoint, RouteEndpoint] {
+  const bindAddress = `${rule.bindHost}:${rule.bindPort}`;
+  if (rule.type === "remote") {
+    return [
+      { label: "远程", address: bindAddress, icon: "server" },
+      { label: "本地", address: `${rule.targetHost}:${rule.targetPort}`, icon: "computer" },
+    ];
+  }
+  if (rule.type === "socks5") {
+    return [
+      { label: "本地", address: bindAddress, icon: "computer" },
+      { label: "远程网络", address: "动态目标", icon: "server" },
+    ];
+  }
+  return [
+    { label: "本地", address: bindAddress, icon: "computer" },
+    { label: "远程", address: `${rule.targetHost}:${rule.targetPort}`, icon: "server" },
+  ];
 }
 
 function typeLabel(type: NetworkRule["type"]): string {
@@ -97,4 +223,17 @@ function stateLabel(state: NetworkRuleRuntimeState): string {
 function errorMessage(error: unknown): string {
   if (typeof error === "object" && error && "message" in error) return String(error.message);
   return error instanceof Error ? error.message : String(error);
+}
+
+function fitContextMenu(anchorX: number, anchorY: number, menu: HTMLDivElement): Pick<ContextMenuState, "x" | "y" | "placement"> {
+  const gap = 6;
+  const inset = 6;
+  const menuWidth = menu.offsetWidth;
+  const menuHeight = menu.offsetHeight;
+  const placement = anchorY + menuHeight + gap > window.innerHeight ? "above" : "below";
+  return {
+    x: Math.max(inset, Math.min(anchorX, window.innerWidth - menuWidth - inset)),
+    y: placement === "above" ? Math.max(inset, anchorY - menuHeight - gap) : Math.min(anchorY + gap, window.innerHeight - menuHeight - inset),
+    placement,
+  };
 }

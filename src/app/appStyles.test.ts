@@ -49,9 +49,49 @@ describe("application layout styles", () => {
     expect(terminalSurface).toContain("min-height:0");
     expect(terminalSurface).toContain("flex:1");
     expect(terminalSurface).not.toContain("padding:");
-    expect(terminalSurface).toContain("background:#050607");
+    expect(declarations(".terminal-surface,.file-browser,.network-pane")).toContain("background:rgba(5,7,8,.78)");
     expect(xtermSurface).toContain("height:100%");
     expect(xtermSurface).toContain("padding:4px 3px 2px 7px");
+  });
+
+  it("uses one dark translucent surface language across terminal, files, and network blocks", () => {
+    const block = declarations(".terminal-block");
+    const contentSurfaces = declarations(".terminal-surface,.file-browser,.network-pane");
+
+    expect(block).toContain("background:rgba(5,7,8,.84)");
+    expect(block).toContain("overflow:hidden");
+    expect(block).not.toContain("backdrop-filter:");
+    expect(block).not.toContain("-webkit-backdrop-filter:");
+    expect(contentSurfaces).toContain("background:rgba(5,7,8,.78)");
+    expect(declarations(".network-block")).not.toContain("background:");
+    expect(declarations(".file-browser-navigation")).toContain("height:34px");
+    expect(declarations(".network-toolbar")).toContain("height:34px");
+    expect(declarations(".network-create-button")).toContain("width:25px");
+    expect(declarations(".network-create-button")).toContain("height:25px");
+    expect(declarations(".network-create-button")).toContain("border:0");
+    expect(declarations(".network-create-button")).toContain("background:transparent");
+    expect(declarations(".network-create-button")).not.toContain("box-shadow:");
+    expect(declarations(".network-rule-item")).toContain("grid-template-columns:6px minmax(0,1fr) 38px");
+    expect(declarations(".network-rule-item")).toContain("min-height:58px");
+    expect(declarations(".network-rule-item+.network-rule-item")).toContain("margin-top:3px");
+    expect(declarations(".network-rule-copy")).toContain("flex-direction:column");
+    expect(declarations(".network-rule-list.empty")).toContain("display:flex");
+    expect(declarations(".network-rule-list.empty>.network-empty")).toContain("width:100%");
+    expect(declarations(".network-rule-list.empty>.network-empty")).toContain("flex:1");
+    expect(declarations(".network-rule-switch")).toContain("width:38px");
+    expect(declarations(".network-rule-switch")).toContain("height:18px");
+    expect(declarations(".network-rule-switch-input")).toContain("opacity:0");
+    expect(declarations(".network-rule-switch-label.off")).toContain("opacity:1");
+    expect(declarations(".network-rule-switch-input:checked+.network-rule-switch-track .network-rule-switch-label.on")).toContain("opacity:1");
+    expect(declarations(".network-rule-switch-input:checked+.network-rule-switch-track .network-rule-switch-thumb")).toContain("translateX(20px)");
+    expect(styles).not.toContain(".network-rule-menu-hint");
+    expect(declarations(".network-context-menu")).toContain("position:fixed");
+    expect(declarations(".dialog-frame.network-type-dialog")).toContain("width:min(660px,calc(100vw - 40px))");
+    expect(declarations(".network-type-options")).toContain("grid-template-columns:repeat(3,minmax(0,1fr))");
+    expect(declarations(".network-type-option")).toContain("min-height:150px");
+    expect(declarations(".network-type-option:focus-visible")).toContain("outline:2px solid var(--focus)");
+    expect(styles).toMatch(/max-width:620px[\s\S]*\.network-type-options\{grid-template-columns:1fr\}/);
+    expect(styles).toMatch(/prefers-reduced-transparency:reduce[\s\S]*\.terminal-block,.terminal-surface,.file-browser,.network-pane\{background:#050708\}/);
   });
 
   it("keeps canvas and split gutters compact", () => {
@@ -162,7 +202,7 @@ describe("application layout styles", () => {
     expect(declarations(".connection-drag-preview")).toContain("position:fixed");
     expect(declarations(".connection-drag-preview")).toContain("pointer-events:none");
     expect(styles).toContain("@keyframes connection-menu-in");
-    expect(styles).toContain(".connection-context-menu,.file-context-menu{animation:none}");
+    expect(styles).toContain(".connection-context-menu,.file-context-menu,.network-context-menu{animation:none}");
   });
 
   it("anchors connection save feedback to the button and disables spinner motion when requested", () => {
@@ -223,7 +263,7 @@ describe("application layout styles", () => {
     expect(declarations(".file-preview-toolbar .file-edit-button,.file-preview-toolbar .file-cancel-button,.file-preview-toolbar .file-save-button")).toContain("display:flex");
     expect(styles).toContain(".file-preview-toolbar .file-save-button{width:48px}");
     expect(declarations(".file-code-editor:not([data-read-only]) .cm-cursor,.file-code-editor:not([data-read-only]) .cm-dropCursor")).toContain("border-left-color:var(--accent)");
-    expect(styles).toContain(".connection-context-menu,.file-context-menu{animation:none}");
+    expect(styles).toContain(".connection-context-menu,.file-context-menu,.network-context-menu{animation:none}");
   });
 
   it("keeps path editing inline and anchors refresh to the far edge", () => {

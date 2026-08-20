@@ -9,7 +9,7 @@
 - Workspace 布局新增可持久化的 `network` 叶子，保存稳定 `blockId` 与可空 `profileId`。
 - 右侧工具轨每次点击都在活动 Block 旁创建新的 Network Block；远程 Terminal Block 标题栏可以创建继承当前 profile 的 Network Block；本地 Terminal Block 的对应动作保持可见但禁用。
 - Network Block 右上角复用现有连接选择交互，但不提供本机目标；切换 profile 会停止并关闭该 Block 的旧 Network SSH session 与活动转发。
-- Network Block 以紧凑列表展示当前 profile 全局共享的转发规则，支持创建、编辑、删除、启动和停止。
+- Network Block 以带适度间距的紧凑列表展示当前 profile 全局共享的转发规则；每项使用 PC/服务器图标及“本地/远程”标签明确监听端和目标端，支持创建、编辑、删除、启动和停止。
 - 支持三类 TCP 转发：
   - Local：本机监听地址/端口经 SSH 连接到服务器视角的目标地址/端口，语义等价于 `ssh -L`。
   - Remote：服务器监听地址/端口经 SSH 连接到本机视角的目标地址/端口，语义等价于 `ssh -R`。
@@ -46,7 +46,7 @@
 
 1. 右侧工具轨能在活动 Block 旁创建未选择连接的 Network Block；远程终端能创建继承当前 profile 的 Network Block；本地终端不能创建。
 2. Network Block 可在右上角选择远程 profile，切换目标时旧 Block session 和全部活动规则被停止，其他 Terminal/Files/Network Block 不受影响。
-3. 当前 profile 的规则以列表展示并可创建、编辑、删除；相同 profile 的其他 Network Block 能看到持久化配置，但运行状态按 Block 独立。
+3. 当前 profile 的规则以列表展示并可创建、编辑、删除；Local 显示“本地监听 → 远程目标”，Remote 显示“远程监听 → 本地目标”，SOCKS5 显示“本地监听 → 远程网络动态目标”，且对应端点带 PC/服务器图标；相同 profile 的其他 Network Block 能看到持久化配置，但运行状态按 Block 独立。
 4. Local 规则能将本机 TCP listener 的双向字节经 `direct-tcpip` 转发到服务器视角目标，并能可靠停止和释放端口。
 5. Remote 规则能请求服务器 listener、接受 `forwarded-tcpip` channel、连接本机目标，并在停止时取消远程 forward。
 6. SOCKS5 规则能完成无认证协商，接受 IPv4、IPv6 和域名 `CONNECT`，拒绝不支持的方法/命令/畸形报文，且域名由服务器侧目标连接解析。
@@ -85,4 +85,3 @@
 - `protecting-critical-behavior`
 - `verifying-before-completion`
 - `updating-directory-map`（实现新增 `src/network` 与 network domain/application/port/command 后执行）
-

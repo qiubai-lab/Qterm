@@ -125,10 +125,10 @@ function acquireTerminalView(sessionKey: string, container: HTMLElement, windows
     lineHeight: 1.22,
     scrollback: 8000,
     ...(windowsPty ? { windowsPty } : {}),
-    allowTransparency: false,
+    allowTransparency: true,
     overviewRuler: { width: 3 },
     theme: {
-      background: "#050607",
+      background: "rgba(5, 7, 8, 0.78)",
       foreground: "#f1f3f5",
       cursor: "#74e6d1",
       selectionBackground: "#2a5550",

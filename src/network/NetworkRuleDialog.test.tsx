@@ -9,7 +9,7 @@ describe("NetworkRuleDialog", () => {
   it("uses loopback defaults and warns before saving an exposed listener", async () => {
     const user = userEvent.setup();
     const onSave = vi.fn();
-    render(<NetworkRuleDialog profileId="profile-1" rule={null} busy={false} message="" onClose={vi.fn()} onSave={onSave}/>);
+    render(<NetworkRuleDialog profileId="profile-1" rule={null} initialType="local" busy={false} message="" onClose={vi.fn()} onSave={onSave}/>);
     expect(screen.getByLabelText("监听地址")).toHaveValue("127.0.0.1");
     expect(screen.getByText("当前监听地址仅允许本机访问。")).toBeInTheDocument();
     await user.type(screen.getByLabelText("名称"), "Public tunnel");
@@ -31,12 +31,23 @@ describe("NetworkRuleDialog", () => {
   it("validates the full port range before emitting a rule", async () => {
     const user = userEvent.setup();
     const onSave = vi.fn();
-    render(<NetworkRuleDialog profileId="profile-1" rule={null} busy={false} message="" onClose={vi.fn()} onSave={onSave}/>);
+    render(<NetworkRuleDialog profileId="profile-1" rule={null} initialType="local" busy={false} message="" onClose={vi.fn()} onSave={onSave}/>);
     await user.type(screen.getByLabelText("名称"), "Invalid");
     await user.clear(screen.getByLabelText("监听端口"));
     await user.type(screen.getByLabelText("监听端口"), "0");
     fireEvent.submit(screen.getByRole("dialog").querySelector("form")!);
     expect(screen.getByText("请填写名称、监听地址和 1–65535 端口")).toBeInTheDocument();
     expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it("uses the selected SOCKS5 mode without exposing target fields and can return to mode selection", async () => {
+    const onBack = vi.fn();
+    render(<NetworkRuleDialog profileId="profile-1" rule={null} initialType="socks5" busy={false} message="" onBack={onBack} onClose={vi.fn()} onSave={vi.fn()}/>);
+
+    expect(screen.getByText("SOCKS5 动态代理", { selector: ".network-selected-type strong" })).toBeInTheDocument();
+    expect(screen.getByLabelText("监听端口")).toHaveValue(1080);
+    expect(screen.queryByLabelText("目标地址")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "返回选择" }));
+    expect(onBack).toHaveBeenCalledOnce();
   });
 });
