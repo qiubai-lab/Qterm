@@ -18,6 +18,9 @@ use crate::{
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LockReason {
     Manual,
+    // Only constructed from the Windows-only session-lock listener
+    // (`infrastructure::windows::session_lock`).
+    #[cfg_attr(not(windows), expect(dead_code))]
     WindowsSession,
     Timeout,
 }

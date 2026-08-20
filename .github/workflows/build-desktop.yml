@@ -105,3 +105,23 @@ jobs:
           path: ${{ matrix.bundlePath }}
           if-no-files-found: error
           retention-days: 14
+
+  release:
+    name: Publish GitHub release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download desktop artifacts
+        uses: actions/download-artifact@v7
+        with:
+          pattern: terminal-demo-*
+          path: dist-artifacts
+          merge-multiple: false
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist-artifacts/**/*
