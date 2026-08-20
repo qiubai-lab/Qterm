@@ -2,7 +2,7 @@
 name = "Qterm"
 version = "0.1.1"
 description = "A secure cross-platform SSH terminal client"
-authors = ["Terminal Demo contributors"]
+authors = ["Qterm contributors"]
 license = "GPL-3.0-only"
 readme = "../README.md"
 edition = "2024"
