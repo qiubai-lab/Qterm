@@ -129,7 +129,7 @@ pnpm audit:rust
 pnpm tauri build
 ```
 
-仓库的 `.github/workflows/build-desktop.yml` 在版本标签或手动触发时分别使用原生 runner 构建 macOS ARM64、Windows x64 和 Linux x64 产物。涉及原生依赖、Tauri 配置或发布打包的改动，应至少验证对应平台构建。
+仓库的 `.github/workflows/build-desktop.yml` 在版本标签或手动触发时分别使用原生 runner 构建 macOS ARM64、Windows x64 和 Linux x64 产物；推送 `v*` 标签时会额外发布 GitHub Release。涉及原生依赖、Tauri 配置或发布打包的改动，应至少验证对应平台构建。标签发布的完整流程见[发布流程](release.md)。
 
 ## 代码与测试约定
 

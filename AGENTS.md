@@ -13,7 +13,7 @@ The Tauri/Rust backend is under `src-tauri/src/`. Preserve its layering: `domain
 - `pnpm check` runs ESLint, Vitest, TypeScript checking, and the Vite production build.
 - `pnpm test:watch` runs frontend tests interactively.
 - From `src-tauri/`, run `cargo fmt --check`, `cargo clippy --all-targets --all-features -- -D warnings`, and `cargo test --all-targets --all-features`.
-- `pnpm tauri build` creates a release bundle. Run it only for releases or changes affecting native dependencies, Tauri configuration, or packaging. Pushing a `v*` tag builds desktop bundles for macOS/Windows/Linux and publishes them to a GitHub Release via `.github/workflows/build-desktop.yml`.
+- `pnpm tauri build` creates a release bundle. Run it only for releases or changes affecting native dependencies, Tauri configuration, or packaging. Pushing a `v*` tag builds desktop bundles for macOS/Windows/Linux and publishes them to a GitHub Release via `.github/workflows/build-desktop.yml`; see `docs/release.md` for the full release procedure.
 
 ## Coding Style & Naming Conventions
 

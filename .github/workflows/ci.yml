@@ -2,7 +2,12 @@ name: CI
 
 on:
   push:
+    branches:
+      - main
+      - dev
   pull_request:
+    branches:
+      - main
 
 permissions:
   contents: read
@@ -67,6 +72,9 @@ jobs:
 
   desktop-build:
     name: Desktop build (${{ matrix.os }})
+    # 合并闸门：dev 分支日常推送只做 quality checks，
+    # 三平台构建仅在 main 推送和指向 main 的 PR 上运行。
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
