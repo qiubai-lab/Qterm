@@ -7,6 +7,7 @@
 ## Scope
 
 - 新增类型选择弹窗与三个说明入口。
+- 将三个入口的方向副标题升级为不含地址、但保留设备图标和端点角色文字的方向摘要。
 - 新建表单接收明确的初始类型，并让返回按钮、右上角关闭和 Escape 统一返回模式选择。
 - 编辑流程继续直接打开原配置表单。
 - 不修改 Rust、IPC、持久化模型或运行时管理器。
@@ -25,6 +26,7 @@
 
 - `NetworkPane` 分别管理类型选择、新建类型和编辑规则状态，避免使用一个含多重语义的 editor sentinel。
 - `NetworkRuleTypeDialog` 使用三个语义按钮呈现方向、标题和描述；点击后回传 `NetworkRuleInput["type"]`。
+- `networkRuleTypes` 保存三种模式的结构化端点角色与图标，`NetworkRuleTypeDialog` 显示既有 computer/server 图标、角色文字和箭头，并生成完整无障碍标签。
 - `NetworkRuleDialog` 对新建接收 `initialType`，以只读摘要替代类型下拉框；仅新建流程显示“返回选择”。
 
 ## Acceptance To Verification
@@ -34,6 +36,7 @@
 - SOCKS5 默认值与字段裁剪正确：`NetworkRuleDialog.test.tsx`。
 - 返回按钮、关闭和 Escape 返回选择，以及编辑直达、退出和类型不可变：`NetworkPane.test.tsx`、`NetworkRuleDialog.test.tsx`。
 - 紧凑布局、焦点和 reduced-motion：`appStyles.test.ts`。
+- 三种设备图标与角色文字方向正确且不渲染地址：`NetworkRuleTypeDialog.test.tsx`；副标题保持紧凑：`appStyles.test.ts`。
 
 ## Test / Verification
 

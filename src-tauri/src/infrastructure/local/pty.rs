@@ -246,6 +246,42 @@ mod tests {
                 }
             }
         }
+        #[cfg(windows)]
+        {
+            let mut clear_output = Vec::new();
+            manager
+                .write(&session_id, b"\x1bcls\r".to_vec())
+                .expect("request shell clear");
+            manager
+                .write(&session_id, b"echo %COMSPEC%\r".to_vec())
+                .expect("write command after clear");
+            for _ in 0..20 {
+                if let Ok(chunk) = output_rx.recv_timeout(Duration::from_millis(250)) {
+                    clear_output.extend(chunk);
+                    if clear_output.windows(3).any(|window| window == b"\x1b[H")
+                        && clear_output.windows(4).any(|window| window == b"\x1b[3J")
+                        && String::from_utf8_lossy(&clear_output)
+                            .to_ascii_lowercase()
+                            .contains("cmd.exe")
+                    {
+                        break;
+                    }
+                }
+            }
+            assert!(
+                String::from_utf8_lossy(&clear_output)
+                    .to_ascii_lowercase()
+                    .contains("cmd.exe"),
+                "local shell did not execute after clear: {:?}",
+                String::from_utf8_lossy(&clear_output)
+            );
+            assert!(
+                clear_output.windows(3).any(|window| window == b"\x1b[H")
+                    && clear_output.windows(4).any(|window| window == b"\x1b[3J"),
+                "local shell did not emit synchronized clear sequences: {:?}",
+                String::from_utf8_lossy(&clear_output)
+            );
+        }
         manager
             .write(&session_id, b"echo qterm-local-ready\r".to_vec())
             .expect("write command");
@@ -263,6 +299,51 @@ mod tests {
             "local shell output was: {:?}",
             String::from_utf8_lossy(&output)
         );
+        #[cfg(windows)]
+        {
+            manager
+                .write(&session_id, b"powershell -NoLogo -NoProfile\r".to_vec())
+                .expect("start PowerShell");
+            let mut powershell_start = Vec::new();
+            for _ in 0..40 {
+                if let Ok(chunk) = output_rx.recv_timeout(Duration::from_millis(250)) {
+                    powershell_start.extend(chunk);
+                    if String::from_utf8_lossy(&powershell_start).contains("PS ") {
+                        break;
+                    }
+                }
+            }
+            manager
+                .write(&session_id, b"\x1bcls\r".to_vec())
+                .expect("clear PowerShell");
+            manager
+                .write(&session_id, b"Write-Output (6*7)\r".to_vec())
+                .expect("write PowerShell command after clear");
+            let mut powershell_output = Vec::new();
+            for _ in 0..20 {
+                if let Ok(chunk) = output_rx.recv_timeout(Duration::from_millis(250)) {
+                    powershell_output.extend(chunk);
+                    if String::from_utf8_lossy(&powershell_output).contains("42\r\nPS ") {
+                        break;
+                    }
+                }
+            }
+            assert!(
+                powershell_output
+                    .windows(3)
+                    .any(|window| window == b"\x1b[H")
+                    && powershell_output
+                        .windows(4)
+                        .any(|window| window == b"\x1b[3J"),
+                "PowerShell did not emit synchronized clear sequences: {:?}",
+                String::from_utf8_lossy(&powershell_output)
+            );
+            assert!(
+                String::from_utf8_lossy(&powershell_output).contains("42\r\nPS "),
+                "PowerShell did not execute after clear: {:?}",
+                String::from_utf8_lossy(&powershell_output)
+            );
+        }
         manager.close(&session_id).expect("close shell");
     }
 

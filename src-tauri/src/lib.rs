@@ -13,9 +13,9 @@ use commands::credential::{
     credential_vault_status, credential_vault_unlock,
 };
 use commands::files::{
-    files_copy_entry, files_create_entry, files_delete_entry, files_list_local, files_list_remote,
-    files_read_binary, files_read_text, files_rename_entry, files_session_connect,
-    files_write_text,
+    files_copy_entry, files_create_entry, files_delete_entry, files_list_local,
+    files_list_local_roots, files_list_remote, files_read_binary, files_read_text,
+    files_rename_entry, files_session_connect, files_write_text,
 };
 use commands::local_session::{
     LocalSessionState, local_session_close, local_session_connect, local_session_resize,
@@ -191,6 +191,7 @@ pub fn run() {
             local_session_resize,
             local_session_close,
             files_list_local,
+            files_list_local_roots,
             files_list_remote,
             files_read_text,
             files_read_binary,

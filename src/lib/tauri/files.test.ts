@@ -6,7 +6,7 @@ vi.mock("@tauri-apps/api/core", () => ({
   Channel: class { constructor(handler: (event: unknown) => void) { void handler; } },
 }));
 
-import { copyFile, createEntry, deleteEntry, readBinaryFile, readTextFile, renameEntry, writeTextFile } from "./files";
+import { copyFile, createEntry, deleteEntry, listLocalRoots, readBinaryFile, readTextFile, renameEntry, writeTextFile } from "./files";
 
 describe("file content IPC client", () => {
   beforeEach(() => mocks.invoke.mockReset());
@@ -44,5 +44,13 @@ describe("file content IPC client", () => {
     await createEntry(null, "C:/work", "assets", true);
     expect(mocks.invoke).toHaveBeenNthCalledWith(1, "files_create_entry", { input: { sessionId: "session-1", directory: "/srv", name: "notes.txt", isDirectory: false } });
     expect(mocks.invoke).toHaveBeenNthCalledWith(2, "files_create_entry", { input: { sessionId: null, directory: "C:/work", name: "assets", isDirectory: true } });
+  });
+
+  it("lists local filesystem roots through a read-only command", async () => {
+    const roots = [{ name: "C:", path: "C:\\" }];
+    mocks.invoke.mockResolvedValue(roots);
+
+    await expect(listLocalRoots()).resolves.toEqual(roots);
+    expect(mocks.invoke).toHaveBeenCalledWith("files_list_local_roots");
   });
 });

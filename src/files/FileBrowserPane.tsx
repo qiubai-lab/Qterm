@@ -4,11 +4,11 @@ import { writeText as writeClipboardText } from "@tauri-apps/plugin-clipboard-ma
 
 import { Icon } from "../components/Icon";
 import { DialogFrame } from "../components/dialogs/DialogFrame";
-import { copyFile, createEntry, deleteEntry, listLocalDirectory, listRemoteDirectory, readBinaryFile, readTextFile, renameEntry, writeTextFile, type DirectoryListing, type FileEntry } from "../lib/tauri/files";
+import { copyFile, createEntry, deleteEntry, listLocalDirectory, listLocalRoots, listRemoteDirectory, readBinaryFile, readTextFile, renameEntry, writeTextFile, type DirectoryListing, type FileEntry, type LocalRoot } from "../lib/tauri/files";
 import { cancelTransfer, downloadDirectory, downloadFile, selectDownloadDirectory, selectDownloadPath, uploadDroppedEntries, type TransferEvent } from "../lib/tauri/transfers";
 import type { FileRuntime } from "../workspace/WorkspaceProvider";
 import type { EditorLanguage } from "./CodeEditor";
-import { parentPath } from "./path";
+import { displayLocalPath, isWindowsDriveRoot, parentPath } from "./path";
 
 type PreviewKind = EditorLanguage | "image";
 type FileViewMode = "preview" | "edit";
@@ -27,10 +27,12 @@ const MarkdownPreview = lazy(() => import("./MarkdownPreview").then((module) => 
 export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initialPath: string; runtime: FileRuntime; onPathChange: (path: string) => void }) {
   const [path, setPath] = useState(initialPath);
   const [listing, setListing] = useState<DirectoryListing | null>(null);
+  const [localRoots, setLocalRoots] = useState<LocalRoot[]>([]);
+  const [showLocalRoots, setShowLocalRoots] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [editingPath, setEditingPath] = useState(false);
-  const [pathDraft, setPathDraft] = useState(initialPath);
+  const [pathDraft, setPathDraft] = useState(displayLocalPath(initialPath));
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [sort, setSort] = useState<SortState>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
@@ -52,7 +54,7 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
   const connectionError = kind === "sftp" && status === "failed" ? runtime.notice.trim() || "文件连接失败" : "";
   const displayedEntries = useMemo(() => sortEntries(listing?.entries ?? [], sort), [listing, sort]);
 
-  const load = useCallback(async (nextPath: string) => {
+  const load = useCallback(async (nextPath: string, returnToRootsOnError = false) => {
     const currentRequest = ++request.current;
     if (kind === "sftp" && (!sessionId || status !== "connected")) {
       setEditingPath(false);
@@ -61,18 +63,41 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
       return;
     }
     setEditingPath(false);
+    setShowLocalRoots(false);
     setLoading(true);
     setError("");
     try {
       const next = kind === "local" ? await listLocalDirectory(nextPath) : await listRemoteDirectory(sessionId!, nextPath);
       if (request.current !== currentRequest) return;
-      setPath(next.path); setPathDraft(next.path); setListing(next); setSelectedPath(null); setEditingPath(false); onPathChange(next.path);
+      setPath(next.path); setPathDraft(kind === "local" ? displayLocalPath(next.path) : next.path); setListing(next); setSelectedPath(null); setEditingPath(false); onPathChange(next.path);
+    } catch (reason) {
+      if (request.current === currentRequest) {
+        setError(errorMessage(reason));
+        if (returnToRootsOnError) setShowLocalRoots(true);
+      }
+    } finally {
+      if (request.current === currentRequest) setLoading(false);
+    }
+  }, [kind, onPathChange, sessionId, status]);
+
+  const openLocalRoots = useCallback(async () => {
+    if (kind !== "local") return;
+    const currentRequest = ++request.current;
+    setEditingPath(false);
+    setContextMenu(null);
+    setSelectedPath(null);
+    setShowLocalRoots(true);
+    setLoading(true);
+    setError("");
+    try {
+      const roots = await listLocalRoots();
+      if (request.current === currentRequest) setLocalRoots(roots);
     } catch (reason) {
       if (request.current === currentRequest) setError(errorMessage(reason));
     } finally {
       if (request.current === currentRequest) setLoading(false);
     }
-  }, [kind, onPathChange, sessionId, status]);
+  }, [kind]);
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => void load(initialPath));
@@ -190,7 +215,7 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
   async function copyPath(entry: FileEntry) {
     setContextMenu(null);
     try {
-      await writeClipboardText(entry.path);
+      await writeClipboardText(kind === "local" ? displayLocalPath(entry.path) : entry.path);
       setOperationMessage("路径已复制");
     } catch {
       setOperationMessage("复制路径失败");
@@ -280,12 +305,14 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
   }
 
   const parent = parentPath(path, runtime?.kind === "local");
+  const visiblePath = kind === "local" ? displayLocalPath(path) : path;
+  const driveRoot = kind === "local" && isWindowsDriveRoot(path);
   if (preview) {
     const dirty = preview.mode === "edit" && preview.content !== preview.original;
     return <div className="file-browser file-preview">
       <header className="file-preview-toolbar">
         <button aria-label="返回文件夹" title="返回文件夹" onClick={closePreview}><Icon name="back" size={14}/></button>
-        <div className="file-preview-identity"><strong>{preview.entry.name}{dirty && <span className="file-dirty-indicator" aria-label="有未保存的修改">*</span>}</strong><small title={preview.entry.path}>{preview.entry.path}</small></div>
+        <div className="file-preview-identity"><strong>{preview.entry.name}{dirty && <span className="file-dirty-indicator" aria-label="有未保存的修改">*</span>}</strong><small title={kind === "local" ? displayLocalPath(preview.entry.path) : preview.entry.path}>{kind === "local" ? displayLocalPath(preview.entry.path) : preview.entry.path}</small></div>
         {preview.mode === "edit" && <span className="file-experimental-badge">实验功能</span>}
         <span className="file-view-mode">{preview.mode === "preview" ? "预览" : "编辑"}</span>
         {preview.mode === "preview" && <button className="file-edit-button" disabled={preview.kind === "image"} title={preview.kind === "image" ? "此文件类型不支持编辑" : "编辑文件（实验功能）"} onClick={() => setPreview((current) => current && current.kind !== "image" ? { ...current, mode: "edit" } : current)}><Icon name="edit" size={11}/><span>编辑</span></button>}
@@ -309,30 +336,35 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
 
   return <div className="file-browser">
     <nav className="file-browser-navigation" aria-label="文件夹导航">
-      <button aria-label="返回上级文件夹" title="返回上级" disabled={!parent || loading} onClick={() => parent && void load(parent)}><Icon name="back" size={14}/></button>
+      <button aria-label="返回上级文件夹" title="返回上级" disabled={showLocalRoots || (!parent && !driveRoot) || loading} onClick={() => driveRoot ? void openLocalRoots() : parent && void load(parent)}><Icon name="back" size={14}/></button>
+      <button aria-label="浏览本机位置" title="本机" disabled={kind !== "local" || loading} aria-pressed={showLocalRoots} onClick={() => void openLocalRoots()}><Icon name="computer" size={14}/></button>
       <div className="file-browser-path-shell" data-editing={editingPath || undefined}>
-        {editingPath ? <form className="file-browser-path-form" onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setEditingPath(false); }} onSubmit={(event) => { event.preventDefault(); void load(pathDraft); }}>
-          <input aria-label="文件夹路径" autoFocus value={pathDraft} onChange={(event) => setPathDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); setPathDraft(path); setEditingPath(false); } }}/>
-        </form> : <button className="file-browser-path" title={`${path} · 单击编辑`} onClick={() => { setPathDraft(path); setEditingPath(true); }}>{path}</button>}
+        {showLocalRoots ? <span className="file-browser-path file-browser-location-label">本机</span> : editingPath ? <form className="file-browser-path-form" onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setEditingPath(false); }} onSubmit={(event) => { event.preventDefault(); void load(pathDraft); }}>
+          <input aria-label="文件夹路径" autoFocus value={pathDraft} onChange={(event) => setPathDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); setPathDraft(visiblePath); setEditingPath(false); } }}/>
+        </form> : <button className="file-browser-path" title={`${visiblePath} · 单击编辑`} onClick={() => { setPathDraft(visiblePath); setEditingPath(true); }}>{visiblePath}</button>}
       </div>
-      <button aria-label="创建文件" title="创建文件" disabled={loading || (kind === "sftp" && status !== "connected")} onClick={() => requestCreate("createFile")}><Icon name="filePlus" size={14}/></button>
-      <button aria-label="创建文件夹" title="创建文件夹" disabled={loading || (kind === "sftp" && status !== "connected")} onClick={() => requestCreate("createDirectory")}><Icon name="folderPlus" size={14}/></button>
-      <button aria-label="刷新文件夹" title="刷新" disabled={loading} onClick={() => void load(path)}><Icon name="refresh" size={14}/></button>
+      <button aria-label="创建文件" title="创建文件" disabled={showLocalRoots || loading || (kind === "sftp" && status !== "connected")} onClick={() => requestCreate("createFile")}><Icon name="filePlus" size={14}/></button>
+      <button aria-label="创建文件夹" title="创建文件夹" disabled={showLocalRoots || loading || (kind === "sftp" && status !== "connected")} onClick={() => requestCreate("createDirectory")}><Icon name="folderPlus" size={14}/></button>
+      <button aria-label={showLocalRoots ? "刷新本机位置" : "刷新文件夹"} title="刷新" disabled={loading} onClick={() => showLocalRoots ? void openLocalRoots() : void load(path)}><Icon name="refresh" size={14}/></button>
     </nav>
     {connectionError && <div className="file-browser-inline-error" role="alert">{connectionError}</div>}
-    {!connectionError && error && listing && <div className="file-browser-inline-error" role="alert">{error}</div>}
+    {!connectionError && error && (listing || (showLocalRoots && localRoots.length > 0)) && <div className="file-browser-inline-error" role="alert">{error}</div>}
     <div className="file-browser-content" ref={listScroll} onPointerEnter={() => setEditingPath(false)} onScroll={() => setEditingPath(false)}>
-      <div className="file-browser-columns" aria-label="文件排序">
+      {!showLocalRoots && <div className="file-browser-columns" aria-label="文件排序">
         <FileSortHeader label="名称" sortKey="name" sort={sort} onChange={cycleSort}/>
         <FileSortHeader label="大小" sortKey="size" sort={sort} onChange={cycleSort}/>
         <span className="file-browser-column-label file-permission-column">权限</span>
         <FileSortHeader label="修改时间" sortKey="modifiedAt" sort={sort} onChange={cycleSort}/>
-      </div>
-      {loading && !listing && <div className="file-browser-state">正在读取文件夹…</div>}
-      {!connectionError && error && !listing && <div className="file-browser-state error"><Icon name="files" size={22}/><span>{error}</span><button onClick={() => void load(path)}>重试</button></div>}
-      {!error && listing?.entries.length === 0 && <div className="file-browser-state">此文件夹为空</div>}
-      {listing && <div className="file-list" role="list" aria-label={`文件夹 ${listing.path}`}>{displayedEntries.map((entry) => <FileRow key={entry.path} entry={entry} selected={selectedPath === entry.path} onSelect={() => setSelectedPath(entry.path)} onOpen={() => entry.isDirectory ? void load(entry.path) : void openFile(entry, "preview")} onContextMenu={(event) => openContextMenu(event, entry)} onContextMenuKey={(event) => openContextMenuFromKeyboard(event, entry)}/>)}</div>}
-      {dropActive && <div className="file-upload-drop-overlay" role="status"><Icon name="upload" size={24}/><strong>上传到当前目录</strong><span>{path}</span><small>释放鼠标以上传文件或文件夹</small></div>}
+      </div>}
+      {showLocalRoots && loading && <div className="file-browser-state">正在读取本机位置…</div>}
+      {showLocalRoots && !loading && error && localRoots.length === 0 && <div className="file-browser-state error"><Icon name="computer" size={22}/><span>{error}</span><button onClick={() => void openLocalRoots()}>重试</button></div>}
+      {showLocalRoots && !loading && !error && localRoots.length === 0 && <div className="file-browser-state">没有可用的本机位置</div>}
+      {showLocalRoots && !loading && localRoots.length > 0 && <div className="file-local-root-list" role="list" aria-label="本机位置">{localRoots.map((root) => <div key={root.path} role="listitem"><button className="file-local-root-row" aria-label={`打开 ${root.name}`} onClick={() => void load(root.path, true)}><Icon name="computer" size={16}/><span><strong>{root.name}</strong><small>{root.path}</small></span></button></div>)}</div>}
+      {!showLocalRoots && loading && !listing && <div className="file-browser-state">正在读取文件夹…</div>}
+      {!showLocalRoots && !connectionError && error && !listing && <div className="file-browser-state error"><Icon name="files" size={22}/><span>{error}</span><button onClick={() => void load(path)}>重试</button></div>}
+      {!showLocalRoots && !error && listing?.entries.length === 0 && <div className="file-browser-state">此文件夹为空</div>}
+      {!showLocalRoots && listing && <div className="file-list" role="list" aria-label={`文件夹 ${listing.path}`}>{displayedEntries.map((entry) => <FileRow key={entry.path} entry={entry} selected={selectedPath === entry.path} onSelect={() => setSelectedPath(entry.path)} onOpen={() => entry.isDirectory ? void load(entry.path) : void openFile(entry, "preview")} onContextMenu={(event) => openContextMenu(event, entry)} onContextMenuKey={(event) => openContextMenuFromKeyboard(event, entry)}/>)}</div>}
+      {!showLocalRoots && dropActive && <div className="file-upload-drop-overlay" role="status"><Icon name="upload" size={24}/><strong>上传到当前目录</strong><span>{visiblePath}</span><small>释放鼠标以上传文件或文件夹</small></div>}
     </div>
     {contextMenu && <div ref={menuRef} className="file-context-menu" data-placement={contextMenu.placement} role="menu" aria-label={`${contextMenu.entry.name} 文件菜单`} style={{ left: contextMenu.x, top: contextMenu.y }} onContextMenu={(event) => event.preventDefault()}>
       {!contextMenu.entry.isDirectory && !contextMenu.entry.isSymlink && <button role="menuitem" onClick={() => { setContextMenu(null); void openFile(contextMenu.entry, "preview"); }}>预览</button>}
@@ -351,7 +383,7 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
         <small>{transfer.total > 0 ? `${formatSize(transfer.transferred)} / ${formatSize(transfer.total)}` : "准备中"}</small>
         {transfer.transferId && sessionId && <button onClick={() => void cancelTransfer(sessionId, transfer.transferId)}>取消</button>}
       </> : <>
-        <span>{listing ? `${folderCount} 个文件夹 · ${fileCount} 个文件` : loading ? "正在读取目录…" : "暂无目录统计"}</span>
+        <span>{showLocalRoots ? loading ? "正在读取本机位置…" : `${localRoots.length} 个位置` : listing ? `${folderCount} 个文件夹 · ${fileCount} 个文件` : loading ? "正在读取目录…" : "暂无目录统计"}</span>
         {(transfer || operationMessage) && <span className="file-browser-transfer-result">{transfer?.message || operationMessage}</span>}
         {(transfer || operationMessage) && <button aria-label="关闭操作状态" onClick={() => { setTransfer(null); setOperationMessage(""); }}><Icon name="close" size={10}/></button>}
       </>}

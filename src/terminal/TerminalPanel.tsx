@@ -22,6 +22,7 @@ interface TerminalView {
 }
 
 const terminalViews = new Map<string, TerminalView>();
+const CLEAR_SCREEN_INPUT = "\x1bcls\r";
 
 export function TerminalPanel({ blockId, sessionKey, visible, local }: { blockId: string; sessionKey: string; visible: boolean; local: boolean }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -50,6 +51,8 @@ export function TerminalPanel({ blockId, sessionKey, visible, local }: { blockId
         if (reset) {
           view.decoder = new TextDecoder();
           view.terminal.reset();
+        } else if (local && windowsPty?.backend === "conpty") {
+          view.write(CLEAR_SCREEN_INPUT);
         } else {
           view.terminal.clear();
         }

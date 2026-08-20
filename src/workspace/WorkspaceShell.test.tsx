@@ -211,7 +211,7 @@ describe("WorkspaceShell utility rail", () => {
 
     await user.click(screen.getByRole("button", { name: "文件管理" }));
     expect(mocks.dispatch).toHaveBeenCalledWith({
-      type: "openFiles", workspaceId: "workspace-1", anchorBlockId: "block-1", profileId: null, path: ".",
+      type: "openFiles", workspaceId: "workspace-1", anchorBlockId: "block-1", profileId: null, path: "~",
     });
 
     await user.click(screen.getByRole("button", { name: "打开终端" }));

@@ -3,8 +3,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { TransferEvent } from "../lib/tauri/transfers";
 
-const { listLocalDirectory, listRemoteDirectory, readTextFile, readBinaryFile, writeTextFile, writeClipboardText, copyFile, createEntry, renameEntry, deleteEntry, selectDownloadDirectory, selectDownloadPath, downloadDirectory, downloadFile, uploadDroppedEntries, cancelTransfer, dragDrop } = vi.hoisted(() => ({
+const { listLocalDirectory, listLocalRoots, listRemoteDirectory, readTextFile, readBinaryFile, writeTextFile, writeClipboardText, copyFile, createEntry, renameEntry, deleteEntry, selectDownloadDirectory, selectDownloadPath, downloadDirectory, downloadFile, uploadDroppedEntries, cancelTransfer, dragDrop } = vi.hoisted(() => ({
   listLocalDirectory: vi.fn(),
+  listLocalRoots: vi.fn(),
   listRemoteDirectory: vi.fn(),
   readTextFile: vi.fn(),
   readBinaryFile: vi.fn(),
@@ -25,19 +26,20 @@ const { listLocalDirectory, listRemoteDirectory, readTextFile, readBinaryFile, w
 
 vi.mock("@tauri-apps/api/webview", () => ({ getCurrentWebview: () => ({ onDragDropEvent: vi.fn(async (handler) => { dragDrop.handler = handler; return () => { dragDrop.handler = null; }; }) }) }));
 vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({ writeText: writeClipboardText }));
-vi.mock("../lib/tauri/files", () => ({ listLocalDirectory, listRemoteDirectory, readTextFile, readBinaryFile, writeTextFile, copyFile, createEntry, renameEntry, deleteEntry }));
+vi.mock("../lib/tauri/files", () => ({ listLocalDirectory, listLocalRoots, listRemoteDirectory, readTextFile, readBinaryFile, writeTextFile, copyFile, createEntry, renameEntry, deleteEntry }));
 vi.mock("../lib/tauri/transfers", () => ({ selectDownloadDirectory, selectDownloadPath, downloadDirectory, downloadFile, uploadDroppedEntries, cancelTransfer }));
 vi.mock("./CodeEditor", () => ({ CodeEditor: ({ value, readOnly, onChange }: { value: string; readOnly?: boolean; onChange: (value: string) => void }) => <textarea aria-label={readOnly ? "文件只读预览" : "文件编辑器"} readOnly={readOnly} value={value} onChange={(event) => onChange(event.target.value)}/> }));
 vi.mock("./MarkdownPreview", () => ({ MarkdownPreview: ({ content }: { content: string }) => <h1>{content.replace(/^#\s*/, "")}</h1> }));
 
 import { FileBrowserPane } from "./FileBrowserPane";
-import { parentPath } from "./path";
+import { displayLocalPath, isWindowsDriveRoot, parentPath } from "./path";
 
 const localRuntime = { sessionId: null, kind: "local" as const, status: "connected" as const, hostKeyPrompt: null, notice: "" };
 
 describe("FileBrowserPane", () => {
   beforeEach(() => {
     listLocalDirectory.mockReset();
+    listLocalRoots.mockReset();
     listRemoteDirectory.mockReset();
     readTextFile.mockReset(); readBinaryFile.mockReset(); writeTextFile.mockReset(); writeClipboardText.mockReset(); copyFile.mockReset(); createEntry.mockReset(); renameEntry.mockReset(); deleteEntry.mockReset();
     selectDownloadDirectory.mockReset(); selectDownloadPath.mockReset(); downloadDirectory.mockReset(); downloadFile.mockReset(); uploadDroppedEntries.mockReset(); cancelTransfer.mockReset();
@@ -61,6 +63,35 @@ describe("FileBrowserPane", () => {
     render(<FileBrowserPane initialPath="C:/work" runtime={localRuntime} onPathChange={vi.fn()}/>);
     await waitFor(() => expect(listLocalDirectory).toHaveBeenCalledWith("C:/work"));
     expect(listRemoteDirectory).not.toHaveBeenCalled();
+  });
+
+  it("opens the computer location from a drive root and switches drives", async () => {
+    listLocalDirectory
+      .mockResolvedValueOnce({ path: "D:\\", entries: [] })
+      .mockResolvedValueOnce({ path: "C:\\", entries: [] });
+    listLocalRoots.mockResolvedValue([{ name: "C:", path: "C:\\" }, { name: "D:", path: "D:\\" }]);
+    const onPathChange = vi.fn();
+    const view = render(<FileBrowserPane initialPath={"D:\\"} runtime={localRuntime} onPathChange={onPathChange}/>);
+    const ui = within(view.container);
+
+    await waitFor(() => expect(listLocalDirectory).toHaveBeenCalledWith("D:\\"));
+    fireEvent.click(ui.getByRole("button", { name: "返回上级文件夹" }));
+    expect(await ui.findByRole("list", { name: "本机位置" })).toBeInTheDocument();
+    expect(ui.getByText("C:")).toBeInTheDocument();
+
+    fireEvent.click(ui.getByRole("button", { name: "打开 C:" }));
+    await waitFor(() => expect(listLocalDirectory).toHaveBeenLastCalledWith("C:\\"));
+    expect(onPathChange).toHaveBeenLastCalledWith("C:\\");
+  });
+
+  it("shows a readable Windows path while retaining the operational path", async () => {
+    const operationalPath = "\\\\?\\D:\\GIT";
+    listLocalDirectory.mockResolvedValue({ path: operationalPath, entries: [] });
+    const view = render(<FileBrowserPane initialPath={operationalPath} runtime={localRuntime} onPathChange={vi.fn()}/>);
+    const ui = within(view.container);
+
+    expect(await ui.findByRole("button", { name: "D:\\GIT" })).toBeInTheDocument();
+    await waitFor(() => expect(listLocalDirectory).toHaveBeenCalledWith(operationalPath));
   });
 
   it("cycles file-name sorting through ascending, descending, and the original order", async () => {
@@ -439,7 +470,19 @@ describe("parentPath", () => {
   it("handles Windows and POSIX roots", () => {
     expect(parentPath("C:\\Users\\Test", true)).toBe("C:\\Users");
     expect(parentPath("C:\\", true)).toBeNull();
+    expect(parentPath("\\\\?\\D:\\GIT", true)).toBe("\\\\?\\D:\\");
+    expect(parentPath("\\\\?\\D:\\", true)).toBeNull();
+    expect(parentPath("\\\\server\\share\\folder", true)).toBe("\\\\server\\share\\");
+    expect(parentPath("\\\\server\\share\\", true)).toBeNull();
     expect(parentPath("/srv/app", false)).toBe("/srv");
     expect(parentPath("/", false)).toBeNull();
+  });
+
+  it("formats Windows implementation paths without changing root detection", () => {
+    expect(displayLocalPath("\\\\?\\D:\\GIT")).toBe("D:\\GIT");
+    expect(displayLocalPath("\\\\?\\UNC\\server\\share\\folder")).toBe("\\\\server\\share\\folder");
+    expect(isWindowsDriveRoot("D:\\")).toBe(true);
+    expect(isWindowsDriveRoot("\\\\?\\D:\\")).toBe(true);
+    expect(isWindowsDriveRoot("D:\\GIT")).toBe(false);
   });
 });

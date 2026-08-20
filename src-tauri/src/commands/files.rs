@@ -1,4 +1,7 @@
-use std::{path::PathBuf, sync::Arc};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use serde::{Deserialize, Serialize};
 use tauri::{
@@ -37,6 +40,13 @@ pub struct RemoteDirectoryDto {
 pub struct DirectoryListingDto {
     path: String,
     entries: Vec<FileEntryDto>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalRootDto {
+    name: String,
+    path: String,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -117,9 +127,11 @@ pub async fn files_list_local(path: String) -> Result<DirectoryListingDto, IpcEr
     if path.trim().is_empty() || path.len() > 4096 || path.contains('\0') {
         return Err(invalid_path());
     }
-    let canonical = tokio::fs::canonicalize(PathBuf::from(path))
+    let requested = expand_home_path(&path, dirs::home_dir().as_deref())?;
+    let canonical = tokio::fs::canonicalize(requested)
         .await
         .map_err(|_| unavailable())?;
+    let canonical = dunce::simplified(&canonical).to_path_buf();
     let mut directory = tokio::fs::read_dir(&canonical)
         .await
         .map_err(|_| unavailable())?;
@@ -141,7 +153,9 @@ pub async fn files_list_local(path: String) -> Result<DirectoryListingDto, IpcEr
         let permission_mode = None;
         entries.push(FileEntry {
             name: entry.file_name().to_string_lossy().into_owned(),
-            path: entry.path().to_string_lossy().into_owned(),
+            path: dunce::simplified(&entry.path())
+                .to_string_lossy()
+                .into_owned(),
             is_directory: metadata.is_dir(),
             is_symlink: file_type.is_symlink(),
             size: metadata.len(),
@@ -153,6 +167,55 @@ pub async fn files_list_local(path: String) -> Result<DirectoryListingDto, IpcEr
         canonical.to_string_lossy().into_owned(),
         entries,
     )))
+}
+
+#[tauri::command]
+pub fn files_list_local_roots() -> Result<Vec<LocalRootDto>, IpcError> {
+    local_root_paths().map(|roots| {
+        roots
+            .into_iter()
+            .map(|path| {
+                let value = path.to_string_lossy().into_owned();
+                let trimmed = value.trim_end_matches(['\\', '/']);
+                LocalRootDto {
+                    name: if trimmed.is_empty() {
+                        value.clone()
+                    } else {
+                        trimmed.to_owned()
+                    },
+                    path: value,
+                }
+            })
+            .collect()
+    })
+}
+
+fn expand_home_path(path: &str, home: Option<&Path>) -> Result<PathBuf, IpcError> {
+    if path == "~" {
+        home.map(Path::to_path_buf).ok_or_else(unavailable)
+    } else {
+        Ok(PathBuf::from(path))
+    }
+}
+
+#[cfg(windows)]
+fn local_root_paths() -> Result<Vec<PathBuf>, IpcError> {
+    use windows::Win32::Storage::FileSystem::GetLogicalDrives;
+
+    // SAFETY: GetLogicalDrives has no parameters and only returns a process-local bitmask.
+    let mask = unsafe { GetLogicalDrives() };
+    if mask == 0 {
+        return Err(unavailable());
+    }
+    Ok((0_u8..26)
+        .filter(|index| mask & (1_u32 << index) != 0)
+        .map(|index| PathBuf::from(format!("{}:\\", char::from(b'A' + index))))
+        .collect())
+}
+
+#[cfg(not(windows))]
+fn local_root_paths() -> Result<Vec<PathBuf>, IpcError> {
+    Ok(vec![PathBuf::from("/")])
 }
 
 #[tauri::command]
@@ -470,9 +533,39 @@ impl From<FileEntry> for FileEntryDto {
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+
     use tempfile::tempdir;
 
-    use super::files_list_local;
+    use super::{expand_home_path, files_list_local, files_list_local_roots};
+
+    #[test]
+    fn expands_only_the_explicit_home_location() {
+        let home = Path::new(r"C:\Users\Test");
+        assert_eq!(
+            expand_home_path("~", Some(home)).expect("home"),
+            home.to_path_buf()
+        );
+        assert_eq!(
+            expand_home_path(".\\~", Some(home)).expect("literal folder"),
+            Path::new(r".\~")
+        );
+    }
+
+    #[test]
+    fn lists_local_roots_with_stable_names() {
+        let roots = files_list_local_roots().expect("local roots");
+        assert!(!roots.is_empty());
+        #[cfg(windows)]
+        assert!(roots.iter().all(|root| {
+            root.name.len() == 2
+                && root.name.ends_with(':')
+                && root.path.len() == 3
+                && root.path.ends_with("\\")
+        }));
+        #[cfg(not(windows))]
+        assert_eq!((roots[0].name.as_str(), roots[0].path.as_str()), ("/", "/"));
+    }
 
     #[tokio::test]
     async fn lists_local_directories_with_directories_first() {
@@ -488,6 +581,8 @@ mod tests {
             .expect("listing");
         assert_eq!(listing.entries[0].name, "a-folder");
         assert!(listing.entries[0].is_directory);
+        #[cfg(windows)]
+        assert!(!listing.path.starts_with(r"\\?\"));
         #[cfg(not(unix))]
         assert!(
             listing

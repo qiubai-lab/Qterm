@@ -411,7 +411,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     await closeCurrentFileSession(blockId);
     updateFileRuntime(blockId, () => profileId === null ? defaultFileRuntime : { ...defaultFileRuntime, kind: "sftp", status: "closed" });
     dispatch({ type: "setFilesProfile", workspaceId, blockId, profileId });
-    dispatch({ type: "setFilesPath", workspaceId, blockId, path: "." });
+    dispatch({ type: "setFilesPath", workspaceId, blockId, path: "~" });
   }, [closeCurrentFileSession, updateFileRuntime]);
 
   const connectFileBlock = useCallback(async (blockId: string, profile: ConnectionProfile, auth: SessionAuth, onFailure?: () => void) => {

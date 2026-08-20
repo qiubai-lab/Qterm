@@ -31,6 +31,7 @@ aes-gcm = "0.11.0"
 argon2 = "0.5.3"
 base64 = "0.23.1"
 dirs = "6.0.0"
+dunce = "1.0.5"
 getrandom = "0.4.3"
 uuid = { version = "1.24.1", features = ["v4"] }
 russh = { version = "=0.62.6", default-features = false, features = ["ring"] }
@@ -46,7 +47,7 @@ tauri-plugin-window-state = "=2.4.1"
 windows-version = "0.1.7"
 # Pinned to match the `windows` version used by tauri/tao so HWND and other
 # handle types stay identical across the dependency graph.
-windows = { version = "=0.61.3", features = ["Win32_Foundation", "Win32_System_RemoteDesktop", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
+windows = { version = "=0.61.3", features = ["Win32_Foundation", "Win32_Storage_FileSystem", "Win32_System_RemoteDesktop", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
 
 [dev-dependencies]
 tempfile = "3.27.0"

@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { SessionEvent } from "../lib/tauri/sessions";
-import { blockIds } from "./layout";
+import { blockIds, findLeaf } from "./layout";
 
 const mocks = vi.hoisted(() => ({
   connections: [] as Array<{ event: (event: SessionEvent) => void; terminal: (data: Uint8Array) => void }>,
@@ -54,6 +54,7 @@ const profile = { id: "profile-1", name: "Server", host: "example.test", port: 2
 function Harness() {
   const { activeWorkspace, dispatch, registerWriter, clearBlockBuffer, startLocalBlock, connectBlock, connectFileBlock, connectNetworkBlock, startNetworkBlockRule, selectBlockTarget, selectFileTarget, selectNetworkTarget, writeBlock, resizeBlock, runtimes, fileRuntimes, networkRuntimes } = useWorkspace();
   const ids = blockIds(activeWorkspace.layout);
+  const activeLeaf = findLeaf(activeWorkspace.layout, activeWorkspace.activeBlockId);
   return <>
     <output>{ids.length}</output>
     <button onClick={() => dispatch({ type: "splitBlock", workspaceId: activeWorkspace.id, blockId: activeWorkspace.activeBlockId, direction: "horizontal" })}>split</button>
@@ -79,6 +80,7 @@ function Harness() {
     <button onClick={() => void selectNetworkTarget(activeWorkspace.id, activeWorkspace.activeBlockId, null)}>network-clear-target</button>
     <span data-testid="runtime">{runtimes[ids[0]]?.kind}:{runtimes[ids[0]]?.status}</span>
     <span data-testid="file-runtime">{fileRuntimes[activeWorkspace.activeBlockId]?.kind}:{fileRuntimes[activeWorkspace.activeBlockId]?.status}</span>
+    <span data-testid="file-path">{activeLeaf?.type === "files" ? activeLeaf.path : ""}</span>
     <span data-testid="network-runtime">{networkRuntimes[activeWorkspace.activeBlockId]?.status}:{networkRuntimes[activeWorkspace.activeBlockId]?.ruleStates["rule-1"]}</span>
   </>;
 }
@@ -328,6 +330,7 @@ describe("WorkspaceProvider multi-session routing", () => {
     await user.click(screen.getByRole("button", { name: "files-local" }));
     await waitFor(() => expect(mocks.closeSession).toHaveBeenCalledWith("files-session-1"));
     expect(screen.getByTestId("file-runtime")).toHaveTextContent("local:connected");
+    expect(screen.getByTestId("file-path")).toHaveTextContent("~");
   });
 
   it("owns Network SSH state per block and closes it before clearing the profile", async () => {

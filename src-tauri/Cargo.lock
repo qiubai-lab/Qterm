@@ -11,6 +11,7 @@ dependencies = [
  "atomic-write-file",
  "base64 0.23.1",
  "dirs",
+ "dunce",
  "getrandom 0.4.3",
  "portable-pty",
  "russh",

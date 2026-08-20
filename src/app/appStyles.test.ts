@@ -96,6 +96,9 @@ describe("application layout styles", () => {
     expect(declarations(".network-type-options")).toContain("grid-template-columns:repeat(3,minmax(0,1fr))");
     expect(declarations(".network-type-option")).toContain("min-height:150px");
     expect(declarations(".network-type-option:focus-visible")).toContain("outline:2px solid var(--focus)");
+    expect(declarations(".network-type-route")).toContain("height:16px");
+    expect(declarations(".network-type-route-endpoint svg")).toContain("flex:none");
+    expect(declarations(".network-type-route-endpoint>span")).toContain("font-size:8px");
     expect(styles).toMatch(/max-width:620px[\s\S]*\.network-type-options\{grid-template-columns:1fr\}/);
     expect(styles).toMatch(/prefers-reduced-transparency:reduce[\s\S]*\.terminal-block,.terminal-surface,.file-browser,.network-pane\{background:#050708\}/);
   });
@@ -274,11 +277,13 @@ describe("application layout styles", () => {
 
   it("keeps path editing inline and anchors refresh to the far edge", () => {
     expect(declarations(".file-browser-navigation")).toContain("display:grid");
-    expect(declarations(".file-browser-navigation")).toContain("grid-template-columns:25px minmax(0,1fr) 25px 25px 25px");
+    expect(declarations(".file-browser-navigation")).toContain("grid-template-columns:25px 25px minmax(0,1fr) 25px 25px 25px");
     expect(declarations(".file-browser-path-shell")).toContain("min-width:0");
     expect(declarations(".file-browser-path-form input")).toContain("border:0");
     expect(declarations(".file-browser-path-form input")).toContain("background:transparent");
     expect(declarations(".file-browser-path-form input:focus,.file-browser-path-form input:focus-visible")).toContain("box-shadow:inset 0 -1px 0 var(--focus)");
+    expect(declarations(".file-local-root-list")).toContain("overflow:auto");
+    expect(declarations(".file-local-root-row:focus-visible")).toContain("outline:2px solid var(--focus)");
   });
 
   it("keeps directory counts and transfer progress in one narrow fixed footer", () => {

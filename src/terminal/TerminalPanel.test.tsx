@@ -16,7 +16,8 @@ const mocks = vi.hoisted(() => ({
   setBlockCwd: vi.fn(),
   startLocalBlock: vi.fn(),
   hydrated: true,
-  localTerminalCapabilities: { windowsPty: { backend: "conpty" as const, buildNumber: 26100 } } as { windowsPty: { backend: "conpty"; buildNumber: number } } | null,
+  localTerminalCapabilities: { windowsPty: { backend: "conpty" as const, buildNumber: 26100 } } as { windowsPty: { backend: "conpty"; buildNumber: number } | null } | null,
+  writeBlock: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("@xterm/addon-fit", () => ({
@@ -70,7 +71,7 @@ vi.mock("../workspace/WorkspaceProvider", () => ({
     hydrated: mocks.hydrated,
     localTerminalCapabilities: mocks.localTerminalCapabilities,
     startLocalBlock: mocks.startLocalBlock,
-    writeBlock: vi.fn(),
+    writeBlock: mocks.writeBlock,
     resizeBlock: vi.fn(),
   }),
 }));
@@ -94,6 +95,7 @@ describe("TerminalPanel view lifetime", () => {
     mocks.fits.length = 0;
     mocks.registerWriter.mockClear();
     mocks.startLocalBlock.mockClear();
+    mocks.writeBlock.mockClear();
     mocks.hydrated = true;
     mocks.localTerminalCapabilities = { windowsPty: { backend: "conpty", buildNumber: 26100 } };
     vi.useFakeTimers();
@@ -166,6 +168,34 @@ describe("TerminalPanel view lifetime", () => {
     expect(terminal.reset).not.toHaveBeenCalled();
     clear?.(true);
     expect(terminal.reset).toHaveBeenCalledOnce();
+    view.unmount();
+  });
+
+  it("asks a local ConPTY shell to clear so its cursor stays synchronized with xterm", () => {
+    const view = render(<TerminalPanel blockId="block-clear-local" sessionKey="block-clear-local:local" local visible/>);
+    const terminal = mocks.terminals[mocks.terminals.length - 1];
+    const clear = mocks.registerWriter.mock.calls[mocks.registerWriter.mock.calls.length - 1]?.[2];
+
+    clear?.(false);
+
+    expect(mocks.writeBlock).toHaveBeenCalledOnce();
+    expect(mocks.writeBlock.mock.calls[0]?.[0]).toBe("block-clear-local");
+    expect(Array.from(mocks.writeBlock.mock.calls[0]?.[1] ?? [])).toEqual([27, 99, 108, 115, 13]);
+    expect(terminal.clear).not.toHaveBeenCalled();
+    expect(terminal.reset).not.toHaveBeenCalled();
+    view.unmount();
+  });
+
+  it("keeps frontend buffer clearing for a local terminal without ConPTY", () => {
+    mocks.localTerminalCapabilities = { windowsPty: null };
+    const view = render(<TerminalPanel blockId="block-clear-posix" sessionKey="block-clear-posix:local" local visible/>);
+    const terminal = mocks.terminals[mocks.terminals.length - 1];
+    const clear = mocks.registerWriter.mock.calls[mocks.registerWriter.mock.calls.length - 1]?.[2];
+
+    clear?.(false);
+
+    expect(terminal.clear).toHaveBeenCalledOnce();
+    expect(mocks.writeBlock).not.toHaveBeenCalled();
     view.unmount();
   });
 

@@ -10,6 +10,6 @@ export function openFileWindowAction(workspace: Workspace): WorkspaceAction {
       ? workspace.activeBlockId
       : blockIds(workspace.layout)[0],
     profileId: null,
-    path: ".",
+    path: "~",
   };
 }

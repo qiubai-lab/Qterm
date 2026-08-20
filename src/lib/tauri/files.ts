@@ -24,8 +24,17 @@ export interface DirectoryListing {
   entries: FileEntry[];
 }
 
+export interface LocalRoot {
+  name: string;
+  path: string;
+}
+
 export function listLocalDirectory(path: string): Promise<DirectoryListing> {
   return invoke<DirectoryListing>("files_list_local", { path });
+}
+
+export function listLocalRoots(): Promise<LocalRoot[]> {
+  return invoke<LocalRoot[]>("files_list_local_roots");
 }
 
 export function listRemoteDirectory(sessionId: string, path: string): Promise<DirectoryListing> {
