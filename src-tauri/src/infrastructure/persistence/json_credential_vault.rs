@@ -684,8 +684,9 @@ fn encrypt(
             break;
         }
     }
+    let nonce = Nonce::from(nonce);
     let ciphertext = cipher
-        .encrypt(Nonce::from_slice(&nonce), Payload { msg: plain, aad })
+        .encrypt(&nonce, Payload { msg: plain, aad })
         .map_err(|_| CredentialError::CryptoFailure)?;
     Ok(Encrypted {
         nonce: BASE64.encode(nonce),
@@ -698,13 +699,14 @@ fn decrypt(
     aad: &[u8],
 ) -> Result<Zeroizing<Vec<u8>>, CredentialError> {
     let nonce = nonce_bytes(encrypted)?;
+    let nonce = Nonce::try_from(nonce.as_slice()).map_err(|_| CredentialError::CorruptVault)?;
     let ciphertext = BASE64
         .decode(&encrypted.ciphertext)
         .map_err(|_| CredentialError::CorruptVault)?;
     Aes256Gcm::new_from_slice(key)
         .map_err(|_| CredentialError::CryptoFailure)?
         .decrypt(
-            Nonce::from_slice(&nonce),
+            &nonce,
             Payload {
                 msg: &ciphertext,
                 aad,
