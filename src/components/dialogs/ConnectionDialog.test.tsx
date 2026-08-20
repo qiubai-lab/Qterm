@@ -415,7 +415,49 @@ describe("ConnectionDialog", () => {
     expect(mocks.updateProfile).not.toHaveBeenCalled();
   });
 
-  it("keeps profile context menus focused on editing and deletion", async () => {
+  it("copies a profile in its current group and selects the uniquely named duplicate for editing", async () => {
+    const duplicate = { ...profile, id: "profile-copy", name: "K8S服务器 副本 2" };
+    workspaceProfiles = [profile, { ...profile, id: "profile-existing-copy", name: "K8S服务器 副本" }];
+    mocks.createProfile.mockResolvedValue(duplicate);
+    const user = userEvent.setup();
+    render(<ConnectionDialog onClose={vi.fn()}/>);
+
+    const productionToggle = (await screen.findByText("Production", { selector: ".connection-group-toggle strong" })).closest("button")!;
+    fireEvent.click(productionToggle);
+    fireEvent.contextMenu(screen.getByRole("button", { name: /^K8S服务器root@/ }));
+    await user.click(within(screen.getByRole("menu", { name: "K8S服务器 连接菜单" })).getByRole("menuitem", { name: "复制连接" }));
+
+    await waitFor(() => expect(mocks.createProfile).toHaveBeenCalledWith({
+      name: "K8S服务器 副本 2",
+      host: "10.100.5.28",
+      port: 22,
+      username: "root",
+      authPreference: "password",
+      credentialId: "password-1",
+      groupId: "group-1",
+    }));
+    expect(mocks.refreshProfiles).toHaveBeenCalled();
+    expect(screen.getByLabelText("名称")).toHaveValue("K8S服务器 副本 2");
+    expect(screen.getByRole("alert")).toHaveTextContent("已复制“K8S服务器”为“K8S服务器 副本 2”");
+    expect(mocks.selectBlockTarget).toHaveBeenCalledWith("workspace-1", "block-1", "profile-copy");
+  });
+
+  it("keeps the current selection and reports an error when copying fails", async () => {
+    mocks.createProfile.mockRejectedValue(new Error("无法复制连接"));
+    const user = userEvent.setup();
+    render(<ConnectionDialog onClose={vi.fn()}/>);
+
+    const productionToggle = (await screen.findByText("Production", { selector: ".connection-group-toggle strong" })).closest("button")!;
+    fireEvent.click(productionToggle);
+    fireEvent.contextMenu(screen.getByRole("button", { name: /K8S服务器/ }));
+    await user.click(within(screen.getByRole("menu", { name: "K8S服务器 连接菜单" })).getByRole("menuitem", { name: "复制连接" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("无法复制连接");
+    expect(screen.getByLabelText("名称")).toHaveValue("K8S服务器");
+    expect(mocks.refreshProfiles).not.toHaveBeenCalled();
+  });
+
+  it("keeps profile context menus focused on editing, copying, and deletion", async () => {
     const user = userEvent.setup();
     render(<ConnectionDialog onClose={vi.fn()}/>);
 
@@ -425,6 +467,7 @@ describe("ConnectionDialog", () => {
     fireEvent.contextMenu(item);
     const menu = screen.getByRole("menu", { name: "K8S服务器 连接菜单" });
     expect(within(menu).getByRole("menuitem", { name: "编辑连接" })).toBeInTheDocument();
+    expect(within(menu).getByRole("menuitem", { name: "复制连接" })).toBeInTheDocument();
     expect(within(menu).queryByRole("menuitem", { name: /移至/ })).not.toBeInTheDocument();
     expect(within(menu).getByRole("menuitem", { name: "删除连接" })).toBeInTheDocument();
 

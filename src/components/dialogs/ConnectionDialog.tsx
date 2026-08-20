@@ -286,6 +286,27 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
     } catch (error) { setMessage(errorMessage(error)); }
   }
 
+  async function duplicateProfile(profile: ConnectionProfile) {
+    setContextMenu(null); setMessage("");
+    try {
+      const input = {
+        ...profileToInput(profile, profile.groupId),
+        name: duplicateProfileName(profile.name, profiles),
+      };
+      const duplicate = await createProfile(input);
+      await refreshProfiles();
+      if (duplicate.groupId) {
+        setCollapsedGroupIds((current) => {
+          const next = new Set(current); next.delete(duplicate.groupId!); return next;
+        });
+      } else {
+        setUngroupedCollapsed(false);
+      }
+      await chooseProfile(duplicate);
+      setMessage(`已复制“${profile.name}”为“${duplicate.name}”`);
+    } catch (error) { setMessage(errorMessage(error)); }
+  }
+
   function profileItem(profile: ConnectionProfile) {
     return <div
       key={profile.id}
@@ -400,6 +421,7 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
         <button className="danger" role="menuitem" onClick={() => { setContextMenu(null); setGroupDeleteRequested(contextGroup); }}>删除分组</button>
       </> : contextProfile ? <>
         <button role="menuitem" onClick={() => { setContextMenu(null); void chooseProfile(contextProfile); }}>编辑连接</button>
+        <button role="menuitem" onClick={() => void duplicateProfile(contextProfile)}>复制连接</button>
         <div className="connection-context-menu-separator" role="separator"/>
         <button className="danger" role="menuitem" onClick={() => { setContextMenu(null); setDeleteRequested(contextProfile); }}>删除连接</button>
       </> : null}
@@ -448,6 +470,15 @@ function profileToInput(profile: ConnectionProfile, groupId: string | null): Pro
     credentialId: profile.credentialId,
     groupId,
   };
+}
+
+function duplicateProfileName(name: string, profiles: ConnectionProfile[]): string {
+  const names = new Set(profiles.map((profile) => profile.name));
+  const base = `${name} 副本`;
+  if (!names.has(base)) return base;
+  let suffix = 2;
+  while (names.has(`${base} ${suffix}`)) suffix += 1;
+  return `${base} ${suffix}`;
 }
 
 function dropGroupAtPoint(x: number, y: number, currentGroupId: string | null): string | null | undefined {

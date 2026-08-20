@@ -13,6 +13,15 @@ function declarations(selector: string): string {
 }
 
 describe("application layout styles", () => {
+  it("slides one shared selection surface between workspace tabs", () => {
+    expect(declarations(".workspace-tab-strip")).toContain("position:relative");
+    expect(declarations(".workspace-tab-selection")).toContain("position:absolute");
+    expect(declarations(".workspace-tab-selection")).toContain("pointer-events:none");
+    expect(declarations(".workspace-tab-selection.ready")).toContain("transform 250ms cubic-bezier(.2,.8,.2,1)");
+    expect(declarations(".workspace-tab.selected")).not.toContain("background:");
+    expect(styles).toMatch(/prefers-reduced-motion:reduce[\s\S]*\.workspace-tab-selection\.ready\{transition:none\}/);
+  });
+
   it("uses native window material behind a lightly tinted, rounded webview shell", () => {
     const appShell = declarations(".app-shell");
     const chrome = declarations(".app-chrome");

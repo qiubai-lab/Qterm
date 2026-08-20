@@ -61,6 +61,8 @@ describe("application shell", () => {
     render(<App/>);
 
     const workspaceNavigation = screen.getByRole("navigation", { name: "工作区" });
+    expect(workspaceNavigation.querySelectorAll(".workspace-tab-selection")).toHaveLength(1);
+    expect(workspaceNavigation.querySelector(".workspace-tab-selection")).toHaveAttribute("aria-hidden", "true");
     expect(within(workspaceNavigation).getByRole("button", { name: "Workspace 1" })).toBeInTheDocument();
     expect(within(workspaceNavigation).getByRole("button", { name: "新建工作区" })).toBeInTheDocument();
     expect(screen.queryByRole("navigation", { name: "当前工作区标签页" })).not.toBeInTheDocument();

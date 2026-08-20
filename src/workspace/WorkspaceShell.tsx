@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 
 import { Icon, type IconName } from "../components/Icon";
 import { ConnectionDialog } from "../components/dialogs/ConnectionDialog";
@@ -37,6 +37,9 @@ export function WorkspaceShell() {
   const [terminalLocked, setTerminalLocked] = useState(false);
   const [securitySettings, setSecuritySettings] = useState<SecuritySettings | null>(null);
   const [draggedWorkspace, setDraggedWorkspace] = useState<string | null>(null);
+  const [workspaceTabIndicator, setWorkspaceTabIndicator] = useState({ x: 0, width: 0, ready: false });
+  const workspaceTabStripRef = useRef<HTMLElement | null>(null);
+  const workspaceTabRefs = useRef(new Map<string, HTMLDivElement>());
   const workspaceDragRef = useRef<{ id: string; pointerId: number; x: number; y: number; active: boolean } | null>(null);
   const workspaceDragCleanupRef = useRef<(() => void) | null>(null);
   const automaticAttemptsRef = useRef(new Set<string>());
@@ -47,6 +50,7 @@ export function WorkspaceShell() {
   const terminalHostPrompt = Object.entries(runtimes).find(([, runtime]) => runtime.hostKeyPrompt);
   const fileHostPrompt = Object.entries(fileRuntimes).find(([, runtime]) => runtime.hostKeyPrompt);
   const networkHostPrompt = Object.entries(networkRuntimes).find(([, runtime]) => runtime.hostKeyPrompt);
+  const workspaceOrder = document.workspaces.map((workspace) => workspace.id).join("\u0000");
   const hostPrompt = terminalHostPrompt
     ? { owner: "terminal" as const, blockId: terminalHostPrompt[0], prompt: terminalHostPrompt[1].hostKeyPrompt! }
     : fileHostPrompt
@@ -54,6 +58,25 @@ export function WorkspaceShell() {
       : networkHostPrompt
         ? { owner: "network" as const, blockId: networkHostPrompt[0], prompt: networkHostPrompt[1].hostKeyPrompt! }
         : null;
+
+  useLayoutEffect(() => {
+    const strip = workspaceTabStripRef.current;
+    const selectedTab = workspaceTabRefs.current.get(activeWorkspace.id);
+    if (!strip || !selectedTab) return;
+
+    const positionIndicator = () => {
+      const stripRect = strip.getBoundingClientRect();
+      const tabRect = selectedTab.getBoundingClientRect();
+      const x = tabRect.left - stripRect.left + strip.scrollLeft;
+      setWorkspaceTabIndicator((current) => current.x === x && current.width === tabRect.width && current.ready
+        ? current
+        : { x, width: tabRect.width, ready: true });
+    };
+
+    positionIndicator();
+    window.addEventListener("resize", positionIndicator);
+    return () => window.removeEventListener("resize", positionIndicator);
+  }, [activeWorkspace.id, workspaceOrder]);
 
   function requestClose(request: CloseRequest) {
     if (connectedCount(request.ids) === 0) {
@@ -335,8 +358,13 @@ export function WorkspaceShell() {
       <div className="app-brand" aria-label="Qterm">
         <Icon name="terminal" size={15}/><span>Qterm</span>
       </div>
-      <nav className="workspace-tab-strip" aria-label="工作区">
-        {document.workspaces.map((workspace) => <div key={workspace.id} data-workspace-id={workspace.id} className={`workspace-tab${workspace.id === activeWorkspace.id ? " selected" : ""}${draggedWorkspace === workspace.id ? " dragging" : ""}`} onPointerDown={(event) => beginWorkspaceDrag(event, workspace.id)}>
+      <nav ref={workspaceTabStripRef} className="workspace-tab-strip" aria-label="工作区">
+        <span
+          aria-hidden="true"
+          className={`workspace-tab-selection${workspaceTabIndicator.ready ? " ready" : ""}`}
+          style={{ width: workspaceTabIndicator.width, transform: `translate3d(${workspaceTabIndicator.x}px, 0, 0)` }}
+        />
+        {document.workspaces.map((workspace) => <div ref={(element) => { if (element) workspaceTabRefs.current.set(workspace.id, element); else workspaceTabRefs.current.delete(workspace.id); }} key={workspace.id} data-workspace-id={workspace.id} className={`workspace-tab${workspace.id === activeWorkspace.id ? " selected" : ""}${draggedWorkspace === workspace.id ? " dragging" : ""}`} onPointerDown={(event) => beginWorkspaceDrag(event, workspace.id)}>
           {renaming?.id === workspace.id ? <div className="workspace-tab-rename"><Icon name="workspace" size={13}/><input autoFocus aria-label={`重命名 ${workspace.name}`} value={renaming.value} onChange={(event) => setRenaming({ ...renaming, value: event.target.value })} onBlur={commitRename} onKeyDown={(event) => { if (event.key === "Enter") commitRename(); if (event.key === "Escape") setRenaming(null); }}/></div>
             : <button className="workspace-tab-select" onClick={() => dispatch({ type: "selectWorkspace", workspaceId: workspace.id })} onDoubleClick={() => setRenaming({ id: workspace.id, value: workspace.name })}><Icon name="workspace" size={13}/><span>{workspace.name}</span></button>}
           {document.workspaces.length > 1 && <button className="workspace-tab-close" aria-label={`关闭 ${workspace.name}`} onClick={() => closeWorkspace(workspace)}><Icon name="close" size={12}/></button>}
