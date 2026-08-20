@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { TransferEvent } from "../lib/tauri/transfers";
@@ -53,9 +54,136 @@ describe("FileBrowserPane", () => {
     const onPathChange = vi.fn();
     render(<FileBrowserPane initialPath="C:/work" runtime={localRuntime} onPathChange={onPathChange}/>);
     const folder = await screen.findByRole("listitem", { name: /src/ });
+    expect(folder).toHaveAttribute("data-entry-kind", "directory");
     fireEvent.doubleClick(folder);
     await waitFor(() => expect(listLocalDirectory).toHaveBeenLastCalledWith("C:/work/src"));
     expect(onPathChange).toHaveBeenLastCalledWith("C:/work/src");
+  });
+
+  it("restores directory browsing positions while navigating up and forward", async () => {
+    const parentEntries = [{ name: "src", path: "/home/dev/src", isDirectory: true, isSymlink: false, size: 0, modifiedAt: null, permissionMode: 0o755 }];
+    const childEntries = [{ name: "index.ts", path: "/home/dev/src/index.ts", isDirectory: false, isSymlink: false, size: 12, modifiedAt: null, permissionMode: 0o644 }];
+    listRemoteDirectory
+      .mockResolvedValueOnce({ path: "/home/dev", entries: parentEntries })
+      .mockResolvedValueOnce({ path: "/home/dev/src", entries: childEntries })
+      .mockResolvedValueOnce({ path: "/home/dev", entries: parentEntries })
+      .mockResolvedValueOnce({ path: "/home/dev/src", entries: childEntries });
+    function ControlledPane() {
+      const [controlledPath, setControlledPath] = useState("/home/dev");
+      return <FileBrowserPane initialPath={controlledPath} runtime={{ ...localRuntime, kind: "sftp", sessionId: "files-1" }} onPathChange={setControlledPath}/>;
+    }
+    const view = render(<ControlledPane/>);
+    const ui = within(view.container);
+    const content = view.container.querySelector<HTMLElement>(".file-browser-content")!;
+    const forward = ui.getByRole("button", { name: "前进到下一目录" });
+
+    const folder = await ui.findByRole("listitem", { name: /src/ });
+    expect(forward).toBeDisabled();
+    content.scrollTop = 160;
+    fireEvent.click(folder);
+    fireEvent.doubleClick(folder);
+    await waitFor(() => expect(listRemoteDirectory).toHaveBeenLastCalledWith("files-1", "/home/dev/src"));
+    await waitFor(() => expect(content.scrollTop).toBe(0));
+    content.scrollTop = 45;
+
+    fireEvent.click(ui.getByRole("button", { name: "返回上级文件夹" }));
+    await waitFor(() => expect(listRemoteDirectory).toHaveBeenLastCalledWith("files-1", "/home/dev"));
+    await ui.findByRole("listitem", { name: /src/ });
+    await waitFor(() => expect(content.scrollTop).toBe(160));
+    expect(ui.getByRole("listitem", { name: /src/ })).toHaveAttribute("data-selected", "true");
+    expect(forward).toBeEnabled();
+
+    fireEvent.click(forward);
+    await waitFor(() => expect(listRemoteDirectory).toHaveBeenLastCalledWith("files-1", "/home/dev/src"));
+    await ui.findByRole("listitem", { name: /index\.ts/ });
+    await waitFor(() => expect(content.scrollTop).toBe(45));
+    expect(forward).toBeDisabled();
+    expect(listRemoteDirectory).toHaveBeenCalledTimes(4);
+  });
+
+  it("keeps the visible row anchored when entries are inserted above it", async () => {
+    const initialEntries = ["alpha", "beta", "gamma"].map((name) => ({ name, path: `/home/dev/${name}`, isDirectory: true, isSymlink: false, size: 0, modifiedAt: null, permissionMode: 0o755 }));
+    const updatedEntries = [
+      { name: "added", path: "/home/dev/added", isDirectory: true, isSymlink: false, size: 0, modifiedAt: null, permissionMode: 0o755 },
+      ...initialEntries,
+    ];
+    listRemoteDirectory
+      .mockResolvedValueOnce({ path: "/home/dev", entries: initialEntries })
+      .mockResolvedValueOnce({ path: "/home/dev/beta", entries: [] })
+      .mockResolvedValueOnce({ path: "/home/dev", entries: updatedEntries });
+    const geometry = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+      if (this.classList.contains("file-browser-columns")) return testRect(0, 25);
+      if (this.classList.contains("file-row")) {
+        const rows = Array.from(this.parentElement?.querySelectorAll(".file-row") ?? []);
+        const index = rows.indexOf(this);
+        const scrollTop = this.closest<HTMLElement>(".file-browser-content")?.scrollTop ?? 0;
+        const top = 28 + index * 27 - scrollTop;
+        return testRect(top, top + 27);
+      }
+      return testRect(0, 200);
+    });
+
+    try {
+      const view = render(<FileBrowserPane initialPath="/home/dev" runtime={{ ...localRuntime, kind: "sftp", sessionId: "files-1" }} onPathChange={vi.fn()}/>);
+      const ui = within(view.container);
+      const content = view.container.querySelector<HTMLElement>(".file-browser-content")!;
+      const beta = await ui.findByRole("listitem", { name: /beta/ });
+      content.scrollTop = 35;
+
+      fireEvent.doubleClick(beta);
+      await waitFor(() => expect(listRemoteDirectory).toHaveBeenLastCalledWith("files-1", "/home/dev/beta"));
+      fireEvent.click(ui.getByRole("button", { name: "返回上级文件夹" }));
+
+      await ui.findByRole("listitem", { name: /added/ });
+      await waitFor(() => expect(content.scrollTop).toBe(62));
+      const restoredBeta = ui.getByRole("listitem", { name: /beta/ });
+      expect(restoredBeta.getBoundingClientRect().top - 25).toBe(-5);
+    } finally {
+      geometry.mockRestore();
+    }
+  });
+
+  it("clears the forward branch after opening a different directory", async () => {
+    const parentEntries = [
+      { name: "alpha", path: "/home/dev/alpha", isDirectory: true, isSymlink: false, size: 0, modifiedAt: null, permissionMode: 0o755 },
+      { name: "beta", path: "/home/dev/beta", isDirectory: true, isSymlink: false, size: 0, modifiedAt: null, permissionMode: 0o755 },
+    ];
+    listRemoteDirectory
+      .mockResolvedValueOnce({ path: "/home/dev", entries: parentEntries })
+      .mockResolvedValueOnce({ path: "/home/dev/alpha", entries: [] })
+      .mockResolvedValueOnce({ path: "/home/dev", entries: parentEntries })
+      .mockResolvedValueOnce({ path: "/home/dev/beta", entries: [] });
+    const view = render(<FileBrowserPane initialPath="/home/dev" runtime={{ ...localRuntime, kind: "sftp", sessionId: "files-1" }} onPathChange={vi.fn()}/>);
+    const ui = within(view.container);
+
+    fireEvent.doubleClick(await ui.findByRole("listitem", { name: /alpha/ }));
+    await waitFor(() => expect(listRemoteDirectory).toHaveBeenLastCalledWith("files-1", "/home/dev/alpha"));
+    fireEvent.click(ui.getByRole("button", { name: "返回上级文件夹" }));
+    const beta = await ui.findByRole("listitem", { name: /beta/ });
+    expect(ui.getByRole("button", { name: "前进到下一目录" })).toBeEnabled();
+
+    fireEvent.doubleClick(beta);
+    await waitFor(() => expect(listRemoteDirectory).toHaveBeenLastCalledWith("files-1", "/home/dev/beta"));
+    expect(ui.getByRole("button", { name: "前进到下一目录" })).toBeDisabled();
+  });
+
+  it("preserves the current browsing position when refreshing a directory", async () => {
+    const entries = [{ name: "src", path: "/home/dev/src", isDirectory: true, isSymlink: false, size: 0, modifiedAt: null, permissionMode: 0o755 }];
+    listRemoteDirectory
+      .mockResolvedValueOnce({ path: "/home/dev", entries })
+      .mockResolvedValueOnce({ path: "/home/dev", entries });
+    const view = render(<FileBrowserPane initialPath="/home/dev" runtime={{ ...localRuntime, kind: "sftp", sessionId: "files-1" }} onPathChange={vi.fn()}/>);
+    const ui = within(view.container);
+    const content = view.container.querySelector<HTMLElement>(".file-browser-content")!;
+    const folder = await ui.findByRole("listitem", { name: /src/ });
+
+    content.scrollTop = 120;
+    fireEvent.click(folder);
+    fireEvent.click(ui.getByRole("button", { name: "刷新文件夹" }));
+
+    await waitFor(() => expect(listRemoteDirectory).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(content.scrollTop).toBe(120));
+    expect(ui.getByRole("listitem", { name: /src/ })).toHaveAttribute("data-selected", "true");
   });
 
   it("lists a local directory without creating a terminal session", async () => {
@@ -494,3 +622,7 @@ describe("parentPath", () => {
     expect(isWindowsDriveRoot("D:\\GIT")).toBe(false);
   });
 });
+
+function testRect(top: number, bottom: number): DOMRect {
+  return { x: 0, y: top, top, right: 100, bottom, left: 0, width: 100, height: bottom - top, toJSON: () => ({}) };
+}

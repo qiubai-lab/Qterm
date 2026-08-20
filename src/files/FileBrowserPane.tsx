@@ -20,6 +20,10 @@ type SortKey = "name" | "size" | "modifiedAt";
 type SortDirection = "ascending" | "descending";
 type SortState = { key: SortKey; direction: SortDirection } | null;
 type ContextMenuState = { entry: FileEntry; anchorX: number; anchorY: number; x: number; y: number; placement: "above" | "below" };
+type DirectoryLocation = { scrollTop: number; selectedPath: string | null; anchorPath: string | null; anchorOffset: number };
+type PendingDirectoryLocation = { key: string; location: DirectoryLocation };
+
+const LOCAL_ROOTS_LOCATION = "\0local-roots";
 
 const CodeEditor = lazy(() => import("./CodeEditor").then((module) => ({ default: module.CodeEditor })));
 const MarkdownPreview = lazy(() => import("./MarkdownPreview").then((module) => ({ default: module.MarkdownPreview })));
@@ -29,6 +33,7 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
   const [listing, setListing] = useState<DirectoryListing | null>(null);
   const [localRoots, setLocalRoots] = useState<LocalRoot[]>([]);
   const [showLocalRoots, setShowLocalRoots] = useState(false);
+  const [forwardPaths, setForwardPaths] = useState<string[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [editingPath, setEditingPath] = useState(false);
@@ -46,6 +51,14 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
   const request = useRef(0);
   const previewRequest = useRef(0);
   const listScroll = useRef<HTMLDivElement>(null);
+  const directoryLocations = useRef(new Map<string, DirectoryLocation>());
+  const pendingDirectoryLocation = useRef<PendingDirectoryLocation | null>(null);
+  const lastLoadedInputPath = useRef<string | null>(null);
+  const lastLoadedRuntime = useRef<string | null>(null);
+  const pathRef = useRef(path);
+  const listingRef = useRef(listing);
+  const selectedPathRef = useRef(selectedPath);
+  const showLocalRootsRef = useRef(showLocalRoots);
   const savedScroll = useRef(0);
   const menuRef = useRef<HTMLDivElement>(null);
   const kind = runtime?.kind;
@@ -63,6 +76,29 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
     permissionMode: null,
   })), [localRoots]);
   const displayedRootEntries = useMemo(() => sortEntries(rootEntries, sort), [rootEntries, sort]);
+  pathRef.current = path;
+  listingRef.current = listing;
+  selectedPathRef.current = selectedPath;
+  showLocalRootsRef.current = showLocalRoots;
+
+  const rememberDirectoryLocation = useCallback(() => {
+    const key = showLocalRootsRef.current ? LOCAL_ROOTS_LOCATION : listingRef.current?.path ?? pathRef.current;
+    const container = listScroll.current;
+    const anchor = container ? visibleRowAnchor(container) : null;
+    directoryLocations.current.set(key, {
+      scrollTop: container?.scrollTop ?? 0,
+      selectedPath: selectedPathRef.current,
+      anchorPath: anchor?.path ?? null,
+      anchorOffset: anchor?.offset ?? 0,
+    });
+  }, []);
+
+  const prepareDirectoryLocation = useCallback((key: string) => {
+    const location = directoryLocations.current.get(key) ?? { scrollTop: 0, selectedPath: null, anchorPath: null, anchorOffset: 0 };
+    pendingDirectoryLocation.current = { key, location };
+    selectedPathRef.current = location.selectedPath;
+    setSelectedPath(location.selectedPath);
+  }, []);
 
   const load = useCallback(async (nextPath: string, returnToRootsOnError = false) => {
     const currentRequest = ++request.current;
@@ -70,49 +106,84 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
       setEditingPath(false);
       setLoading(false);
       setError("");
-      return;
+      return false;
     }
+    rememberDirectoryLocation();
     setEditingPath(false);
     setShowLocalRoots(false);
+    showLocalRootsRef.current = false;
     setLoading(true);
     setError("");
     try {
       const next = kind === "local" ? await listLocalDirectory(nextPath) : await listRemoteDirectory(sessionId!, nextPath);
-      if (request.current !== currentRequest) return;
-      setPath(next.path); setPathDraft(kind === "local" ? displayLocalPath(next.path) : next.path); setListing(next); setSelectedPath(null); setEditingPath(false); onPathChange(next.path);
+      if (request.current !== currentRequest) return false;
+      lastLoadedInputPath.current = nextPath;
+      lastLoadedRuntime.current = `${kind ?? "unknown"}:${sessionId ?? ""}`;
+      pathRef.current = next.path; listingRef.current = next;
+      prepareDirectoryLocation(next.path);
+      setPath(next.path); setPathDraft(kind === "local" ? displayLocalPath(next.path) : next.path); setListing(next); setEditingPath(false); onPathChange(next.path);
+      return true;
     } catch (reason) {
       if (request.current === currentRequest) {
         setError(errorMessage(reason));
-        if (returnToRootsOnError) setShowLocalRoots(true);
+        if (returnToRootsOnError) { setShowLocalRoots(true); showLocalRootsRef.current = true; }
       }
+      return false;
     } finally {
       if (request.current === currentRequest) setLoading(false);
     }
-  }, [kind, onPathChange, sessionId, status]);
+  }, [kind, onPathChange, prepareDirectoryLocation, rememberDirectoryLocation, sessionId, status]);
 
   const openLocalRoots = useCallback(async () => {
-    if (kind !== "local") return;
+    if (kind !== "local") return false;
     const currentRequest = ++request.current;
+    rememberDirectoryLocation();
     setEditingPath(false);
     setContextMenu(null);
-    setSelectedPath(null);
     setShowLocalRoots(true);
+    showLocalRootsRef.current = true;
     setLoading(true);
     setError("");
     try {
       const roots = await listLocalRoots();
-      if (request.current === currentRequest) setLocalRoots(roots);
+      if (request.current !== currentRequest) return false;
+      prepareDirectoryLocation(LOCAL_ROOTS_LOCATION);
+      setLocalRoots(roots);
+      return true;
     } catch (reason) {
       if (request.current === currentRequest) setError(errorMessage(reason));
+      return false;
     } finally {
       if (request.current === currentRequest) setLoading(false);
     }
-  }, [kind]);
+  }, [kind, prepareDirectoryLocation, rememberDirectoryLocation]);
 
   useEffect(() => {
+    const runtimeKey = `${kind ?? "unknown"}:${sessionId ?? ""}`;
+    const sameLoadedLocation = !showLocalRootsRef.current
+      && lastLoadedRuntime.current === runtimeKey
+      && (initialPath === pathRef.current || initialPath === lastLoadedInputPath.current);
+    if (sameLoadedLocation) return;
     const frame = requestAnimationFrame(() => void load(initialPath));
-    return () => { cancelAnimationFrame(frame); request.current += 1; };
-  }, [initialPath, load]);
+    return () => { cancelAnimationFrame(frame); };
+  }, [initialPath, kind, load, sessionId]);
+
+  useEffect(() => () => { request.current += 1; }, []);
+
+  useLayoutEffect(() => {
+    const pending = pendingDirectoryLocation.current;
+    const key = showLocalRoots ? LOCAL_ROOTS_LOCATION : listing?.path;
+    const container = listScroll.current;
+    if (!pending || !key || pending.key !== key || !container) return;
+    pendingDirectoryLocation.current = null;
+    container.scrollTop = pending.location.scrollTop;
+    if (!pending.location.anchorPath) return;
+    const row = Array.from(container.querySelectorAll<HTMLElement>(".file-row[data-entry-path]"))
+      .find((candidate) => candidate.dataset.entryPath === pending.location.anchorPath);
+    if (!row) return;
+    const viewportTop = fileListViewportTop(container);
+    container.scrollTop += row.getBoundingClientRect().top - viewportTop - pending.location.anchorOffset;
+  }, [listing, localRoots, showLocalRoots]);
 
   useEffect(() => {
     if (!contextMenu) return;
@@ -317,6 +388,25 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
   const parent = parentPath(path, runtime?.kind === "local");
   const visiblePath = kind === "local" ? displayLocalPath(path) : path;
   const driveRoot = kind === "local" && isWindowsDriveRoot(path);
+  const forwardPath = forwardPaths[forwardPaths.length - 1] ?? null;
+
+  async function navigateTo(nextPath: string, returnToRootsOnError = false) {
+    if (await load(nextPath, returnToRootsOnError)) setForwardPaths([]);
+  }
+
+  async function navigateUp() {
+    const previousPath = path;
+    const succeeded = driveRoot ? await openLocalRoots() : parent ? await load(parent) : false;
+    if (succeeded) setForwardPaths((current) => [...current, previousPath]);
+  }
+
+  async function navigateForward() {
+    if (!forwardPath) return;
+    const succeeded = await load(forwardPath, showLocalRoots);
+    if (!succeeded) return;
+    setForwardPaths((current) => current[current.length - 1] === forwardPath ? current.slice(0, -1) : current);
+  }
+
   if (preview) {
     const dirty = preview.mode === "edit" && preview.content !== preview.original;
     return <div className="file-browser file-preview">
@@ -346,9 +436,10 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
 
   return <div className="file-browser">
     <nav className="file-browser-navigation" aria-label="文件夹导航">
-      <button aria-label="返回上级文件夹" title="返回上级" disabled={showLocalRoots || (!parent && !driveRoot) || loading} onClick={() => driveRoot ? void openLocalRoots() : parent && void load(parent)}><Icon name="back" size={14}/></button>
+      <button aria-label="返回上级文件夹" title="返回上级" disabled={showLocalRoots || (!parent && !driveRoot) || loading} onClick={() => void navigateUp()}><Icon name="back" size={14}/></button>
+      <button aria-label="前进到下一目录" title={forwardPath ? `前进到 ${kind === "local" ? displayLocalPath(forwardPath) : forwardPath}` : "没有可前进的目录"} disabled={!forwardPath || loading} onClick={() => void navigateForward()}><Icon name="forward" size={14}/></button>
       <div className="file-browser-path-shell" data-editing={editingPath || undefined}>
-        {showLocalRoots ? <span className="file-browser-path file-browser-location-label">本机</span> : editingPath ? <form className="file-browser-path-form" onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setEditingPath(false); }} onSubmit={(event) => { event.preventDefault(); void load(pathDraft); }}>
+        {showLocalRoots ? <span className="file-browser-path file-browser-location-label">本机</span> : editingPath ? <form className="file-browser-path-form" onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setEditingPath(false); }} onSubmit={(event) => { event.preventDefault(); void navigateTo(pathDraft); }}>
           <input aria-label="文件夹路径" autoFocus value={pathDraft} onChange={(event) => setPathDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); setPathDraft(visiblePath); setEditingPath(false); } }}/>
         </form> : <button className="file-browser-path" title={`${visiblePath} · 单击编辑`} onClick={() => { setPathDraft(visiblePath); setEditingPath(true); }}>{visiblePath}</button>}
       </div>
@@ -368,11 +459,11 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
       {showLocalRoots && loading && <div className="file-browser-state">正在读取本机位置…</div>}
       {showLocalRoots && !loading && error && localRoots.length === 0 && <div className="file-browser-state error"><Icon name="files" size={22}/><span>{error}</span><button onClick={() => void openLocalRoots()}>重试</button></div>}
       {showLocalRoots && !loading && !error && localRoots.length === 0 && <div className="file-browser-state">没有可用的本机位置</div>}
-      {showLocalRoots && !loading && localRoots.length > 0 && <div className="file-list" role="list" aria-label="本机根目录">{displayedRootEntries.map((entry) => <FileRow key={entry.path} entry={entry} selected={selectedPath === entry.path} onSelect={() => setSelectedPath(entry.path)} onOpen={() => void load(entry.path, true)} onContextMenu={(event) => event.preventDefault()} onContextMenuKey={() => undefined}/>)}</div>}
+      {showLocalRoots && !loading && localRoots.length > 0 && <div className="file-list" role="list" aria-label="本机根目录">{displayedRootEntries.map((entry) => <FileRow key={entry.path} entry={entry} selected={selectedPath === entry.path} onSelect={() => setSelectedPath(entry.path)} onOpen={() => void navigateTo(entry.path, true)} onContextMenu={(event) => event.preventDefault()} onContextMenuKey={() => undefined}/>)}</div>}
       {!showLocalRoots && loading && !listing && <div className="file-browser-state">正在读取文件夹…</div>}
       {!showLocalRoots && !connectionError && error && !listing && <div className="file-browser-state error"><Icon name="files" size={22}/><span>{error}</span><button onClick={() => void load(path)}>重试</button></div>}
       {!showLocalRoots && !error && listing?.entries.length === 0 && <div className="file-browser-state">此文件夹为空</div>}
-      {!showLocalRoots && listing && <div className="file-list" role="list" aria-label={`文件夹 ${listing.path}`}>{displayedEntries.map((entry) => <FileRow key={entry.path} entry={entry} selected={selectedPath === entry.path} onSelect={() => setSelectedPath(entry.path)} onOpen={() => entry.isDirectory ? void load(entry.path) : void openFile(entry, "preview")} onContextMenu={(event) => openContextMenu(event, entry)} onContextMenuKey={(event) => openContextMenuFromKeyboard(event, entry)}/>)}</div>}
+      {!showLocalRoots && listing && <div className="file-list" role="list" aria-label={`文件夹 ${listing.path}`}>{displayedEntries.map((entry) => <FileRow key={entry.path} entry={entry} selected={selectedPath === entry.path} onSelect={() => setSelectedPath(entry.path)} onOpen={() => entry.isDirectory ? void navigateTo(entry.path) : void openFile(entry, "preview")} onContextMenu={(event) => openContextMenu(event, entry)} onContextMenuKey={(event) => openContextMenuFromKeyboard(event, entry)}/>)}</div>}
       {!showLocalRoots && dropActive && <div className="file-upload-drop-overlay" role="status"><Icon name="upload" size={24}/><strong>上传到当前目录</strong><span>{visiblePath}</span><small>释放鼠标以上传文件或文件夹</small></div>}
     </div>
     {contextMenu && <div ref={menuRef} className="file-context-menu" data-placement={contextMenu.placement} role="menu" aria-label={`${contextMenu.entry.name} 文件菜单`} style={{ left: contextMenu.x, top: contextMenu.y }} onContextMenu={(event) => event.preventDefault()}>
@@ -421,10 +512,23 @@ function FileSortHeader({ label, sortKey, sort, onChange }: { label: string; sor
 }
 
 function FileRow({ entry, selected, onSelect, onOpen, onContextMenu, onContextMenuKey }: { entry: FileEntry; selected: boolean; onSelect: () => void; onOpen: () => void; onContextMenu: (event: MouseEvent<HTMLButtonElement>) => void; onContextMenuKey: (event: KeyboardEvent<HTMLButtonElement>) => void }) {
-  return <button className="file-row" data-selected={selected || undefined} role="listitem" title={entry.path} onClick={() => { if (!entry.isDirectory && selected) onOpen(); else onSelect(); }} onDoubleClick={() => { if (entry.isDirectory) onOpen(); }} onContextMenu={onContextMenu} onKeyDown={(event) => { onContextMenuKey(event); if (event.key === "Enter") onOpen(); }}>
+  return <button className="file-row" data-entry-kind={entry.isDirectory ? "directory" : "file"} data-entry-path={entry.path} data-selected={selected || undefined} role="listitem" title={entry.path} onClick={() => { if (!entry.isDirectory && selected) onOpen(); else onSelect(); }} onDoubleClick={() => { if (entry.isDirectory) onOpen(); }} onContextMenu={onContextMenu} onKeyDown={(event) => { onContextMenuKey(event); if (event.key === "Enter") onOpen(); }}>
     <span className="file-name"><Icon name={entry.isDirectory ? "files" : "file"} size={14}/><span>{entry.name}</span>{entry.isSymlink && <small>链接</small>}</span>
     <span>{entry.isDirectory ? "—" : formatSize(entry.size)}</span><span className="file-permission file-permission-column">{formatPermissions(entry.permissionMode)}</span><span>{entry.modifiedAt ? new Date(entry.modifiedAt * 1000).toLocaleString() : "—"}</span>
   </button>;
+}
+
+function fileListViewportTop(container: HTMLElement): number {
+  return container.querySelector<HTMLElement>(".file-browser-columns")?.getBoundingClientRect().bottom
+    ?? container.getBoundingClientRect().top;
+}
+
+function visibleRowAnchor(container: HTMLElement): { path: string; offset: number } | null {
+  const viewportTop = fileListViewportTop(container);
+  const row = Array.from(container.querySelectorAll<HTMLElement>(".file-row[data-entry-path]"))
+    .find((candidate) => candidate.getBoundingClientRect().bottom > viewportTop);
+  const path = row?.dataset.entryPath;
+  return row && path ? { path, offset: row.getBoundingClientRect().top - viewportTop } : null;
 }
 
 function previewKindFor(name: string): PreviewKind {

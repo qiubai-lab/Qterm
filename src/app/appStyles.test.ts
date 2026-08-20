@@ -277,7 +277,7 @@ describe("application layout styles", () => {
 
   it("keeps path editing inline and anchors refresh to the far edge", () => {
     expect(declarations(".file-browser-navigation")).toContain("display:grid");
-    expect(declarations(".file-browser-navigation")).toContain("grid-template-columns:25px minmax(0,1fr) 25px 25px 25px");
+    expect(declarations(".file-browser-navigation")).toContain("grid-template-columns:25px 25px minmax(0,1fr) 25px 25px 25px");
     expect(declarations(".file-browser-path-shell")).toContain("min-width:0");
     expect(declarations(".file-browser-path-form input")).toContain("border:0");
     expect(declarations(".file-browser-path-form input")).toContain("background:transparent");
@@ -303,9 +303,25 @@ describe("application layout styles", () => {
     expect(declarations(".file-browser-columns>:not(:first-child)")).toContain("justify-content:center");
     expect(declarations(".file-browser-columns>:not(:first-child) .file-sort-indicator")).toContain("position:absolute");
     expect(declarations(".file-row>span:not(:first-child)")).toContain("text-align:center");
-    expect(declarations(".file-permission")).toContain("font:");
+    expect(declarations(".file-permission")).toContain("font-family:var(--terminal-font-family)");
     expect(styles).toContain("@container (max-width:440px)");
     expect(styles).toContain(".file-permission-column{display:none}");
+  });
+
+  it("uses the terminal font hierarchy for readable file rows", () => {
+    expect(declarations(":root")).toContain('--terminal-font-family:"SFMono-Regular",Menlo,Monaco,Consolas,monospace');
+    expect(declarations(".file-list>.file-row")).toContain("font-family:var(--terminal-font-family)");
+    expect(declarations(".file-list>.file-row")).toContain("font-size:11px");
+    expect(declarations(".file-list>.file-row")).toContain("font-weight:500");
+    expect(declarations(".file-name")).toContain("color:#e2e7ea");
+    expect(declarations(".file-name")).toContain("font-weight:600");
+    expect(declarations(".file-row>span:not(:first-child)")).toContain("color:#949da4");
+  });
+
+  it("fills folder icons while keeping ordinary file icons outlined", () => {
+    expect(declarations('.file-row[data-entry-kind="directory"] .file-name svg')).toContain("fill:currentColor");
+    expect(declarations('.file-row[data-entry-kind="directory"] .file-name svg')).toContain("stroke:currentColor");
+    expect(declarations(".file-name svg")).not.toContain("fill:");
   });
 
   it("keeps native file-drop feedback inside the file content surface", () => {
@@ -313,6 +329,14 @@ describe("application layout styles", () => {
     expect(declarations(".file-upload-drop-overlay")).toContain("position:absolute");
     expect(declarations(".file-upload-drop-overlay")).toContain("pointer-events:none");
     expect(declarations(".file-upload-drop-overlay")).toContain("border:1px dashed");
+  });
+
+  it("assigns about-page scrolling to its content stage and preserves reduced motion", () => {
+    expect(declarations(".about-dialog .dialog-content")).toContain("display:flex");
+    expect(declarations(".about-dialog .dialog-content")).toContain("overflow:hidden");
+    expect(declarations(".about-page")).toContain("min-height:0");
+    expect(declarations(".about-page")).toContain("overflow:auto");
+    expect(styles).toContain("@media(prefers-reduced-motion:reduce){.about-dialog *");
   });
 
   it("uses a narrow terminal-themed scrollbar with animated visibility", () => {

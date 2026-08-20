@@ -284,7 +284,7 @@ export function WorkspaceShell() {
           <span className="rail-spacer"/>
           <RailActionButton icon="lock" label="锁定终端" accessibleLabel={terminalLockLabel} title={terminalLockLabel} disabled={!vaultStatus?.initialized || vaultStatus.legacy || vaultLockBusy} onClick={() => { setVaultLockError(""); setLockChoiceOpen(true); }}/>
           <RailButton tool="settings" icon="settings" label="系统设置" active={tool === "settings"} onClick={setTool}/>
-          <RailButton tool="help" icon="help" label="系统帮助" active={tool === "help"} onClick={setTool}/>
+          <RailButton tool="help" icon="help" label="关于 Qterm" active={tool === "help"} onClick={setTool}/>
         </aside>
       </div>
       {terminalLocked && (

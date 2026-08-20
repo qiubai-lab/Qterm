@@ -101,7 +101,7 @@ describe("WorkspaceShell utility rail", () => {
     const lockButton = await screen.findByRole("button", { name: "锁定终端" });
     const settingsButton = screen.getByRole("button", { name: "系统设置" });
     expect(lockButton.compareDocumentPosition(settingsButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(screen.getByRole("button", { name: "系统帮助" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "关于 Qterm" })).toBeInTheDocument();
   });
 
   it("offers both scopes and can lock only the credential vault", async () => {

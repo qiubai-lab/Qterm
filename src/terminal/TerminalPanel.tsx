@@ -23,6 +23,7 @@ interface TerminalView {
 
 const terminalViews = new Map<string, TerminalView>();
 const CLEAR_SCREEN_INPUT = "\x1bcls\r";
+const FALLBACK_TERMINAL_FONT_FAMILY = "SFMono-Regular, Menlo, Monaco, Consolas, monospace";
 
 export function TerminalPanel({ blockId, sessionKey, visible, local }: { blockId: string; sessionKey: string; visible: boolean; local: boolean }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -123,7 +124,7 @@ function acquireTerminalView(sessionKey: string, container: HTMLElement, windows
 
   const terminal = new Terminal({
     cursorBlink: true,
-    fontFamily: "SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+    fontFamily: terminalFontFamily(),
     fontSize: 13,
     lineHeight: 1.22,
     scrollback: 8000,
@@ -178,6 +179,11 @@ function acquireTerminalView(sessionKey: string, container: HTMLElement, windows
   });
   terminalViews.set(sessionKey, view);
   return view;
+}
+
+function terminalFontFamily(): string {
+  return getComputedStyle(document.documentElement).getPropertyValue("--terminal-font-family").trim()
+    || FALLBACK_TERMINAL_FONT_FAMILY;
 }
 
 function scheduleTerminalViewDisposal(sessionKey: string, view: TerminalView) {

@@ -141,11 +141,13 @@ describe("TerminalPanel view lifetime", () => {
   it("configures a narrow terminal-themed xterm scrollbar", () => {
     const view = render(<TerminalPanel blockId="block-1" sessionKey="block-1:local" local={false} visible={false}/>);
     const options = mocks.terminals[0].options as {
+      fontFamily: string;
       allowTransparency: boolean;
       overviewRuler: { width: number };
       theme: Record<string, string>;
     };
 
+    expect(options.fontFamily).toBe("SFMono-Regular, Menlo, Monaco, Consolas, monospace");
     expect(options.allowTransparency).toBe(true);
     expect(options.theme.background).toBe("rgba(5, 7, 8, 0.78)");
     expect(options.overviewRuler.width).toBe(3);
