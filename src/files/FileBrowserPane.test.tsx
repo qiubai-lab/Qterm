@@ -65,7 +65,7 @@ describe("FileBrowserPane", () => {
     expect(listRemoteDirectory).not.toHaveBeenCalled();
   });
 
-  it("opens the computer location from a drive root and switches drives", async () => {
+  it("shows drive roots as ordinary folder rows and switches drives", async () => {
     listLocalDirectory
       .mockResolvedValueOnce({ path: "D:\\", entries: [] })
       .mockResolvedValueOnce({ path: "C:\\", entries: [] });
@@ -76,10 +76,16 @@ describe("FileBrowserPane", () => {
 
     await waitFor(() => expect(listLocalDirectory).toHaveBeenCalledWith("D:\\"));
     fireEvent.click(ui.getByRole("button", { name: "返回上级文件夹" }));
-    expect(await ui.findByRole("list", { name: "本机位置" })).toBeInTheDocument();
-    expect(ui.getByText("C:")).toBeInTheDocument();
+    const roots = await ui.findByRole("list", { name: "本机根目录" });
+    expect(ui.queryByRole("button", { name: "浏览本机位置" })).not.toBeInTheDocument();
+    expect(ui.getByRole("button", { name: /^名称，/ })).toBeInTheDocument();
+    const drive = within(roots).getByRole("listitem", { name: /C:/ });
+    expect(drive).toHaveClass("file-row");
+    expect(drive.querySelector('[data-icon="files"]')).toBeInTheDocument();
 
-    fireEvent.click(ui.getByRole("button", { name: "打开 C:" }));
+    fireEvent.click(drive);
+    expect(listLocalDirectory).toHaveBeenCalledTimes(1);
+    fireEvent.doubleClick(drive);
     await waitFor(() => expect(listLocalDirectory).toHaveBeenLastCalledWith("C:\\"));
     expect(onPathChange).toHaveBeenLastCalledWith("C:\\");
   });
@@ -177,15 +183,17 @@ describe("FileBrowserPane", () => {
   });
 
   it("loads the remote directory once a pending file connection succeeds", async () => {
-    listRemoteDirectory.mockResolvedValue({ path: "/srv", entries: [] });
+    listRemoteDirectory.mockResolvedValue({ path: "/home/dev", entries: [] });
     const onPathChange = vi.fn();
-    const view = render(<FileBrowserPane initialPath="/srv" runtime={{ ...localRuntime, kind: "sftp", status: "connecting" }} onPathChange={onPathChange}/>);
+    const view = render(<FileBrowserPane initialPath="." runtime={{ ...localRuntime, kind: "sftp", status: "connecting" }} onPathChange={onPathChange}/>);
     await act(async () => { await new Promise<void>((resolve) => requestAnimationFrame(() => resolve())); });
     expect(listRemoteDirectory).not.toHaveBeenCalled();
 
-    view.rerender(<FileBrowserPane initialPath="/srv" runtime={{ ...localRuntime, kind: "sftp", status: "connected", sessionId: "files-1" }} onPathChange={onPathChange}/>);
+    view.rerender(<FileBrowserPane initialPath="." runtime={{ ...localRuntime, kind: "sftp", status: "connected", sessionId: "files-1" }} onPathChange={onPathChange}/>);
 
-    await waitFor(() => expect(listRemoteDirectory).toHaveBeenCalledWith("files-1", "/srv"));
+    await waitFor(() => expect(listRemoteDirectory).toHaveBeenCalledWith("files-1", "."));
+    expect(onPathChange).toHaveBeenCalledWith("/home/dev");
+    expect(within(view.container).getByRole("button", { name: "/home/dev" })).toBeInTheDocument();
     expect(within(view.container).queryByRole("alert")).not.toBeInTheDocument();
   });
 

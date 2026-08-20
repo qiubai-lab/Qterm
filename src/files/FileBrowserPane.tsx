@@ -53,6 +53,16 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
   const status = runtime?.status;
   const connectionError = kind === "sftp" && status === "failed" ? runtime.notice.trim() || "文件连接失败" : "";
   const displayedEntries = useMemo(() => sortEntries(listing?.entries ?? [], sort), [listing, sort]);
+  const rootEntries = useMemo<FileEntry[]>(() => localRoots.map((root) => ({
+    name: root.name,
+    path: root.path,
+    isDirectory: true,
+    isSymlink: false,
+    size: 0,
+    modifiedAt: null,
+    permissionMode: null,
+  })), [localRoots]);
+  const displayedRootEntries = useMemo(() => sortEntries(rootEntries, sort), [rootEntries, sort]);
 
   const load = useCallback(async (nextPath: string, returnToRootsOnError = false) => {
     const currentRequest = ++request.current;
@@ -337,7 +347,6 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
   return <div className="file-browser">
     <nav className="file-browser-navigation" aria-label="文件夹导航">
       <button aria-label="返回上级文件夹" title="返回上级" disabled={showLocalRoots || (!parent && !driveRoot) || loading} onClick={() => driveRoot ? void openLocalRoots() : parent && void load(parent)}><Icon name="back" size={14}/></button>
-      <button aria-label="浏览本机位置" title="本机" disabled={kind !== "local" || loading} aria-pressed={showLocalRoots} onClick={() => void openLocalRoots()}><Icon name="computer" size={14}/></button>
       <div className="file-browser-path-shell" data-editing={editingPath || undefined}>
         {showLocalRoots ? <span className="file-browser-path file-browser-location-label">本机</span> : editingPath ? <form className="file-browser-path-form" onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setEditingPath(false); }} onSubmit={(event) => { event.preventDefault(); void load(pathDraft); }}>
           <input aria-label="文件夹路径" autoFocus value={pathDraft} onChange={(event) => setPathDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); setPathDraft(visiblePath); setEditingPath(false); } }}/>
@@ -350,16 +359,16 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
     {connectionError && <div className="file-browser-inline-error" role="alert">{connectionError}</div>}
     {!connectionError && error && (listing || (showLocalRoots && localRoots.length > 0)) && <div className="file-browser-inline-error" role="alert">{error}</div>}
     <div className="file-browser-content" ref={listScroll} onPointerEnter={() => setEditingPath(false)} onScroll={() => setEditingPath(false)}>
-      {!showLocalRoots && <div className="file-browser-columns" aria-label="文件排序">
+      <div className="file-browser-columns" aria-label="文件排序">
         <FileSortHeader label="名称" sortKey="name" sort={sort} onChange={cycleSort}/>
         <FileSortHeader label="大小" sortKey="size" sort={sort} onChange={cycleSort}/>
         <span className="file-browser-column-label file-permission-column">权限</span>
         <FileSortHeader label="修改时间" sortKey="modifiedAt" sort={sort} onChange={cycleSort}/>
-      </div>}
+      </div>
       {showLocalRoots && loading && <div className="file-browser-state">正在读取本机位置…</div>}
-      {showLocalRoots && !loading && error && localRoots.length === 0 && <div className="file-browser-state error"><Icon name="computer" size={22}/><span>{error}</span><button onClick={() => void openLocalRoots()}>重试</button></div>}
+      {showLocalRoots && !loading && error && localRoots.length === 0 && <div className="file-browser-state error"><Icon name="files" size={22}/><span>{error}</span><button onClick={() => void openLocalRoots()}>重试</button></div>}
       {showLocalRoots && !loading && !error && localRoots.length === 0 && <div className="file-browser-state">没有可用的本机位置</div>}
-      {showLocalRoots && !loading && localRoots.length > 0 && <div className="file-local-root-list" role="list" aria-label="本机位置">{localRoots.map((root) => <div key={root.path} role="listitem"><button className="file-local-root-row" aria-label={`打开 ${root.name}`} onClick={() => void load(root.path, true)}><Icon name="computer" size={16}/><span><strong>{root.name}</strong><small>{root.path}</small></span></button></div>)}</div>}
+      {showLocalRoots && !loading && localRoots.length > 0 && <div className="file-list" role="list" aria-label="本机根目录">{displayedRootEntries.map((entry) => <FileRow key={entry.path} entry={entry} selected={selectedPath === entry.path} onSelect={() => setSelectedPath(entry.path)} onOpen={() => void load(entry.path, true)} onContextMenu={(event) => event.preventDefault()} onContextMenuKey={() => undefined}/>)}</div>}
       {!showLocalRoots && loading && !listing && <div className="file-browser-state">正在读取文件夹…</div>}
       {!showLocalRoots && !connectionError && error && !listing && <div className="file-browser-state error"><Icon name="files" size={22}/><span>{error}</span><button onClick={() => void load(path)}>重试</button></div>}
       {!showLocalRoots && !error && listing?.entries.length === 0 && <div className="file-browser-state">此文件夹为空</div>}
@@ -383,7 +392,7 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
         <small>{transfer.total > 0 ? `${formatSize(transfer.transferred)} / ${formatSize(transfer.total)}` : "准备中"}</small>
         {transfer.transferId && sessionId && <button onClick={() => void cancelTransfer(sessionId, transfer.transferId)}>取消</button>}
       </> : <>
-        <span>{showLocalRoots ? loading ? "正在读取本机位置…" : `${localRoots.length} 个位置` : listing ? `${folderCount} 个文件夹 · ${fileCount} 个文件` : loading ? "正在读取目录…" : "暂无目录统计"}</span>
+        <span>{showLocalRoots ? loading ? "正在读取本机位置…" : `${localRoots.length} 个文件夹 · 0 个文件` : listing ? `${folderCount} 个文件夹 · ${fileCount} 个文件` : loading ? "正在读取目录…" : "暂无目录统计"}</span>
         {(transfer || operationMessage) && <span className="file-browser-transfer-result">{transfer?.message || operationMessage}</span>}
         {(transfer || operationMessage) && <button aria-label="关闭操作状态" onClick={() => { setTransfer(null); setOperationMessage(""); }}><Icon name="close" size={10}/></button>}
       </>}

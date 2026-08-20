@@ -45,11 +45,23 @@ describe("workspace reducer", () => {
     expect(blockIds(current.layout)).toHaveLength(2);
     expect(current.activeBlockId).toMatch(/^files-/);
     expect(current.layout).toMatchObject({ second: { type: "files", profileId: "profile-1", path: "/srv/app" } });
-    const navigated = workspaceReducer(opened, { type: "setFilesPath", workspaceId: workspace.id, blockId: current.activeBlockId, path: "/srv/app/src" });
+    const navigated = workspaceReducer(opened, { type: "setFilesPath", workspaceId: workspace.id, blockId: current.activeBlockId, profileId: "profile-1", path: "/srv/app/src" });
     expect(navigated.workspaces[0].layout).toMatchObject({ second: { path: "/srv/app/src" } });
     const local = workspaceReducer(navigated, { type: "setFilesProfile", workspaceId: workspace.id, blockId: current.activeBlockId, profileId: null });
     expect(local.workspaces[0].layout).toMatchObject({ second: { type: "files", profileId: null } });
     expect(workspaceReducer(opened, { type: "closeBlock", workspaceId: workspace.id, blockId: workspace.activeBlockId })).toEqual(opened);
+  });
+
+  it("ignores a stale path update after the file target changes", () => {
+    const initial = createWorkspaceDocument();
+    const workspace = initial.workspaces[0];
+    const opened = workspaceReducer(initial, { type: "openFiles", workspaceId: workspace.id, anchorBlockId: workspace.activeBlockId, profileId: null, path: "C:\\cache" });
+    const current = opened.workspaces[0];
+    const remote = workspaceReducer(opened, { type: "setFilesProfile", workspaceId: workspace.id, blockId: current.activeBlockId, profileId: "profile-1" });
+    const reset = workspaceReducer(remote, { type: "setFilesPath", workspaceId: workspace.id, blockId: current.activeBlockId, profileId: "profile-1", path: "." });
+    const stale = workspaceReducer(reset, { type: "setFilesPath", workspaceId: workspace.id, blockId: current.activeBlockId, profileId: null, path: "C:\\cache" });
+
+    expect(stale.workspaces[0].layout).toMatchObject({ second: { type: "files", profileId: "profile-1", path: "." } });
   });
 
   it("opens and retargets a persisted network leaf", () => {

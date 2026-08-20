@@ -74,6 +74,7 @@ function Harness() {
     <button onClick={() => dispatch({ type: "openFiles", workspaceId: activeWorkspace.id, anchorBlockId: ids[0], profileId: profile.id, path: "/srv" })}>open-files</button>
     <button onClick={() => void connectFileBlock(activeWorkspace.activeBlockId, profile, { method: "password", password: "ephemeral" })}>connect-files</button>
     <button onClick={() => void selectFileTarget(activeWorkspace.id, activeWorkspace.activeBlockId, null)}>files-local</button>
+    <button onClick={() => void selectFileTarget(activeWorkspace.id, activeWorkspace.activeBlockId, profile.id)}>files-remote</button>
     <button onClick={() => dispatch({ type: "openNetwork", workspaceId: activeWorkspace.id, anchorBlockId: ids[0], profileId: profile.id })}>open-network</button>
     <button onClick={() => void connectNetworkBlock(activeWorkspace.activeBlockId, profile, { method: "sshAgent" })}>connect-network</button>
     <button onClick={() => void startNetworkBlockRule(activeWorkspace.activeBlockId, "rule-1")}>start-network-rule</button>
@@ -331,6 +332,10 @@ describe("WorkspaceProvider multi-session routing", () => {
     await waitFor(() => expect(mocks.closeSession).toHaveBeenCalledWith("files-session-1"));
     expect(screen.getByTestId("file-runtime")).toHaveTextContent("local:connected");
     expect(screen.getByTestId("file-path")).toHaveTextContent("~");
+
+    await user.click(screen.getByRole("button", { name: "files-remote" }));
+    expect(screen.getByTestId("file-runtime")).toHaveTextContent("sftp:closed");
+    expect(screen.getByTestId("file-path")).toHaveTextContent(".");
   });
 
   it("owns Network SSH state per block and closes it before clearing the profile", async () => {

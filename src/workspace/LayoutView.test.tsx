@@ -24,7 +24,7 @@ vi.mock("../terminal/TerminalPanel", () => ({
 }));
 
 vi.mock("../files/FileBrowserPane", () => ({
-  FileBrowserPane: () => <div aria-label="测试文件窗口"/>,
+  FileBrowserPane: ({ initialPath }: { initialPath: string }) => <div aria-label="测试文件窗口" data-initial-path={initialPath}/>,
 }));
 
 vi.mock("../network/NetworkPane", () => ({
@@ -140,9 +140,10 @@ describe("WorkspaceCanvas terminal actions", () => {
 
   it("automatically requests one independent connection for a persisted remote files leaf", async () => {
     const onRequestAuthConnection = vi.fn();
-    render(<WorkspaceCanvas workspace={{ ...workspace, activeBlockId: "files-1", layout: { type: "files", blockId: "files-1", profileId: "password-profile", path: "/srv" } }} visible onRequestClose={vi.fn()} onRequestAuthConnection={onRequestAuthConnection}/>);
+    const view = render(<WorkspaceCanvas workspace={{ ...workspace, activeBlockId: "files-1", layout: { type: "files", blockId: "files-1", profileId: "password-profile", path: "~" } }} visible onRequestClose={vi.fn()} onRequestAuthConnection={onRequestAuthConnection}/>);
     await vi.waitFor(() => expect(onRequestAuthConnection).toHaveBeenCalledWith("files", "files-1", profiles[0]));
     expect(onRequestAuthConnection).toHaveBeenCalledOnce();
+    expect(within(view.container).getByLabelText("测试文件窗口")).toHaveAttribute("data-initial-path", ".");
   });
 
   it("clears the current terminal buffer from the block header", async () => {

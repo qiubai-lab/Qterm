@@ -15,7 +15,7 @@ export type WorkspaceAction =
   | { type: "closeBlock"; workspaceId: string; blockId: string }
   | { type: "resizeSplit"; workspaceId: string; splitId: string; ratio: number }
   | { type: "setBlockProfile"; workspaceId: string; blockId: string; profileId: string | null }
-  | { type: "setFilesPath"; workspaceId: string; blockId: string; path: string }
+  | { type: "setFilesPath"; workspaceId: string; blockId: string; profileId: string | null; path: string }
   | { type: "setFilesProfile"; workspaceId: string; blockId: string; profileId: string | null }
   | { type: "setNetworkProfile"; workspaceId: string; blockId: string; profileId: string | null }
   | { type: "moveBlock"; workspaceId: string; sourceId: string; targetId: string; position: DropPosition };
@@ -63,7 +63,11 @@ export function workspaceReducer(state: WorkspaceDocument, action: WorkspaceActi
     });
     case "resizeSplit": return mapWorkspace(state, action.workspaceId, (workspace) => ({ ...workspace, layout: updateSplitRatio(workspace.layout, action.splitId, action.ratio) }));
     case "setBlockProfile": return mapWorkspace(state, action.workspaceId, (workspace) => ({ ...workspace, layout: setTerminalProfile(workspace.layout, action.blockId, action.profileId) }));
-    case "setFilesPath": return mapWorkspace(state, action.workspaceId, (workspace) => ({ ...workspace, layout: setFilesPath(workspace.layout, action.blockId, action.path) }));
+    case "setFilesPath": return mapWorkspace(state, action.workspaceId, (workspace) => {
+      const leaf = findLeaf(workspace.layout, action.blockId);
+      if (!leaf || leaf.type !== "files" || leaf.profileId !== action.profileId) return workspace;
+      return { ...workspace, layout: setFilesPath(workspace.layout, action.blockId, action.path) };
+    });
     case "setFilesProfile": return mapWorkspace(state, action.workspaceId, (workspace) => ({ ...workspace, layout: setFilesProfile(workspace.layout, action.blockId, action.profileId) }));
     case "setNetworkProfile": return mapWorkspace(state, action.workspaceId, (workspace) => ({ ...workspace, layout: setNetworkProfile(workspace.layout, action.blockId, action.profileId) }));
     case "moveBlock": return mapWorkspace(state, action.workspaceId, (workspace) => ({ ...workspace, activeBlockId: action.sourceId, layout: moveTerminal(workspace.layout, action.sourceId, action.targetId, action.position, createId("split")) }));

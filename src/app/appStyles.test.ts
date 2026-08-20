@@ -277,13 +277,12 @@ describe("application layout styles", () => {
 
   it("keeps path editing inline and anchors refresh to the far edge", () => {
     expect(declarations(".file-browser-navigation")).toContain("display:grid");
-    expect(declarations(".file-browser-navigation")).toContain("grid-template-columns:25px 25px minmax(0,1fr) 25px 25px 25px");
+    expect(declarations(".file-browser-navigation")).toContain("grid-template-columns:25px minmax(0,1fr) 25px 25px 25px");
     expect(declarations(".file-browser-path-shell")).toContain("min-width:0");
     expect(declarations(".file-browser-path-form input")).toContain("border:0");
     expect(declarations(".file-browser-path-form input")).toContain("background:transparent");
     expect(declarations(".file-browser-path-form input:focus,.file-browser-path-form input:focus-visible")).toContain("box-shadow:inset 0 -1px 0 var(--focus)");
-    expect(declarations(".file-local-root-list")).toContain("overflow:auto");
-    expect(declarations(".file-local-root-row:focus-visible")).toContain("outline:2px solid var(--focus)");
+    expect(styles).not.toContain(".file-local-root-row");
   });
 
   it("keeps directory counts and transfer progress in one narrow fixed footer", () => {

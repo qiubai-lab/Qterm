@@ -222,8 +222,8 @@ function FilesBlock(props: Omit<Parameters<typeof LayoutBranch>[0], "node"> & { 
   const drop = props.drag?.targetId === props.blockId ? props.drag.position : null;
   const requestedProfileRef = useRef<string | null>(null);
   const updatePath = useCallback((path: string) => {
-    dispatch({ type: "setFilesPath", workspaceId: props.workspace.id, blockId: props.blockId, path });
-  }, [dispatch, props.blockId, props.workspace.id]);
+    dispatch({ type: "setFilesPath", workspaceId: props.workspace.id, blockId: props.blockId, profileId: props.profileId, path });
+  }, [dispatch, props.blockId, props.profileId, props.workspace.id]);
 
   async function chooseTarget(profileId: string | null) {
     if (profileId !== props.profileId) await selectFileTarget(props.workspace.id, props.blockId, profileId);
@@ -250,7 +250,7 @@ function FilesBlock(props: Omit<Parameters<typeof LayoutBranch>[0], "node"> & { 
         <button aria-label="关闭文件窗口" title="关闭" onClick={() => props.onRequestClose(props.blockId)}><Icon name="close" size={13}/></button>
       </div>
     </header>
-    <FileBrowserPane initialPath={props.path} runtime={runtime} onPathChange={updatePath}/>
+    <FileBrowserPane key={`files:${props.profileId ?? "local"}`} initialPath={props.profileId !== null && props.path === "~" ? "." : props.path} runtime={runtime} onPathChange={updatePath}/>
     {drop && <div className={`drop-zone drop-${drop}`} />}
   </section>;
 }
