@@ -1,0 +1,107 @@
+name: Build desktop artifacts
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: "22.22.2"
+  PNPM_VERSION: "11.0.8"
+  RUST_TOOLCHAIN: "1.97.1"
+
+jobs:
+  build:
+    name: Build ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS ARM64
+            os: macos-15
+            target: aarch64-apple-darwin
+            artifactName: terminal-demo-macos-arm64
+            bundlePath: src-tauri/target/aarch64-apple-darwin/release/bundle/**
+          - name: Windows x64
+            os: windows-2025
+            target: x86_64-pc-windows-msvc
+            artifactName: terminal-demo-windows-x64
+            bundlePath: src-tauri/target/x86_64-pc-windows-msvc/release/bundle/**
+          - name: Linux x64
+            os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            artifactName: terminal-demo-linux-x64
+            bundlePath: src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/**
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Verify runner architecture
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "${{ matrix.target }}" in
+            aarch64-apple-darwin)
+              test "$(uname -m)" = "arm64"
+              ;;
+            x86_64-pc-windows-msvc)
+              test "$RUNNER_ARCH" = "X64"
+              ;;
+            x86_64-unknown-linux-gnu)
+              test "$(uname -m)" = "x86_64"
+              ;;
+          esac
+
+      - name: Install Linux system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends --yes \
+            build-essential \
+            file \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libwebkit2gtk-4.1-dev \
+            libxdo-dev \
+            patchelf \
+            rpm
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+
+      - name: Set up pnpm
+        run: npm install --global pnpm@${{ env.PNPM_VERSION }}
+
+      - name: Set up Rust target
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal
+          rustup target add "${{ matrix.target }}" --toolchain "$RUST_TOOLCHAIN"
+          rustup default "$RUST_TOOLCHAIN"
+
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Tauri bundles
+        run: pnpm tauri build --target ${{ matrix.target }}
+
+      - name: Upload desktop artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.artifactName }}-${{ github.sha }}
+          path: ${{ matrix.bundlePath }}
+          if-no-files-found: error
+          retention-days: 14

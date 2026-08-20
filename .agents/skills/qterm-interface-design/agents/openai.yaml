@@ -1,0 +1,4 @@
+interface:
+  display_name: "Qterm 界面设计规范"
+  short_description: "统一 Qterm 桌面端页面、弹窗、状态反馈与动效设计"
+  default_prompt: "使用 $qterm-interface-design 按照 Qterm 现有界面语言设计并实现这个页面。"

@@ -1,0 +1,271 @@
+use serde::{Deserialize, Serialize};
+use tauri::State;
+
+use crate::{
+    application::workspace_service::WorkspaceService,
+    commands::error::IpcError,
+    domain::workspace::{LayoutNode, SplitDirection, Workspace, WorkspaceDocument},
+    infrastructure::persistence::json_workspace_repository::JsonWorkspaceRepository,
+};
+
+pub struct WorkspaceState {
+    service: WorkspaceService<JsonWorkspaceRepository>,
+}
+
+impl WorkspaceState {
+    pub fn new(repository: JsonWorkspaceRepository) -> Self {
+        Self {
+            service: WorkspaceService::new(repository),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct WorkspaceDocumentDto {
+    schema_version: u64,
+    active_workspace_id: String,
+    workspaces: Vec<WorkspaceDto>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct WorkspaceDto {
+    id: String,
+    name: String,
+    active_block_id: String,
+    layout: LayoutDto,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
+enum LayoutDto {
+    Terminal {
+        block_id: String,
+        profile_id: Option<String>,
+    },
+    Files {
+        block_id: String,
+        profile_id: Option<String>,
+        path: String,
+    },
+    Split {
+        id: String,
+        direction: DirectionDto,
+        ratio: f64,
+        first: Box<LayoutDto>,
+        second: Box<LayoutDto>,
+    },
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+enum DirectionDto {
+    Horizontal,
+    Vertical,
+}
+
+#[tauri::command]
+pub fn workspace_load(
+    state: State<'_, WorkspaceState>,
+) -> Result<Option<WorkspaceDocumentDto>, IpcError> {
+    state
+        .service
+        .load()
+        .map(|document| document.as_ref().map(WorkspaceDocumentDto::from_domain))
+        .map_err(IpcError::from)
+}
+
+#[tauri::command]
+pub fn workspace_save(
+    document: WorkspaceDocumentDto,
+    state: State<'_, WorkspaceState>,
+) -> Result<(), IpcError> {
+    if document.schema_version != 4 {
+        return Err(IpcError::from(
+            crate::application::error::ApplicationError::new(
+                crate::application::error::ApplicationErrorCode::InvalidWorkspaceDocument,
+                "工作区布局无效",
+                false,
+            ),
+        ));
+    }
+    state
+        .service
+        .save(document.into_domain())
+        .map_err(IpcError::from)
+}
+
+impl WorkspaceDocumentDto {
+    fn from_domain(document: &WorkspaceDocument) -> Self {
+        Self {
+            schema_version: 4,
+            active_workspace_id: document.active_workspace_id.clone(),
+            workspaces: document
+                .workspaces
+                .iter()
+                .map(WorkspaceDto::from_domain)
+                .collect(),
+        }
+    }
+
+    fn into_domain(self) -> WorkspaceDocument {
+        WorkspaceDocument {
+            active_workspace_id: self.active_workspace_id,
+            workspaces: self
+                .workspaces
+                .into_iter()
+                .map(WorkspaceDto::into_domain)
+                .collect(),
+        }
+    }
+}
+
+impl WorkspaceDto {
+    fn from_domain(workspace: &Workspace) -> Self {
+        Self {
+            id: workspace.id.clone(),
+            name: workspace.name.clone(),
+            active_block_id: workspace.active_block_id.clone(),
+            layout: LayoutDto::from_domain(&workspace.layout),
+        }
+    }
+
+    fn into_domain(self) -> Workspace {
+        Workspace {
+            id: self.id,
+            name: self.name,
+            active_block_id: self.active_block_id,
+            layout: self.layout.into_domain(),
+        }
+    }
+}
+
+impl LayoutDto {
+    fn from_domain(node: &LayoutNode) -> Self {
+        match node {
+            LayoutNode::Terminal {
+                block_id,
+                profile_id,
+            } => Self::Terminal {
+                block_id: block_id.clone(),
+                profile_id: profile_id.clone(),
+            },
+            LayoutNode::Files {
+                block_id,
+                profile_id,
+                path,
+            } => Self::Files {
+                block_id: block_id.clone(),
+                profile_id: profile_id.clone(),
+                path: path.clone(),
+            },
+            LayoutNode::Split {
+                id,
+                direction,
+                ratio,
+                first,
+                second,
+            } => Self::Split {
+                id: id.clone(),
+                direction: (*direction).into(),
+                ratio: *ratio,
+                first: Box::new(Self::from_domain(first)),
+                second: Box::new(Self::from_domain(second)),
+            },
+        }
+    }
+
+    fn into_domain(self) -> LayoutNode {
+        match self {
+            Self::Terminal {
+                block_id,
+                profile_id,
+            } => LayoutNode::Terminal {
+                block_id,
+                profile_id,
+            },
+            Self::Files {
+                block_id,
+                profile_id,
+                path,
+            } => LayoutNode::Files {
+                block_id,
+                profile_id,
+                path,
+            },
+            Self::Split {
+                id,
+                direction,
+                ratio,
+                first,
+                second,
+            } => LayoutNode::Split {
+                id,
+                direction: direction.into(),
+                ratio,
+                first: Box::new(first.into_domain()),
+                second: Box::new(second.into_domain()),
+            },
+        }
+    }
+}
+
+impl From<SplitDirection> for DirectionDto {
+    fn from(value: SplitDirection) -> Self {
+        match value {
+            SplitDirection::Horizontal => Self::Horizontal,
+            SplitDirection::Vertical => Self::Vertical,
+        }
+    }
+}
+
+impl From<DirectionDto> for SplitDirection {
+    fn from(value: DirectionDto) -> Self {
+        match value {
+            DirectionDto::Horizontal => Self::Horizontal,
+            DirectionDto::Vertical => Self::Vertical,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::WorkspaceDocumentDto;
+
+    fn document() -> serde_json::Value {
+        json!({
+            "schemaVersion": 4,
+            "activeWorkspaceId": "workspace-1",
+            "workspaces": [{
+                "id": "workspace-1",
+                "name": "Workspace",
+                "activeBlockId": "block-1",
+                "layout": {
+                    "type": "terminal",
+                    "blockId": "block-1",
+                    "profileId": null
+                }
+            }]
+        })
+    }
+
+    #[test]
+    fn workspace_dto_accepts_v4_camel_case_layout_fields() {
+        assert!(serde_json::from_value::<WorkspaceDocumentDto>(document()).is_ok());
+    }
+
+    #[test]
+    fn workspace_dto_rejects_runtime_and_secret_fields() {
+        let mut value = document();
+        value["workspaces"][0]["layout"]["sessionId"] = json!("forbidden");
+        assert!(serde_json::from_value::<WorkspaceDocumentDto>(value).is_err());
+    }
+}
