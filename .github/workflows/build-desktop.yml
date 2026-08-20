@@ -25,18 +25,24 @@ jobs:
           - name: macOS ARM64
             os: macos-15
             target: aarch64-apple-darwin
-            artifactName: terminal-demo-macos-arm64
-            bundlePath: src-tauri/target/aarch64-apple-darwin/release/bundle/**
+            artifactName: qterm-macos-arm64
+            bundlePath: |
+              src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
           - name: Windows x64
             os: windows-2025
             target: x86_64-pc-windows-msvc
-            artifactName: terminal-demo-windows-x64
-            bundlePath: src-tauri/target/x86_64-pc-windows-msvc/release/bundle/**
+            artifactName: qterm-windows-x64
+            bundlePath: |
+              src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi
+              src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe
           - name: Linux x64
             os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
-            artifactName: terminal-demo-linux-x64
-            bundlePath: src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/**
+            artifactName: qterm-linux-x64
+            bundlePath: |
+              src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/appimage/*.AppImage
+              src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/deb/*.deb
+              src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/rpm/*.rpm
 
     steps:
       - name: Check out source
@@ -124,7 +130,7 @@ jobs:
       - name: Download desktop artifacts
         uses: actions/download-artifact@v7
         with:
-          pattern: terminal-demo-*
+          pattern: qterm-*
           path: dist-artifacts
           merge-multiple: false
 

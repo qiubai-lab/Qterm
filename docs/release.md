@@ -45,13 +45,13 @@ git push origin v0.2.0
 
 ## 流水线行为
 
-- `build` job：三个原生 runner 并行构建（`fail-fast: false`，单平台失败不影响其他平台），产物先上传为 workflow artifacts，命名为 `terminal-demo-{平台}-{commit sha}`。
+- `build` job：三个原生 runner 并行构建（`fail-fast: false`，单平台失败不影响其他平台），产物先上传为 workflow artifacts，命名为 `qterm-{平台}-{commit sha}`。
 - `release` job：仅在标签推送（`refs/tags/v*`）时运行，等待全部平台构建成功后，下载所有 artifacts 并通过 `softprops/action-gh-release` 把安装包附加到该标签的 Release。该 job 单独持有 `contents: write` 权限。
 - Release 标题与正文由 action 默认生成，发布后可手动在 Releases 页面编辑补充更新说明。
 
-产物内容取决于 `tauri.conf.json` 的 `bundle.targets`（当前为 `all`）：
+流水线只收集最终安装包（见各平台 `bundlePath` glob），Tauri 的中间产物（如 AppDir 内容、`.app` 目录、构建用共享库）不会进入 workflow artifacts 和 Release：
 
-- macOS ARM64：`.dmg`、`.app.tar.gz`
+- macOS ARM64：`.dmg`
 - Windows x64：`.msi`、NSIS `.exe`
 - Linux x64：`.AppImage`、`.deb`、`.rpm`
 

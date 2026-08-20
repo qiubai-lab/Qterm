@@ -196,7 +196,7 @@ pub fn run() {
             workspace_save
         ])
         .run(tauri::generate_context!())
-        .expect("failed to run Terminal Demo");
+        .expect("failed to run Qterm");
 }
 
 #[cfg(test)]
