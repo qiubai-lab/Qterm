@@ -38,7 +38,7 @@ git tag -a v0.2.0 -m "v0.2.0"
 git push origin v0.2.0
 ```
 
-推送标签后，在 Actions 页的 **Build desktop artifacts** 工作流中观察执行结果。
+推送标签后，在 Actions 页的 **Build desktop artifacts** 工作流中观察执行结果。Release 发布成功后，按[发布后：更新 Homebrew tap](#发布后更新-homebrew-tap)同步更新安装渠道。
 
 ## 流水线行为
 
@@ -52,6 +52,34 @@ git push origin v0.2.0
 - macOS ARM64：`.dmg`
 - Windows x64：`.msi`、NSIS `.exe`
 - Linux x64：`.AppImage`、`.deb`、`.rpm`
+
+## 发布后：更新 Homebrew tap
+
+macOS 用户可以通过 Homebrew tap [qiubai-lab/homebrew-tap](https://github.com/qiubai-lab/homebrew-tap) 安装 Qterm。cask 会在安装后自动移除隔离属性，规避未公证应用的 Gatekeeper"已损坏"提示。每次 Release 发布后需要手动同步 tap 中的 cask 定义。
+
+1. 获取新版本 dmg 的 SHA-256，两种方式任选其一：
+
+   - **从 Release 页面直接复制**：打开对应 Release，展开 `Qterm_*_aarch64.dmg` 资产，复制其 `sha256:` Digest 值（GitHub 会为每个资产自动计算）；
+   - **本地下载后计算**（以 `v0.1.3` 为例，注意替换版本号；先确认 Release 页面资产已齐全）：
+
+     ```bash
+     curl -fsSL -o /tmp/qterm.dmg \
+       https://github.com/qiubai-lab/Qterm/releases/download/v0.1.3/Qterm_0.1.3_aarch64.dmg
+     shasum -a 256 /tmp/qterm.dmg
+     ```
+
+2. 在 `homebrew-tap` 仓库中修改 `Casks/qterm.rb` 的两处字段并提交推送：
+
+   - `version`：改为新版本号（不含 `v` 前缀）；
+   - `sha256`：改为上一步获取的值。
+
+3. 验证安装渠道：
+
+   ```bash
+   brew update
+   brew upgrade --cask qterm          # 已安装的用户
+   brew install --cask qiubai-lab/tap/qterm   # 首次安装
+   ```
 
 ## 失败处理
 
