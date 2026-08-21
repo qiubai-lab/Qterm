@@ -10,6 +10,7 @@ dependencies = [
  "argon2 0.5.3",
  "atomic-write-file",
  "base64 0.23.1",
+ "block2",
  "dirs",
  "dunce",
  "getrandom 0.4.3",

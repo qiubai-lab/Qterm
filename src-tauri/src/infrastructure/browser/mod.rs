@@ -102,10 +102,15 @@ impl BrowserProxyLauncher {
             .join(browser.profile_folder())
             .join(safe_rule_folder(&profile_key));
         std::fs::create_dir_all(&profile).map_err(|_| BrowserProxyError::ProfileUnavailable)?;
-        platform_launch_browser(
-            browser,
-            &browser_arguments(host, port, &profile, proxy_local_addresses),
-        )
+        let arguments = browser_arguments(host, port, &profile, proxy_local_addresses);
+        #[cfg(target_os = "macos")]
+        {
+            platform_launch_browser(browser, &arguments).await
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            platform_launch_browser(browser, &arguments)
+        }
     }
 }
 
