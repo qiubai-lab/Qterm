@@ -10,6 +10,11 @@ export interface LocalTerminalCapabilities {
   } | null;
 }
 
+export interface LocalSessionConnection {
+  sessionId: string;
+  cwd: string;
+}
+
 export function getLocalTerminalCapabilities(): Promise<LocalTerminalCapabilities> {
   return invoke<LocalTerminalCapabilities>("local_terminal_capabilities");
 }
@@ -19,10 +24,10 @@ export function connectLocalSession(
   rows: number,
   onEvent: (event: LocalSessionEvent) => void,
   onTerminalData: (data: Uint8Array) => void,
-): Promise<string> {
+): Promise<LocalSessionConnection> {
   const eventChannel = new Channel<LocalSessionEvent>(onEvent);
   const terminalChannel = new Channel<{ data: number[] }>((message) => onTerminalData(Uint8Array.from(message.data)));
-  return invoke<string>("local_session_connect", {
+  return invoke<LocalSessionConnection>("local_session_connect", {
     columns,
     rows,
     onEvent: eventChannel,

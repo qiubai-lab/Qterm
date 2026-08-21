@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Workspace } from "./model";
+import type { TerminalRuntime } from "./WorkspaceProvider";
 
 const dispatch = vi.fn();
 const selectBlockTarget = vi.fn().mockResolvedValue(undefined);
@@ -16,7 +17,7 @@ const profiles = [
   { id: "key-profile", name: "Key Server", host: "key.example", port: 22, username: "deploy", authPreference: "privateKey" as const, credentialId: null, groupId: null },
 ];
 const connectedLocalRuntime = { sessionId: "local-1", kind: "local" as const, status: "connected" as const, hostKeyPrompt: null, notice: "", cwd: "C:/work" };
-let terminalRuntimes: Record<string, typeof connectedLocalRuntime> = { "block-1": connectedLocalRuntime };
+let terminalRuntimes: Record<string, TerminalRuntime> = { "block-1": connectedLocalRuntime };
 let networkRuntimes: Record<string, { sessionId: string | null; status: "closed" | "connected"; hostKeyPrompt: null; notice: string; ruleStates: Record<string, "stopped" | "running"> }> = {};
 
 vi.mock("../terminal/TerminalPanel", () => ({
@@ -80,6 +81,15 @@ describe("WorkspaceCanvas terminal actions", () => {
     const view = render(<WorkspaceCanvas workspace={workspace} visible onRequestClose={vi.fn()} onRequestAuthConnection={vi.fn()}/>);
     within(view.container).getByRole("button", { name: "打开当前文件夹" }).click();
     expect(dispatch).toHaveBeenCalledWith({ type: "openFiles", workspaceId: "workspace-1", anchorBlockId: "block-1", profileId: null, path: "C:/work" });
+  });
+
+  it("opens the local home fallback instead of the application working directory before OSC 7", () => {
+    terminalRuntimes = { "block-1": { ...connectedLocalRuntime, cwd: null } };
+    const view = render(<WorkspaceCanvas workspace={workspace} visible onRequestClose={vi.fn()} onRequestAuthConnection={vi.fn()}/>);
+
+    within(view.container).getByRole("button", { name: "打开当前文件夹" }).click();
+
+    expect(dispatch).toHaveBeenCalledWith({ type: "openFiles", workspaceId: "workspace-1", anchorBlockId: "block-1", profileId: null, path: "~" });
   });
 
   it("allows only a remote terminal to create a network leaf inheriting its profile", async () => {

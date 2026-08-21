@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   closeCurrentWindow: vi.fn(),
   minimizeCurrentWindow: vi.fn(),
   toggleMaximizeCurrentWindow: vi.fn(),
+  isConnectionTargetCurrent: vi.fn().mockReturnValue(true),
 }));
 
 const connectionProfile: ConnectionProfile = { id: "agent-profile", name: "Server", host: "host", port: 22, username: "dev", authPreference: "sshAgent", credentialId: null, groupId: null };
@@ -29,6 +30,7 @@ vi.mock("./LayoutView", () => ({ WorkspaceCanvas: ({ onRequestAuthConnection }: 
 vi.mock("./WorkspaceProvider", () => ({ useWorkspace: () => ({
   document: { schemaVersion: 5, activeWorkspaceId: workspace.id, workspaces: [workspace] }, activeWorkspace: workspace,
   dispatch: mocks.dispatch, runtimes: {}, fileRuntimes: {}, networkRuntimes: {}, connectBlock: mocks.connectBlock, connectFileBlock: mocks.connectFileBlock, connectNetworkBlock: mocks.connectNetworkBlock,
+  isConnectionTargetCurrent: mocks.isConnectionTargetCurrent,
   connectedCount: vi.fn().mockReturnValue(0), closeSessions: vi.fn().mockResolvedValue(undefined), blocksForWorkspace: vi.fn().mockReturnValue(["block-1"]),
   acceptBlockHostKey: vi.fn(), rejectBlockHostKey: vi.fn(), acceptFileHostKey: vi.fn(), rejectFileHostKey: vi.fn(), acceptNetworkHostKey: vi.fn(), rejectNetworkHostKey: vi.fn(), storageNotice: "", dismissStorageNotice: vi.fn(),
 }) }));
@@ -50,6 +52,7 @@ beforeEach(() => {
     security: { credentialAutoLockAfterSeconds: 3600, terminalAutoLockAfterSeconds: null },
     warning: null,
   });
+  mocks.isConnectionTargetCurrent.mockReturnValue(true);
 });
 
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.clearAllMocks(); requestedProfile = connectionProfile; });
@@ -94,6 +97,22 @@ describe("WorkspaceShell configured connection routing", () => {
     expect(await screen.findByRole("dialog", { name: "认证 Server" })).toBeInTheDocument();
     expect(mocks.getVaultStatus).toHaveBeenCalledOnce();
     expect(mocks.connectBlock).not.toHaveBeenCalled();
+  });
+
+  it("discards configured authentication that resolves after the terminal target changes", async () => {
+    let resolveAuth: ((auth: { method: "sshAgent" }) => void) | null = null;
+    mocks.resolveConfiguredAuth.mockImplementation(() => new Promise((resolve) => { resolveAuth = resolve; }));
+    const user = userEvent.setup();
+    render(<WorkspaceShell/>);
+
+    await user.click(screen.getByRole("button", { name: "请求远程连接" }));
+    await waitFor(() => expect(mocks.resolveConfiguredAuth).toHaveBeenCalledOnce());
+    mocks.isConnectionTargetCurrent.mockReturnValue(false);
+    await act(async () => resolveAuth?.({ method: "sshAgent" }));
+
+    expect(mocks.isConnectionTargetCurrent).toHaveBeenCalled();
+    expect(mocks.connectBlock).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog", { name: "认证 Server" })).not.toBeInTheDocument();
   });
 });
 

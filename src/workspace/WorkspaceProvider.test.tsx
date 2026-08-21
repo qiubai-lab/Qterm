@@ -65,6 +65,7 @@ function Harness() {
     <button onClick={() => clearBlockBuffer(ids[0])}>clear-buffer</button>
     <button onClick={() => void startLocalBlock(ids[0], 100, 30)}>local</button>
     <button onClick={() => void selectBlockTarget(activeWorkspace.id, ids[0], profile.id)}>select-remote-target</button>
+    <button onClick={() => void selectBlockTarget(activeWorkspace.id, ids[0], null)}>select-local-target</button>
     <button onClick={() => void (async () => { await selectBlockTarget(activeWorkspace.id, ids[0], null); await startLocalBlock(ids[0], 100, 30); })()}>switch-to-local</button>
     <button onClick={() => void writeBlock(ids[0], Uint8Array.from([100, 105, 114, 13]))}>write</button>
     <button onClick={() => void writeBlock(ids[0], Uint8Array.from([27, 91, 49, 59, 49, 82]))}>write-control-response</button>
@@ -80,6 +81,7 @@ function Harness() {
     <button onClick={() => void startNetworkBlockRule(activeWorkspace.activeBlockId, "rule-1")}>start-network-rule</button>
     <button onClick={() => void selectNetworkTarget(activeWorkspace.id, activeWorkspace.activeBlockId, null)}>network-clear-target</button>
     <span data-testid="runtime">{runtimes[ids[0]]?.kind}:{runtimes[ids[0]]?.status}</span>
+    <span data-testid="runtime-cwd">{runtimes[ids[0]]?.cwd}</span>
     <span data-testid="file-runtime">{fileRuntimes[activeWorkspace.activeBlockId]?.kind}:{fileRuntimes[activeWorkspace.activeBlockId]?.status}</span>
     <span data-testid="file-path">{activeLeaf?.type === "files" ? activeLeaf.path : ""}</span>
     <span data-testid="network-runtime">{networkRuntimes[activeWorkspace.activeBlockId]?.status}:{networkRuntimes[activeWorkspace.activeBlockId]?.ruleStates["rule-1"]}</span>
@@ -94,8 +96,8 @@ describe("WorkspaceProvider multi-session routing", () => {
     mocks.connectNetworkSession.mockReset();
     mocks.startNetworkRule.mockClear();
     mocks.stopNetworkRule.mockClear();
-    mocks.closeSession.mockClear();
-    mocks.closeLocalSession.mockClear();
+    mocks.closeSession.mockReset().mockResolvedValue(undefined);
+    mocks.closeLocalSession.mockReset().mockResolvedValue(undefined);
     mocks.writeLocalSession.mockClear();
     mocks.resizeLocalSession.mockClear();
     mocks.onFailure.mockClear();
@@ -140,7 +142,7 @@ describe("WorkspaceProvider multi-session routing", () => {
     mocks.connectLocalSession.mockImplementation(async (_columns, _rows, event, terminal) => {
       mocks.localConnections.push({ event, terminal });
       event({ type: "stateChanged", state: "connected" });
-      return "local-1";
+      return { sessionId: "local-1", cwd: "/Users/tester" };
     });
     mocks.connectSession.mockResolvedValue("ssh-1");
     const user = userEvent.setup();
@@ -163,6 +165,102 @@ describe("WorkspaceProvider multi-session routing", () => {
     expect(mocks.closeLocalSession).toHaveBeenCalledWith("local-1");
   });
 
+  it("uses the absolute initial directory returned by the local session", async () => {
+    Object.defineProperty(window, "__TAURI_INTERNALS__", { configurable: true, value: {} });
+    mocks.connectLocalSession.mockImplementation(async (_columns, _rows, event, terminal) => {
+      mocks.localConnections.push({ event, terminal });
+      event({ type: "stateChanged", state: "connected" });
+      return { sessionId: "local-home", cwd: "/Users/tester" };
+    });
+    const user = userEvent.setup();
+    render(<WorkspaceProvider><Harness/></WorkspaceProvider>);
+
+    await user.click(screen.getByRole("button", { name: "local" }));
+
+    await waitFor(() => expect(screen.getByTestId("runtime")).toHaveTextContent("local:connected"));
+    expect(screen.getByTestId("runtime-cwd")).toHaveTextContent("/Users/tester");
+  });
+
+  it("does not let an obsolete SSH request replace the selected local target", async () => {
+    Object.defineProperty(window, "__TAURI_INTERNALS__", { configurable: true, value: {} });
+    mocks.connectLocalSession.mockImplementation(async (_columns, _rows, event, terminal) => {
+      mocks.localConnections.push({ event, terminal });
+      event({ type: "stateChanged", state: "connected" });
+      return { sessionId: "local-current", cwd: "/Users/tester" };
+    });
+    mocks.connectSession.mockResolvedValue("obsolete-ssh");
+    const user = userEvent.setup();
+    render(<WorkspaceProvider><Harness/></WorkspaceProvider>);
+
+    await user.click(screen.getByRole("button", { name: "select-remote-target" }));
+    await user.click(screen.getByRole("button", { name: "select-local-target" }));
+    await user.click(screen.getByRole("button", { name: "local" }));
+    await waitFor(() => expect(screen.getByTestId("runtime")).toHaveTextContent("local:connected"));
+    await user.click(screen.getByRole("button", { name: "connect" }));
+
+    expect(mocks.connectSession).not.toHaveBeenCalled();
+    expect(screen.getByTestId("runtime")).toHaveTextContent("local:connected");
+  });
+
+  it("does not clear a new local session when closing the previous SSH session finishes late", async () => {
+    Object.defineProperty(window, "__TAURI_INTERNALS__", { configurable: true, value: {} });
+    let resolveClose: (() => void) | null = null;
+    mocks.connectSession.mockImplementation(async (_input, event, terminal) => {
+      mocks.connections.push({ event, terminal });
+      event({ type: "stateChanged", state: "connected" });
+      return "ssh-closing-late";
+    });
+    mocks.closeSession.mockImplementation(() => new Promise<void>((resolve) => { resolveClose = resolve; }));
+    mocks.connectLocalSession.mockImplementation(async (_columns, _rows, event, terminal) => {
+      mocks.localConnections.push({ event, terminal });
+      event({ type: "stateChanged", state: "connected" });
+      return { sessionId: "local-after-late-close", cwd: "/Users/tester" };
+    });
+    const user = userEvent.setup();
+    render(<WorkspaceProvider><Harness/></WorkspaceProvider>);
+
+    await user.click(screen.getByRole("button", { name: "connect" }));
+    await waitFor(() => expect(screen.getByTestId("runtime")).toHaveTextContent("ssh:connected"));
+    await user.click(screen.getByRole("button", { name: "select-local-target" }));
+    await user.click(screen.getByRole("button", { name: "local" }));
+    await waitFor(() => expect(screen.getByTestId("runtime")).toHaveTextContent("local:connected"));
+
+    act(() => resolveClose?.());
+
+    await waitFor(() => expect(screen.getByTestId("runtime")).toHaveTextContent("local:connected"));
+    expect(screen.getByTestId("runtime-cwd")).toHaveTextContent("/Users/tester");
+  });
+
+  it("ignores late SSH failures after switching to a local session", async () => {
+    Object.defineProperty(window, "__TAURI_INTERNALS__", { configurable: true, value: {} });
+    mocks.connectSession.mockImplementation(async (_input, event, terminal) => {
+      mocks.connections.push({ event, terminal });
+      event({ type: "stateChanged", state: "connected" });
+      return "ssh-before-late-failure";
+    });
+    mocks.connectLocalSession.mockImplementation(async (_columns, _rows, event, terminal) => {
+      mocks.localConnections.push({ event, terminal });
+      event({ type: "stateChanged", state: "connected" });
+      return { sessionId: "local-before-late-failure", cwd: "/Users/tester" };
+    });
+    const user = userEvent.setup();
+    render(<WorkspaceProvider><Harness/></WorkspaceProvider>);
+
+    await user.click(screen.getByRole("button", { name: "connect-with-fallback" }));
+    await waitFor(() => expect(screen.getByTestId("runtime")).toHaveTextContent("ssh:connected"));
+    await user.click(screen.getByRole("button", { name: "select-local-target" }));
+    await user.click(screen.getByRole("button", { name: "local" }));
+    await waitFor(() => expect(screen.getByTestId("runtime")).toHaveTextContent("local:connected"));
+
+    act(() => {
+      mocks.connections[0].event({ type: "stateChanged", state: "failed" });
+      mocks.connections[0].event({ type: "failed", code: "authentication-rejected", message: "认证失败" });
+    });
+
+    expect(screen.getByTestId("runtime")).toHaveTextContent("local:connected");
+    expect(mocks.onFailure).not.toHaveBeenCalled();
+  });
+
   it("starts a fresh local shell and routes its first output after switching from SSH", async () => {
     Object.defineProperty(window, "__TAURI_INTERNALS__", { configurable: true, value: {} });
     mocks.writers[0].mockClear();
@@ -174,7 +272,7 @@ describe("WorkspaceProvider multi-session routing", () => {
     mocks.connectLocalSession.mockImplementation(async (_columns, _rows, event, terminal) => {
       mocks.localConnections.push({ event, terminal });
       event({ type: "stateChanged", state: "connected" });
-      return "local-after-ssh";
+      return { sessionId: "local-after-ssh", cwd: "/Users/tester" };
     });
     const user = userEvent.setup();
     render(<WorkspaceProvider><Harness/></WorkspaceProvider>);
@@ -192,11 +290,11 @@ describe("WorkspaceProvider multi-session routing", () => {
 
   it("flushes xterm control responses emitted before the local session id returns", async () => {
     Object.defineProperty(window, "__TAURI_INTERNALS__", { configurable: true, value: {} });
-    let resolveConnect: ((sessionId: string) => void) | null = null;
+    let resolveConnect: ((connection: { sessionId: string; cwd: string }) => void) | null = null;
     mocks.connectLocalSession.mockImplementation((_columns, _rows, event, terminal) => {
       mocks.localConnections.push({ event, terminal });
       event({ type: "stateChanged", state: "connected" });
-      return new Promise<string>((resolve) => { resolveConnect = resolve; });
+      return new Promise<{ sessionId: string; cwd: string }>((resolve) => { resolveConnect = resolve; });
     });
     const user = userEvent.setup();
     render(<WorkspaceProvider><Harness/></WorkspaceProvider>);
@@ -206,18 +304,18 @@ describe("WorkspaceProvider multi-session routing", () => {
     await user.click(screen.getByRole("button", { name: "write" }));
     expect(mocks.writeLocalSession).not.toHaveBeenCalled();
 
-    act(() => resolveConnect?.("local-pending"));
+    act(() => resolveConnect?.({ sessionId: "local-pending", cwd: "/Users/tester" }));
     await waitFor(() => expect(mocks.writeLocalSession).toHaveBeenCalledWith("local-pending", Uint8Array.from([100, 105, 114, 13])));
   });
 
   it("does not drop xterm control responses emitted while buffered local input is flushing", async () => {
     Object.defineProperty(window, "__TAURI_INTERNALS__", { configurable: true, value: {} });
-    let resolveConnect: ((sessionId: string) => void) | null = null;
+    let resolveConnect: ((connection: { sessionId: string; cwd: string }) => void) | null = null;
     let resolveFirstWrite: (() => void) | null = null;
     mocks.connectLocalSession.mockImplementation((_columns, _rows, event, terminal) => {
       mocks.localConnections.push({ event, terminal });
       event({ type: "stateChanged", state: "connected" });
-      return new Promise<string>((resolve) => { resolveConnect = resolve; });
+      return new Promise<{ sessionId: string; cwd: string }>((resolve) => { resolveConnect = resolve; });
     });
     mocks.writeLocalSession.mockImplementationOnce(() => new Promise<void>((resolve) => { resolveFirstWrite = resolve; }));
     const user = userEvent.setup();
@@ -226,7 +324,7 @@ describe("WorkspaceProvider multi-session routing", () => {
     await user.click(screen.getByRole("button", { name: "local" }));
     await waitFor(() => expect(mocks.connectLocalSession).toHaveBeenCalledOnce());
     await user.click(screen.getByRole("button", { name: "write" }));
-    act(() => resolveConnect?.("local-flushing"));
+    act(() => resolveConnect?.({ sessionId: "local-flushing", cwd: "/Users/tester" }));
     await waitFor(() => expect(mocks.writeLocalSession).toHaveBeenCalledTimes(1));
 
     await user.click(screen.getByRole("button", { name: "write-control-response" }));
@@ -241,7 +339,7 @@ describe("WorkspaceProvider multi-session routing", () => {
     mocks.connectLocalSession.mockImplementation(async (_columns, _rows, event, terminal) => {
       mocks.localConnections.push({ event, terminal });
       event({ type: "stateChanged", state: "connected" });
-      return "local-owned";
+      return { sessionId: "local-owned", cwd: "/Users/tester" };
     });
     const user = userEvent.setup();
     render(<WorkspaceProvider><Harness/></WorkspaceProvider>);
@@ -280,7 +378,7 @@ describe("WorkspaceProvider multi-session routing", () => {
     mocks.connectLocalSession.mockImplementation(async (_columns, _rows, event, terminal) => {
       mocks.localConnections.push({ event, terminal });
       event({ type: "stateChanged", state: "connected" });
-      return "local-buffered";
+      return { sessionId: "local-buffered", cwd: "/Users/tester" };
     });
     const user = userEvent.setup();
     render(<WorkspaceProvider><Harness/></WorkspaceProvider>);
@@ -300,7 +398,7 @@ describe("WorkspaceProvider multi-session routing", () => {
     mocks.connectLocalSession.mockImplementation(async (_columns, _rows, event, terminal) => {
       mocks.localConnections.push({ event, terminal });
       event({ type: "stateChanged", state: "connected" });
-      return "local-before-switch";
+      return { sessionId: "local-before-switch", cwd: "/Users/tester" };
     });
     const user = userEvent.setup();
     render(<WorkspaceProvider><Harness/></WorkspaceProvider>);

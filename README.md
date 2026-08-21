@@ -25,7 +25,10 @@ Qterm 基于 Tauri 2、React、TypeScript 与 Rust 构建，将本地终端、SS
 
 ```bash
 brew tap qiubai-lab/tap
-brew trust qiubai-lab/tap   # Homebrew 6.0+ 需要的一次性确认
+
+# Homebrew 6.0+ 需要的一次性确认
+brew trust qiubai-lab/tap
+
 brew install --cask qterm
 ```
 

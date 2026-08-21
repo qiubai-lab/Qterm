@@ -24,7 +24,7 @@ type Tool = "connections" | "credentials" | "settings" | "help";
 interface CloseRequest { title: string; detail: string; ids: string[]; execute: () => void }
 
 export function WorkspaceShell() {
-  const { document, activeWorkspace, dispatch, runtimes, fileRuntimes, networkRuntimes, connectBlock, connectFileBlock, connectNetworkBlock, connectedCount, closeSessions, blocksForWorkspace, acceptBlockHostKey, rejectBlockHostKey, acceptFileHostKey, rejectFileHostKey, acceptNetworkHostKey, rejectNetworkHostKey, storageNotice, dismissStorageNotice } = useWorkspace();
+  const { document, activeWorkspace, dispatch, runtimes, fileRuntimes, networkRuntimes, connectBlock, connectFileBlock, connectNetworkBlock, isConnectionTargetCurrent, connectedCount, closeSessions, blocksForWorkspace, acceptBlockHostKey, rejectBlockHostKey, acceptFileHostKey, rejectFileHostKey, acceptNetworkHostKey, rejectNetworkHostKey, storageNotice, dismissStorageNotice } = useWorkspace();
   const [tool, setTool] = useState<Tool | null>(null);
   const [renaming, setRenaming] = useState<{ id: string; value: string } | null>(null);
   const [closeRequest, setCloseRequest] = useState<CloseRequest | null>(null);
@@ -306,16 +306,20 @@ export function WorkspaceShell() {
   }
 
   async function requestConfiguredConnection(owner: ConnectionOwner, blockId: string, profile: ConnectionProfile) {
-    const key = `${owner}:${blockId}`;
+    const targetCurrent = () => isConnectionTargetCurrent(owner, blockId, profile.id);
+    if (!targetCurrent()) return;
+    const key = `${owner}:${blockId}:${profile.id}`;
     if (automaticAttemptsRef.current.has(key)) return;
     automaticAttemptsRef.current.add(key);
     const showAuthentication = () => {
       automaticAttemptsRef.current.delete(key);
+      if (!targetCurrent()) return;
       setAuthRequest({ owner, blockId, profile });
     };
     try {
       if (profile.authPreference !== "sshAgent" && profile.authPreference !== "manual" && profile.credentialId) {
         const status = await getVaultStatus();
+        if (!targetCurrent()) return;
         if (!status.unlocked) {
           if (status.legacy) {
             showAuthentication();
@@ -327,12 +331,13 @@ export function WorkspaceShell() {
         }
       }
       const auth = await resolveConfiguredAuth(profile);
+      if (!targetCurrent()) return;
       if (!auth) { showAuthentication(); return; }
       if (owner === "terminal") await connectBlock(blockId, profile, auth, showAuthentication);
       else if (owner === "files") await connectFileBlock(blockId, profile, auth, showAuthentication);
       else await connectNetworkBlock(blockId, profile, auth, showAuthentication);
     } catch {
-      showAuthentication();
+      if (targetCurrent()) showAuthentication();
     } finally {
       automaticAttemptsRef.current.delete(key);
     }
@@ -411,6 +416,7 @@ export function WorkspaceShell() {
     {authRequest && (
       <ConnectionAuthDialog profile={authRequest.profile} onClose={() => setAuthRequest(null)} onConnect={async (auth) => {
         const request = authRequest;
+        if (!isConnectionTargetCurrent(request.owner, request.blockId, request.profile.id)) return;
         if (request.owner === "terminal") await connectBlock(request.blockId, request.profile, auth);
         else if (request.owner === "files") await connectFileBlock(request.blockId, request.profile, auth);
         else await connectNetworkBlock(request.blockId, request.profile, auth);

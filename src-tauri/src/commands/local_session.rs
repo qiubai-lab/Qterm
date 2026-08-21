@@ -43,6 +43,13 @@ pub struct LocalTerminalDataDto {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct LocalSessionConnectionDto {
+    session_id: String,
+    cwd: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct LocalTerminalCapabilitiesDto {
     windows_pty: Option<WindowsPtyDto>,
 }
@@ -72,7 +79,7 @@ pub fn local_session_connect(
     on_event: Channel<LocalSessionEventDto>,
     on_terminal: Channel<LocalTerminalDataDto>,
     state: State<'_, LocalSessionState>,
-) -> Result<String, IpcError> {
+) -> Result<LocalSessionConnectionDto, IpcError> {
     let size = terminal_size(columns, rows)?;
     let events = Arc::new(move |event| {
         let state = match event {
@@ -84,10 +91,14 @@ pub fn local_session_connect(
     let output = Arc::new(move |data| {
         let _ = on_terminal.send(LocalTerminalDataDto { data });
     });
-    state
+    let connection = state
         .manager
         .connect(size, output, events)
-        .map_err(local_error)
+        .map_err(local_error)?;
+    Ok(LocalSessionConnectionDto {
+        session_id: connection.session_id,
+        cwd: connection.cwd.to_string_lossy().into_owned(),
+    })
 }
 
 #[tauri::command]

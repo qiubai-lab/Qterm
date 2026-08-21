@@ -1,6 +1,7 @@
 use std::{
     collections::HashMap,
     io::{Read, Write},
+    path::PathBuf,
     sync::{Arc, Mutex},
     thread,
 };
@@ -55,6 +56,12 @@ pub enum LocalSessionError {
     ControlUnavailable,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LocalSessionConnection {
+    pub session_id: String,
+    pub cwd: PathBuf,
+}
+
 struct LocalSession {
     master: Mutex<Box<dyn MasterPty + Send>>,
     writer: Mutex<Box<dyn Write + Send>>,
@@ -72,11 +79,16 @@ impl LocalSessionManager {
         size: PtySize,
         terminal_output: OutputSink,
         events: EventSink,
-    ) -> Result<String, LocalSessionError> {
+    ) -> Result<LocalSessionConnection, LocalSessionError> {
+        let cwd = dirs::home_dir()
+            .and_then(|home| std::fs::canonicalize(home).ok())
+            .map(|home| dunce::simplified(&home).to_path_buf())
+            .ok_or(LocalSessionError::StartFailed)?;
         let pair = native_pty_system()
             .openpty(size)
             .map_err(|_| LocalSessionError::StartFailed)?;
         let mut command = CommandBuilder::new_default_prog();
+        command.cwd(&cwd);
         command.env("TERM", "xterm-256color");
         #[cfg(windows)]
         command.env(
@@ -147,7 +159,7 @@ impl LocalSessionManager {
         });
 
         events(LocalSessionEvent::Connected);
-        Ok(session_id)
+        Ok(LocalSessionConnection { session_id, cwd })
     }
 
     pub fn write(&self, session_id: &str, data: Vec<u8>) -> Result<(), LocalSessionError> {
@@ -213,7 +225,7 @@ mod tests {
         let manager = LocalSessionManager::default();
         let (output_tx, output_rx) = mpsc::channel::<Vec<u8>>();
         let (event_tx, event_rx) = mpsc::channel::<LocalSessionEvent>();
-        let session_id = manager
+        let connection = manager
             .connect(
                 PtySize {
                     rows: 24,
@@ -229,6 +241,8 @@ mod tests {
                 }),
             )
             .expect("start default shell");
+        let session_id = connection.session_id;
+        assert!(connection.cwd.is_absolute());
 
         assert_eq!(
             event_rx.recv_timeout(Duration::from_secs(5)),

@@ -23,11 +23,11 @@ describe("local terminal IPC client", () => {
   });
 
   it("opens the default shell with ordered event and terminal channels", async () => {
-    mocks.invoke.mockResolvedValue("local-1");
+    mocks.invoke.mockResolvedValue({ sessionId: "local-1", cwd: "/Users/tester" });
     const onEvent = vi.fn();
     const onTerminalData = vi.fn();
 
-    await connectLocalSession(120, 40, onEvent, onTerminalData);
+    await expect(connectLocalSession(120, 40, onEvent, onTerminalData)).resolves.toEqual({ sessionId: "local-1", cwd: "/Users/tester" });
 
     expect(mocks.invoke).toHaveBeenCalledWith("local_session_connect", {
       columns: 120,
