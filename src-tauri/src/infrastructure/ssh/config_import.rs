@@ -363,7 +363,7 @@ mod tests {
         fs::write(ssh.join("id_ed25519"), "fixture key metadata only").expect("key");
         fs::write(
             ssh.join("config.d/work.conf"),
-            "Host work\n  HostName 10.0.0.8\n  IdentityFile ~/.ssh/id_ed25519\n",
+            "Host work\n  HostName 10.0.0.8\n  IdentityFile .ssh/id_ed25519\n",
         )
         .expect("include");
         fs::write(
