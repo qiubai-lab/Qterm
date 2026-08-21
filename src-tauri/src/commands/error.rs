@@ -81,10 +81,14 @@ fn error_code(code: ApplicationErrorCode) -> &'static str {
             "profileStorageContainsSensitiveData"
         }
         ApplicationErrorCode::ProfileStorageUnavailable => "profileStorageUnavailable",
+        ApplicationErrorCode::SshConfigNotFound => "sshConfigNotFound",
+        ApplicationErrorCode::SshConfigUnreadable => "sshConfigUnreadable",
+        ApplicationErrorCode::SshConfigTooLarge => "sshConfigTooLarge",
+        ApplicationErrorCode::SshConfigInvalid => "sshConfigInvalid",
+        ApplicationErrorCode::SshConfigImportSelectionInvalid => "sshConfigImportSelectionInvalid",
         ApplicationErrorCode::InvalidNetworkRule => "invalidNetworkRule",
         ApplicationErrorCode::NetworkRuleAlreadyExists => "networkRuleAlreadyExists",
         ApplicationErrorCode::NetworkRuleNotFound => "networkRuleNotFound",
-        ApplicationErrorCode::ProfileHasNetworkRules => "profileHasNetworkRules",
         ApplicationErrorCode::NetworkStorageCorrupt => "networkStorageCorrupt",
         ApplicationErrorCode::NetworkStorageVersionUnsupported => {
             "networkStorageVersionUnsupported"

@@ -155,6 +155,19 @@ describe("TerminalPanel view lifetime", () => {
     expect(terminal.dispose).toHaveBeenCalledOnce();
   });
 
+  it("restores the transparent theme when a preserved xterm view is reattached", () => {
+    const view = render(<TerminalPanel blockId="block-theme" sessionKey="block-theme:local" local={false} visible={false}/>);
+    const terminal = mocks.terminals[0];
+    terminal.options.theme = { background: "#000000" };
+    view.unmount();
+
+    const reattachedView = render(<TerminalPanel blockId="block-theme" sessionKey="block-theme:local" local={false} visible={false}/>);
+
+    expect(mocks.terminals).toHaveLength(1);
+    expect(terminal.options.theme).toMatchObject({ background: "#00000000" });
+    reattachedView.unmount();
+  });
+
   it("creates a fresh view and disposes the old one when the terminal target changes", () => {
     const view = render(<TerminalPanel blockId="block-1" sessionKey="block-1:local" local={false} visible={false}/>);
     const localTerminal = mocks.terminals[0];
@@ -184,7 +197,7 @@ describe("TerminalPanel view lifetime", () => {
     expect(options.fontSize).toBe(13);
     expect(options.lineHeight).toBe(1.22);
     expect(options.allowTransparency).toBe(true);
-    expect(options.theme.background).toBe("rgba(5, 7, 8, 0.78)");
+    expect(options.theme.background).toBe("#00000000");
     expect(options.overviewRuler.width).toBe(3);
     expect(options.theme.overviewRulerBorder).toBe("#00000000");
     expect(options.theme.scrollbarSliderBackground).toBe("#75e6cf80");

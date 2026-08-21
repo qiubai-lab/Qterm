@@ -167,6 +167,29 @@ impl ProfileRepository for JsonProfileRepository {
         self.save_unlocked(&catalog)
     }
 
+    fn insert_many(&self, profiles: Vec<ConnectionProfile>) -> Result<(), ProfileRepositoryError> {
+        let _guard = self.acquire_lock()?;
+        let mut catalog = self.load_unlocked()?;
+        let mut ids = catalog
+            .profiles
+            .iter()
+            .map(|profile| profile.id().as_str().to_owned())
+            .collect::<HashSet<_>>();
+        for profile in &profiles {
+            if !ids.insert(profile.id().as_str().to_owned()) {
+                return Err(ProfileRepositoryError::AlreadyExists);
+            }
+            if profile
+                .group_id()
+                .is_some_and(|id| !catalog.groups.iter().any(|group| group.id() == id))
+            {
+                return Err(ProfileRepositoryError::GroupNotFound);
+            }
+        }
+        catalog.profiles.extend(profiles);
+        self.save_unlocked(&catalog)
+    }
+
     fn update(&self, profile: ConnectionProfile) -> Result<(), ProfileRepositoryError> {
         let _guard = self.acquire_lock()?;
         let mut catalog = self.load_unlocked()?;
@@ -562,6 +585,21 @@ mod tests {
             repository.delete(&ProfileId::parse("missing").expect("fixture id")),
             Err(ProfileRepositoryError::NotFound)
         );
+    }
+
+    #[test]
+    fn batch_insert_validates_every_profile_before_writing_any() {
+        let directory = tempdir().expect("temporary directory");
+        let repository = JsonProfileRepository::new(directory.path().join("profiles.json"));
+        let invalid = profile("profile-2", "Invalid group").with_group_id(Some(
+            ProfileGroupId::parse("missing-group").expect("group id"),
+        ));
+
+        assert_eq!(
+            repository.insert_many(vec![profile("profile-1", "Valid"), invalid]),
+            Err(ProfileRepositoryError::GroupNotFound)
+        );
+        assert!(repository.list().expect("list profiles").is_empty());
     }
 
     #[test]

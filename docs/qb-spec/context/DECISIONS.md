@@ -1,5 +1,13 @@
 # Decisions
 
+## 2026-08-21 — SSH Config 只经预览导入并逐项授权私钥
+
+Status: accepted
+
+连接管理页头提供常驻“导入”入口，先显示紧凑说明窗；只有用户明确点击“选择配置”后才打开默认定位 `~/.ssh` 的系统文件选择器。配置路径只由 Rust 以一次性预览令牌持有，提交时重新解析同一授权文件。Include 由应用做深度、文件数和总字节数限制；Match、ProxyCommand、ProxyJump 不执行，只隔离或提示。通配 Host 可提供默认值，但不生成连接候选。连接信息与凭证在独立 Tab 中确认，提交协议不接受 groupId，连接统一导入“未分组”；管理器标题栏提供“重新选择”。
+
+新连接默认使用手动认证。`IdentityFile` 只有在用户逐项勾选、解锁或初始化凭证库后才导入；加密私钥可随该项提供口令。IdentityFile 路径始终停留在 Rust 侧，前端预览只获得文件名、可用状态和不透明索引，提交时也不能传入任意路径或私钥正文。私钥按解析后的公钥身份去重：已有相同公钥时复用，同名但公钥不同仍可新建；同批次相同私钥也只创建一次。现有 profile 与 vault 持久化 schema 保持不变；SSH Config 高级语义不接入当前 SSH 运行时。
+
 ## 2026-08-18 — 使用 Tauri 2
 
 Status: accepted
@@ -226,4 +234,4 @@ Status: accepted
 
 Status: accepted
 
-Network 是与 Terminal、Files 并列的一等 Workspace leaf。转发规则按 `profileId` 全局共享并保存到可迁移目录的独立 `network-forwards.json`，Workspace Network leaf 只保存 `blockId/profileId`；listener、活动转发、子 channel、session id 和认证材料不持久化。每个 Network Block 使用独立 SSH session，同一 Block 内的 Local、Remote 与 SOCKS5 规则共享该 session，不复用来源 Terminal/Files session。规则恢复后默认停止，不自动启动或无限重连。本地与 SOCKS5 listener、远程 listener 均默认 loopback；非 loopback 需要显式风险提示。profile 仍被规则引用时禁止删除，不跨独立配置文件静默级联。
+Network 是与 Terminal、Files 并列的一等 Workspace leaf。转发规则按 `profileId` 全局共享并保存到可迁移目录的独立 `network-forwards.json`，Workspace Network leaf 只保存 `blockId/profileId`；listener、活动转发、子 channel、session id 和认证材料不持久化。每个 Network Block 使用独立 SSH session，同一 Block 内的 Local、Remote 与 SOCKS5 规则共享该 session，不复用来源 Terminal/Files session。规则恢复后默认停止，不自动启动或无限重连。本地与 SOCKS5 listener、远程 listener 均默认 loopback；非 loopback 需要显式风险提示。用户在确认界面明确授权删除 profile 后，application use case 同步删除引用该 profile 的持久化规则并关闭相关 Network session，同时保留共享凭证；跨独立文件的第二步失败时尽力恢复 profile，不将该编排下放给 WebView。

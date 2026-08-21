@@ -36,6 +36,25 @@ const FALLBACK_TERMINAL_FONT_SIZE = 13;
 const FALLBACK_TERMINAL_LINE_HEIGHT = 1.22;
 const LONG_PASTE_THRESHOLD = 1000;
 
+function terminalTheme() {
+  return {
+    background: "#00000000",
+    foreground: "#f1f3f5",
+    cursor: "#74e6d1",
+    selectionBackground: "#2a5550",
+    black: "#15171a",
+    brightBlack: "#707780",
+    green: "#74e6a5",
+    brightGreen: "#9bf5bd",
+    red: "#ff7770",
+    brightRed: "#ff9b96",
+    overviewRulerBorder: "#00000000",
+    scrollbarSliderBackground: "#75e6cf80",
+    scrollbarSliderHoverBackground: "#75e6cfa6",
+    scrollbarSliderActiveBackground: "#75e6cfbf",
+  };
+}
+
 export function TerminalPanel({ blockId, sessionKey, visible, local }: { blockId: string; sessionKey: string; visible: boolean; local: boolean }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -332,6 +351,7 @@ function acquireTerminalView(sessionKey: string, container: HTMLElement, windows
     if (existing.disposeTimer !== null) window.clearTimeout(existing.disposeTimer);
     existing.disposeTimer = null;
     if (windowsPty) existing.terminal.options.windowsPty = windowsPty;
+    existing.terminal.options.theme = terminalTheme();
     container.append(existing.element);
     return existing;
   }
@@ -344,22 +364,7 @@ function acquireTerminalView(sessionKey: string, container: HTMLElement, windows
     ...(windowsPty ? { windowsPty } : {}),
     allowTransparency: true,
     overviewRuler: { width: 3 },
-    theme: {
-      background: "rgba(5, 7, 8, 0.78)",
-      foreground: "#f1f3f5",
-      cursor: "#74e6d1",
-      selectionBackground: "#2a5550",
-      black: "#15171a",
-      brightBlack: "#707780",
-      green: "#74e6a5",
-      brightGreen: "#9bf5bd",
-      red: "#ff7770",
-      brightRed: "#ff9b96",
-      overviewRulerBorder: "#00000000",
-      scrollbarSliderBackground: "#75e6cf80",
-      scrollbarSliderHoverBackground: "#75e6cfa6",
-      scrollbarSliderActiveBackground: "#75e6cfbf",
-    },
+    theme: terminalTheme(),
   });
   const fit = new FitAddon();
   terminal.loadAddon(fit);

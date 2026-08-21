@@ -20,7 +20,7 @@ use crate::{
 };
 
 pub struct NetworkState {
-    service: NetworkService<JsonNetworkRepository>,
+    pub(crate) service: NetworkService<JsonNetworkRepository>,
 }
 
 impl NetworkState {
@@ -28,12 +28,6 @@ impl NetworkState {
         Self {
             service: NetworkService::new(repository),
         }
-    }
-
-    pub(crate) fn has_profile_rules(&self, profile_id: &str) -> Result<bool, IpcError> {
-        self.service
-            .has_profile_rules(profile_id)
-            .map_err(IpcError::from)
     }
 
     fn rule(&self, id: &str) -> Result<ForwardRule, IpcError> {

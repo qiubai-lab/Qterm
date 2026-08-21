@@ -85,7 +85,7 @@ beforeEach(() => {
   mocks.clearVault.mockResolvedValue(undefined);
   mocks.createProfile.mockResolvedValue({ ...profile, id: "profile-new" });
   mocks.createProfileGroup.mockResolvedValue(group);
-  mocks.deleteProfile.mockResolvedValue(undefined);
+  mocks.deleteProfile.mockResolvedValue({ deletedNetworkRules: 0 });
   mocks.deleteProfileGroup.mockResolvedValue(undefined);
   mocks.getVaultStatus.mockResolvedValue({ initialized: false, unlocked: false });
   mocks.hasSavedPassword.mockResolvedValue(false);
@@ -105,6 +105,18 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
 describe("ConnectionDialog", () => {
+  it("orders the vault status, import action, and close action in the header", async () => {
+    render(<ConnectionDialog onClose={vi.fn()}/>);
+
+    const header = (await screen.findByRole("button", { name: "导入" })).closest(".dialog-header")!;
+    const actions = header.querySelector(".dialog-header-actions")!;
+    expect(Array.from(actions.children).map((element) => element.textContent || element.getAttribute("aria-label"))).toEqual([
+      "凭证库未初始化",
+      "导入",
+      "关闭",
+    ]);
+  });
+
   it("keeps the endpoint contiguous and appends each profile authentication method", async () => {
     workspaceProfiles = [
       profile,
@@ -301,6 +313,8 @@ describe("ConnectionDialog", () => {
     await user.click(screen.getByRole("button", { name: "删除" }));
     const confirmation = screen.getByRole("dialog", { name: "删除连接？" });
     expect(within(confirmation).getByText(/K8S服务器/)).toBeInTheDocument();
+    expect(within(confirmation).getByText(/关联的网络转发规则/)).toBeInTheDocument();
+    expect(within(confirmation).getByText(/共享凭证保持不变/)).toBeInTheDocument();
     expect(mocks.deleteProfile).not.toHaveBeenCalled();
     await user.click(within(confirmation).getByRole("button", { name: "取消" }));
     expect(mocks.deleteProfile).not.toHaveBeenCalled();
@@ -308,6 +322,20 @@ describe("ConnectionDialog", () => {
     await user.click(screen.getByRole("button", { name: "删除" }));
     await user.click(within(screen.getByRole("dialog", { name: "删除连接？" })).getByRole("button", { name: "确认删除" }));
     await waitFor(() => expect(mocks.deleteProfile).toHaveBeenCalledWith("profile-1"));
+  });
+
+  it("reports cascaded network-rule cleanup after deleting a profile", async () => {
+    mocks.deleteProfile.mockResolvedValue({ deletedNetworkRules: 4 });
+    const user = userEvent.setup();
+    render(<ConnectionDialog onClose={vi.fn()}/>);
+    await screen.findByDisplayValue("K8S服务器");
+
+    await user.click(screen.getByRole("button", { name: "删除" }));
+    await user.click(within(screen.getByRole("dialog", { name: "删除连接？" })).getByRole("button", { name: "确认删除" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("已同时删除 4 条关联网络转发规则");
+    expect(mocks.refreshProfiles).toHaveBeenCalled();
+    expect(mocks.selectBlockTarget).toHaveBeenCalledWith("workspace-1", "block-1", null);
   });
 
   it("creates a group and starts a connection from the group context menu", async () => {
@@ -501,7 +529,9 @@ describe("ConnectionDialog", () => {
 
     fireEvent.keyDown(screen.getByRole("button", { name: /K8S服务器/ }), { key: "ContextMenu" });
     await user.click(within(screen.getByRole("menu", { name: "K8S服务器 连接菜单" })).getByRole("menuitem", { name: "删除连接" }));
-    expect(screen.getByRole("dialog", { name: "删除连接？" })).toBeInTheDocument();
+    const confirmation = screen.getByRole("dialog", { name: "删除连接？" });
+    await user.click(within(confirmation).getByRole("button", { name: "确认删除" }));
+    await waitFor(() => expect(mocks.deleteProfile).toHaveBeenCalledWith("profile-1"));
   });
 
   it("keeps group headers compact and opens their menu from the keyboard", async () => {

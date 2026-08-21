@@ -139,10 +139,16 @@ impl NetworkRepository for JsonNetworkRepository {
         self.save_unlocked(&rules)
     }
 
-    fn has_profile_rules(&self, profile_id: &ProfileId) -> Result<bool, NetworkRepositoryError> {
+    fn delete_by_profile(&self, profile_id: &ProfileId) -> Result<usize, NetworkRepositoryError> {
         let _guard = self.lock()?;
-        self.load_unlocked()
-            .map(|rules| rules.iter().any(|rule| rule.profile_id() == profile_id))
+        let mut rules = self.load_unlocked()?;
+        let original_length = rules.len();
+        rules.retain(|rule| rule.profile_id() != profile_id);
+        let deleted = original_length.saturating_sub(rules.len());
+        if deleted > 0 {
+            self.save_unlocked(&rules)?;
+        }
+        Ok(deleted)
     }
 }
 
@@ -347,14 +353,18 @@ mod tests {
         ports::network_repository::{NetworkRepository, NetworkRepositoryError},
     };
 
-    fn rule() -> ForwardRule {
+    fn rule_for(id: &str, profile_id: &str) -> ForwardRule {
         ForwardRule::new(
-            NetworkRuleId::parse("network-1").expect("id"),
-            ProfileId::parse("profile-1").expect("profile"),
+            NetworkRuleId::parse(id).expect("id"),
+            ProfileId::parse(profile_id).expect("profile"),
             "SOCKS",
             ForwardRuleKind::socks5("127.0.0.1", 1080).expect("kind"),
         )
         .expect("rule")
+    }
+
+    fn rule() -> ForwardRule {
+        rule_for("network-1", "profile-1")
     }
 
     #[test]
@@ -367,6 +377,27 @@ mod tests {
         let text = fs::read_to_string(path).expect("document");
         assert!(text.contains("\"schemaVersion\": 1"));
         assert!(!text.contains("sessionId"));
+    }
+
+    #[test]
+    fn deletes_only_rules_owned_by_one_profile_in_one_operation() {
+        let directory = tempdir().expect("tempdir");
+        let repository = JsonNetworkRepository::new(directory.path().join("network-forwards.json"));
+        repository
+            .insert(rule_for("network-1", "profile-1"))
+            .expect("first");
+        repository
+            .insert(rule_for("network-2", "profile-1"))
+            .expect("second");
+        let preserved = rule_for("network-3", "profile-2");
+        repository.insert(preserved.clone()).expect("preserved");
+
+        let deleted = repository
+            .delete_by_profile(&ProfileId::parse("profile-1").expect("profile"))
+            .expect("delete by profile");
+
+        assert_eq!(deleted, 2);
+        assert_eq!(repository.list().expect("remaining rules"), vec![preserved]);
     }
 
     #[test]

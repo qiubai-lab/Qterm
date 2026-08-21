@@ -19,7 +19,9 @@ use crate::{
     commands::{error::IpcError, profile::ProfileState, settings::SettingsState},
     domain::{
         auth::{AuthRequest, SecretBytes, SecretText},
-        credential::{CredentialError, CredentialKind, CredentialMaterial, RecoveryKeyFile},
+        credential::{
+            CredentialError, CredentialKind, CredentialMaterial, CredentialSummary, RecoveryKeyFile,
+        },
     },
     infrastructure::{
         persistence::json_credential_vault::JsonCredentialVault, ssh::auth::load_private_key_bytes,
@@ -32,6 +34,11 @@ const MAX_RECOVERY_FILE_BYTES: u64 = 4 * 1024;
 pub struct CredentialState {
     lifecycle: CredentialLifecycle<JsonCredentialVault>,
     pending_recovery_reset: Mutex<Option<PendingRecoveryReset>>,
+}
+
+pub(crate) struct PrivateKeyImportOutcome {
+    pub summary: CredentialSummary,
+    pub created: bool,
 }
 
 struct PendingRecoveryReset {
@@ -71,6 +78,87 @@ impl CredentialState {
                 Ok(AuthRequest::PrivateKeyData { data, passphrase })
             }
         }
+    }
+
+    pub(crate) fn import_private_key_path(
+        &self,
+        name: String,
+        path: &Path,
+        passphrase: Option<String>,
+    ) -> Result<CredentialSummary, IpcError> {
+        let bytes = read_private_key(path)?;
+        let passphrase = passphrase.map(SecretText::new);
+        let loaded = load_private_key_bytes(&bytes, passphrase.as_ref())
+            .map_err(crate::application::error::ApplicationError::from)?;
+        let algorithm = private_key_algorithm_name(loaded.algorithm());
+        self.lifecycle
+            .import_private_key(
+                name,
+                SecretBytes::new(bytes.to_vec()),
+                passphrase,
+                algorithm.into(),
+            )
+            .map_err(IpcError::from)
+    }
+
+    pub(crate) fn import_or_reuse_private_key_path(
+        &self,
+        name: String,
+        path: &Path,
+        passphrase: Option<String>,
+    ) -> Result<PrivateKeyImportOutcome, IpcError> {
+        let bytes = read_private_key(path)?;
+        let passphrase = passphrase.map(SecretText::new);
+        let loaded = load_private_key_bytes(&bytes, passphrase.as_ref())
+            .map_err(crate::application::error::ApplicationError::from)?;
+        let public_key_fingerprint = loaded.public_key_fingerprint();
+
+        for summary in self.lifecycle.list().map_err(IpcError::from)? {
+            if summary.kind != CredentialKind::PrivateKey {
+                continue;
+            }
+            let existing = self
+                .lifecycle
+                .load(summary.id.as_str())
+                .map_err(IpcError::from)?;
+            let CredentialMaterial::PrivateKey {
+                data,
+                passphrase: existing_passphrase,
+            } = existing
+            else {
+                continue;
+            };
+            let Ok(existing_key) =
+                load_private_key_bytes(data.expose(), existing_passphrase.as_ref())
+            else {
+                continue;
+            };
+            if existing_key.public_key_fingerprint() == public_key_fingerprint {
+                return Ok(PrivateKeyImportOutcome {
+                    summary,
+                    created: false,
+                });
+            }
+        }
+
+        let algorithm = private_key_algorithm_name(loaded.algorithm());
+        let summary = self
+            .lifecycle
+            .import_private_key(
+                name,
+                SecretBytes::new(bytes.to_vec()),
+                passphrase,
+                algorithm.into(),
+            )
+            .map_err(IpcError::from)?;
+        Ok(PrivateKeyImportOutcome {
+            summary,
+            created: true,
+        })
+    }
+
+    pub(crate) fn delete_imported_credential(&self, credential_id: &str) {
+        let _ = self.lifecycle.delete(credential_id);
     }
 
     fn ensure_exists(&self, credential_id: &str) -> Result<(), IpcError> {
@@ -518,7 +606,14 @@ pub async fn credential_import_private_key(
     else {
         return Ok(None);
     };
-    let file = File::open(&path).map_err(|_| {
+    state
+        .import_private_key_path(input.name, &path, input.passphrase)
+        .map(CredentialSummaryDto::from)
+        .map(Some)
+}
+
+fn read_private_key(path: &Path) -> Result<Zeroizing<Vec<u8>>, IpcError> {
+    let file = File::open(path).map_err(|_| {
         crate::application::error::ApplicationError::from(
             crate::domain::auth::AuthFailure::KeyUnreadable,
         )
@@ -550,26 +645,16 @@ pub async fn credential_import_private_key(
             ),
         ));
     }
-    let passphrase = input.passphrase.map(SecretText::new);
-    let loaded = load_private_key_bytes(&bytes, passphrase.as_ref())
-        .map_err(crate::application::error::ApplicationError::from)?;
-    let algorithm = match loaded.algorithm() {
+    Ok(bytes)
+}
+
+fn private_key_algorithm_name(algorithm: crate::domain::auth::PrivateKeyAlgorithm) -> &'static str {
+    match algorithm {
         crate::domain::auth::PrivateKeyAlgorithm::Ed25519 => "ed25519",
         crate::domain::auth::PrivateKeyAlgorithm::EcdsaP256 => "ecdsa-p256",
         crate::domain::auth::PrivateKeyAlgorithm::EcdsaP384 => "ecdsa-p384",
         crate::domain::auth::PrivateKeyAlgorithm::EcdsaP521 => "ecdsa-p521",
-    };
-    state
-        .lifecycle
-        .import_private_key(
-            input.name,
-            SecretBytes::new(bytes.to_vec()),
-            passphrase,
-            algorithm.into(),
-        )
-        .map(CredentialSummaryDto::from)
-        .map(Some)
-        .map_err(IpcError::from)
+    }
 }
 
 #[tauri::command]
@@ -646,8 +731,16 @@ mod tests {
         PendingRecoveryReset, ResetMasterPasswordDto, read_recovery_file, recovery_file_name,
         validate_clear_confirmation, wait_for_dialog_result, write_recovery_file,
     };
-    use crate::domain::credential::{CredentialError, RecoveryKeyFile};
+    use crate::domain::{
+        auth::SecretText,
+        credential::{CredentialError, RecoveryKeyFile},
+        settings::SecuritySettings,
+    };
     use crate::infrastructure::persistence::json_credential_vault::JsonCredentialVault;
+    use russh::keys::ssh_key::{
+        LineEnding, PrivateKey,
+        private::{Ed25519Keypair, KeypairData},
+    };
     use serde_json::json;
     use tempfile::tempdir;
     #[test]
@@ -752,5 +845,57 @@ mod tests {
         });
         state.clear_pending_recovery_reset();
         assert!(state.take_pending_recovery_reset().is_none());
+    }
+
+    #[test]
+    fn ssh_config_import_reuses_public_key_identity_not_credential_name() {
+        let dir = tempdir().expect("dir");
+        let state = CredentialState::new(JsonCredentialVault::new_for_test(
+            dir.path().join("vault.json"),
+        ));
+        let recovery = state
+            .lifecycle
+            .prepare_initial_recovery()
+            .expect("recovery");
+        state
+            .lifecycle
+            .initialize(
+                SecretText::new("correct-master-password".into()),
+                recovery,
+                SecuritySettings::default(),
+            )
+            .expect("initialize");
+
+        let first_path = dir.path().join("first-key");
+        let same_key_path = dir.path().join("same-key-different-comment");
+        let second_path = dir.path().join("second-key");
+        for (path, seed, comment) in [
+            (&first_path, 7_u8, "first-comment"),
+            (&same_key_path, 7_u8, "different-comment"),
+            (&second_path, 8_u8, "first-comment"),
+        ] {
+            let pair = Ed25519Keypair::from_seed(&[seed; 32]);
+            let key = PrivateKey::new(KeypairData::from(pair), comment)
+                .expect("private key")
+                .to_openssh(LineEnding::LF)
+                .expect("encode key");
+            std::fs::write(path, key.as_bytes()).expect("write key");
+        }
+
+        let original = state
+            .import_private_key_path("同名凭证".into(), &first_path, None)
+            .expect("initial import");
+        let reused = state
+            .import_or_reuse_private_key_path("另一个名称".into(), &same_key_path, None)
+            .expect("reuse same public key");
+        let distinct = state
+            .import_or_reuse_private_key_path("同名凭证".into(), &second_path, None)
+            .expect("import different public key");
+
+        assert!(!reused.created);
+        assert_eq!(reused.summary.id, original.id);
+        assert!(distinct.created);
+        assert_ne!(distinct.summary.id, original.id);
+        assert_eq!(distinct.summary.name, "同名凭证");
     }
 }

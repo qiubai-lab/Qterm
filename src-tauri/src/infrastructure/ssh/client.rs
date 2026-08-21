@@ -161,6 +161,24 @@ impl SshSessionManager {
         }
     }
 
+    pub fn close_profile_network_sessions(&self, profile_id: &str) -> usize {
+        let entries = self
+            .sessions
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .values()
+            .filter(|entry| {
+                entry.purpose == SessionPurpose::Network
+                    && entry.profile_id.as_deref() == Some(profile_id)
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        for entry in &entries {
+            entry.begin_close();
+        }
+        entries.len()
+    }
+
     pub fn write(&self, id: &str, data: Vec<u8>) -> Result<(), SessionControlError> {
         if data.is_empty() || data.len() > 64 * 1024 {
             return Err(SessionControlError::InvalidTerminalInput);
@@ -2181,6 +2199,53 @@ mod tests {
             decision_receiver.try_recv().expect("close decision"),
             HostKeyDecision::Cancel
         );
+    }
+
+    #[test]
+    fn closes_only_network_sessions_for_a_deleted_profile() {
+        let directory = tempdir().expect("temp directory");
+        let manager = SshSessionManager::new(JsonKnownHostRepository::new(
+            directory.path().join("known-hosts.json"),
+        ));
+        let entry = |purpose, profile_id: Option<&str>| {
+            let (cancel_sender, cancel_receiver) = oneshot::channel();
+            let (control_sender, control_receiver) = mpsc::channel(1);
+            (
+                Arc::new(SessionEntry::new(
+                    HostEndpoint::new("example.com", 22).expect("endpoint"),
+                    purpose,
+                    profile_id.map(str::to_owned),
+                    Arc::new(|_| {}),
+                    cancel_sender,
+                    control_sender,
+                )),
+                cancel_receiver,
+                control_receiver,
+            )
+        };
+        let (target, mut target_cancel, _target_control) =
+            entry(SessionPurpose::Network, Some("profile-1"));
+        let (other, mut other_cancel, _other_control) =
+            entry(SessionPurpose::Network, Some("profile-2"));
+        let (terminal, mut terminal_cancel, _terminal_control) =
+            entry(SessionPurpose::Terminal, Some("profile-1"));
+        {
+            let mut sessions = manager.sessions.lock().expect("sessions");
+            sessions.insert("target".into(), target);
+            sessions.insert("other".into(), other);
+            sessions.insert("terminal".into(), terminal);
+        }
+
+        assert_eq!(manager.close_profile_network_sessions("profile-1"), 1);
+        assert!(target_cancel.try_recv().is_ok());
+        assert!(matches!(
+            other_cancel.try_recv(),
+            Err(oneshot::error::TryRecvError::Empty)
+        ));
+        assert!(matches!(
+            terminal_cancel.try_recv(),
+            Err(oneshot::error::TryRecvError::Empty)
+        ));
     }
 
     #[test]

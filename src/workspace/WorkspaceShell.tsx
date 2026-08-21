@@ -21,6 +21,7 @@ import { openNetworkWindowAction } from "./networkWindow";
 import { useWorkspace } from "./WorkspaceProvider";
 
 type Tool = "connections" | "credentials" | "settings" | "help";
+type WorkspaceTransitionDirection = "forward" | "backward";
 interface CloseRequest { title: string; detail: string; ids: string[]; execute: () => void }
 
 export function WorkspaceShell() {
@@ -38,8 +39,10 @@ export function WorkspaceShell() {
   const [securitySettings, setSecuritySettings] = useState<SecuritySettings | null>(null);
   const [draggedWorkspace, setDraggedWorkspace] = useState<string | null>(null);
   const [workspaceTabIndicator, setWorkspaceTabIndicator] = useState({ x: 0, width: 0, ready: false });
+  const [workspaceTransition, setWorkspaceTransition] = useState<{ workspaceId: string; direction: WorkspaceTransitionDirection | null }>(() => ({ workspaceId: activeWorkspace.id, direction: null }));
   const workspaceTabStripRef = useRef<HTMLElement | null>(null);
   const workspaceTabRefs = useRef(new Map<string, HTMLDivElement>());
+  const previousWorkspaceOrderRef = useRef(document.workspaces.map((workspace) => workspace.id));
   const workspaceDragRef = useRef<{ id: string; pointerId: number; x: number; y: number; active: boolean } | null>(null);
   const workspaceDragCleanupRef = useRef<(() => void) | null>(null);
   const automaticAttemptsRef = useRef(new Set<string>());
@@ -77,6 +80,22 @@ export function WorkspaceShell() {
     window.addEventListener("resize", positionIndicator);
     return () => window.removeEventListener("resize", positionIndicator);
   }, [activeWorkspace.id, workspaceOrder]);
+
+  useLayoutEffect(() => {
+    const nextOrder = document.workspaces.map((workspace) => workspace.id);
+    setWorkspaceTransition((current) => {
+      if (current.workspaceId === activeWorkspace.id) return current;
+      const previousOrder = previousWorkspaceOrderRef.current;
+      const previousIndex = previousOrder.indexOf(current.workspaceId);
+      const nextIndexInPreviousOrder = previousOrder.indexOf(activeWorkspace.id);
+      const nextIndex = nextIndexInPreviousOrder >= 0 ? nextIndexInPreviousOrder : nextOrder.indexOf(activeWorkspace.id);
+      const direction = previousIndex < 0 || nextIndex < 0 || previousIndex === nextIndex
+        ? null
+        : nextIndex > previousIndex ? "forward" : "backward";
+      return { workspaceId: activeWorkspace.id, direction };
+    });
+    previousWorkspaceOrderRef.current = nextOrder;
+  }, [activeWorkspace.id, document.workspaces, workspaceOrder]);
 
   function requestClose(request: CloseRequest) {
     if (connectedCount(request.ids) === 0) {
@@ -388,7 +407,8 @@ export function WorkspaceShell() {
         <div className="workspace-canvases">
           {document.workspaces.map((workspace) => {
             const visible = workspace.id === activeWorkspace.id;
-            return <div key={workspace.id} className={`workspace-canvas-stage${visible ? " visible" : ""}`} aria-hidden={!visible}><WorkspaceCanvas workspace={workspace} visible={visible} onRequestClose={closeBlock} onRequestAuthConnection={(owner, blockId, profile) => void requestConfiguredConnection(owner, blockId, profile)}/></div>;
+            const transitionDirection = visible && workspaceTransition.workspaceId === workspace.id ? workspaceTransition.direction : null;
+            return <div key={workspace.id} className={`workspace-canvas-stage${visible ? " visible" : ""}${transitionDirection ? ` workspace-transition-${transitionDirection}` : ""}`} aria-hidden={!visible}><WorkspaceCanvas workspace={workspace} visible={visible} onRequestClose={closeBlock} onRequestAuthConnection={(owner, blockId, profile) => void requestConfiguredConnection(owner, blockId, profile)}/></div>;
           })}
         </div>
         <aside className="utility-rail" aria-label="工具">

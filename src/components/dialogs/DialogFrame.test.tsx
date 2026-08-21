@@ -37,6 +37,17 @@ describe("DialogFrame stack", () => {
 
     expect(onClose).not.toHaveBeenCalled();
     expect(screen.queryByRole("button", { name: "关闭" })).not.toBeInTheDocument();
-    expect(screen.getByRole("dialog", { name: "终端已锁定" })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "终端已锁定" }).parentElement).toHaveClass("dialog-scrim-blocking");
+  });
+
+  it("can disable dismissal without raising a nested parent above its child", () => {
+    const onClose = vi.fn();
+    render(<DialogFrame title="嵌套父弹窗" onClose={onClose} dismissible={false} blocking={false}><button>父操作</button></DialogFrame>);
+
+    fireEvent.keyDown(window, { key: "Escape" });
+    fireEvent.pointerDown(screen.getByRole("dialog", { name: "嵌套父弹窗" }).parentElement!);
+
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByRole("dialog", { name: "嵌套父弹窗" }).parentElement).not.toHaveClass("dialog-scrim-blocking");
   });
 });

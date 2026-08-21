@@ -22,9 +22,10 @@
 - `src/components/dialogs/MasterPasswordDialog.tsx`：主密码初始化/解锁入口；不列出、解密或管理已保存凭据。
 - `src/components/dialogs/SettingsDialog.tsx`：设备安全设置页面与显式保存反馈；不拥有锁定计时或 Windows 会话监听。
 - `src/components/dialogs/ConnectionDialog.tsx`：连接、分组与凭证引用管理入口；只允许显式查看当前引用的单条密码。
+- `src/components/dialogs/SshConfigImportDialog.tsx`：SSH Config 文件选择、连接信息/凭证双 Tab 与批量导入界面；负责默认未分组、连接选择和逐项私钥授权，不接收设备路径或私钥正文。
 - `src/terminal/TerminalPanel.tsx`：每个 Block 的 xterm 生命周期、直接输出 writer、OSC 工作目录和 PTY 尺寸适配；不管理连接配置或布局树。
 - `src/files/FileBrowserPane.tsx`、`CodeEditor.tsx`、`MarkdownPreview.tsx`：内部文件窗口的目录导航、下载、瞬时预览编辑状态与按需编辑/渲染组件；不依赖 TerminalRuntime，不直接读取本地文件或实现 SFTP。
-- `src/lib/tauri/profiles.ts`：连接配置 IPC 客户端契约；不实现校验、持久化或凭据处理。
+- `src/lib/tauri/profiles.ts`：连接配置与 SSH Config 导入 IPC 客户端契约；导入协议不包含配置路径或私钥路径，也不实现校验、持久化或凭据处理。
 - `src/lib/tauri/credentials.ts`：密码/私钥凭证库的窄 IPC 契约；不实现 KDF、加密或 JSON 访问。
 - `src/lib/tauri/settings.ts`：设备安全设置的窄 IPC 契约；不缓存或执行锁定策略。
 - `src/lib/tauri/sessions.ts`：SSH 会话命令与有序状态 Channel 契约；不实现主机密钥规则或协议状态机。
@@ -72,7 +73,8 @@
 - `src-tauri/src/infrastructure/`：负责 persistence、russh、known-hosts、PTY 和 SFTP 的 ports 实现；不把第三方库类型泄漏到 IPC 或 domain。
 - `src-tauri/src/infrastructure/persistence/`：负责当前 schema 的严格 JSON 读取、敏感字段拒绝、原子写入，以及 credential vault 的 Argon2id + envelope AES-GCM 适配；不负责旧版本迁移或 UI 流程。
 - `src-tauri/src/infrastructure/windows/`：负责 Windows WTS session-lock 注册、消息映射与窗口 hook 生命周期；Win32 类型不得越过该 adapter。
-- `src-tauri/src/infrastructure/ssh/`：负责 `russh` 私钥凭证解析、平台 SSH Agent 签名适配、带用途连接生命周期、PTY、SFTP 与有界 TCP forwarding；不扫描设备私钥目录，也不泄漏私钥正文或第三方 channel 类型。
+- `src-tauri/src/infrastructure/ssh/`：负责 `russh` 私钥凭证解析、SSH Config 有界解析、平台 SSH Agent 签名适配、带用途连接生命周期、PTY、SFTP 与有界 TCP forwarding；只读取系统选择器明确授权的配置入口及受限 Include，并仅在用户明确授权后读取候选私钥，不泄漏私钥正文或第三方 channel 类型。
+- `src-tauri/src/infrastructure/ssh/config_import.rs`：负责 SSH Config 的受限读取、Include 展开、Match 隔离、候选解析与私钥元数据检查；不执行 Match 或代理命令。
 
 ## Forbidden Contents By Directory
 

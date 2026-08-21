@@ -39,6 +39,13 @@ impl LoadedPrivateKey {
             .map_err(|_| AuthFailure::CorruptKey)
     }
 
+    pub(crate) fn public_key_fingerprint(&self) -> String {
+        self.key
+            .public_key()
+            .fingerprint(HashAlg::Sha256)
+            .to_string()
+    }
+
     #[cfg(all(test, unix))]
     pub(crate) fn warnings(&self) -> &[AuthWarning] {
         &self.warnings

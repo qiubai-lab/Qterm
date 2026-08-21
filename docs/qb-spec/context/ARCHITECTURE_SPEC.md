@@ -39,6 +39,8 @@ Frontend -> Tauri Commands -> Application -> Domain / Ports <- Infrastructure
 - WorkspaceShell 拥有终端空闲锁编排：从设备设置读取可选时长，以绝对最后活动时间和可清理 timer 监听键盘、指针按下与滚轮输入，并在页面恢复可见或窗口获得焦点时重新检查 deadline。终端输出、网络活动与重绘不续期；到期只复用现有 vault lock 与进程内终端锁屏，不新增后端终端状态。
 - 连接 profile catalog 同时保存独立的一层 `ProfileGroup` 与 profile 的可空 `groupId`。domain 不提供父分组字段；repository 在单次锁定和原子写入内维护引用完整性，删除 group 时清空相关 profile 引用而不删除 profile。
 - `connections.json` schema v4 持久化顶层 `groups`、profile `groupId`、`manual | password | privateKey | sshAgent` 偏好与可空 `credentialId`，不保存私钥路径。`network-forwards.json` 使用独立 schema，按 `profileId` 保存非敏感 Local/Remote/SOCKS5 规则，不保存运行状态；它与 connections/vault 位于同一个可迁移目录。profile、network、vault 和 workspace reader 只接受当前 schema，旧版本不运行时迁移。
+- profile 删除由 application use case 协调 ProfileService 与 NetworkService：先校验两侧存储可读，再删除 profile 并按 profile 在单次 Network repository 写入中批量删除规则；第二步失败时尽力恢复 profile。成功后 command 只负责关闭对应 Network session 并返回删除摘要。React 不逐条编排跨 repository 删除，credential 永远不在该流程中删除。
+- SSH Config 导入先由前端紧凑说明窗取得用户明确意图，再由 command 通过默认定位 `~/.ssh` 的系统选择器取得授权文件，并只向 WebView 返回一次性预览令牌与文件名；config 路径留在 Rust 内存。infrastructure 适配器负责所选入口的有界读取、相对 Include 展开和 Match 隔离，解析器模型不得跨越 infrastructure 边界。WebView 只以预览令牌、候选别名、私钥索引和可选口令提交选择，不能接收或提交 groupId、配置路径、私钥路径或私钥正文；command 固定把导入 profile 的 groupId 设为 null。提交重新解析授权文件；批量导入先校验全部候选，再原子写入 profile，失败时回滚本批次新建凭证。私钥复用比较解析后的公钥身份，不比较凭证显示名称。
 
 ## Workspace UI Model
 
@@ -63,7 +65,7 @@ Frontend -> Tauri Commands -> Application -> Domain / Ports <- Infrastructure
 
 ## Security Rules
 
-- 私钥只能通过凭证管理中的系统文件选择器显式导入；设备路径和私钥正文不进入连接配置或 WebView。
+- 私钥只能通过凭证管理中的系统文件选择器，或 SSH Config 预览中的逐项明确授权导入；设备路径和私钥正文不进入连接配置或 WebView。
 - SSH Agent 私钥不得由应用读取或导出；Unix 仅通过 `SSH_AUTH_SOCK`，Windows 通过 OpenSSH Agent named pipe 或 Pageant 请求签名。
 - profile 只允许保存认证偏好和 `credentialId`。`secrets.vault` 使用 Argon2id KEK 与独立 256-bit recovery key 分别包装同一个随机 data key，并用 AES-256-GCM 逐条加密密码、私钥正文和可选口令；恢复文件只保存 vault identity、generation 与 recovery key，不保存主密码、data key 或凭证明文。主密码、KEK、recovery key 和 data key 禁止进入 WebView 或日志。
 - 密码和口令使用 secret wrapper，在成功、失败、取消和断开路径释放；不得通过 Debug/Display/Serialize 泄漏。

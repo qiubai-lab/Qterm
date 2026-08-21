@@ -2,6 +2,7 @@ use uuid::Uuid;
 
 use crate::{
     application::error::{ApplicationError, ApplicationErrorCode},
+    application::network_service::NetworkService,
     domain::{
         credential::CredentialId,
         profile::{
@@ -9,7 +10,10 @@ use crate::{
             ProfileId, ProfileValidationError, ValidationReason,
         },
     },
-    ports::profile_repository::{ProfileRepository, ProfileRepositoryError},
+    ports::{
+        network_repository::NetworkRepository,
+        profile_repository::{ProfileRepository, ProfileRepositoryError},
+    },
 };
 
 pub struct ProfileInput {
@@ -20,6 +24,37 @@ pub struct ProfileInput {
     pub auth_preference: AuthPreference,
     pub credential_id: Option<String>,
     pub group_id: Option<String>,
+}
+
+pub fn delete_profile_with_network_rules<PR, NR>(
+    profiles: &ProfileService<PR>,
+    networks: &NetworkService<NR>,
+    id: &str,
+) -> Result<usize, ApplicationError>
+where
+    PR: ProfileRepository,
+    NR: NetworkRepository,
+{
+    let profile = profiles
+        .list()?
+        .into_iter()
+        .find(|profile| profile.id().as_str() == id)
+        .ok_or_else(|| map_repository_error(ProfileRepositoryError::NotFound))?;
+    networks.list(Some(id))?;
+    profiles.delete(id)?;
+    match networks.delete_profile_rules(id) {
+        Ok(deleted) => Ok(deleted),
+        Err(error) => {
+            profiles.repository.insert(profile).map_err(|_| {
+                ApplicationError::new(
+                    ApplicationErrorCode::ProfileStorageUnavailable,
+                    "删除关联网络规则失败，且无法恢复连接配置",
+                    true,
+                )
+            })?;
+            Err(error)
+        }
+    }
 }
 
 pub struct ProfileGroupInput {
@@ -53,6 +88,24 @@ where
             .insert(profile.clone())
             .map_err(map_repository_error)?;
         Ok(profile)
+    }
+
+    pub fn create_many(
+        &self,
+        inputs: Vec<ProfileInput>,
+    ) -> Result<Vec<ConnectionProfile>, ApplicationError> {
+        let profiles = inputs
+            .into_iter()
+            .map(|input| {
+                let id =
+                    ProfileId::parse(Uuid::new_v4().to_string()).map_err(map_validation_error)?;
+                build_profile(id, input)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        self.repository
+            .insert_many(profiles.clone())
+            .map_err(map_repository_error)?;
+        Ok(profiles)
     }
 
     pub fn update(
@@ -216,15 +269,57 @@ fn map_repository_error(error: ProfileRepositoryError) -> ApplicationError {
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
+    use std::{fs, sync::Mutex};
 
     use tempfile::tempdir;
 
-    use super::{ProfileGroupInput, ProfileInput, ProfileService};
-    use crate::{
-        application::error::ApplicationErrorCode, domain::profile::AuthPreference,
-        infrastructure::persistence::json_profile_repository::JsonProfileRepository,
+    use super::{
+        ProfileGroupInput, ProfileInput, ProfileService, delete_profile_with_network_rules,
     };
+    use crate::{
+        application::{
+            error::ApplicationErrorCode,
+            network_service::{NetworkRuleInput, NetworkService},
+        },
+        domain::{
+            network::{ForwardRule, ForwardRuleKind, NetworkRuleId},
+            profile::{AuthPreference, ProfileId},
+        },
+        infrastructure::persistence::{
+            json_network_repository::JsonNetworkRepository,
+            json_profile_repository::JsonProfileRepository,
+        },
+        ports::network_repository::{NetworkRepository, NetworkRepositoryError},
+    };
+
+    struct FailingDeleteNetworkRepository {
+        rules: Mutex<Vec<ForwardRule>>,
+    }
+
+    impl NetworkRepository for FailingDeleteNetworkRepository {
+        fn list(&self) -> Result<Vec<ForwardRule>, NetworkRepositoryError> {
+            Ok(self.rules.lock().expect("rules").clone())
+        }
+
+        fn insert(&self, _rule: ForwardRule) -> Result<(), NetworkRepositoryError> {
+            Err(NetworkRepositoryError::Io)
+        }
+
+        fn update(&self, _rule: ForwardRule) -> Result<(), NetworkRepositoryError> {
+            Err(NetworkRepositoryError::Io)
+        }
+
+        fn delete(&self, _id: &NetworkRuleId) -> Result<(), NetworkRepositoryError> {
+            Err(NetworkRepositoryError::Io)
+        }
+
+        fn delete_by_profile(
+            &self,
+            _profile_id: &ProfileId,
+        ) -> Result<usize, NetworkRepositoryError> {
+            Err(NetworkRepositoryError::Io)
+        }
+    }
 
     fn input(name: &str) -> ProfileInput {
         ProfileInput {
@@ -259,6 +354,73 @@ mod tests {
             .delete(created.id().as_str())
             .expect("delete profile");
         assert!(service.list().expect("list empty profiles").is_empty());
+    }
+
+    #[test]
+    fn cascades_profile_deletion_to_only_its_network_rules() {
+        let directory = tempdir().expect("temporary directory");
+        let profiles = ProfileService::new(JsonProfileRepository::new(
+            directory.path().join("profiles.json"),
+        ));
+        let networks = NetworkService::new(JsonNetworkRepository::new(
+            directory.path().join("network-forwards.json"),
+        ));
+        let deleted_profile = profiles.create(input("Production")).expect("profile");
+        let preserved_profile = profiles.create(input("Staging")).expect("profile");
+        for (profile_id, name, port) in [
+            (deleted_profile.id().as_str(), "SOCKS 1", 1080),
+            (deleted_profile.id().as_str(), "SOCKS 2", 1081),
+            (preserved_profile.id().as_str(), "Preserved", 1082),
+        ] {
+            networks
+                .create(NetworkRuleInput {
+                    profile_id: profile_id.to_owned(),
+                    name: name.to_owned(),
+                    kind: ForwardRuleKind::socks5("127.0.0.1", port).expect("kind"),
+                })
+                .expect("network rule");
+        }
+
+        let deleted =
+            delete_profile_with_network_rules(&profiles, &networks, deleted_profile.id().as_str())
+                .expect("cascade delete");
+
+        assert_eq!(deleted, 2);
+        assert_eq!(
+            profiles.list().expect("profiles"),
+            vec![preserved_profile.clone()]
+        );
+        let remaining = networks.list(None).expect("rules");
+        assert_eq!(remaining.len(), 1);
+        assert_eq!(remaining[0].profile_id(), preserved_profile.id());
+    }
+
+    #[test]
+    fn restores_the_profile_when_network_rule_deletion_fails() {
+        let directory = tempdir().expect("temporary directory");
+        let profiles = ProfileService::new(JsonProfileRepository::new(
+            directory.path().join("profiles.json"),
+        ));
+        let profile = profiles.create(input("Production")).expect("profile");
+        let rule = ForwardRule::new(
+            NetworkRuleId::parse("network-1").expect("rule id"),
+            profile.id().clone(),
+            "SOCKS",
+            ForwardRuleKind::socks5("127.0.0.1", 1080).expect("kind"),
+        )
+        .expect("rule");
+        let networks = NetworkService::new(FailingDeleteNetworkRepository {
+            rules: Mutex::new(vec![rule]),
+        });
+
+        let error = delete_profile_with_network_rules(&profiles, &networks, profile.id().as_str())
+            .expect_err("network deletion must fail");
+
+        assert_eq!(
+            error.code(),
+            ApplicationErrorCode::NetworkStorageUnavailable
+        );
+        assert_eq!(profiles.list().expect("restored profile"), vec![profile]);
     }
 
     #[test]

@@ -1,12 +1,11 @@
 .about-dialog .about-update {
   display: grid;
-  min-height: 76px;
+  min-height: 70px;
   grid-template-columns: 31px minmax(0, 1fr) auto;
-  grid-template-rows: 28px minmax(13px, auto);
+  grid-template-rows: 25px minmax(13px, auto);
   column-gap: 10px;
-  row-gap: 3px;
+  row-gap: 2px;
   align-items: center;
-  justify-content: normal;
 }
 
 .about-update-icon {
@@ -20,32 +19,8 @@
   align-self: center;
 }
 
-.about-update[data-status="latest"] .about-update-heading span,
-.about-update[data-status="available"] .about-update-heading span {
-  color: #8fcabe;
-}
-
-.about-update[data-status="latest"] .about-update-heading i,
-.about-update[data-status="available"] .about-update-heading i {
-  background: var(--accent);
-  box-shadow: 0 0 6px #75e6cf55;
-}
-
-.about-update[data-status="error"] .about-update-heading span {
-  color: #d39894;
-}
-
-.about-update[data-status="error"] .about-update-heading i {
-  background: var(--danger);
-}
-
-.about-update[data-status="checking"] .about-update-icon svg {
-  animation: about-update-spin 0.8s linear infinite;
-}
-
 .about-update p {
   min-width: 0;
-  min-height: 13px;
   grid-column: 2;
   grid-row: 2;
   overflow: hidden;
@@ -54,12 +29,11 @@
 }
 
 .about-update-action {
-  grid-column: 3;
-  grid-row: 1 / 3;
   min-width: 76px;
   height: 28px;
+  grid-column: 3;
+  grid-row: 1 / 3;
   align-self: center;
-  flex: none;
   padding: 0 10px;
   border: 1px solid #3c4946;
   border-radius: 6px;
@@ -67,47 +41,230 @@
   background: #1b2220;
   font-size: 9px;
   font-weight: 600;
-  transition:
-    border-color 130ms ease,
-    background-color 130ms ease,
-    transform 100ms ease;
+  transition: border-color 130ms ease, background-color 130ms ease, transform 100ms ease;
 }
 
-.about-update-action:hover:not(:disabled) {
+.about-update-action:hover {
   border-color: #53736c;
   color: #eef7f5;
   background: #222d2a;
 }
 
-.about-update-action:active:not(:disabled) {
+.about-update-action:active {
   transform: scale(0.97);
 }
 
-.about-update-action:focus-visible {
+.about-update-action:focus-visible,
+.update-check-copy:focus-visible,
+.update-check-release:focus-visible,
+.update-check-recheck:focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
 
-.about-update-action:disabled {
-  cursor: wait;
-  color: #697370;
-  background: #171b1a;
+.update-check-dialog .dialog-header {
+  padding: 13px 15px 11px;
 }
 
-.about-update-action.is-primary {
-  border-color: #4f897d;
-  color: #08201b;
-  background: var(--accent);
+.update-check-dialog .dialog-header p {
+  margin-top: 3px;
+  font-size: 9px;
 }
 
-.about-update-action.is-primary:hover {
-  border-color: #77ddc9;
-  color: #04130f;
-  background: #8aefda;
+.update-check-dialog .dialog-content {
+  padding: 12px 14px 14px;
+  overflow: hidden;
+}
+
+.update-check-body {
+  display: grid;
+  min-width: 0;
+  gap: 9px;
+}
+
+.update-check-status {
+  display: grid;
+  min-height: 82px;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid #34413e;
+  border-radius: 9px;
+  background: linear-gradient(145deg, #151b1a, #121516);
+}
+
+.update-check-status-icon {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 1px solid #3a4b46;
+  border-radius: 8px;
+  color: #89a7a1;
+  background: #17201e;
+}
+
+.update-check-status-icon.checking svg {
+  animation: about-update-spin 0.8s linear infinite;
+}
+
+.update-check-status[data-status="latest"] .update-check-status-icon,
+.update-check-status[data-status="available"] .update-check-status-icon {
+  border-color: #3d655c;
+  color: var(--accent);
+  background: #172722;
+}
+
+.update-check-status[data-status="error"] .update-check-status-icon {
+  border-color: #65413f;
+  color: var(--danger);
+  background: #271817;
+}
+
+.update-check-status > div:first-of-type {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.update-check-status strong {
+  color: #e4eae8;
+  font-size: 11px;
+}
+
+.update-check-status p,
+.update-check-status small {
+  margin: 0;
+  color: #87918f;
+  font-size: 9px;
+  line-height: 1.55;
+}
+
+.update-check-status small {
+  color: #687572;
+}
+
+.update-check-status[data-status="error"] p {
+  color: #d49a96;
+}
+
+.update-check-homebrew {
+  display: grid;
+  gap: 7px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: #121518;
+}
+
+.update-check-homebrew > div:first-child {
+  display: grid;
+  gap: 3px;
+}
+
+.update-check-homebrew strong {
+  color: #dbe2e0;
+  font-size: 10.5px;
+}
+
+.update-check-homebrew p {
+  margin: 0;
+  color: #77817f;
+  font-size: 8.5px;
+  line-height: 1.45;
+}
+
+.update-check-command {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: center;
+  padding: 4px 4px 4px 8px;
+  border: 1px solid #313b39;
+  border-radius: 7px;
+  background: #0b0e10;
+}
+
+.update-check-command code {
+  min-width: 0;
+  overflow: hidden;
+  color: #b9d9d2;
+  font-family: var(--terminal-font-family);
+  font-size: 9.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  user-select: text;
+}
+
+.update-check-copy {
+  display: inline-flex;
+  height: 26px;
+  gap: 5px;
+  align-items: center;
+  padding: 0 8px;
+  border: 1px solid #3a4643;
+  border-radius: 5px;
+  color: #9fc9c0;
+  background: #18201e;
+  font-size: 8.5px;
+  font-weight: 650;
+}
+
+.update-check-copy:hover {
+  border-color: #527068;
+  color: #e3f4f0;
+  background: #202b28;
+}
+
+.update-check-status-actions {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+
+.update-check-release,
+.update-check-recheck {
+  height: 28px;
+  border: 1px solid #3a4945;
+  border-radius: 6px;
+  color: #acd8cf;
+  background: #18211f;
+}
+
+.update-check-release {
+  padding: 0 8px;
+  font-size: 8.5px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.update-check-recheck {
+  display: grid;
+  width: 28px;
+  flex: none;
+  place-items: center;
+  padding: 0;
+}
+
+.update-check-release:hover,
+.update-check-recheck:hover {
+  border-color: #58766f;
+  color: #eff9f7;
+  background: #202c29;
+}
+
+.update-check-recheck:active svg {
+  transform: rotate(24deg);
 }
 
 @keyframes about-update-spin {
-  to {
-    transform: rotate(360deg);
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .update-check-status-icon.checking svg {
+    animation: none;
   }
 }

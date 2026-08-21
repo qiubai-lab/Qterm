@@ -9,10 +9,34 @@ const tauriConfig = JSON.parse(readFileSync("src-tauri/tauri.conf.json", "utf8")
 
 function declarations(selector: string): string {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return styles.match(new RegExp(`${escaped}\\s*\\{([^}]*)\\}`))?.[1] ?? "";
+  return styles.match(new RegExp(`(?:^|}|,)\\s*${escaped}\\s*\\{([^}]*)\\}`))?.[1] ?? "";
 }
 
 describe("application layout styles", () => {
+  it("keeps SSH Config import content in one bounded manager scroller", () => {
+    expect(declarations(".ssh-config-import-dialog .dialog-content")).toContain("overflow:hidden");
+    expect(declarations(".ssh-config-import-list")).toContain("min-height:0");
+    expect(declarations(".ssh-config-import-list")).toContain("overflow:auto");
+    expect(declarations(".ssh-config-import-panel")).toContain("min-height:0");
+    expect(declarations(".ssh-config-import-panel")).toContain("overflow:hidden");
+    expect(declarations(".ssh-config-import-tabs")).toContain("margin:7px 10px 6px");
+    expect(declarations(".ssh-config-import-prompt-copy")).toContain("display:grid");
+    expect(declarations(".ssh-config-import-source-label")).toContain("max-width:160px");
+    expect(declarations(".ssh-config-import-dialog .ssh-config-import-source-label")).toContain("height:26px");
+    expect(declarations(".ssh-config-import-dialog .ssh-config-import-source-label")).toContain("background:#15191c");
+    expect(declarations(".ssh-config-import-source-label>span")).toContain("text-overflow:ellipsis");
+    expect(declarations(".secondary-button.ssh-config-import-reselect")).toContain("height:26px");
+    expect(declarations(".ssh-config-import-dialog .icon-button")).toContain("height:26px");
+    expect(declarations(".ssh-config-import-dialog .ssh-config-import-choice")).toContain("min-height:40px");
+    expect(declarations(".ssh-config-import-choice,.ssh-config-key-option>label")).toContain("margin:0");
+    expect(declarations(".ssh-config-import-choice>input")).toContain("accent-color:var(--accent)");
+    expect(declarations(".ssh-config-import-dialog .ssh-config-import-item")).toContain("margin-bottom:5px");
+    expect(declarations(".ssh-config-import-dialog .ssh-config-import-item.selected")).toContain("background:#181d1c");
+    expect(declarations(".ssh-config-import-dialog .ssh-config-import-item.selected")).toContain("box-shadow:none");
+    expect(declarations(".ssh-config-import-actions")).toContain("flex:none");
+    expect(declarations(".connection-import-button")).toContain("display:flex");
+  });
+
   it("slides one shared selection surface between workspace tabs", () => {
     expect(declarations(".workspace-tab-strip")).toContain("position:relative");
     expect(declarations(".workspace-tab-selection")).toContain("position:absolute");
@@ -22,15 +46,27 @@ describe("application layout styles", () => {
     expect(styles).toMatch(/prefers-reduced-motion:reduce[\s\S]*\.workspace-tab-selection\.ready\{transition:none\}/);
   });
 
+  it("slides workspace content in the tab direction with a reduced-motion fade", () => {
+    expect(declarations(".workspace-canvas-stage.visible.workspace-transition-forward")).toContain("animation:workspace-stage-forward 220ms cubic-bezier(.2,.8,.2,1)");
+    expect(declarations(".workspace-canvas-stage.visible.workspace-transition-backward")).toContain("animation:workspace-stage-backward 220ms cubic-bezier(.2,.8,.2,1)");
+    expect(styles).toContain("@keyframes workspace-stage-forward{from{opacity:.5;transform:translate3d(8px,0,0)}");
+    expect(styles).toContain("@keyframes workspace-stage-backward{from{opacity:.5;transform:translate3d(-8px,0,0)}");
+    expect(styles).toMatch(/prefers-reduced-motion:reduce[\s\S]*\.workspace-canvas-stage\.visible\.workspace-transition-forward,[\s\S]*animation:workspace-stage-fade 100ms ease-out!important/);
+  });
+
   it("uses native window material behind a lightly tinted, rounded webview shell", () => {
+    const root = declarations(":root");
     const appShell = declarations(".app-shell");
     const chrome = declarations(".app-chrome");
     const utilityRail = declarations(".utility-rail");
     const workspaceCanvas = declarations(".workspace-canvas");
+    const terminalBlock = declarations(".terminal-block");
     const terminalHeader = declarations(".terminal-block-header");
+    const activeTerminalHeader = declarations(".terminal-block.active>.terminal-block-header");
     const dialog = declarations(".dialog-frame");
     const window = tauriConfig.app.windows[0];
 
+    expect(root).toContain("--workbench-panel:rgba(5,7,8,.92)");
     expect(appShell).toContain("border-radius:var(--shell-radius)");
     expect(appShell).toContain("background:transparent");
     expect(appShell).not.toContain("border:");
@@ -38,6 +74,10 @@ describe("application layout styles", () => {
     expect(chrome).not.toContain("backdrop-filter:");
     expect(utilityRail).not.toContain("backdrop-filter:");
     expect(workspaceCanvas).toContain("background:rgba(5,7,9,.18)");
+    expect(terminalBlock).toContain("background:var(--workbench-panel)");
+    expect(terminalHeader).toContain("rgba(30,33,37,.2)");
+    expect(terminalHeader).toContain("rgba(15,17,20,.12)");
+    expect(activeTerminalHeader).toContain("rgba(25,51,46,.34)");
     expect(terminalHeader).not.toContain("backdrop-filter:");
     expect(dialog).toContain("backdrop-filter:blur(30px)");
     expect(window.theme).toBe("Dark");
@@ -48,33 +88,42 @@ describe("application layout styles", () => {
       radius: 12,
     });
     expect(styles).toMatch(/prefers-reduced-transparency:reduce[\s\S]*\.app-shell\{background:#090a0c\}/);
+    expect(styles).toMatch(/prefers-reduced-transparency:reduce[\s\S]*\.terminal-block,\.terminal-surface,\.file-browser,\.network-pane\{background:#050708\}/);
     expect(styles).toMatch(/prefers-contrast:more[\s\S]*\.app-shell\{background:#090a0cf5;box-shadow:inset 0 0 0 1px #737a84\}/);
+    expect(styles).toMatch(/prefers-contrast:more[\s\S]*\.terminal-block,\.terminal-surface,\.file-browser,\.network-pane\{background:#050708\}/);
   });
 
   it("fills tall terminal blocks with one continuous terminal surface", () => {
     const terminalSurface = declarations(".terminal-surface");
     const xtermSurface = declarations(".terminal-surface>.xterm");
+    const xtermViewport = declarations(".terminal-surface .xterm-viewport");
 
     expect(terminalSurface).toContain("min-height:0");
     expect(terminalSurface).toContain("flex:1");
     expect(terminalSurface).not.toContain("padding:");
-    expect(declarations(".terminal-surface,.file-browser,.network-pane")).toContain("background:rgba(5,7,8,.78)");
+    expect(declarations(".terminal-surface,.file-browser,.network-pane")).toContain("background:transparent");
     expect(xtermSurface).toContain("height:100%");
     expect(xtermSurface).toContain("padding:4px 3px 2px 7px");
+    expect(xtermViewport).toContain("background-color:transparent");
   });
 
   it("uses one dark translucent surface language across terminal, files, and network blocks", () => {
     const block = declarations(".terminal-block");
     const contentSurfaces = declarations(".terminal-surface,.file-browser,.network-pane");
 
-    expect(block).toContain("background:rgba(5,7,8,.84)");
+    expect(block).toContain("background:var(--workbench-panel)");
     expect(block).toContain("overflow:hidden");
     expect(block).not.toContain("backdrop-filter:");
     expect(block).not.toContain("-webkit-backdrop-filter:");
-    expect(contentSurfaces).toContain("background:rgba(5,7,8,.78)");
+    expect(contentSurfaces).toContain("background:transparent");
     expect(declarations(".network-block")).not.toContain("background:");
     expect(declarations(".file-browser-navigation")).toContain("height:34px");
     expect(declarations(".network-toolbar")).toContain("height:34px");
+    expect(declarations(".file-browser-navigation")).toContain("background:rgba(11,14,16,.22)");
+    expect(declarations(".network-toolbar")).toContain("background:rgba(11,14,16,.22)");
+    expect(declarations(".file-browser-columns")).toContain("background:rgba(8,10,11,.28)");
+    expect(declarations(".file-browser-columns")).toContain("backdrop-filter:blur(8px)");
+    expect(declarations(".file-browser-statusbar")).toContain("background:rgba(13,17,17,.32)");
     expect(declarations(".network-create-button")).toContain("width:25px");
     expect(declarations(".network-create-button")).toContain("height:25px");
     expect(declarations(".network-create-button")).toContain("border:0");

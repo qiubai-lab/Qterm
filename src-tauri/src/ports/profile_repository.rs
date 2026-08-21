@@ -9,6 +9,12 @@ pub trait ProfileRepository: Send + Sync {
     fn list(&self) -> Result<Vec<ConnectionProfile>, ProfileRepositoryError>;
     fn list_groups(&self) -> Result<Vec<ProfileGroup>, ProfileRepositoryError>;
     fn insert(&self, profile: ConnectionProfile) -> Result<(), ProfileRepositoryError>;
+    fn insert_many(&self, profiles: Vec<ConnectionProfile>) -> Result<(), ProfileRepositoryError> {
+        for profile in profiles {
+            self.insert(profile)?;
+        }
+        Ok(())
+    }
     fn update(&self, profile: ConnectionProfile) -> Result<(), ProfileRepositoryError>;
     fn delete(&self, id: &ProfileId) -> Result<(), ProfileRepositoryError>;
     fn clear_credential_references(&self, id: &CredentialId) -> Result<(), ProfileRepositoryError>;

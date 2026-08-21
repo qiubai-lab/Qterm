@@ -11,14 +11,22 @@ function declarations(selector: string): string {
 }
 
 describe("about update styles", () => {
-  it("aligns the update heading and persistent action on the same grid row", () => {
+  it("keeps the about-page launcher compact and the update result geometry stable", () => {
     expect(globalStyles).toContain(".about-update{display:flex");
-    expect(declarations(".about-dialog .about-update")).toContain("display: grid");
-    expect(declarations(".about-dialog .about-update")).toContain(
-      "grid-template-columns: 31px minmax(0, 1fr) auto",
-    );
-    expect(declarations(".about-update-heading")).toContain("grid-row: 1");
-    expect(declarations(".about-update-action")).toContain("grid-row: 1 / 3");
-    expect(declarations(".about-update p")).toContain("grid-row: 2");
+    expect(declarations(".about-dialog .about-update")).toContain("grid-template-columns: 31px minmax(0, 1fr) auto");
+    expect(declarations(".update-check-dialog .dialog-header")).toContain("padding: 13px 15px 11px");
+    expect(declarations(".update-check-dialog .dialog-content")).toContain("padding: 12px 14px 14px");
+    expect(declarations(".update-check-status")).toContain("min-height: 82px");
+    expect(declarations(".update-check-status")).toContain("grid-template-columns: 34px minmax(0, 1fr) auto");
+    expect(declarations(".update-check-status-actions")).toContain("display: flex");
+    expect(styles).not.toContain(".update-check-actions");
+  });
+
+  it("presents the Homebrew command as a persistent monospace copy surface", () => {
+    expect(declarations(".update-check-command")).toContain("grid-template-columns: minmax(0, 1fr) auto");
+    expect(declarations(".update-check-command code")).toContain("font-family: var(--terminal-font-family)");
+    expect(declarations(".update-check-homebrew")).toContain("padding: 10px");
+    expect(declarations(".update-check-copy")).toContain("height: 26px");
+    expect(styles).toMatch(/prefers-reduced-motion: reduce[\s\S]*\.update-check-status-icon\.checking svg[\s\S]*animation: none/);
   });
 });

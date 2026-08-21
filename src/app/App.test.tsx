@@ -91,16 +91,19 @@ describe("application shell", () => {
     expect(workspace2.closest(".workspace-tab")).toHaveClass("selected");
     expect(stages[0]).toHaveAttribute("aria-hidden", "true");
     expect(stages[1]).toHaveAttribute("aria-hidden", "false");
+    expect(stages[1]).toHaveClass("workspace-transition-forward");
 
     await user.click(workspace1);
     expect(workspace1.closest(".workspace-tab")).toHaveClass("selected");
     expect(stages[0]).toHaveAttribute("aria-hidden", "false");
     expect(stages[1]).toHaveAttribute("aria-hidden", "true");
+    expect(stages[0]).toHaveClass("workspace-transition-backward");
 
     await user.click(workspace2);
     expect(workspace2.closest(".workspace-tab")).toHaveClass("selected");
     expect(stages[0]).toHaveAttribute("aria-hidden", "true");
     expect(stages[1]).toHaveAttribute("aria-hidden", "false");
+    expect(stages[1]).toHaveClass("workspace-transition-forward");
   });
 
   it("edits a workspace name inside its existing tab", async () => {

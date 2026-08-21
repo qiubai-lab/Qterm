@@ -68,7 +68,7 @@ impl JsonCredentialVault {
         }
     }
     #[cfg(test)]
-    fn new_for_test(path: PathBuf) -> Self {
+    pub(crate) fn new_for_test(path: PathBuf) -> Self {
         Self::with_kdf(path, 1_024, 1, 1)
     }
     fn runtime(&self) -> MutexGuard<'_, Runtime> {

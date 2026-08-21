@@ -5,9 +5,10 @@ import { createProfile, createProfileGroup, deleteProfile, deleteProfileGroup, l
 import { findLeaf, terminalBlockIds } from "../../workspace/layout";
 import { useWorkspace } from "../../workspace/WorkspaceProvider";
 import { Icon } from "../Icon";
-import { DialogFrame } from "./DialogFrame";
+import { DialogActionStatus, DialogFrame } from "./DialogFrame";
 import { CredentialDialog } from "./CredentialDialog";
 import { MasterPasswordDialog } from "./MasterPasswordDialog";
+import { SshConfigImportDialog } from "./SshConfigImportDialog";
 
 const empty: ProfileInput = { name: "", host: "", port: 22, username: "", authPreference: "password", credentialId: null, groupId: null };
 type EditorTab = "connection" | "authentication";
@@ -50,7 +51,10 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
   const [vaultStatus, setVaultStatus] = useState<VaultStatus>({ initialized: false, unlocked: false, legacy: false });
   const [credentialManagerOpen, setCredentialManagerOpen] = useState(false);
   const [credentialUnlockOpen, setCredentialUnlockOpen] = useState(false);
+  const [sshConfigImportOpen, setSshConfigImportOpen] = useState(false);
   const [deleteRequested, setDeleteRequested] = useState<ConnectionProfile | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteMessage, setDeleteMessage] = useState("");
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [pointerDrag, setPointerDrag] = useState<PointerDragState | null>(null);
   const [dropTarget, setDropTarget] = useState<DropTarget>(null);
@@ -141,14 +145,24 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
     } catch (error) { setSaveState("idle"); setMessage(errorMessage(error)); }
   }
 
-  async function remove(profile: ConnectionProfile | null = selected) {
+  function requestDelete(profile: ConnectionProfile) {
+    setDeleteMessage("");
+    setDeleteRequested(profile);
+  }
+
+  async function remove(profile: ConnectionProfile | null = deleteRequested) {
     if (!profile) return;
+    setDeleteBusy(true); setDeleteMessage("");
     try {
-      await deleteProfile(profile.id); await refreshProfiles();
+      const result = await deleteProfile(profile.id); await refreshProfiles();
       if (findProfileId(activeWorkspace.layout, terminalBlockId) === profile.id) await selectBlockTarget(activeWorkspace.id, terminalBlockId, null);
       if (selectedId === profile.id) startNewProfile();
-      setMessage("连接配置已删除，共享凭证保持不变");
-    } catch (error) { setMessage(errorMessage(error)); }
+      setDeleteRequested(null);
+      setMessage(result.deletedNetworkRules > 0
+        ? `连接配置已删除，已同时删除 ${result.deletedNetworkRules} 条关联网络转发规则；共享凭证保持不变`
+        : "连接配置已删除，共享凭证保持不变");
+    } catch (error) { setDeleteMessage(errorMessage(error)); }
+    finally { setDeleteBusy(false); }
   }
 
   function openNewGroup() {
@@ -332,8 +346,8 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
     <DialogFrame
       title="连接管理"
       subtitle="管理 SSH 连接配置"
-      headerActions={<span className={`vault-status-button ${vaultStatus.initialized ? "initialized" : "uninitialized"}`}><span aria-hidden="true"/>{vaultStatus.unlocked ? "凭证库已解锁" : vaultStatus.initialized ? "凭证库已锁定" : vaultStatus.legacy ? "旧版凭证库" : "凭证库未初始化"}</span>}
-      onClose={credentialManagerOpen || credentialUnlockOpen || deleteRequested || groupEditor || groupDeleteRequested || contextMenu ? () => undefined : onClose}
+      headerActions={<><span className={`vault-status-button ${vaultStatus.initialized ? "initialized" : "uninitialized"}`}><span aria-hidden="true"/>{vaultStatus.unlocked ? "凭证库已解锁" : vaultStatus.initialized ? "凭证库已锁定" : vaultStatus.legacy ? "旧版凭证库" : "凭证库未初始化"}</span><button type="button" className="connection-import-button" onClick={() => setSshConfigImportOpen(true)}><Icon name="upload" size={13}/>导入</button></>}
+      onClose={credentialManagerOpen || credentialUnlockOpen || sshConfigImportOpen || deleteRequested || groupEditor || groupDeleteRequested || contextMenu ? () => undefined : onClose}
       wide
     >
       <div className="connection-dialog-grid">
@@ -394,7 +408,7 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
             </div>}
             {message && <p className="inline-message" role="alert">{message}</p>}
           </div>
-          <footer className="dialog-actions connection-editor-actions">{selected && <button className="danger-button" onClick={() => setDeleteRequested(selected)}>删除</button>}<button className={`primary-button connection-save-button ${saveState}`} data-state={saveState} disabled={saveState !== "idle"} aria-live="polite" onClick={() => void save()}><span>{saveState === "saving" ? "保存中…" : saveState === "success" ? "保存成功" : "保存配置"}</span></button></footer>
+          <footer className="dialog-actions connection-editor-actions">{selected && <button className="danger-button" onClick={() => requestDelete(selected)}>删除</button>}<button className={`primary-button connection-save-button ${saveState}`} data-state={saveState} disabled={saveState !== "idle"} aria-live="polite" onClick={() => void save()}><span>{saveState === "saving" ? "保存中…" : saveState === "success" ? "保存成功" : "保存配置"}</span></button></footer>
         </div>
       </div>
     </DialogFrame>
@@ -423,7 +437,7 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
         <button role="menuitem" onClick={() => { setContextMenu(null); chooseProfile(contextProfile); }}>编辑连接</button>
         <button role="menuitem" onClick={() => void duplicateProfile(contextProfile)}>复制连接</button>
         <div className="connection-context-menu-separator" role="separator"/>
-        <button className="danger" role="menuitem" onClick={() => { setContextMenu(null); setDeleteRequested(contextProfile); }}>删除连接</button>
+        <button className="danger" role="menuitem" onClick={() => { setContextMenu(null); requestDelete(contextProfile); }}>删除连接</button>
       </> : null}
     </div>}
     {groupEditor && <DialogFrame title={groupEditor === "new" ? "新建分组" : "管理分组"} subtitle="连接分组仅支持一层" compact onClose={() => setGroupEditor(null)}>
@@ -435,9 +449,9 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
       <p className="confirm-copy">该分组内的连接不会被删除，而会自动移到“未分组”。</p>
       <footer className="dialog-actions end"><button className="secondary-button" onClick={() => setGroupDeleteRequested(null)}>取消</button><button className="danger-button filled" data-dialog-autofocus onClick={() => void removeGroup()}>确认删除</button></footer>
     </DialogFrame>}
-    {deleteRequested && <DialogFrame title="删除连接？" subtitle={deleteRequested.name} compact onClose={() => setDeleteRequested(null)}>
-      <p className="confirm-copy">删除后将同时移除此连接保存的凭据，且无法撤销。</p>
-      <footer className="dialog-actions end"><button className="secondary-button" onClick={() => setDeleteRequested(null)}>取消</button><button className="danger-button filled" data-dialog-autofocus onClick={() => { const profile = deleteRequested; setDeleteRequested(null); void remove(profile); }}>确认删除</button></footer>
+    {deleteRequested && <DialogFrame title="删除连接？" subtitle={deleteRequested.name} compact dismissible={!deleteBusy} onClose={() => { if (!deleteBusy) setDeleteRequested(null); }}>
+      <p className="confirm-copy">删除后将同时移除此连接及其关联的网络转发规则；共享凭证保持不变。此操作无法撤销。</p>
+      <footer className="dialog-actions dialog-actions-with-status"><DialogActionStatus message={deleteMessage}/><div><button className="secondary-button" disabled={deleteBusy} onClick={() => setDeleteRequested(null)}>取消</button><button className="danger-button filled" data-dialog-autofocus disabled={deleteBusy} onClick={() => void remove()}>{deleteBusy ? "正在删除…" : "确认删除"}</button></div></footer>
     </DialogFrame>}
     {credentialManagerOpen && (
       <CredentialDialog onClose={() => {
@@ -450,6 +464,20 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
         setCredentialUnlockOpen(false);
         void refreshCredentialSummaries();
       }}/>
+    )}
+    {sshConfigImportOpen && (
+      <SshConfigImportDialog
+        onClose={() => setSshConfigImportOpen(false)}
+        onImported={async (result) => {
+          await refreshProfiles();
+          await refreshCredentialSummaries();
+          const credentialResult = [
+            result.importedPrivateKeys > 0 ? `新建 ${result.importedPrivateKeys} 个私钥凭证` : "",
+            result.reusedPrivateKeys > 0 ? `复用 ${result.reusedPrivateKeys} 个已有凭证` : "",
+          ].filter(Boolean).join("，");
+          setMessage(`已导入 ${result.imported} 个连接${credentialResult ? `，${credentialResult}` : ""}`);
+        }}
+      />
     )}
   </>;
 }

@@ -28,6 +28,49 @@ export interface ProfileGroup {
   name: string;
 }
 
+export type SshConfigIdentityStatus = "available" | "unavailable" | "tooLarge" | "dynamicPath";
+
+export interface SshConfigIdentity {
+  index: number;
+  fileName: string;
+  status: SshConfigIdentityStatus;
+}
+
+export interface SshConfigCandidate {
+  alias: string;
+  name: string;
+  host: string;
+  port: number;
+  username: string;
+  alreadyImported: boolean;
+  importable: boolean;
+  identities: SshConfigIdentity[];
+  warnings: string[];
+}
+
+export interface SshConfigPreview {
+  previewId: string;
+  sourceName: string;
+  candidates: SshConfigCandidate[];
+  warnings: string[];
+}
+
+export interface SshConfigImportItem {
+  alias: string;
+  identityFileIndex: number | null;
+  passphrase: string | null;
+}
+
+export interface SshConfigImportResult {
+  imported: number;
+  importedPrivateKeys: number;
+  reusedPrivateKeys: number;
+}
+
+export interface ProfileDeleteResult {
+  deletedNetworkRules: number;
+}
+
 export interface IpcError {
   code: string;
   message: string;
@@ -49,8 +92,8 @@ export function updateProfile(
   return invoke<ConnectionProfile>("profile_update", { id, input });
 }
 
-export function deleteProfile(id: string): Promise<void> {
-  return invoke<void>("profile_delete", { id });
+export function deleteProfile(id: string): Promise<ProfileDeleteResult> {
+  return invoke<ProfileDeleteResult>("profile_delete", { id });
 }
 
 export function listProfileGroups(): Promise<ProfileGroup[]> {
@@ -67,4 +110,17 @@ export function updateProfileGroup(id: string, name: string): Promise<ProfileGro
 
 export function deleteProfileGroup(id: string): Promise<void> {
   return invoke<void>("profile_group_delete", { id });
+}
+
+export function previewSshConfigImport(): Promise<SshConfigPreview | null> {
+  return invoke<SshConfigPreview | null>("profile_import_ssh_config_preview");
+}
+
+export function importSshConfig(
+  previewId: string,
+  items: SshConfigImportItem[],
+): Promise<SshConfigImportResult> {
+  return invoke<SshConfigImportResult>("profile_import_ssh_config_commit", {
+    input: { previewId, items },
+  });
 }

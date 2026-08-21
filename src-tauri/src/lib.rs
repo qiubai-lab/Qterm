@@ -27,7 +27,8 @@ use commands::network::{
 };
 use commands::profile::{
     ProfileState, profile_create, profile_delete, profile_group_create, profile_group_delete,
-    profile_group_list, profile_group_update, profile_list, profile_update,
+    profile_group_list, profile_group_update, profile_import_ssh_config_commit,
+    profile_import_ssh_config_preview, profile_list, profile_update,
 };
 use commands::session::{
     SessionState, session_accept_host_key, session_close, session_connect, session_reject_host_key,
@@ -152,6 +153,8 @@ pub fn run() {
             profile_group_create,
             profile_group_update,
             profile_group_delete,
+            profile_import_ssh_config_preview,
+            profile_import_ssh_config_commit,
             network_rule_list,
             network_rule_create,
             network_rule_update,

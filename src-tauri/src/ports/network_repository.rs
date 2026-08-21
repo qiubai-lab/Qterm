@@ -10,7 +10,7 @@ pub trait NetworkRepository: Send + Sync {
     fn insert(&self, rule: ForwardRule) -> Result<(), NetworkRepositoryError>;
     fn update(&self, rule: ForwardRule) -> Result<(), NetworkRepositoryError>;
     fn delete(&self, id: &NetworkRuleId) -> Result<(), NetworkRepositoryError>;
-    fn has_profile_rules(&self, profile_id: &ProfileId) -> Result<bool, NetworkRepositoryError>;
+    fn delete_by_profile(&self, profile_id: &ProfileId) -> Result<usize, NetworkRepositoryError>;
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

@@ -81,11 +81,11 @@ where
         self.repository.delete(&id).map_err(map_repository_error)
     }
 
-    pub fn has_profile_rules(&self, profile_id: &str) -> Result<bool, ApplicationError> {
+    pub fn delete_profile_rules(&self, profile_id: &str) -> Result<usize, ApplicationError> {
         let profile_id =
             ProfileId::parse(profile_id).map_err(|_| invalid_rule("连接配置 ID 无效"))?;
         self.repository
-            .has_profile_rules(&profile_id)
+            .delete_by_profile(&profile_id)
             .map_err(map_repository_error)
     }
 }
@@ -171,8 +171,8 @@ mod tests {
             })
             .expect("create");
         assert_eq!(service.list(Some("profile-1")).expect("list").len(), 1);
-        assert!(service.has_profile_rules("profile-1").expect("has rules"));
+        assert_eq!(service.list(Some("profile-1")).expect("rules").len(), 1);
         service.delete(rule.id().as_str()).expect("delete");
-        assert!(!service.has_profile_rules("profile-1").expect("has rules"));
+        assert!(service.list(Some("profile-1")).expect("rules").is_empty());
     }
 }

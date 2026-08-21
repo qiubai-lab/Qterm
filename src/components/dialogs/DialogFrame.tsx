@@ -4,7 +4,7 @@ import { Icon } from "../Icon";
 
 const dialogStack: symbol[] = [];
 
-export function DialogFrame({ title, subtitle, onClose, children, headerActions, wide = false, compact = false, dismissible = true, modal = true, className, scrimClassName }: { title: string; subtitle?: string; onClose: () => void; children: ReactNode; headerActions?: ReactNode; wide?: boolean; compact?: boolean; dismissible?: boolean; modal?: boolean; className?: string; scrimClassName?: string }) {
+export function DialogFrame({ title, subtitle, onClose, children, headerActions, wide = false, compact = false, dismissible = true, blocking = !dismissible, modal = true, className, scrimClassName }: { title: string; subtitle?: string; onClose: () => void; children: ReactNode; headerActions?: ReactNode; wide?: boolean; compact?: boolean; dismissible?: boolean; blocking?: boolean; modal?: boolean; className?: string; scrimClassName?: string }) {
   const frameRef = useRef<HTMLElement>(null);
   const stackIdRef = useRef(Symbol("dialog"));
   const onCloseRef = useRef(onClose);
@@ -37,7 +37,7 @@ export function DialogFrame({ title, subtitle, onClose, children, headerActions,
       previous?.focus();
     };
   }, [modal]);
-  return <div className={`dialog-scrim${dismissible ? "" : " dialog-scrim-blocking"}${scrimClassName ? ` ${scrimClassName}` : ""}`} onPointerDown={(event) => { if (dismissible && event.target === event.currentTarget) onClose(); }}>
+  return <div className={`dialog-scrim${blocking ? " dialog-scrim-blocking" : ""}${scrimClassName ? ` ${scrimClassName}` : ""}`} onPointerDown={(event) => { if (dismissible && event.target === event.currentTarget) onClose(); }}>
     <section ref={frameRef} tabIndex={-1} className={`dialog-frame${wide ? " dialog-wide" : ""}${compact ? " dialog-compact" : ""}${className ? ` ${className}` : ""}`} role="dialog" aria-modal={modal || undefined} aria-labelledby={titleId}>
       <header className="dialog-header"><div className="dialog-header-copy"><h2 id={titleId}>{title}</h2>{subtitle && <p>{subtitle}</p>}</div><div className="dialog-header-actions">{headerActions}{dismissible && <button className="icon-button" aria-label="关闭" onClick={onClose}><Icon name="close"/></button>}</div></header>
       <div className="dialog-content">{children}</div>
