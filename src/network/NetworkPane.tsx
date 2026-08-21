@@ -3,6 +3,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type Keyboar
 import { Icon } from "../components/Icon";
 import { DialogFrame } from "../components/dialogs/DialogFrame";
 import { createNetworkRule, deleteNetworkRule, listNetworkRules, updateNetworkRule, type NetworkRule, type NetworkRuleInput, type NetworkRuleRuntimeState } from "../lib/tauri/network";
+import { NetworkAccessDialog } from "./NetworkAccessDialog";
 import { NetworkRuleDialog } from "./NetworkRuleDialog";
 import { NetworkRuleTypeDialog } from "./NetworkRuleTypeDialog";
 import type { NetworkRuleType } from "./networkRuleTypes";
@@ -18,7 +19,7 @@ type ContextMenuState = {
   placement: "above" | "below";
 };
 
-export function NetworkPane({ profileId, runtimeStates = {}, lockedRuleIds = new Set(), onStart, onStop }: { profileId: string | null; runtimeStates?: Record<string, NetworkRuleRuntimeState>; lockedRuleIds?: ReadonlySet<string>; onStart?: (rule: NetworkRule) => void; onStop?: (rule: NetworkRule) => void }) {
+export function NetworkPane({ profileId, profileHost = "", runtimeStates = {}, lockedRuleIds = new Set(), onStart, onStop }: { profileId: string | null; profileHost?: string; runtimeStates?: Record<string, NetworkRuleRuntimeState>; lockedRuleIds?: ReadonlySet<string>; onStart?: (rule: NetworkRule) => void; onStop?: (rule: NetworkRule) => void }) {
   const [rules, setRules] = useState<NetworkRule[]>([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
@@ -26,6 +27,7 @@ export function NetworkPane({ profileId, runtimeStates = {}, lockedRuleIds = new
   const [choosingType, setChoosingType] = useState(false);
   const [newRuleType, setNewRuleType] = useState<NetworkRuleType | null>(null);
   const [deleteRule, setDeleteRule] = useState<NetworkRule | null>(null);
+  const [accessRule, setAccessRule] = useState<NetworkRule | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [busy, setBusy] = useState(false);
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
@@ -134,6 +136,7 @@ export function NetworkPane({ profileId, runtimeStates = {}, lockedRuleIds = new
         const switchLabel = state === "starting" ? `正在启动 ${rule.name}` : state === "stopping" ? `正在停止 ${rule.name}` : switchOn ? `停止 ${rule.name}` : `启动 ${rule.name}`;
         return <article className="network-rule-item" role="listitem" tabIndex={0} aria-label={`${rule.name}，${stateLabel(state)}`} key={rule.id} data-state={state} onContextMenu={(event) => openContextMenu(event, rule)} onKeyDown={(event) => openKeyboardContextMenu(event, rule)}>
           <span className={`network-rule-dot ${state}`}/><div className="network-rule-copy"><strong>{rule.name}</strong><NetworkRuleRoute rule={rule}/><small>{typeLabel(rule.type)}{rule.exposed ? " · 对外监听" : " · 仅本机"}</small></div>
+          <button type="button" className="network-rule-access-button" aria-label={`查看并复制 ${rule.name} 访问地址`} title="查看与复制访问地址" onClick={() => setAccessRule(rule)}><Icon name="copy" size={12}/></button>
           <label className="network-rule-switch" title={switchLabel}>
             <input className="network-rule-switch-input" type="checkbox" role="switch" aria-label={switchLabel} checked={switchOn} disabled={transitioning || (switchOn ? !onStop : !onStart)} onChange={(event) => event.target.checked ? onStart?.(rule) : onStop?.(rule)}/>
             <span className="network-rule-switch-track"><span className="network-rule-switch-label on">ON</span><span className="network-rule-switch-label off">OFF</span><span className="network-rule-switch-thumb"/></span>
@@ -163,6 +166,13 @@ export function NetworkPane({ profileId, runtimeStates = {}, lockedRuleIds = new
       onBack={!editor ? returnToTypeSelection : undefined}
       onClose={closeRuleDialog}
       onSave={(input) => void save(input)}
+    />}
+    {accessRule && <NetworkAccessDialog
+      rule={accessRule}
+      profileHost={profileHost || accessRule.bindHost}
+      runtimeState={runtimeStates[accessRule.id] ?? "stopped"}
+      activeElsewhere={lockedRuleIds.has(accessRule.id)}
+      onClose={() => setAccessRule(null)}
     />}
     {deleteRule && <DialogFrame compact title="删除网络规则？" subtitle="将移除持久化配置" dismissible={!busy} onClose={() => { if (!busy) setDeleteRule(null); }}><p className="confirm-copy">将删除“{deleteRule.name}”。此操作无法撤销，但不会删除连接配置。</p><footer className="dialog-actions end"><button className="secondary-button" disabled={busy} onClick={() => setDeleteRule(null)}>取消</button><button className="danger-button filled" disabled={busy} onClick={() => void confirmDelete()}>{busy ? "正在删除…" : "删除规则"}</button></footer></DialogFrame>}
   </div>;

@@ -199,7 +199,7 @@ describe("application layout styles", () => {
     expect(declarations(".network-create-button")).toContain("border:0");
     expect(declarations(".network-create-button")).toContain("background:transparent");
     expect(declarations(".network-create-button")).not.toContain("box-shadow:");
-    expect(declarations(".network-rule-item")).toContain("grid-template-columns:6px minmax(0,1fr) 38px");
+    expect(declarations(".network-rule-item")).toContain("grid-template-columns:6px minmax(0,1fr) 26px 38px");
     expect(declarations(".network-rule-item")).toContain("min-height:58px");
     expect(declarations(".network-rule-item+.network-rule-item")).toContain("margin-top:3px");
     expect(declarations(".network-rule-copy")).toContain("flex-direction:column");
@@ -218,6 +218,9 @@ describe("application layout styles", () => {
     expect(declarations(".network-rule-switch-label.off")).toContain("opacity:1");
     expect(declarations(".network-rule-switch-input:checked+.network-rule-switch-track .network-rule-switch-label.on")).toContain("opacity:1");
     expect(declarations(".network-rule-switch-input:checked+.network-rule-switch-track .network-rule-switch-thumb")).toContain("translateX(20px)");
+    expect(declarations(".network-rule-access-button")).toContain("width:26px");
+    expect(declarations(".network-rule-access-button")).toContain("background:transparent");
+    expect(declarations(".network-rule-access-button:focus-visible")).toContain("outline:2px solid var(--focus)");
     expect(styles).not.toContain(".network-rule-menu-hint");
     expect(declarations(".network-context-menu")).toContain("position:fixed");
     expect(declarations(".dialog-frame.network-type-dialog")).toContain("width:min(660px,calc(100vw - 40px))");
@@ -238,6 +241,14 @@ describe("application layout styles", () => {
     expect(declarations(".network-rule-flow-connector::after")).toContain("animation:network-rule-flow-packet 1.8s");
     expect(declarations(".network-rule-flow-connector::after")).toContain("transform:translateX(-100%)");
     expect(styles).toContain("@keyframes network-rule-flow-packet");
+    expect(declarations(".network-access-dialog")).toContain("width:min(500px,calc(100vw - 40px))");
+    expect(declarations(".network-access-dialog .dialog-content")).toContain("overflow:auto");
+    expect(declarations(".network-access-field>div")).toContain("grid-template-columns:minmax(0,1fr) 30px");
+    expect(declarations(".network-access-browser-grid")).toContain("grid-template-columns:1fr 1fr");
+    expect(declarations(".network-access-proxy-option")).toContain("min-height:58px");
+    expect(declarations(".network-access-option-switch input:focus-visible+span")).toContain("outline:2px solid var(--focus)");
+    expect(declarations(".network-access-status")).toContain("height:20px");
+    expect(declarations(".network-access-status")).toContain("white-space:nowrap");
     expect(styles).toMatch(/prefers-reduced-motion:reduce[\s\S]*\.network-rule-flow-connector::after\{animation:none!important/);
     expect(styles).toMatch(/max-width:620px[\s\S]*\.network-type-options\{grid-template-columns:1fr\}/);
     expect(styles).toMatch(/prefers-reduced-transparency:reduce[\s\S]*\.terminal-block,.terminal-surface,.file-browser,.network-pane\{background:#050708\}/);
@@ -373,7 +384,12 @@ describe("application layout styles", () => {
     expect(declarations(".password-input-shell")).toContain("position:relative");
     expect(declarations(".password-visibility-button")).toContain("position:absolute");
     expect(declarations(".password-visibility-button")).toContain("width:24px");
-    expect(declarations(".connection-group-section")).toContain("margin:0 0 3px");
+    expect(declarations(".connection-group-section")).toContain("margin:0 0 5px");
+    expect(declarations(".connection-group-heading")).toContain("background:#17191c");
+    expect(declarations(".connection-group-heading")).toContain("border:1px solid #292d32");
+    expect(declarations(".connection-group-toggle strong")).toContain("font-weight:700");
+    expect(declarations(".connection-group-heading small")).toContain("border-radius:999px");
+    expect(declarations(".connection-group-toggle:focus-visible")).toContain("outline:2px solid var(--focus)");
     expect(declarations(".connection-group-heading.drop-target")).toContain("border-color:#5cae9e");
     expect(declarations(".connection-context-menu")).toContain("position:fixed");
     expect(declarations(".connection-context-menu")).toContain("animation:connection-menu-in");

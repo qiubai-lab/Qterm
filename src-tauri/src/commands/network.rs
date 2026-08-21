@@ -30,7 +30,7 @@ impl NetworkState {
         }
     }
 
-    fn rule(&self, id: &str) -> Result<ForwardRule, IpcError> {
+    pub(crate) fn rule(&self, id: &str) -> Result<ForwardRule, IpcError> {
         self.service.get(id).map_err(IpcError::from)
     }
 }

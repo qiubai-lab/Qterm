@@ -309,7 +309,7 @@ function NetworkBlock(props: Omit<Parameters<typeof LayoutBranch>[0], "node"> & 
       <ConnectionRouteProgress progress={runtime?.connectionProgress} endpoint={endpoint}/>
       <div className="block-actions"><button aria-label="关闭网络窗口" title="关闭" onClick={() => props.onRequestClose(props.blockId)}><Icon name="close" size={13}/></button></div>
     </header>
-    <NetworkPane profileId={props.profileId} runtimeStates={runtime?.ruleStates} lockedRuleIds={lockedRuleIds} onStart={(rule) => void startRule(rule.id)} onStop={(rule) => void stopNetworkBlockRule(props.blockId, rule.id)}/>
+    <NetworkPane profileId={props.profileId} profileHost={profile?.host} runtimeStates={runtime?.ruleStates} lockedRuleIds={lockedRuleIds} onStart={(rule) => void startRule(rule.id)} onStop={(rule) => void stopNetworkBlockRule(props.blockId, rule.id)}/>
     {runtime?.notice && <div className="block-notice">{runtime.notice}</div>}
     {drop && <div className={`drop-zone drop-${drop}`} />}
   </section>;

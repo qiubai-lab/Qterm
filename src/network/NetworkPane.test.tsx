@@ -53,6 +53,7 @@ describe("NetworkPane", () => {
     expect(screen.queryByText("创建实例")).not.toBeInTheDocument();
     expect(screen.queryByText("已停止")).not.toBeInTheDocument();
     expect(view.container.querySelector(".network-rule-menu-hint")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "查看并复制 Web tunnel 访问地址" })).toBeInTheDocument();
     expect(screen.getByText("ON")).toBeInTheDocument();
     expect(screen.getByText("OFF")).toBeInTheDocument();
     const toggle = screen.getByRole("switch", { name: "启动 Web tunnel" });
@@ -69,6 +70,16 @@ describe("NetworkPane", () => {
 
     expect(await screen.findByText("暂无网络实例")).toBeInTheDocument();
     expect(view.container.querySelector(".network-rule-list")).toHaveClass("empty");
+  });
+
+  it("opens a selectable access dialog from the persistent copy action", async () => {
+    const user = userEvent.setup();
+    render(<NetworkPane profileId="profile-1" profileHost="server.example.com" onStart={vi.fn()}/>);
+
+    await user.click(await screen.findByRole("button", { name: "查看并复制 Web tunnel 访问地址" }));
+    expect(screen.getByRole("dialog", { name: "访问 Web tunnel" })).toBeInTheDocument();
+    expect(screen.getByLabelText("本地访问地址")).toHaveValue("127.0.0.1:8080");
+    expect(screen.getByLabelText("服务器目标地址")).toHaveValue("localhost:80");
   });
 
   it("shows explicit local and remote endpoint roles with matching device icons", async () => {

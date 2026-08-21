@@ -1,5 +1,6 @@
 //! Tauri transport adapters. Commands validate DTOs and delegate to application services.
 
+pub mod browser;
 pub mod credential;
 pub mod error;
 pub mod files;

@@ -12,6 +12,16 @@ pub struct IpcError {
     retryable: bool,
 }
 
+impl IpcError {
+    pub(crate) fn new(code: &'static str, message: &'static str, retryable: bool) -> Self {
+        Self {
+            code,
+            message,
+            retryable,
+        }
+    }
+}
+
 impl From<ApplicationError> for IpcError {
     fn from(error: ApplicationError) -> Self {
         Self {

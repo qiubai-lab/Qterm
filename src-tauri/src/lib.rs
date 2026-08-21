@@ -4,6 +4,7 @@ mod domain;
 mod infrastructure;
 mod ports;
 
+use commands::browser::{BrowserProxyState, browser_proxy_launch, browser_proxy_list};
 use commands::credential::{
     CredentialState, credential_cancel_private_key, credential_commit_private_key,
     credential_create_password, credential_delete, credential_list,
@@ -76,6 +77,7 @@ struct DataPaths {
     known_hosts: std::path::PathBuf,
     workspaces: std::path::PathBuf,
     settings: std::path::PathBuf,
+    browser_profiles: std::path::PathBuf,
 }
 
 impl DataPaths {
@@ -87,6 +89,7 @@ impl DataPaths {
             known_hosts: local_root.join("known-hosts.json"),
             workspaces: local_root.join("workspaces.json"),
             settings: local_root.join("settings.json"),
+            browser_profiles: local_root.join("browser-profiles"),
         }
     }
 }
@@ -131,6 +134,7 @@ pub fn run() {
                 paths.credentials,
             )));
             app.manage(NetworkState::new(JsonNetworkRepository::new(paths.network)));
+            app.manage(BrowserProxyState::new(paths.browser_profiles));
             app.manage(SettingsState::new(
                 JsonSettingsRepository::new(paths.settings),
                 data_directory_repository,
@@ -148,6 +152,8 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            browser_proxy_list,
+            browser_proxy_launch,
             profile_list,
             profile_jump_candidates,
             profile_route_requirements,
@@ -244,6 +250,7 @@ mod tests {
         assert_eq!(paths.known_hosts.parent(), Some(local_root));
         assert_eq!(paths.workspaces.parent(), Some(local_root));
         assert_eq!(paths.settings.parent(), Some(local_root));
+        assert_eq!(paths.browser_profiles.parent(), Some(local_root));
     }
 
     #[test]
