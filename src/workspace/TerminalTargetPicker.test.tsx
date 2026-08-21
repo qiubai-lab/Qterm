@@ -64,6 +64,7 @@ describe("TerminalTargetPicker", () => {
     });
     await user.click(trigger);
     const picker = screen.getByRole("dialog", { name: "选择终端连接" });
+    expect(picker).toHaveStyle({ maxHeight: "600px" });
     const initialPickerStyle = picker.getAttribute("style");
     const productionGroup = within(picker).getByRole("button", { name: /生产环境/ });
     expect(within(picker).getByRole("button", { name: /未分组/ })).toBeInTheDocument();

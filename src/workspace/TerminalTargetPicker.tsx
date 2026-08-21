@@ -40,7 +40,8 @@ interface SubmenuPosition {
 const VIEWPORT_INSET = 8;
 const POPOVER_GAP = 4;
 const POPOVER_WIDTH = 292;
-const POPOVER_MAX_HEIGHT = 420;
+const POPOVER_PREFERRED_HEIGHT = 580;
+const POPOVER_MAX_HEIGHT = 600;
 const SUBMENU_WIDTH = 260;
 const SUBMENU_MAX_HEIGHT = 360;
 const GROUP_OPEN_DELAY = 100;
@@ -162,7 +163,7 @@ export function TerminalTargetPicker({ profiles, groups = [], recentProfileIds =
       const width = Math.min(POPOVER_WIDTH, Math.max(0, window.innerWidth - VIEWPORT_INSET * 2));
       const belowSpace = window.innerHeight - rect.bottom - POPOVER_GAP - VIEWPORT_INSET;
       const aboveSpace = rect.top - POPOVER_GAP - VIEWPORT_INSET;
-      const placement = belowSpace < 240 && aboveSpace > belowSpace ? "above" : "below";
+      const placement = belowSpace >= POPOVER_PREFERRED_HEIGHT || belowSpace >= aboveSpace ? "below" : "above";
       const availableHeight = Math.max(96, placement === "below" ? belowSpace : aboveSpace);
       const maxHeight = Math.min(POPOVER_MAX_HEIGHT, availableHeight);
       const left = Math.min(Math.max(VIEWPORT_INSET, rect.left), Math.max(VIEWPORT_INSET, window.innerWidth - width - VIEWPORT_INSET));
