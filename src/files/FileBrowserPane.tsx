@@ -15,7 +15,7 @@ type FileViewMode = "preview" | "edit";
 type PreviewState = { entry: FileEntry; kind: PreviewKind; mode: FileViewMode; loading: boolean; error: string; content: string; original: string; revision: string; imageUrl: string };
 type TransferState = { transferId: string; status: "starting" | "running" | "completed" | "cancelled" | "failed"; transferred: number; total: number; message: string; direction: "download" | "upload" };
 type NameOperation = { kind: "copy" | "rename" | "createFile" | "createDirectory"; entry: FileEntry | null; value: string; error: string; busy: boolean };
-type DeleteOperation = { entry: FileEntry; error: string; busy: boolean };
+type DeleteOperation = { entries: FileEntry[]; error: string; busy: boolean };
 type SortKey = "name" | "size" | "modifiedAt";
 type SortDirection = "ascending" | "descending";
 type SortState = { key: SortKey; direction: SortDirection } | null;
@@ -47,6 +47,7 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
   const [editingPath, setEditingPath] = useState(false);
   const [pathDraft, setPathDraft] = useState(displayLocalPath(initialPath));
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
+  const [selectedPaths, setSelectedPaths] = useState<Set<string>>(() => new Set());
   const [sort, setSort] = useState<SortState>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [preview, setPreview] = useState<PreviewState | null>(null);
@@ -85,6 +86,9 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
   })), [localRoots]);
   const displayedRootEntries = useMemo(() => sortEntries(rootEntries, sort), [rootEntries, sort]);
   const activeEntries = showLocalRoots ? displayedRootEntries : displayedEntries;
+  const contextEntries = contextMenu
+    ? selectedPaths.has(contextMenu.entry.path) ? activeEntries.filter((entry) => selectedPaths.has(entry.path)) : [contextMenu.entry]
+    : [];
   const activeEntryIndexes = useMemo(() => new Map(activeEntries.map((entry, index) => [entry.path, index])), [activeEntries]);
   const activeEntriesRef = useRef(activeEntries);
   pathRef.current = path;
@@ -115,6 +119,7 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
     pendingDirectoryLocation.current = { key, location };
     selectedPathRef.current = location.selectedPath;
     setSelectedPath(location.selectedPath);
+    setSelectedPaths(location.selectedPath ? new Set([location.selectedPath]) : new Set());
   }, []);
 
   const load = useCallback(async (nextPath: string, returnToRootsOnError = false) => {
@@ -305,14 +310,34 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
     } finally { setSaving(false); }
   }
 
+  function selectEntry(entry: FileEntry, additive: boolean) {
+    if (!additive) {
+      selectedPathRef.current = entry.path;
+      setSelectedPath(entry.path);
+      setSelectedPaths(new Set([entry.path]));
+      return;
+    }
+    const next = new Set(selectedPaths);
+    if (next.has(entry.path)) next.delete(entry.path); else next.add(entry.path);
+    let nextActivePath = selectedPath;
+    if (next.has(entry.path)) nextActivePath = entry.path;
+    else if (selectedPath === entry.path) nextActivePath = activeEntries.find((item) => next.has(item.path))?.path ?? null;
+    selectedPathRef.current = nextActivePath;
+    setSelectedPath(nextActivePath);
+    setSelectedPaths(next);
+  }
+
   function openContextMenu(event: MouseEvent<HTMLElement>, entry: FileEntry) {
-    event.preventDefault(); setSelectedPath(entry.path);
+    event.preventDefault();
+    if (!selectedPaths.has(entry.path)) selectEntry(entry, false);
     showContextMenu(entry, event.clientX, event.clientY);
   }
 
   function openContextMenuFromKeyboard(event: KeyboardEvent<HTMLElement>, entry: FileEntry) {
     if (event.key !== "ContextMenu" && !(event.shiftKey && event.key === "F10")) return;
-    event.preventDefault(); const rect = event.currentTarget.getBoundingClientRect(); setSelectedPath(entry.path); showContextMenu(entry, rect.left + 18, rect.top + 18);
+    event.preventDefault();
+    if (!selectedPaths.has(entry.path)) selectEntry(entry, false);
+    const rect = event.currentTarget.getBoundingClientRect(); showContextMenu(entry, rect.left + 18, rect.top + 18);
   }
 
   function showContextMenu(entry: FileEntry, anchorX: number, anchorY: number) {
@@ -392,14 +417,29 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
   async function confirmDelete() {
     if (!deleteOperation || deleteOperation.busy) return;
     setDeleteOperation({ ...deleteOperation, busy: true, error: "" });
-    try {
-      await deleteEntry(kind === "sftp" ? sessionId : null, deleteOperation.entry.path);
-      setDeleteOperation(null);
-      setOperationMessage("删除完成");
-      await load(path);
-    } catch (reason) {
-      setDeleteOperation((current) => current ? { ...current, busy: false, error: errorMessage(reason) } : current);
+    const requestedEntries = deleteOperation.entries;
+    const results = await Promise.allSettled(requestedEntries.map((entry) => deleteEntry(kind === "sftp" ? sessionId : null, entry.path)));
+    const failedEntries = requestedEntries.filter((_, index) => results[index].status === "rejected");
+    const firstFailure = results.find((result) => result.status === "rejected");
+    const deletedCount = requestedEntries.length - failedEntries.length;
+    selectedPathRef.current = null;
+    setSelectedPath(null);
+    setSelectedPaths(new Set());
+    await load(path);
+    if (failedEntries.length > 0) {
+      const failedPaths = new Set(failedEntries.map((entry) => entry.path));
+      selectedPathRef.current = failedEntries[0].path;
+      setSelectedPath(failedEntries[0].path);
+      setSelectedPaths(failedPaths);
+      setDeleteOperation({
+        entries: failedEntries,
+        busy: false,
+        error: `${deletedCount > 0 ? `已删除 ${deletedCount} 个项目，` : ""}${failedEntries.length} 个项目删除失败：${firstFailure?.status === "rejected" ? errorMessage(firstFailure.reason) : "文件操作失败"}`,
+      });
+      return;
     }
+    setDeleteOperation(null);
+    setOperationMessage(requestedEntries.length > 1 ? `已删除 ${requestedEntries.length} 个项目` : "删除完成");
   }
 
   function cycleSort(key: SortKey) {
@@ -485,22 +525,22 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
       {showLocalRoots && loading && <div className="file-browser-state">正在读取本机位置…</div>}
       {showLocalRoots && !loading && error && localRoots.length === 0 && <div className="file-browser-state error"><Icon name="files" size={22}/><span>{error}</span><button onClick={() => void openLocalRoots()}>重试</button></div>}
       {showLocalRoots && !loading && !error && localRoots.length === 0 && <div className="file-browser-state">没有可用的本机位置</div>}
-      {showLocalRoots && !loading && localRoots.length > 0 && <FileList entries={displayedRootEntries} range={virtualRange} ariaLabel="本机根目录" selectedPath={selectedPath} onSelect={(entry) => setSelectedPath(entry.path)} onOpen={(entry) => void navigateTo(entry.path, true)} onContextMenu={(event) => event.preventDefault()} onContextMenuKey={() => undefined}/>}
+      {showLocalRoots && !loading && localRoots.length > 0 && <FileList entries={displayedRootEntries} range={virtualRange} ariaLabel="本机根目录" selectedPaths={selectedPaths} onSelect={(entry) => selectEntry(entry, false)} onOpen={(entry) => void navigateTo(entry.path, true)} onContextMenu={(event) => event.preventDefault()} onContextMenuKey={() => undefined}/>}
       {!showLocalRoots && loading && !listing && <div className="file-browser-state">正在读取文件夹…</div>}
       {!showLocalRoots && !connectionError && error && !listing && <div className="file-browser-state error"><Icon name="files" size={22}/><span>{error}</span><button onClick={() => void load(path)}>重试</button></div>}
       {!showLocalRoots && !error && listing?.entries.length === 0 && <div className="file-browser-state">此文件夹为空</div>}
-      {!showLocalRoots && listing && <FileList entries={displayedEntries} range={virtualRange} ariaLabel={`文件夹 ${listing.path}`} selectedPath={selectedPath} onSelect={(entry) => setSelectedPath(entry.path)} onOpen={(entry) => entry.isDirectory ? void navigateTo(entry.path) : void openFile(entry, "preview")} onContextMenu={openContextMenu} onContextMenuKey={openContextMenuFromKeyboard}/>}
+      {!showLocalRoots && listing && <FileList entries={displayedEntries} range={virtualRange} ariaLabel={`文件夹 ${listing.path}`} selectedPaths={selectedPaths} onSelect={selectEntry} onOpen={(entry) => entry.isDirectory ? void navigateTo(entry.path) : void openFile(entry, "preview")} onContextMenu={openContextMenu} onContextMenuKey={openContextMenuFromKeyboard}/>}
       {!showLocalRoots && dropActive && <div className="file-upload-drop-overlay" role="status"><Icon name="upload" size={24}/><strong>上传到当前目录</strong><span>{visiblePath}</span><small>释放鼠标以上传文件或文件夹</small></div>}
     </div>
-    {contextMenu && <div ref={menuRef} className="file-context-menu" data-placement={contextMenu.placement} role="menu" aria-label={`${contextMenu.entry.name} 文件菜单`} style={{ left: contextMenu.x, top: contextMenu.y }} onContextMenu={(event) => event.preventDefault()}>
-      {!contextMenu.entry.isDirectory && !contextMenu.entry.isSymlink && <button role="menuitem" onClick={() => { setContextMenu(null); void openFile(contextMenu.entry, "preview"); }}>预览</button>}
-      {!contextMenu.entry.isDirectory && !contextMenu.entry.isSymlink && previewKindFor(contextMenu.entry.name) !== "image" && <button role="menuitem" className="file-context-edit" onClick={() => { setContextMenu(null); void openFile(contextMenu.entry, "edit"); }}><span>编辑</span><small>实验</small></button>}
-      {kind === "sftp" && !contextMenu.entry.isSymlink && <button role="menuitem" onClick={() => void startDownload(contextMenu.entry)}>下载到本地…</button>}
-      <button role="menuitem" onClick={() => void copyPath(contextMenu.entry)}>复制路径</button>
-      <div className="file-context-menu-separator" role="separator"/>
-      {!contextMenu.entry.isDirectory && !contextMenu.entry.isSymlink && <button role="menuitem" onClick={() => requestNameOperation("copy", contextMenu.entry)}>复制文件…</button>}
-      <button role="menuitem" onClick={() => requestNameOperation("rename", contextMenu.entry)}>改名…</button>
-      <button role="menuitem" className="danger" onClick={() => { setContextMenu(null); setDeleteOperation({ entry: contextMenu.entry, error: "", busy: false }); }}>删除</button>
+    {contextMenu && <div ref={menuRef} className="file-context-menu" data-placement={contextMenu.placement} role="menu" aria-label={contextEntries.length > 1 ? `${contextEntries.length} 个已选项目菜单` : `${contextMenu.entry.name} 文件菜单`} style={{ left: contextMenu.x, top: contextMenu.y }} onContextMenu={(event) => event.preventDefault()}>
+      {contextEntries.length === 1 && !contextMenu.entry.isDirectory && !contextMenu.entry.isSymlink && <button role="menuitem" onClick={() => { setContextMenu(null); void openFile(contextMenu.entry, "preview"); }}>预览</button>}
+      {contextEntries.length === 1 && !contextMenu.entry.isDirectory && !contextMenu.entry.isSymlink && previewKindFor(contextMenu.entry.name) !== "image" && <button role="menuitem" className="file-context-edit" onClick={() => { setContextMenu(null); void openFile(contextMenu.entry, "edit"); }}><span>编辑</span><small>实验</small></button>}
+      {contextEntries.length === 1 && kind === "sftp" && !contextMenu.entry.isSymlink && <button role="menuitem" onClick={() => void startDownload(contextMenu.entry)}>下载到本地…</button>}
+      {contextEntries.length === 1 && <button role="menuitem" onClick={() => void copyPath(contextMenu.entry)}>复制路径</button>}
+      {contextEntries.length === 1 && <div className="file-context-menu-separator" role="separator"/>}
+      {contextEntries.length === 1 && !contextMenu.entry.isDirectory && !contextMenu.entry.isSymlink && <button role="menuitem" onClick={() => requestNameOperation("copy", contextMenu.entry)}>复制文件…</button>}
+      {contextEntries.length === 1 && <button role="menuitem" onClick={() => requestNameOperation("rename", contextMenu.entry)}>改名…</button>}
+      <button role="menuitem" className="danger" onClick={() => { setContextMenu(null); setDeleteOperation({ entries: contextEntries, error: "", busy: false }); }}>{contextEntries.length > 1 ? `删除 ${contextEntries.length} 个项目` : "删除"}</button>
     </div>}
     <footer className={`file-browser-statusbar${transfer ? ` ${transfer.status}` : ""}`} role="status" aria-label="文件状态">
       {transferActive && transfer ? <>
@@ -509,7 +549,7 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
         <small>{transfer.total > 0 ? `${formatSize(transfer.transferred)} / ${formatSize(transfer.total)}` : "准备中"}</small>
         {transfer.transferId && sessionId && <button onClick={() => void cancelTransfer(sessionId, transfer.transferId)}>取消</button>}
       </> : <>
-        <span>{showLocalRoots ? loading ? "正在读取本机位置…" : `${localRoots.length} 个文件夹 · 0 个文件` : listing ? `${folderCount} 个文件夹 · ${fileCount} 个文件` : loading ? "正在读取目录…" : "暂无目录统计"}</span>
+        <span>{selectedPaths.size > 1 ? `${selectedPaths.size} 项已选择` : showLocalRoots ? loading ? "正在读取本机位置…" : `${localRoots.length} 个文件夹 · 0 个文件` : listing ? `${folderCount} 个文件夹 · ${fileCount} 个文件` : loading ? "正在读取目录…" : "暂无目录统计"}</span>
         {(transfer || operationMessage) && <span className="file-browser-transfer-result">{transfer?.message || operationMessage}</span>}
         {(transfer || operationMessage) && <button aria-label="关闭操作状态" onClick={() => { setTransfer(null); setOperationMessage(""); }}><Icon name="close" size={10}/></button>}
       </>}
@@ -521,8 +561,8 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
         <footer className="dialog-actions end"><button type="button" className="secondary-button" disabled={nameOperation.busy} onClick={() => setNameOperation(null)}>取消</button><button className="primary-button" disabled={nameOperation.busy || !nameOperation.value.trim() || (nameOperation.kind === "rename" && nameOperation.value === nameOperation.entry?.name)}>{nameOperation.busy ? "处理中…" : nameOperation.kind === "copy" ? "创建副本" : nameOperation.kind === "rename" ? "保存名称" : nameOperation.kind === "createFile" ? "创建文件" : "创建文件夹"}</button></footer>
       </form>
     </DialogFrame>}
-    {deleteOperation && <DialogFrame title={`删除${deleteOperation.entry.isDirectory ? "文件夹" : deleteOperation.entry.isSymlink ? "链接" : "文件"}？`} subtitle={deleteOperation.entry.name} compact onClose={deleteOperation.busy ? () => undefined : () => setDeleteOperation(null)}>
-      <p className="confirm-copy">{deleteOperation.entry.isDirectory ? "文件夹及其中的全部内容将被永久删除，此操作无法撤销。" : deleteOperation.entry.isSymlink ? "只会删除此链接，不会删除链接指向的目标。此操作无法撤销。" : "文件将被永久删除，此操作无法撤销。"}</p>
+    {deleteOperation && <DialogFrame title={deleteOperation.entries.length > 1 ? `删除 ${deleteOperation.entries.length} 个项目？` : `删除${deleteOperation.entries[0].isDirectory ? "文件夹" : deleteOperation.entries[0].isSymlink ? "链接" : "文件"}？`} subtitle={deleteOperation.entries.length > 1 ? deleteOperation.entries.map((entry) => entry.name).join("、") : deleteOperation.entries[0].name} compact onClose={deleteOperation.busy ? () => undefined : () => setDeleteOperation(null)}>
+      <p className="confirm-copy">{deleteOperation.entries.length > 1 ? "这些项目将被永久删除，其中的文件夹及全部内容将被永久删除；链接指向的目标会保留。此操作无法撤销。" : deleteOperation.entries[0].isDirectory ? "文件夹及其中的全部内容将被永久删除，此操作无法撤销。" : deleteOperation.entries[0].isSymlink ? "只会删除此链接，不会删除链接指向的目标。此操作无法撤销。" : "文件将被永久删除，此操作无法撤销。"}</p>
       {deleteOperation.error && <p className="inline-message error" role="alert">{deleteOperation.error}</p>}
       <footer className="dialog-actions end"><button className="secondary-button" disabled={deleteOperation.busy} onClick={() => setDeleteOperation(null)}>取消</button><button className="danger-button filled" data-dialog-autofocus disabled={deleteOperation.busy} onClick={() => void confirmDelete()}>{deleteOperation.busy ? "删除中…" : "确认删除"}</button></footer>
     </DialogFrame>}
@@ -537,12 +577,12 @@ function FileSortHeader({ label, sortKey, sort, onChange }: { label: string; sor
   </button>;
 }
 
-function FileList({ entries, range, ariaLabel, selectedPath, onSelect, onOpen, onContextMenu, onContextMenuKey }: {
+function FileList({ entries, range, ariaLabel, selectedPaths, onSelect, onOpen, onContextMenu, onContextMenuKey }: {
   entries: FileEntry[];
   range: VirtualRange;
   ariaLabel: string;
-  selectedPath: string | null;
-  onSelect: (entry: FileEntry) => void;
+  selectedPaths: Set<string>;
+  onSelect: (entry: FileEntry, additive: boolean) => void;
   onOpen: (entry: FileEntry) => void;
   onContextMenu: (event: MouseEvent<HTMLButtonElement>, entry: FileEntry) => void;
   onContextMenuKey: (event: KeyboardEvent<HTMLButtonElement>, entry: FileEntry) => void;
@@ -554,13 +594,21 @@ function FileList({ entries, range, ariaLabel, selectedPath, onSelect, onOpen, o
   return <div className={`file-list${virtualized ? " file-list-virtual" : ""}`} role="list" aria-label={ariaLabel} style={virtualized ? { height: entries.length * FILE_ROW_HEIGHT + FILE_LIST_PADDING * 2 } : undefined}>
     {visibleEntries.map((entry, visibleIndex) => {
       const index = start + visibleIndex;
-      return <FileRow key={entry.path} entry={entry} selected={selectedPath === entry.path} onSelect={() => onSelect(entry)} onOpen={() => onOpen(entry)} onContextMenu={(event) => onContextMenu(event, entry)} onContextMenuKey={(event) => onContextMenuKey(event, entry)} position={virtualized ? index : null} setSize={virtualized ? entries.length : undefined}/>;
+      return <FileRow key={entry.path} entry={entry} selected={selectedPaths.has(entry.path)} selectionCount={selectedPaths.size} onSelect={(additive) => onSelect(entry, additive)} onOpen={() => onOpen(entry)} onContextMenu={(event) => onContextMenu(event, entry)} onContextMenuKey={(event) => onContextMenuKey(event, entry)} position={virtualized ? index : null} setSize={virtualized ? entries.length : undefined}/>;
     })}
   </div>;
 }
 
-function FileRow({ entry, selected, onSelect, onOpen, onContextMenu, onContextMenuKey, position, setSize }: { entry: FileEntry; selected: boolean; onSelect: () => void; onOpen: () => void; onContextMenu: (event: MouseEvent<HTMLButtonElement>) => void; onContextMenuKey: (event: KeyboardEvent<HTMLButtonElement>) => void; position: number | null; setSize?: number }) {
-  return <button className="file-row" data-entry-kind={entry.isDirectory ? "directory" : "file"} data-entry-path={entry.path} data-selected={selected || undefined} role="listitem" aria-posinset={position === null ? undefined : position + 1} aria-setsize={setSize} style={position === null ? undefined : { transform: `translateY(${FILE_LIST_PADDING + position * FILE_ROW_HEIGHT}px)` }} title={entry.path} onClick={() => { if (!entry.isDirectory && selected) onOpen(); else onSelect(); }} onDoubleClick={() => { if (entry.isDirectory) onOpen(); }} onContextMenu={onContextMenu} onKeyDown={(event) => { onContextMenuKey(event); if (event.key === "Enter") onOpen(); }}>
+function FileRow({ entry, selected, selectionCount, onSelect, onOpen, onContextMenu, onContextMenuKey, position, setSize }: { entry: FileEntry; selected: boolean; selectionCount: number; onSelect: (additive: boolean) => void; onOpen: () => void; onContextMenu: (event: MouseEvent<HTMLButtonElement>) => void; onContextMenuKey: (event: KeyboardEvent<HTMLButtonElement>) => void; position: number | null; setSize?: number }) {
+  return <button className="file-row" data-entry-kind={entry.isDirectory ? "directory" : "file"} data-entry-path={entry.path} data-selected={selected || undefined} role="listitem" aria-selected={selected} aria-posinset={position === null ? undefined : position + 1} aria-setsize={setSize} style={position === null ? undefined : { transform: `translateY(${FILE_LIST_PADDING + position * FILE_ROW_HEIGHT}px)` }} title={entry.path} onClick={(event) => {
+    const additive = event.metaKey || event.ctrlKey;
+    if (!additive && !entry.isDirectory && selected && selectionCount === 1) onOpen(); else onSelect(additive);
+  }} onDoubleClick={() => { if (entry.isDirectory) onOpen(); }} onContextMenu={onContextMenu} onKeyDown={(event) => {
+    onContextMenuKey(event);
+    const additive = event.metaKey || event.ctrlKey;
+    if (event.key === "Enter") { event.preventDefault(); if (additive) onSelect(true); else onOpen(); }
+    if (event.key === " ") { event.preventDefault(); onSelect(additive); }
+  }}>
     <span className="file-name"><Icon name={entry.isDirectory ? "files" : "file"} size={14}/><span>{entry.name}</span>{entry.isSymlink && <small>链接</small>}</span>
     <span>{entry.isDirectory ? "—" : formatSize(entry.size)}</span><span className="file-permission file-permission-column">{formatPermissions(entry.permissionMode)}</span><span>{entry.modifiedAt ? new Date(entry.modifiedAt * 1000).toLocaleString() : "—"}</span>
   </button>;

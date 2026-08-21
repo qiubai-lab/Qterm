@@ -419,6 +419,112 @@ describe("FileBrowserPane", () => {
     expect(readTextFile).toHaveBeenCalledTimes(1);
   });
 
+  it("adds and removes file selections with the platform modifier while ordinary clicks restore one active item", async () => {
+    const first = { name: "alpha.txt", path: "C:/work/alpha.txt", isDirectory: false, isSymlink: false, size: 5, modifiedAt: null };
+    const second = { name: "beta.txt", path: "C:/work/beta.txt", isDirectory: false, isSymlink: false, size: 6, modifiedAt: null };
+    const folder = { name: "assets", path: "C:/work/assets", isDirectory: true, isSymlink: false, size: 0, modifiedAt: null };
+    listLocalDirectory.mockResolvedValue({ path: "C:/work", entries: [first, second, folder] });
+    readTextFile.mockResolvedValue({ content: "alpha", revision: "r1", modifiedAt: null, size: 5 });
+    const view = render(<FileBrowserPane initialPath="C:/work" runtime={localRuntime} onPathChange={vi.fn()}/>);
+    const ui = within(view.container);
+    const firstRow = await ui.findByRole("listitem", { name: /alpha\.txt/ });
+    const secondRow = ui.getByRole("listitem", { name: /beta\.txt/ });
+    const folderRow = ui.getByRole("listitem", { name: /assets/ });
+
+    fireEvent.click(firstRow);
+    fireEvent.click(secondRow, { metaKey: true });
+    fireEvent.keyDown(folderRow, { key: " ", ctrlKey: true });
+    expect(firstRow).toHaveAttribute("aria-selected", "true");
+    expect(secondRow).toHaveAttribute("aria-selected", "true");
+    expect(folderRow).toHaveAttribute("aria-selected", "true");
+
+    fireEvent.keyDown(secondRow, { key: " ", ctrlKey: true });
+    expect(secondRow).toHaveAttribute("aria-selected", "false");
+    fireEvent.click(firstRow);
+    expect(firstRow).toHaveAttribute("aria-selected", "true");
+    expect(folderRow).toHaveAttribute("aria-selected", "false");
+    expect(readTextFile).not.toHaveBeenCalled();
+
+    fireEvent.click(firstRow);
+    await waitFor(() => expect(readTextFile).toHaveBeenCalledWith(null, first.path));
+    expect(await ui.findByRole("textbox", { name: "文件只读预览" })).toHaveValue("alpha");
+  });
+
+  it("keeps selected files on right click and deletes them through one batch confirmation", async () => {
+    const folder = { name: "assets", path: "C:/work/assets", isDirectory: true, isSymlink: false, size: 0, modifiedAt: null };
+    const file = { name: "notes.txt", path: "C:/work/notes.txt", isDirectory: false, isSymlink: false, size: 6, modifiedAt: null };
+    listLocalDirectory.mockResolvedValue({ path: "C:/work", entries: [folder, file] });
+    deleteEntry.mockResolvedValue(undefined);
+    const view = render(<FileBrowserPane initialPath="C:/work" runtime={localRuntime} onPathChange={vi.fn()}/>);
+    const ui = within(view.container);
+    const folderRow = await ui.findByRole("listitem", { name: /assets/ });
+    const fileRow = ui.getByRole("listitem", { name: /notes\.txt/ });
+
+    fireEvent.click(folderRow);
+    fireEvent.click(fileRow, { metaKey: true });
+    expect(readTextFile).not.toHaveBeenCalled();
+    fireEvent.contextMenu(fileRow);
+    const menu = ui.getByRole("menu", { name: "2 个已选项目菜单" });
+    expect(within(menu).queryByRole("separator")).not.toBeInTheDocument();
+    expect(within(menu).queryByRole("menuitem", { name: "预览" })).not.toBeInTheDocument();
+    expect(readTextFile).not.toHaveBeenCalled();
+    fireEvent.click(within(menu).getByRole("menuitem", { name: "删除 2 个项目" }));
+
+    const confirmation = screen.getByRole("dialog", { name: "删除 2 个项目？" });
+    expect(confirmation).toHaveTextContent("其中的文件夹及全部内容将被永久删除");
+    fireEvent.click(within(confirmation).getByRole("button", { name: "确认删除" }));
+    await waitFor(() => {
+      expect(deleteEntry).toHaveBeenCalledTimes(2);
+      expect(deleteEntry).toHaveBeenCalledWith(null, folder.path);
+      expect(deleteEntry).toHaveBeenCalledWith(null, file.path);
+    });
+    expect(listLocalDirectory).toHaveBeenCalledTimes(2);
+    expect(ui.getByRole("status", { name: "文件状态" })).toHaveTextContent("已删除 2 个项目");
+  });
+
+  it("switches to a single item when opening the context menu on an unselected file", async () => {
+    const entries = ["alpha.txt", "beta.txt", "gamma.txt"].map((name) => ({ name, path: `C:/work/${name}`, isDirectory: false, isSymlink: false, size: 5, modifiedAt: null }));
+    listLocalDirectory.mockResolvedValue({ path: "C:/work", entries });
+    const view = render(<FileBrowserPane initialPath="C:/work" runtime={localRuntime} onPathChange={vi.fn()}/>);
+    const ui = within(view.container);
+    const first = await ui.findByRole("listitem", { name: /alpha\.txt/ });
+    const second = ui.getByRole("listitem", { name: /beta\.txt/ });
+    const third = ui.getByRole("listitem", { name: /gamma\.txt/ });
+
+    fireEvent.click(first);
+    fireEvent.click(second, { ctrlKey: true });
+    fireEvent.contextMenu(third);
+
+    expect(first).toHaveAttribute("aria-selected", "false");
+    expect(second).toHaveAttribute("aria-selected", "false");
+    expect(third).toHaveAttribute("aria-selected", "true");
+    expect(ui.getByRole("menu", { name: "gamma.txt 文件菜单" })).toBeInTheDocument();
+    expect(ui.getByRole("menuitem", { name: "预览" })).toBeInTheDocument();
+  });
+
+  it("keeps only failed entries selected when part of a batch deletion fails", async () => {
+    const first = { name: "alpha.txt", path: "C:/work/alpha.txt", isDirectory: false, isSymlink: false, size: 5, modifiedAt: null };
+    const second = { name: "beta.txt", path: "C:/work/beta.txt", isDirectory: false, isSymlink: false, size: 6, modifiedAt: null };
+    listLocalDirectory.mockResolvedValue({ path: "C:/work", entries: [first, second] });
+    deleteEntry.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error("权限不足"));
+    const view = render(<FileBrowserPane initialPath="C:/work" runtime={localRuntime} onPathChange={vi.fn()}/>);
+    const ui = within(view.container);
+    const firstRow = await ui.findByRole("listitem", { name: /alpha\.txt/ });
+    const secondRow = ui.getByRole("listitem", { name: /beta\.txt/ });
+
+    fireEvent.click(firstRow);
+    fireEvent.click(secondRow, { metaKey: true });
+    fireEvent.contextMenu(secondRow);
+    fireEvent.click(ui.getByRole("menuitem", { name: "删除 2 个项目" }));
+    fireEvent.click(within(screen.getByRole("dialog", { name: "删除 2 个项目？" })).getByRole("button", { name: "确认删除" }));
+
+    const retryDialog = await screen.findByRole("dialog", { name: "删除文件？" });
+    expect(within(retryDialog).getByRole("alert")).toHaveTextContent("已删除 1 个项目，1 个项目删除失败：权限不足");
+    expect(ui.getByRole("listitem", { name: /alpha\.txt/ })).toHaveAttribute("aria-selected", "false");
+    expect(ui.getByRole("listitem", { name: /beta\.txt/ })).toHaveAttribute("aria-selected", "true");
+    expect(listLocalDirectory).toHaveBeenCalledTimes(2);
+  });
+
   it("opens the separate experimental editor from the context menu and saves changes", async () => {
     listLocalDirectory.mockResolvedValue({ path: "C:/work", entries: [{ name: "README.md", path: "C:/work/README.md", isDirectory: false, isSymlink: false, size: 7, modifiedAt: null }] });
     readTextFile.mockResolvedValue({ content: "# Hello", revision: "r1", modifiedAt: null, size: 7 });
