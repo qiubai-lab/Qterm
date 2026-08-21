@@ -53,7 +53,9 @@ describe("NetworkPane", () => {
     expect(screen.queryByText("创建实例")).not.toBeInTheDocument();
     expect(screen.queryByText("已停止")).not.toBeInTheDocument();
     expect(view.container.querySelector(".network-rule-menu-hint")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "查看并复制 Web tunnel 访问地址" })).toBeInTheDocument();
+    const copyAction = screen.getByRole("button", { name: "查看并复制 Web tunnel 访问地址" });
+    expect(copyAction).toHaveTextContent("复制");
+    expect(copyAction.querySelector('[data-icon="copy"]')).toHaveAttribute("width", "13");
     expect(screen.getByText("ON")).toBeInTheDocument();
     expect(screen.getByText("OFF")).toBeInTheDocument();
     const toggle = screen.getByRole("switch", { name: "启动 Web tunnel" });
@@ -78,8 +80,9 @@ describe("NetworkPane", () => {
 
     await user.click(await screen.findByRole("button", { name: "查看并复制 Web tunnel 访问地址" }));
     expect(screen.getByRole("dialog", { name: "访问 Web tunnel" })).toBeInTheDocument();
-    expect(screen.getByLabelText("本地访问地址")).toHaveValue("127.0.0.1:8080");
-    expect(screen.getByLabelText("服务器目标地址")).toHaveValue("localhost:80");
+    expect(screen.getByLabelText("本地可访问地址")).toHaveValue("127.0.0.1:8080");
+    expect(screen.getByText("本地访问下面的本地地址，Qterm 会自动转发到服务器的 localhost:80")).toBeInTheDocument();
+    expect(screen.queryByLabelText("服务器目标地址")).not.toBeInTheDocument();
   });
 
   it("shows explicit local and remote endpoint roles with matching device icons", async () => {
@@ -102,6 +105,9 @@ describe("NetworkPane", () => {
     const socksRoute = screen.getByLabelText("本地 127.0.0.1:1080 → 远程网络 动态目标");
     expect(socksRoute.querySelector('[data-icon="computer"]')).toBeInTheDocument();
     expect(socksRoute.querySelector('[data-icon="server"]')).toBeInTheDocument();
+    const socksAction = screen.getByRole("button", { name: "打开 Private proxy 代理工具" });
+    expect(socksAction).toHaveTextContent("代理");
+    expect(socksAction.querySelector('[data-icon="browser"]')).toHaveAttribute("width", "12");
   });
 
   it("explains all three modes before opening the selected creation form", async () => {

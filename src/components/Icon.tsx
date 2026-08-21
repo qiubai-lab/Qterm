@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-export type IconName = "workspace" | "plus" | "terminal" | "browser" | "computer" | "server" | "network" | "connections" | "files" | "file" | "filePlus" | "folderPlus" | "edit" | "save" | "check" | "copy" | "upload" | "key" | "lock" | "trash" | "clear" | "back" | "forward" | "chevronDown" | "refresh" | "settings" | "help" | "splitHorizontal" | "splitVertical" | "menu" | "windowMinimize" | "windowMaximize" | "close" | "more" | "eye" | "eyeOff";
+export type IconName = "workspace" | "plus" | "terminal" | "browser" | "computer" | "server" | "network" | "connections" | "files" | "file" | "filePlus" | "folderPlus" | "edit" | "save" | "check" | "checkCircle" | "copy" | "upload" | "key" | "lock" | "trash" | "clear" | "back" | "forward" | "chevronDown" | "refresh" | "settings" | "help" | "splitHorizontal" | "splitVertical" | "menu" | "windowMinimize" | "windowMaximize" | "close" | "more" | "eye" | "eyeOff";
 
 export function Icon({ name, size = 16 }: { name: IconName; size?: number }) {
   const paths: Record<IconName, ReactNode> = {
@@ -19,6 +19,7 @@ export function Icon({ name, size = 16 }: { name: IconName; size?: number }) {
     edit: <><path d="m14.5 5.5 4 4M4 20l3.5-.7L19 7.8a2.1 2.1 0 0 0-3-3L4.7 16.2Z"/><path d="m13.8 6.2 4 4"/></>,
     save: <><path d="M5 4h12l2 2v14H5Z"/><path d="M8 4v6h8V4M8 20v-6h8v6"/></>,
     check: <path d="m5 12 4 4L19 6"/>,
+    checkCircle: <><circle cx="12" cy="12" r="8.5"/><path d="m8.3 12.1 2.5 2.5 5-5.2"/></>,
     copy: <><rect x="8" y="8" width="11" height="11" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></>,
     upload: <><path d="M12 16V4M7 9l5-5 5 5"/><path d="M5 14v5h14v-5"/></>,
     key: <><circle cx="8" cy="12" r="4"/><path d="M12 12h9M17 12v3M20 12v2"/></>,

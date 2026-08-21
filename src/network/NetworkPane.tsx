@@ -134,9 +134,11 @@ export function NetworkPane({ profileId, profileHost = "", runtimeStates = {}, l
         const switchOn = state === "running" || state === "starting";
         const transitioning = state === "starting" || state === "stopping";
         const switchLabel = state === "starting" ? `正在启动 ${rule.name}` : state === "stopping" ? `正在停止 ${rule.name}` : switchOn ? `停止 ${rule.name}` : `启动 ${rule.name}`;
-        return <article className="network-rule-item" role="listitem" tabIndex={0} aria-label={`${rule.name}，${stateLabel(state)}`} key={rule.id} data-state={state} onContextMenu={(event) => openContextMenu(event, rule)} onKeyDown={(event) => openKeyboardContextMenu(event, rule)}>
+        const socksAccess = rule.type === "socks5";
+        const accessLabel = socksAccess ? `打开 ${rule.name} 代理工具` : `查看并复制 ${rule.name} 访问地址`;
+        return <article className="network-rule-item with-access-label" role="listitem" tabIndex={0} aria-label={`${rule.name}，${stateLabel(state)}`} key={rule.id} data-state={state} onContextMenu={(event) => openContextMenu(event, rule)} onKeyDown={(event) => openKeyboardContextMenu(event, rule)}>
           <span className={`network-rule-dot ${state}`}/><div className="network-rule-copy"><strong>{rule.name}</strong><NetworkRuleRoute rule={rule}/><small>{typeLabel(rule.type)}{rule.exposed ? " · 对外监听" : " · 仅本机"}</small></div>
-          <button type="button" className="network-rule-access-button" aria-label={`查看并复制 ${rule.name} 访问地址`} title="查看与复制访问地址" onClick={() => setAccessRule(rule)}><Icon name="copy" size={12}/></button>
+          <button type="button" className="network-rule-access-button labeled" aria-label={accessLabel} title={socksAccess ? "代理地址与浏览器" : "查看与复制访问地址"} onClick={() => setAccessRule(rule)}><Icon name={socksAccess ? "browser" : "copy"} size={socksAccess ? 12 : 13}/><span>{socksAccess ? "代理" : "复制"}</span></button>
           <label className="network-rule-switch" title={switchLabel}>
             <input className="network-rule-switch-input" type="checkbox" role="switch" aria-label={switchLabel} checked={switchOn} disabled={transitioning || (switchOn ? !onStop : !onStart)} onChange={(event) => event.target.checked ? onStart?.(rule) : onStop?.(rule)}/>
             <span className="network-rule-switch-track"><span className="network-rule-switch-label on">ON</span><span className="network-rule-switch-label off">OFF</span><span className="network-rule-switch-thumb"/></span>

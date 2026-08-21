@@ -407,7 +407,9 @@ describe("ConnectionDialog", () => {
     expect(screen.getByRole("button", { name: "保存中…" })).toBeDisabled();
     await act(async () => { resolveUpdate(profile); });
 
-    expect(await screen.findByRole("button", { name: "保存成功" })).toHaveAttribute("data-state", "success");
+    const successButton = await screen.findByRole("button", { name: "保存成功" });
+    expect(successButton).toHaveAttribute("data-state", "success");
+    expect(successButton.querySelector("svg")).toHaveAttribute("data-icon", "checkCircle");
     expect(authTab).toHaveAttribute("aria-selected", "true");
     expect(screen.queryByText("连接配置已保存")).not.toBeInTheDocument();
     expect(mocks.selectBlockTarget).not.toHaveBeenCalled();

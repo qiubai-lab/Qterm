@@ -6,6 +6,7 @@ export type NetworkAccessField = {
 };
 
 export type NetworkAccessDetails = {
+  description?: string;
   fields: NetworkAccessField[];
   warning?: string;
   socksEndpoint?: { host: string; port: number };
@@ -16,10 +17,8 @@ export function deriveNetworkAccess(rule: NetworkRule, profileHost: string): Net
     const wildcard = isWildcardHost(rule.bindHost);
     const serverHost = wildcard ? profileHost : rule.bindHost;
     return {
-      fields: [
-        { label: "服务器访问地址", value: formatEndpoint(serverHost, rule.bindPort) },
-        { label: "本地目标地址", value: formatEndpoint(rule.targetHost, rule.targetPort) },
-      ],
+      description: `远程访问下面的远程地址，Qterm 会自动转发到本地的 ${formatEndpoint(rule.targetHost, rule.targetPort)}`,
+      fields: [{ label: "远程可访问地址", value: formatEndpoint(serverHost, rule.bindPort) }],
       warning: wildcard
         ? "服务器实际可访问性取决于 SSH GatewayPorts、监听网卡和防火墙配置。"
         : isLoopbackHost(rule.bindHost) ? "该地址仅能从服务器本机访问。" : undefined,
@@ -40,10 +39,8 @@ export function deriveNetworkAccess(rule: NetworkRule, profileHost: string): Net
   }
 
   return {
-    fields: [
-      { label: "本地访问地址", value: formatEndpoint(localHost, rule.bindPort) },
-      { label: "服务器目标地址", value: formatEndpoint(rule.targetHost, rule.targetPort) },
-    ],
+    description: `本地访问下面的本地地址，Qterm 会自动转发到服务器的 ${formatEndpoint(rule.targetHost, rule.targetPort)}`,
+    fields: [{ label: "本地可访问地址", value: formatEndpoint(localHost, rule.bindPort) }],
     warning: wildcardWarning,
   };
 }
@@ -71,4 +68,3 @@ function isLoopbackHost(host: string): boolean {
 function unbracket(host: string): string {
   return host.startsWith("[") && host.endsWith("]") ? host.slice(1, -1) : host;
 }
-

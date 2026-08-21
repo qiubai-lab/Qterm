@@ -80,8 +80,9 @@ export function NetworkAccessDialog({ rule, profileHost, runtimeState, activeEls
     headerActions={rule.type === "socks5" ? <span className="network-access-experimental">实验性</span> : undefined}
     onClose={onClose}
   >
-    <div className="network-access-content">
+    <div className="network-access-content network-access-content-compact">
       <section className="network-access-addresses" aria-label="访问地址">
+        {access.description && <p className="network-access-description"><Icon name={rule.type === "remote" ? "server" : "computer"} size={14}/><span>{access.description}</span></p>}
         {access.fields.map((field) => <div className="network-access-field" key={field.label}>
           <label htmlFor={`network-access-${rule.id}-${field.label}`}>{field.label}</label>
           <div>
@@ -94,20 +95,20 @@ export function NetworkAccessDialog({ rule, profileHost, runtimeState, activeEls
 
       {rule.type === "socks5" && <section className="network-access-browsers" role="group" aria-label="代理浏览器">
         <header><div><strong>通过代理打开浏览器</strong><p>使用隔离 Profile；主要代理网页请求，不保证扩展或 WebRTC 流量。</p></div></header>
-        <label className="network-access-proxy-option">
+        <div className="network-access-proxy-option">
           <span><strong>代理本地与内网地址</strong><small>{proxyLocalAddresses
             ? "localhost 将指向远程服务器环境；回环与链路本地地址也通过 SOCKS5。"
             : "localhost 和链路本地地址由浏览器直接访问；常规内网地址仍通过 SOCKS5。"}</small></span>
-          <span className="network-access-option-switch">
-            <input type="checkbox" role="switch" aria-label="代理本地与内网地址" checked={proxyLocalAddresses} disabled={launching !== null} onChange={(event) => setProxyLocalAddresses(event.target.checked)}/>
-            <span aria-hidden="true"><span/></span>
-          </span>
-        </label>
+          <button type="button" className="network-access-option-switch" role="switch" aria-label="代理本地与内网地址" aria-checked={proxyLocalAddresses} disabled={launching !== null} onClick={() => setProxyLocalAddresses((enabled) => !enabled)}>
+            <span aria-hidden="true"/>
+          </button>
+        </div>
         <div className="network-access-browser-grid">
           {browsers.map((browser) => {
             const busy = launching === browser.id;
             const unavailable = !browser.supported || !browser.installed;
             const disabled = detecting || unavailable || !listenerExpected || launching !== null;
+            const visualState = detecting ? "detecting" : unavailable ? "unavailable" : !listenerExpected ? "waiting" : busy ? "launching" : "ready";
             const ariaLabel = detecting
               ? `正在检测 ${browser.name}`
               : !browser.supported ? `${browser.name} 当前平台不支持`
@@ -115,18 +116,22 @@ export function NetworkAccessDialog({ rule, profileHost, runtimeState, activeEls
                   : !listenerExpected ? `请先启动 ${rule.name} 后使用 ${browser.name}`
                     : busy ? `正在启动 ${browser.name}` : `使用 ${browser.name} 打开`;
             const status = detecting ? "检测中…" : !browser.supported ? "当前平台不支持" : !browser.installed ? "未检测到" : busy ? "启动中…" : listenerExpected ? "使用 SOCKS5 启动" : "等待代理启动";
-            return <button type="button" key={browser.id} aria-label={ariaLabel} disabled={disabled} onClick={() => void launch(browser)}>
+            return <button type="button" key={browser.id} data-state={visualState} aria-label={ariaLabel} disabled={disabled} onClick={() => void launch(browser)}>
               <span className="network-access-browser-icon"><Icon name="browser" size={17}/></span>
               <span><strong>{browser.name}</strong><small>{status}</small></span>
             </button>;
           })}
         </div>
-        <p className="network-access-browser-note">{listenerExpected
-          ? "仅新启动的独立窗口使用此代理；停止 SOCKS5 后浏览器可能无法继续访问网络。"
-          : "请先启动 SOCKS5 实例，再打开代理浏览器。"}</p>
       </section>}
 
-      <p className={`network-access-status${messageError ? " error" : ""}`} role={messageError ? "alert" : undefined} aria-live="polite" title={message || undefined}>{message}</p>
+      <div className={`network-access-footer${rule.type === "socks5" ? " with-note" : ""}${message ? " has-message" : ""}${messageError ? " error" : ""}`}>
+        {rule.type === "socks5" && <p className="network-access-footer-note" aria-hidden={message ? true : undefined}>
+          <Icon name="network" size={12}/><span>{listenerExpected
+            ? "仅新启动的独立窗口使用此代理；停止 SOCKS5 后浏览器可能无法继续访问网络。"
+            : "请先启动 SOCKS5 实例，再打开代理浏览器。"}</span>
+        </p>}
+        <p className="network-access-footer-status" role={messageError ? "alert" : undefined} aria-live="polite" title={message || undefined}>{message}</p>
+      </div>
     </div>
   </DialogFrame>;
 }

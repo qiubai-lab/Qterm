@@ -199,7 +199,7 @@ describe("application layout styles", () => {
     expect(declarations(".network-create-button")).toContain("border:0");
     expect(declarations(".network-create-button")).toContain("background:transparent");
     expect(declarations(".network-create-button")).not.toContain("box-shadow:");
-    expect(declarations(".network-rule-item")).toContain("grid-template-columns:6px minmax(0,1fr) 26px 38px");
+    expect(declarations(".network-rule-item.with-access-label")).toContain("grid-template-columns:6px minmax(0,1fr) 48px 38px");
     expect(declarations(".network-rule-item")).toContain("min-height:58px");
     expect(declarations(".network-rule-item+.network-rule-item")).toContain("margin-top:3px");
     expect(declarations(".network-rule-copy")).toContain("flex-direction:column");
@@ -218,9 +218,13 @@ describe("application layout styles", () => {
     expect(declarations(".network-rule-switch-label.off")).toContain("opacity:1");
     expect(declarations(".network-rule-switch-input:checked+.network-rule-switch-track .network-rule-switch-label.on")).toContain("opacity:1");
     expect(declarations(".network-rule-switch-input:checked+.network-rule-switch-track .network-rule-switch-thumb")).toContain("translateX(20px)");
-    expect(declarations(".network-rule-access-button")).toContain("width:26px");
+    expect(declarations(".network-rule-access-button.labeled")).toContain("width:48px");
+    expect(declarations(".network-rule-access-button.labeled")).toContain("display:flex");
     expect(declarations(".network-rule-access-button")).toContain("background:transparent");
     expect(declarations(".network-rule-access-button:focus-visible")).toContain("outline:2px solid var(--focus)");
+    expect(declarations(".network-access-description")).toContain("background:#121a18");
+    expect(declarations(".network-access-description")).toContain("align-items:center");
+    expect(declarations(".network-access-description svg")).not.toContain("margin-top");
     expect(styles).not.toContain(".network-rule-menu-hint");
     expect(declarations(".network-context-menu")).toContain("position:fixed");
     expect(declarations(".dialog-frame.network-type-dialog")).toContain("width:min(660px,calc(100vw - 40px))");
@@ -246,9 +250,24 @@ describe("application layout styles", () => {
     expect(declarations(".network-access-field>div")).toContain("grid-template-columns:minmax(0,1fr) 30px");
     expect(declarations(".network-access-browser-grid")).toContain("grid-template-columns:1fr 1fr");
     expect(declarations(".network-access-proxy-option")).toContain("min-height:58px");
-    expect(declarations(".network-access-option-switch input:focus-visible+span")).toContain("outline:2px solid var(--focus)");
-    expect(declarations(".network-access-status")).toContain("height:20px");
-    expect(declarations(".network-access-status")).toContain("white-space:nowrap");
+    expect(declarations(".network-access-option-switch")).toContain("grid-template-columns:14px 14px");
+    expect(declarations(".network-access-option-switch")).toContain("grid-template-rows:14px");
+    expect(declarations(".network-access-option-switch>span")).toContain("grid-column:1");
+    expect(declarations(".network-access-option-switch>span")).toContain("transition:translate 180ms");
+    expect(declarations('.network-access-option-switch[aria-checked="true"]>span')).toContain("translate:14px 0");
+    expect(declarations('.network-access-option-switch[aria-checked="true"]>span')).not.toContain("transform");
+    expect(declarations(".network-access-option-switch:focus-visible")).toContain("outline:2px solid var(--focus)");
+    expect(declarations('.network-access-browser-grid>button[data-state="unavailable"]')).toContain("opacity:.68");
+    expect(declarations('.network-access-browser-grid>button[data-state="waiting"]:disabled')).toContain("border-color:#3b514b");
+    expect(declarations('.network-access-browser-grid>button[data-state="waiting"]:disabled .network-access-browser-icon')).toContain("color:#7fc5b8");
+    expect(declarations(".network-access-dialog>.dialog-content")).toContain("padding:14px 18px 11px");
+    expect(declarations(".network-access-content-compact")).toContain("gap:9px");
+    expect(declarations(".network-access-footer")).toContain("grid-template-areas:\"message\"");
+    expect(declarations(".network-access-footer-note,.network-access-footer-status")).toContain("justify-content:center");
+    expect(declarations(".network-access-footer-note,.network-access-footer-status")).toContain("text-align:center");
+    expect(declarations(".network-access-footer.has-message .network-access-footer-note")).toContain("opacity:0");
+    expect(declarations(".network-access-footer>.network-access-footer-status")).toContain("opacity:0");
+    expect(declarations(".network-access-footer>.network-access-footer-status")).toContain("white-space:nowrap");
     expect(styles).toMatch(/prefers-reduced-motion:reduce[\s\S]*\.network-rule-flow-connector::after\{animation:none!important/);
     expect(styles).toMatch(/max-width:620px[\s\S]*\.network-type-options\{grid-template-columns:1fr\}/);
     expect(styles).toMatch(/prefers-reduced-transparency:reduce[\s\S]*\.terminal-block,.terminal-surface,.file-browser,.network-pane\{background:#050708\}/);
@@ -401,9 +420,19 @@ describe("application layout styles", () => {
 
   it("anchors connection save feedback to the button and disables spinner motion when requested", () => {
     expect(declarations(".connection-save-button")).toContain("position:relative");
-    expect(declarations(".connection-save-button.saving>span::before")).toContain("animation:connection-save-spin");
-    expect(declarations(".connection-save-button.success")).toContain("background:#245d51");
-    expect(styles).toMatch(/prefers-reduced-motion:reduce[\s\S]*\.connection-save-button\.saving>span::before\{animation:none!important\}/);
+    expect(declarations(".connection-save-button")).toContain("width:88px");
+    expect(declarations(".connection-save-button")).toContain("height:30px");
+    expect(declarations(".connection-save-button")).toContain("align-items:center");
+    expect(declarations(".connection-save-content")).toContain("width:100%");
+    expect(declarations(".connection-save-content")).toContain("align-items:center");
+    expect(declarations(".connection-save-content>span:last-child")).toContain("line-height:1");
+    expect(declarations(".connection-save-content>svg")).toContain("display:block");
+    expect(declarations(".connection-save-spinner")).toContain("animation:connection-save-spin");
+    expect(declarations(".connection-save-button.saving:disabled,.connection-save-button.success:disabled")).toContain("background:var(--accent)");
+    expect(declarations(".connection-save-button.saving:disabled,.connection-save-button.success:disabled")).toContain("color:#06201b");
+    expect(declarations(".connection-save-button.success .connection-save-content>svg")).toContain("animation:connection-save-success-icon-in");
+    expect(styles).not.toContain(".connection-save-button.success { border-color:#4f9f8f");
+    expect(styles).toMatch(/prefers-reduced-motion:reduce[\s\S]*\.connection-save-spinner\{animation:none!important\}/);
   });
 
   it("keeps the terminal lock inside the workspace stage with opaque accessibility fallbacks", () => {

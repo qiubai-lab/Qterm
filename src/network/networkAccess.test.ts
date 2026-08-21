@@ -20,10 +20,8 @@ describe("deriveNetworkAccess", () => {
     };
 
     expect(deriveNetworkAccess(rule, profileHost)).toEqual({
-      fields: [
-        { label: "本地访问地址", value: "127.0.0.1:8080" },
-        { label: "服务器目标地址", value: "[2001:db8::20]:80" },
-      ],
+      description: "本地访问下面的本地地址，Qterm 会自动转发到服务器的 [2001:db8::20]:80",
+      fields: [{ label: "本地可访问地址", value: "127.0.0.1:8080" }],
       warning: "监听配置为 0.0.0.0；复制时使用本机回环地址，局域网设备仍可能通过本机实际地址访问。",
     });
   });
@@ -42,10 +40,8 @@ describe("deriveNetworkAccess", () => {
     };
 
     expect(deriveNetworkAccess(rule, "2001:db8::10")).toEqual({
-      fields: [
-        { label: "服务器访问地址", value: "[2001:db8::10]:9000" },
-        { label: "本地目标地址", value: "localhost:3000" },
-      ],
+      description: "远程访问下面的远程地址，Qterm 会自动转发到本地的 localhost:3000",
+      fields: [{ label: "远程可访问地址", value: "[2001:db8::10]:9000" }],
       warning: "服务器实际可访问性取决于 SSH GatewayPorts、监听网卡和防火墙配置。",
     });
   });
@@ -64,10 +60,8 @@ describe("deriveNetworkAccess", () => {
     };
 
     expect(deriveNetworkAccess(rule, profileHost)).toEqual({
-      fields: [
-        { label: "服务器访问地址", value: "127.0.0.1:9001" },
-        { label: "本地目标地址", value: "127.0.0.1:3001" },
-      ],
+      description: "远程访问下面的远程地址，Qterm 会自动转发到本地的 127.0.0.1:3001",
+      fields: [{ label: "远程可访问地址", value: "127.0.0.1:9001" }],
       warning: "该地址仅能从服务器本机访问。",
     });
   });
@@ -90,4 +84,3 @@ describe("deriveNetworkAccess", () => {
     });
   });
 });
-

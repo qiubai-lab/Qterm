@@ -7,7 +7,7 @@
 ## Scope
 
 - 增加三种规则共用的访问地址派生、访问弹窗和逐项剪贴板反馈。
-- 调整网络实例尾部布局以容纳常驻复制按钮，同时保持开关和现有右键菜单行为。
+- 调整网络实例尾部布局以容纳带文字的常驻操作：Local/Remote 使用“复制图标 + 复制”，SOCKS5 使用“小浏览器图标 + 代理”，同时保持开关和现有右键菜单行为。
 - 为 SOCKS5 弹窗增加 Windows Chrome/Edge 检测与启动状态。
 - 增加受限 Tauri DTO、Windows 浏览器启动 adapter、组合根注册和自动化保护。
 - 不修改网络规则 schema、SSH 转发实现、系统代理或浏览器进程生命周期。
@@ -40,7 +40,7 @@
 ### Frontend interaction
 
 - `NetworkPane` 只保存当前打开的访问规则，并把当前连接 Profile、规则运行状态和跨窗口锁定状态传给 feature-local `NetworkAccessDialog`。
-- 列表项网格扩展为“状态、正文、复制按钮、开关”；复制按钮使用现有 `copy` 图标、稳定 25–28px 点击区域、动态 `aria-label` 和焦点恢复。
+- 列表项网格扩展为“状态、正文、访问操作、开关”；Local/Remote 操作使用现有 `copy` 图标和“复制”文字，SOCKS5 使用现有 `browser` 图标和“代理”文字，并保留动态 `aria-label`、稳定点击区域和焦点恢复。
 - `NetworkAccessDialog` 使用标准宽度或紧凑扩展宽度的 `DialogFrame`：上部为地址卡片，下部仅对 SOCKS5 渲染实验浏览器区域。地址使用只读 input，使鼠标选择、键盘全选和手工复制可用。
 - 每项复制直接复用 `@tauri-apps/plugin-clipboard-manager`；一个固定高度 `aria-live` 状态槽展示复制或启动结果，不因消息出现而改变弹窗几何。
 - 浏览器按钮保持 Chrome、Edge 固定顺序。检测中与启动中禁用相关操作；未安装按钮保留但禁用。SOCKS5 未运行或跨窗口 listener 尚不可确认时，展示明确不可启动原因。
@@ -49,7 +49,7 @@
 
 - `networkAccess.ts` 从 `NetworkRule` 和 `ConnectionProfile` 纯函数派生展示标签、原始配置端点、建议复制值和警告，不把展示模型写回 IPC 或持久化模型。
 - 通用端点格式化对 IPv6 加方括号；本地/SOCKS 通配监听规范化到本机回环地址。
-- Local 输出本地 listener 和服务器侧 target；Remote 输出服务器 listener 和本地 target。
+- Local 只输出可复制的本地 listener，并生成一句包含服务器侧 target 的转发说明；Remote 只输出可复制的服务器 listener，并生成一句包含本地 target 的转发说明。target 不作为第二个可复制入口。
 - Remote 的具体绑定地址按原值显示；绑定通配地址时用 Profile host 生成“建议服务器访问地址”并附带 `GatewayPorts` / 防火墙提示；绑定服务器回环地址时不替换成 Profile host。
 - SOCKS 连接字符串只使用浏览器所在本机可连接的 listener 地址，格式为 `socks5://host:port`。
 
