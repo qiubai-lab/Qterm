@@ -5,6 +5,7 @@ import { clearUnsupportedProfileStorage, createProfile, createProfileGroup, dele
 import { findLeaf, terminalBlockIds } from "../../workspace/layout";
 import { useWorkspace } from "../../workspace/WorkspaceProvider";
 import { Icon } from "../Icon";
+import { RequiredFieldLabel } from "../RequiredFieldLabel";
 import { DialogActionStatus, DialogFrame } from "./DialogFrame";
 import { CredentialDialog } from "./CredentialDialog";
 import { MasterPasswordDialog } from "./MasterPasswordDialog";
@@ -521,11 +522,11 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
           </div>
           <div className="connection-editor-scroll">
             {editorTab === "connection" && <div className={`form-grid connection-tab-panel${tabMotion === "backward" ? " tab-backward" : tabMotion === "forward" ? " tab-forward" : ""}`} role="tabpanel" aria-label="连接信息">
-              <label className="span-2">名称<input value={editor.name} onChange={(event) => setEditor({ ...editor, name: event.target.value })}/></label>
+              <label className="span-2"><RequiredFieldLabel>名称</RequiredFieldLabel><input required value={editor.name} onChange={(event) => setEditor({ ...editor, name: event.target.value })}/></label>
               <label className="span-2">分组<select value={editor.groupId ?? ""} onChange={(event) => setEditor({ ...editor, groupId: event.target.value || null })}><option value="">未分组</option>{groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}</select></label>
-              <label>主机<input value={editor.host} onChange={(event) => setEditor({ ...editor, host: event.target.value })}/></label>
-              <label>端口<input type="number" min="1" max="65535" value={editor.port} onChange={(event) => setEditor({ ...editor, port: Number(event.target.value) })}/></label>
-              <label className="span-2">用户名<input value={editor.username} onChange={(event) => setEditor({ ...editor, username: event.target.value })}/></label>
+              <label><RequiredFieldLabel>主机</RequiredFieldLabel><input required value={editor.host} onChange={(event) => setEditor({ ...editor, host: event.target.value })}/></label>
+              <label><RequiredFieldLabel>端口</RequiredFieldLabel><input required type="number" min="1" max="65535" value={editor.port} onChange={(event) => setEditor({ ...editor, port: Number(event.target.value) })}/></label>
+              <label className="span-2"><RequiredFieldLabel>用户名</RequiredFieldLabel><input required value={editor.username} onChange={(event) => setEditor({ ...editor, username: event.target.value })}/></label>
             </div>}
             {editorTab === "authentication" && <div className={`form-grid connection-tab-panel connection-auth-panel${tabMotion === "forward" ? " tab-forward" : tabMotion === "backward" ? " tab-backward" : ""}`} role="tabpanel" aria-label="认证方式">
               <label className="span-2">认证方式<select value={editor.authPreference} onChange={(event) => {
@@ -599,7 +600,7 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
       onSelect={(candidate) => chooseJumpCandidate(jumpPickerOpen, candidate)}
     />}
     {groupEditor && <DialogFrame title={groupEditor === "new" ? "新建分组" : "管理分组"} subtitle="连接分组仅支持一层" compact onClose={() => setGroupEditor(null)}>
-      <label>分组名称<input data-dialog-autofocus value={groupName} maxLength={80} onChange={(event) => setGroupName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void saveGroup(); }}/></label>
+      <label><RequiredFieldLabel>分组名称</RequiredFieldLabel><input data-dialog-autofocus required value={groupName} maxLength={80} onChange={(event) => setGroupName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void saveGroup(); }}/></label>
       {groupMessage && <p className="inline-message" role="alert">{groupMessage}</p>}
       <footer className={`dialog-actions group-editor-actions${groupEditor === "new" ? " end" : ""}`}>{groupEditor !== "new" && <button className="danger-button" onClick={() => { setGroupEditor(null); setGroupDeleteRequested(groupEditor); }}>删除分组</button>}<div><button className="secondary-button" onClick={() => setGroupEditor(null)}>取消</button><button className="primary-button" onClick={() => void saveGroup()}>{groupEditor === "new" ? "创建分组" : "保存分组"}</button></div></footer>
     </DialogFrame>}

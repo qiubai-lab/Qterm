@@ -502,6 +502,7 @@ describe("WorkspaceProvider multi-session routing", () => {
     });
 
     expect(screen.getByTestId("runtime-notice")).toHaveTextContent("跳板“Gateway”（gateway.example:22）：无法建立下一跳通道");
+    expect(screen.getByTestId("runtime-progress")).toHaveTextContent("failed:无法建立下一跳通道");
     expect(mocks.onFailure).not.toHaveBeenCalled();
   });
 

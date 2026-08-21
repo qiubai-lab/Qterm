@@ -135,12 +135,12 @@ describe("TerminalTargetPicker", () => {
     expect(screen.queryByRole("dialog", { name: "选择终端连接" })).not.toBeInTheDocument();
   });
 
-  it("uses a restrained menu affordance and restores focus after Escape", async () => {
+  it("uses the connection name itself as the picker affordance and restores focus after Escape", async () => {
     const user = userEvent.setup();
     render(<TerminalTargetPicker profiles={profiles} groups={groups} selectedProfileId="profile-1" status="connected" detail="deploy@prod.example" onSelect={vi.fn()}/>);
 
     const trigger = screen.getByRole("button", { name: "选择终端连接，当前：Production" });
-    expect(trigger.querySelector(".terminal-target-menu-icon svg")).toBeInTheDocument();
+    expect(trigger.querySelector(".terminal-target-menu-icon")).not.toBeInTheDocument();
     expect(trigger.querySelector(".terminal-target-chevron")).not.toBeInTheDocument();
     await user.click(trigger);
     expect(screen.getByRole("dialog", { name: "选择终端连接" })).toBeInTheDocument();

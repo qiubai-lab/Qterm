@@ -165,8 +165,16 @@ describe("ConnectionDialog", () => {
     render(<ConnectionDialog onClose={vi.fn()}/>);
 
     expect(await screen.findByRole("tab", { name: "连接信息" })).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByLabelText("名称")).toHaveValue("K8S服务器");
-    expect(screen.getByLabelText("主机")).toHaveValue("10.100.5.28");
+    const name = screen.getByLabelText("名称");
+    const host = screen.getByLabelText("主机");
+    const port = screen.getByLabelText("端口");
+    const username = screen.getByLabelText("用户名");
+    expect(name).toHaveValue("K8S服务器");
+    expect(host).toHaveValue("10.100.5.28");
+    for (const field of [name, host, port, username]) {
+      expect(field).toBeRequired();
+      expect(field.closest("label")?.querySelector(".required-field-mark")).toBeInTheDocument();
+    }
     expect(screen.queryByRole("combobox", { name: "认证方式" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "连接当前终端" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "断开" })).not.toBeInTheDocument();

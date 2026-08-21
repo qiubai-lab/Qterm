@@ -24,7 +24,7 @@ Read [references/qterm-ui-spec.md](references/qterm-ui-spec.md) completely befor
 4. Make scrolling ownership explicit. Every nested flex/grid region that may shrink needs `min-width: 0` or `min-height: 0`; only the intended list/editor region may scroll.
 5. Implement all observable states: empty, loading or busy, selected, disabled, error, success, locked, and confirmation where applicable.
 6. Add motion only when it explains a spatial or state transition. Animate `transform` and `opacity`, keep transitions short, and provide reduced-motion behavior.
-7. Preserve semantics and keyboard behavior: labels, roles, selected/expanded state, focus-visible treatment, focus restoration, and topmost-dialog Escape handling.
+7. Preserve semantics and keyboard behavior: labels, roles, selected/expanded state, focus-visible treatment, focus restoration, and topmost-dialog Escape handling. Required form labels use the shared red `RequiredFieldLabel` star before the label text, never a textual “（必填）” suffix; pair it with native `required` semantics where supported.
 8. Add or update adjacent behavior tests and style assertions. Run focused checks, then `pnpm check` for meaningful frontend changes.
 
 ## Design decisions

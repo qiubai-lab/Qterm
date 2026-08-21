@@ -4,7 +4,7 @@ const { invoke } = vi.hoisted(() => ({ invoke: vi.fn() }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn() }));
 
-import { cancelMasterPasswordReset, changeMasterPassword, clearVault, createPasswordCredential, generatePrivateKeyCredential, getCredentialPublicKey, importPrivateKeyCredential, prepareMasterPasswordReset, resetMasterPassword } from "./credentials";
+import { cancelMasterPasswordReset, cancelPrivateKeyCredential, changeMasterPassword, clearVault, commitPrivateKeyCredential, createPasswordCredential, getCredentialPublicKey, prepareDroppedPrivateKeyCredential, prepareGeneratedPrivateKeyCredential, prepareMasterPasswordReset, preparePrivateKeyCredential, resetMasterPassword } from "./credentials";
 
 describe("credential vault IPC client", () => {
   beforeEach(() => invoke.mockReset());
@@ -15,16 +15,28 @@ describe("credential vault IPC client", () => {
     expect(invoke).toHaveBeenCalledWith("credential_create_password", { input: { name: "Production", password: "connection-secret" } });
   });
 
-  it("imports private keys without passing a path or key body from the frontend", async () => {
+  it("prepares a selected private key without passing a path or key body from the frontend", async () => {
     invoke.mockResolvedValue(undefined);
-    await importPrivateKeyCredential("Deploy", "key-secret");
-    expect(invoke).toHaveBeenCalledWith("credential_import_private_key", { input: { name: "Deploy", passphrase: "key-secret" } });
+    await preparePrivateKeyCredential();
+    expect(invoke).toHaveBeenCalledWith("credential_prepare_private_key");
+  });
+
+  it("prepares dropped and generated drafts, then commits or cancels only by opaque id", async () => {
+    invoke.mockResolvedValue(undefined);
+    await prepareDroppedPrivateKeyCredential("C:/keys/id_ed25519");
+    await prepareGeneratedPrivateKeyCredential("ecdsaP256", "deploy@example");
+    await commitPrivateKeyCredential("draft-1", "Deploy", "key-secret");
+    await cancelPrivateKeyCredential("draft-1");
+    expect(invoke).toHaveBeenNthCalledWith(1, "credential_prepare_private_key_path", { input: { path: "C:/keys/id_ed25519" } });
+    expect(invoke).toHaveBeenNthCalledWith(2, "credential_prepare_generated_private_key", { input: { algorithm: "ecdsaP256", comment: "deploy@example" } });
+    expect(invoke).toHaveBeenNthCalledWith(3, "credential_commit_private_key", { input: { draftId: "draft-1", name: "Deploy", passphrase: "key-secret" } });
+    expect(invoke).toHaveBeenNthCalledWith(4, "credential_cancel_private_key", { input: { draftId: "draft-1" } });
   });
 
   it("generates private keys through a closed algorithm DTO without returning key material", async () => {
     invoke.mockResolvedValue({ id: "key-2", name: "Generated", kind: "privateKey", detail: "ecdsa-p256" });
-    await generatePrivateKeyCredential("Generated", "ecdsaP256", "deploy@example");
-    expect(invoke).toHaveBeenCalledWith("credential_generate_private_key", { input: { name: "Generated", algorithm: "ecdsaP256", comment: "deploy@example" } });
+    await prepareGeneratedPrivateKeyCredential("ecdsaP256", "deploy@example");
+    expect(invoke).toHaveBeenCalledWith("credential_prepare_generated_private_key", { input: { algorithm: "ecdsaP256", comment: "deploy@example" } });
   });
 
   it("requires the destructive confirmation phrase when clearing", async () => {

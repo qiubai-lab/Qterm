@@ -248,6 +248,7 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
     };
     void getCurrentWebview().onDragDropEvent((event) => {
       const payload = event.payload;
+      if (document.querySelector(".dialog-scrim")) { setDropActive(false); return; }
       if (payload.type === "leave") { setDropActive(false); return; }
       const inside = insideContent(payload.position);
       if (payload.type === "enter" || payload.type === "over") { setDropActive(inside); return; }

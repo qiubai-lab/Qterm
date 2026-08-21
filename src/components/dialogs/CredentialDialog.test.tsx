@@ -6,19 +6,24 @@ import { CredentialDialog } from "./CredentialDialog";
 
 const mocks = vi.hoisted(() => ({
   clearVault: vi.fn(),
+  cancelPrivateKeyCredential: vi.fn(),
+  commitPrivateKeyCredential: vi.fn(),
   createPasswordCredential: vi.fn(),
   deleteCredential: vi.fn(),
-  generatePrivateKeyCredential: vi.fn(),
   getCredentialPublicKey: vi.fn(),
   getVaultStatus: vi.fn(),
-  importPrivateKeyCredential: vi.fn(),
+  preparePrivateKeyCredential: vi.fn(),
+  prepareDroppedPrivateKeyCredential: vi.fn(),
+  prepareGeneratedPrivateKeyCredential: vi.fn(),
   listCredentials: vi.fn(),
   onVaultStatusChanged: vi.fn(),
   revealCredentialPassword: vi.fn(),
   writeClipboardText: vi.fn(),
+  dragDrop: { handler: null as null | ((event: { payload: Record<string, unknown> }) => void) },
 }));
 
 vi.mock("../../lib/tauri/credentials", () => mocks);
+vi.mock("@tauri-apps/api/webview", () => ({ getCurrentWebview: () => ({ onDragDropEvent: vi.fn(async (handler) => { mocks.dragDrop.handler = handler; return () => { mocks.dragDrop.handler = null; }; }) }) }));
 vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({ writeText: mocks.writeClipboardText }));
 vi.mock("./MasterPasswordDialog", () => ({ MasterPasswordDialog: ({ mode, onSuccess }: { mode: string; onSuccess: () => void }) => <div data-testid="master-dialog">{mode}<button onClick={onSuccess}>完成</button></div> }));
 vi.mock("./RecoveryMasterPasswordDialog", () => ({ RecoveryMasterPasswordDialog: ({ onSuccess }: { onSuccess: () => void }) => <div role="dialog" aria-label="使用恢复密钥重置"><button onClick={onSuccess}>完成恢复</button></div> }));
@@ -31,12 +36,17 @@ beforeEach(() => {
   ]);
   mocks.createPasswordCredential.mockResolvedValue({ id: "password-2", name: "新密码", kind: "password", detail: null });
   mocks.deleteCredential.mockResolvedValue(undefined);
-  mocks.generatePrivateKeyCredential.mockResolvedValue({ id: "generated-key", name: "新生成私钥", kind: "privateKey", detail: "ecdsa-p256" });
+  mocks.commitPrivateKeyCredential.mockResolvedValue({ id: "generated-key", name: "新生成私钥", kind: "privateKey", detail: "ecdsa-p256" });
   mocks.getCredentialPublicKey.mockResolvedValue("ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITestKey deploy@example");
   mocks.revealCredentialPassword.mockResolvedValue("server-secret");
   mocks.writeClipboardText.mockResolvedValue(undefined);
   mocks.onVaultStatusChanged.mockResolvedValue(() => undefined);
   mocks.clearVault.mockResolvedValue(undefined);
+  mocks.preparePrivateKeyCredential.mockResolvedValue({ id: "draft-file", source: "file", label: "id_ed25519", detail: "本地私钥文件" });
+  mocks.prepareDroppedPrivateKeyCredential.mockResolvedValue({ id: "draft-file", source: "file", label: "id_ed25519", detail: "本地私钥文件" });
+  mocks.prepareGeneratedPrivateKeyCredential.mockResolvedValue({ id: "draft-generated", source: "generated", label: "ECDSA P-256", detail: "已生成，尚未保存" });
+  mocks.cancelPrivateKeyCredential.mockResolvedValue(undefined);
+  mocks.dragDrop.handler = null;
 });
 
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
@@ -114,30 +124,67 @@ describe("CredentialDialog", () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
-  it("creates password credentials and opens equal private key import and generation choices", async () => {
+  it("creates password credentials and allows private key actions before a name is entered", async () => {
     const user = userEvent.setup();
     render(<CredentialDialog onClose={vi.fn()}/>);
     await screen.findByText("生产密码");
     await user.click(screen.getByRole("button", { name: "新建密码" }));
-    await user.type(screen.getByLabelText("凭证名称"), "新密码");
-    await user.type(screen.getByLabelText("密码"), "server-secret");
+    const passwordName = screen.getByLabelText("凭证名称");
+    const password = screen.getByLabelText("密码");
+    expect(passwordName).toBeRequired();
+    expect(password).toBeRequired();
+    expect(passwordName.closest("label")?.querySelector(".required-field-mark")).toBeInTheDocument();
+    expect(password.closest("label")?.querySelector(".required-field-mark")).toBeInTheDocument();
+    await user.type(passwordName, "新密码");
+    await user.type(password, "server-secret");
     await user.click(screen.getByRole("button", { name: "保存凭证" }));
     await waitFor(() => expect(mocks.createPasswordCredential).toHaveBeenCalledWith("新密码", "server-secret"));
 
     await user.click(screen.getByRole("button", { name: "导入私钥" }));
-    expect(screen.queryByRole("button", { name: "选择并导入" })).not.toBeInTheDocument();
-    const localChoice = screen.getByRole("button", { name: /从本地文件导入/ });
+    const nameInput = screen.getByLabelText("凭证名称");
+    expect(nameInput).toBeRequired();
+    expect(nameInput.closest("label")?.querySelector(".required-field-mark")).toBeInTheDocument();
+    const passphraseInput = screen.getByLabelText("私钥口令（可选）");
+    const localChoice = screen.getByRole("button", { name: /拖放私钥文件到这里或点击选择/ });
     const generateChoice = screen.getByRole("button", { name: /生成新私钥/ });
-    expect(localChoice).toHaveClass("credential-private-key-choice");
-    expect(generateChoice).toHaveClass("credential-private-key-choice");
+    expect(localChoice).toHaveClass("credential-private-key-dropzone");
+    expect(generateChoice).toHaveClass("credential-private-key-generate");
     expect(localChoice.compareDocumentPosition(generateChoice) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-
+    expect(localChoice).toBeEnabled();
+    expect(generateChoice).toBeEnabled();
+    expect(screen.getByRole("button", { name: "保存私钥" })).toBeDisabled();
+    await user.type(passphraseInput, "key-secret");
     await user.click(localChoice);
-    const importDialog = screen.getByRole("dialog", { name: "从本地文件导入" });
-    await user.type(within(importDialog).getByLabelText("凭证名称"), "新私钥");
-    await user.type(within(importDialog).getByLabelText("私钥口令（可选）"), "key-secret");
-    await user.click(within(importDialog).getByRole("button", { name: "选择文件并导入" }));
-    await waitFor(() => expect(mocks.importPrivateKeyCredential).toHaveBeenCalledWith("新私钥", "key-secret"));
+    await waitFor(() => expect(mocks.preparePrivateKeyCredential).toHaveBeenCalledOnce());
+    expect(localChoice).toHaveAttribute("aria-pressed", "true");
+    expect(localChoice).toHaveTextContent("id_ed25519");
+    expect(generateChoice).toBeDisabled();
+    expect(mocks.commitPrivateKeyCredential).not.toHaveBeenCalled();
+    expect(nameInput).toHaveValue("");
+    await user.type(nameInput, "部署私钥");
+    const save = screen.getByRole("button", { name: "保存私钥" });
+    expect(save).toBeEnabled();
+    await user.click(save);
+    await waitFor(() => expect(mocks.commitPrivateKeyCredential).toHaveBeenCalledWith("draft-file", "部署私钥", "key-secret"));
+  });
+
+  it("imports exactly one private key dropped inside the file area and rejects multiple paths", async () => {
+    const user = userEvent.setup();
+    render(<CredentialDialog onClose={vi.fn()}/>);
+    await user.click(await screen.findByRole("button", { name: "导入私钥" }));
+    const nameInput = screen.getByLabelText("凭证名称");
+    const dropzone = screen.getByRole("button", { name: /拖放私钥文件到这里或点击选择/ });
+    vi.spyOn(dropzone, "getBoundingClientRect").mockReturnValue({ left: 10, top: 10, right: 210, bottom: 210, width: 200, height: 200, x: 10, y: 10, toJSON: () => ({}) });
+    await waitFor(() => expect(mocks.dragDrop.handler).not.toBeNull());
+
+    act(() => mocks.dragDrop.handler?.({ payload: { type: "drop", paths: ["C:/keys/one", "C:/keys/two"], position: { x: 20, y: 20 } } }));
+    expect(mocks.prepareDroppedPrivateKeyCredential).not.toHaveBeenCalled();
+    expect(dropzone).toHaveTextContent("一次只能拖入一个私钥文件");
+
+    act(() => mocks.dragDrop.handler?.({ payload: { type: "drop", paths: ["C:/keys/id_ed25519"], position: { x: 20, y: 20 } } }));
+    await waitFor(() => expect(mocks.prepareDroppedPrivateKeyCredential).toHaveBeenCalledWith("C:/keys/id_ed25519"));
+    expect(nameInput).toHaveValue("");
+    expect(dropzone).toHaveAttribute("aria-pressed", "true");
   });
 
   it("generates an ECDSA P-256 credential in Rust and selects the saved result", async () => {
@@ -154,18 +201,21 @@ describe("CredentialDialog", () => {
       ]);
     render(<CredentialDialog onClose={vi.fn()}/>);
     await user.click(await screen.findByRole("button", { name: "导入私钥" }));
-    await user.click(screen.getByRole("button", { name: /生成新私钥/ }));
+    const generateChoice = screen.getByRole("button", { name: /生成新私钥/ });
+    expect(generateChoice.querySelector('[data-icon="forward"]')).not.toBeInTheDocument();
+    await user.click(generateChoice);
 
     const generateDialog = screen.getByRole("dialog", { name: "生成新私钥" });
     expect(within(generateDialog).getByLabelText("密钥类型")).toHaveValue("ed25519");
-    await user.type(within(generateDialog).getByLabelText("凭证名称"), "新生成私钥");
     await user.selectOptions(within(generateDialog).getByLabelText("密钥类型"), "ecdsaP256");
     await user.type(within(generateDialog).getByLabelText("公钥注释（可选）"), "deploy@example");
-    await user.click(within(generateDialog).getByRole("button", { name: "生成并保存" }));
+    await user.click(within(generateDialog).getByRole("button", { name: "生成私钥" }));
 
-    await waitFor(() => expect(mocks.generatePrivateKeyCredential).toHaveBeenCalledWith("新生成私钥", "ecdsaP256", "deploy@example"));
-    expect(await screen.findByText("ecdsa-p256")).toBeInTheDocument();
-    await waitFor(() => expect(mocks.getCredentialPublicKey).toHaveBeenCalledWith("generated-key"));
+    await waitFor(() => expect(mocks.prepareGeneratedPrivateKeyCredential).toHaveBeenCalledWith("ecdsaP256", "deploy@example"));
+    expect(screen.getByRole("button", { name: /已生成 ECDSA P-256 私钥/ })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: /拖放私钥文件/ })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "保存私钥" })).toBeDisabled();
+    expect(mocks.commitPrivateKeyCredential).not.toHaveBeenCalled();
   });
 
   it("requires confirmation before deleting and preserves the connection contract", async () => {

@@ -13,6 +13,15 @@ function declarations(selector: string): string {
 }
 
 describe("application layout styles", () => {
+  it("uses one restrained danger marker for required field labels", () => {
+    expect(declarations(".required-field-label")).toContain("display:inline-flex");
+    expect(declarations(".required-field-label")).toContain("align-items:center");
+    expect(declarations(".required-field-mark")).toContain("display:inline-flex");
+    expect(declarations(".required-field-mark")).toContain("align-self:center");
+    expect(declarations(".required-field-mark::before")).toContain("color:var(--danger)");
+    expect(declarations(".required-field-mark::before")).toContain('content:"∗"');
+  });
+
   it("keeps a small visual gap between adjacent connection selections", () => {
     expect(declarations(".connection-item+.connection-item")).toContain("margin-top:2px");
   });
@@ -48,6 +57,28 @@ describe("application layout styles", () => {
     expect(declarations(".terminal-target-scrollbar>span")).toContain("--terminal-target-scroll-thumb-offset");
     expect(declarations('.terminal-target-submenu[data-placement="left"]')).toContain("transform-origin:right top");
     expect(styles).toContain(".terminal-context-menu,.terminal-target-menu,.terminal-target-submenu{background:#171b1e}");
+  });
+
+  it("collapses the connected endpoint before persistent route status", () => {
+    expect(declarations(".terminal-block")).toContain("container-type:inline-size");
+    expect(declarations(".connection-route-progress")).not.toContain("position:absolute");
+    expect(declarations(".connection-route-progress")).toContain("display:contents");
+    expect(declarations(".connection-route-dots")).toContain("flex:none");
+    expect(declarations(".terminal-target")).toContain("min-width:0");
+    expect(declarations(".terminal-target-trigger")).toContain("flex:0 1 auto");
+    expect(declarations(".connection-route-endpoint")).toContain("text-overflow:ellipsis");
+    expect(declarations(".connection-route-endpoint")).toContain("flex:0 100 auto");
+    expect(styles).not.toMatch(/@container terminal-block[^}]+\.connection-route-endpoint\{display:none\}/);
+    expect(styles).toMatch(/@container terminal-block \(max-width:390px\)\{\.terminal-target>small\{display:none\}\}/);
+    expect(styles).not.toContain(".connection-route-progress{display:none}");
+    expect(declarations(".block-actions")).toContain("flex:none");
+  });
+
+  it("keeps route node details in a compact two-line tooltip", () => {
+    expect(declarations(".connection-route-tooltip")).toContain("gap:1px");
+    expect(declarations(".connection-route-tooltip")).toContain("padding:4px 7px");
+    expect(declarations(".connection-route-tooltip-detail")).toContain("display:flex");
+    expect(declarations(".connection-route-tooltip-detail")).toContain("align-items:baseline");
   });
 
   it("keeps SSH Config import content in one bounded manager scroller", () => {
@@ -294,9 +325,15 @@ describe("application layout styles", () => {
     expect(declarations(".credential-public-key-actions")).toContain("gap:3px");
     expect(declarations(".credential-public-key-action")).toContain("width:25px");
     expect(declarations(".credential-public-key-action")).toContain("height:25px");
-    expect(declarations(".credential-private-key-choices")).toContain("grid-template-rows:repeat(2,minmax(64px,1fr))");
-    expect(declarations(".credential-private-key-choice")).toContain("width:100%");
-    expect(declarations(".credential-private-key-choice")).toContain("min-height:64px");
+    expect(declarations(".credential-private-key-create")).toContain("grid-template-rows:auto minmax(0,1fr)");
+    expect(declarations(".credential-private-key-actions")).toContain("grid-template-rows:repeat(2,minmax(64px,1fr))");
+    expect(declarations(".credential-private-key-dropzone")).toContain("border:1px dashed");
+    expect(declarations(".credential-private-key-dropzone,.credential-private-key-generate")).toContain("width:100%");
+    expect(declarations(".credential-private-key-dropzone,.credential-private-key-generate")).toContain("min-height:64px");
+    expect(declarations(".credential-private-key-dropzone,.credential-private-key-generate")).toContain("justify-content:center");
+    expect(declarations(".credential-private-key-dropzone.selected,.credential-private-key-generate.selected")).toContain("border-color:#4f8177");
+    expect(declarations(".credential-private-key-validation")).toContain("flex:1");
+    expect(declarations(".credential-private-key-footer .primary-button,.credential-private-key-footer .secondary-button")).toContain("flex:none");
     expect(declarations(".credential-feedback-bubble")).toContain("position:fixed");
     expect(declarations(".credential-feedback-bubble")).toContain("pointer-events:none");
     expect(styles).not.toContain(".credential-message");

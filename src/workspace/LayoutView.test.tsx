@@ -139,10 +139,17 @@ describe("WorkspaceCanvas terminal actions", () => {
   });
 
   it("uses the shared connection route widget in terminal, files, and network blocks", () => {
-    const progress = { totalNodes: 3, completedNodes: 0, activeNode: 1, phase: "connecting" as const, message: "正在连接节点 1" };
+    const progress = {
+      totalNodes: 2, completedNodes: 0, activeNode: 0, phase: "connecting" as const, message: "正在连接节点 1",
+      nodes: [
+        { index: 0, name: "跳板 1", endpoint: null, role: "jump" as const, state: "active" as const, stage: "connect" as const },
+        { index: 1, name: "目标节点", endpoint: null, role: "target" as const, state: "pending" as const, stage: null },
+      ],
+    };
     terminalRuntimes = { "block-1": { ...connectedLocalRuntime, kind: "ssh", status: "connecting", connectionProgress: progress } };
     const view = render(<WorkspaceCanvas workspace={{ ...workspace, layout: { type: "terminal", blockId: "block-1", profileId: "password-profile" } }} visible onRequestClose={vi.fn()} onRequestAuthConnection={vi.fn()}/>);
     expect(screen.getByRole("status")).toHaveTextContent("正在连接节点 1");
+    expect(view.container.querySelector(".terminal-block-header > .connection-route-progress")).not.toBeNull();
 
     fileRuntimes = { "files-1": { sessionId: null, kind: "sftp", status: "connecting", hostKeyPrompt: null, notice: "", connectionProgress: progress } };
     view.rerender(<WorkspaceCanvas workspace={{ ...workspace, activeBlockId: "files-1", layout: { type: "files", blockId: "files-1", profileId: "password-profile", path: "." } }} visible onRequestClose={vi.fn()} onRequestAuthConnection={vi.fn()}/>);
@@ -151,6 +158,25 @@ describe("WorkspaceCanvas terminal actions", () => {
     networkRuntimes = { "network-1": { sessionId: null, status: "connecting", hostKeyPrompt: null, notice: "", connectionProgress: progress, ruleStates: {} } };
     view.rerender(<WorkspaceCanvas workspace={{ ...workspace, activeBlockId: "network-1", layout: { type: "network", blockId: "network-1", profileId: "password-profile" } }} visible onRequestClose={vi.fn()} onRequestAuthConnection={vi.fn()}/>);
     expect(screen.getByRole("status")).toHaveTextContent("正在连接节点 1");
+  });
+
+  it("keeps the connected endpoint after the persistent route nodes", () => {
+    const progress = {
+      totalNodes: 1, completedNodes: 1, activeNode: null, phase: "connected" as const, message: "连接成功",
+      nodes: [{ index: 0, name: "Password Server", endpoint: "password.example:22", role: "target" as const, state: "complete" as const, stage: "startSession" as const }],
+    };
+    terminalRuntimes = { "block-1": { ...connectedLocalRuntime, kind: "ssh", status: "connected", connectionProgress: progress } };
+    const view = render(<WorkspaceCanvas workspace={{ ...workspace, layout: { type: "terminal", blockId: "block-1", profileId: "password-profile" } }} visible onRequestClose={vi.fn()} onRequestAuthConnection={vi.fn()}/>);
+    const route = view.container.querySelector(".connection-route-progress");
+    const dots = route?.querySelector(".connection-route-dots");
+    const endpoint = route?.querySelector(".connection-route-endpoint");
+
+    expect(dots).not.toBeNull();
+    expect(endpoint).toHaveTextContent("root@password.example");
+    if (!dots || !endpoint) throw new Error("route nodes and endpoint should both be rendered");
+    expect(dots.compareDocumentPosition(endpoint) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(view.container.querySelector(".terminal-target-menu-icon")).toBeNull();
+    expect(view.container.querySelector(".terminal-target>small")).toBeNull();
   });
 
   it("uses the folder target picker to connect a files-owned SFTP session", async () => {

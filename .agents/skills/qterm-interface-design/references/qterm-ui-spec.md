@@ -150,6 +150,7 @@ Nested dialogs must remain stacked. Only the topmost dialog handles Escape and T
 
 - Inputs/selects are normally 32px high with 6px radius and a one-pixel border.
 - Label sits above the control; helper or validation text follows it.
+- Prefix every required field label with the shared red `RequiredFieldLabel` star; use the vertically centered asterisk-operator glyph `∗` rather than the naturally superscripted ASCII `*`, and center it with the label text in the same line box. Do not append text such as “(required)” or “（必填）”. Hide the decorative star from assistive technology and add the native `required` attribute whenever the control supports it. Optional labels may use concise suffix text such as “（可选）”.
 - Use a two-column grid only for naturally paired values such as host/port. Let names, credentials, passwords, and warnings span the editor width.
 - Put a related secondary action such as “管理凭证” horizontally beside a flexible select using `minmax(0, 1fr) auto`.
 - Use the common eye/eye-off icon for password visibility. Give it an accessible label that changes between show/hide.

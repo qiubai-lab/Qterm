@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 
 import { initializeVault, unlockVault } from "../../lib/tauri/credentials";
+import { RequiredFieldLabel } from "../RequiredFieldLabel";
 import { DialogActionStatus, DialogFrame } from "./DialogFrame";
 
 export type MasterPasswordMode = "initialize" | "unlock";
@@ -64,8 +65,8 @@ export function MasterPasswordDialog({ mode, onSuccess, onClose }: { mode: Maste
   return <>
   <DialogFrame title={title} subtitle={initializing ? "主密码与恢复密钥共同保护本地凭证" : "本次操作需要重新验证主密码"} onClose={submitting ? () => undefined : onClose} compact>
     <form className="master-password-form" onSubmit={submit}>
-      <label>主密码<input data-dialog-autofocus type="password" autoComplete={initializing ? "new-password" : "current-password"} value={masterPassword} disabled={submitting} onChange={(event) => setMasterPassword(event.target.value)} /></label>
-      {initializing && <label>确认主密码<input type="password" autoComplete="new-password" value={confirmation} disabled={submitting} onChange={(event) => setConfirmation(event.target.value)} /></label>}
+      <label><RequiredFieldLabel>主密码</RequiredFieldLabel><input data-dialog-autofocus required type="password" autoComplete={initializing ? "new-password" : "current-password"} value={masterPassword} disabled={submitting} onChange={(event) => setMasterPassword(event.target.value)} /></label>
+      {initializing && <label><RequiredFieldLabel>确认主密码</RequiredFieldLabel><input required type="password" autoComplete="new-password" value={confirmation} disabled={submitting} onChange={(event) => setConfirmation(event.target.value)} /></label>}
       <p className="callout">{initializing ? "初始化时将保存一份恢复密钥文件。请与 secrets.vault 分开、离线保管；任何同时取得两者的人都可以重置主密码。" : "应用不会保存主密码；忘记后可使用初始化时保存的恢复密钥文件重置。"}</p>
       <footer className="dialog-actions dialog-actions-with-status"><DialogActionStatus message={savePromptOpen ? "" : message}/><div><button type="button" className="secondary-button" disabled={submitting} onClick={onClose}>取消</button><button type="submit" className="primary-button" disabled={submitting}>{submitting ? "正在验证…" : initializing ? "初始化" : "验证"}</button></div></footer>
     </form>

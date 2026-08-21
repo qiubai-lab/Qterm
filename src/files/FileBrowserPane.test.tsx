@@ -735,6 +735,7 @@ describe("FileBrowserPane", () => {
     uploadDroppedEntries.mockResolvedValue("transfer-drop");
     const view = render(<FileBrowserPane initialPath="/srv" runtime={runtime} onPathChange={vi.fn()}/>);
     await waitFor(() => expect(dragDrop.handler).toBeTypeOf("function"));
+    document.querySelectorAll(".dialog-scrim").forEach((element) => element.remove());
     const content = view.container.querySelector(".file-browser-content")!;
     vi.spyOn(content, "getBoundingClientRect").mockReturnValue({ left: 0, top: 0, right: 500, bottom: 400, width: 500, height: 400, x: 0, y: 0, toJSON: () => ({}) });
 
@@ -745,6 +746,14 @@ describe("FileBrowserPane", () => {
     act(() => dragDrop.handler?.({ payload: { type: "drop", paths: ["C:/drop/a.txt"], position: { x: 100, y: 100 } } }));
     await waitFor(() => expect(uploadDroppedEntries).toHaveBeenCalledWith("session-1", ["C:/drop/a.txt"], "/srv", expect.any(Function)));
     expect(view.container.querySelector(".file-upload-drop-overlay")).not.toBeInTheDocument();
+
+    uploadDroppedEntries.mockClear();
+    const modalScrim = document.createElement("div");
+    modalScrim.className = "dialog-scrim";
+    document.body.append(modalScrim);
+    act(() => dragDrop.handler?.({ payload: { type: "drop", paths: ["C:/drop/key"], position: { x: 100, y: 100 } } }));
+    expect(uploadDroppedEntries).not.toHaveBeenCalled();
+    modalScrim.remove();
   });
 });
 

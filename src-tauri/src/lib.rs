@@ -5,9 +5,10 @@ mod infrastructure;
 mod ports;
 
 use commands::credential::{
-    CredentialState, credential_create_password, credential_delete,
-    credential_generate_private_key, credential_import_private_key, credential_list,
-    credential_public_key, credential_reveal_password,
+    CredentialState, credential_cancel_private_key, credential_commit_private_key,
+    credential_create_password, credential_delete, credential_list,
+    credential_prepare_generated_private_key, credential_prepare_private_key,
+    credential_prepare_private_key_path, credential_public_key, credential_reveal_password,
     credential_vault_cancel_master_password_reset, credential_vault_change_master_password,
     credential_vault_clear, credential_vault_initialize, credential_vault_lock,
     credential_vault_prepare_master_password_reset, credential_vault_reset_master_password,
@@ -178,8 +179,11 @@ pub fn run() {
             credential_vault_clear,
             credential_list,
             credential_create_password,
-            credential_import_private_key,
-            credential_generate_private_key,
+            credential_prepare_private_key,
+            credential_prepare_private_key_path,
+            credential_prepare_generated_private_key,
+            credential_commit_private_key,
+            credential_cancel_private_key,
             credential_public_key,
             credential_reveal_password,
             credential_delete,

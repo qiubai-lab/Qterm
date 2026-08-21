@@ -7,7 +7,7 @@ import { closeLocalSession, connectLocalSession, getLocalTerminalCapabilities, r
 import { listProfileGroups, listProfiles, type ConnectionProfile, type ProfileGroup } from "../lib/tauri/profiles";
 import { acceptHostKey, closeSession, connectSession, rejectHostKey, resizeSession, writeSession, type SessionAuth, type SessionEvent, type SessionNode, type SessionState } from "../lib/tauri/sessions";
 import { loadWorkspaces, saveWorkspaces } from "../lib/tauri/workspaces";
-import { completeConnectionProgress, connectionProgressFromRouteEvent, initialConnectionProgress, type ConnectionRouteProgressState } from "./connectionProgress";
+import { completeConnectionProgress, connectionProgressFromRouteEvent, failConnectionProgress, initialConnectionProgress, type ConnectionRouteProgressState } from "./connectionProgress";
 import { blockIds, findLeaf } from "./layout";
 import { createWorkspaceDocument, type Workspace, type WorkspaceDocument } from "./model";
 import { workspaceReducer, type WorkspaceAction } from "./reducer";
@@ -243,17 +243,18 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         notice: event.state === "connected" ? "" : runtime.notice,
         connectionProgress: event.state === "connected"
           ? completeConnectionProgress(runtime.connectionProgress)
-          : event.state === "closed" || event.state === "failed" ? null : runtime.connectionProgress,
+          : event.state === "failed" ? failConnectionProgress(runtime.connectionProgress, null, "连接失败")
+            : event.state === "closed" ? null : runtime.connectionProgress,
       }));
       if (event.state === "connected") connectionFailureHandlers.current.delete(terminalFailureKey(blockId, epoch));
     } else if (event.type === "routeProgress") {
-      updateRuntime(blockId, (runtime) => ({ ...runtime, notice: "", connectionProgress: connectionProgressFromRouteEvent(event) }));
+      updateRuntime(blockId, (runtime) => ({ ...runtime, notice: "", connectionProgress: connectionProgressFromRouteEvent(event, runtime.connectionProgress) }));
     } else if (event.type === "hostKeyConfirmationRequired") {
       updateRuntime(blockId, (runtime) => ({ ...runtime, hostKeyPrompt: event }));
     } else if (event.type === "hostKeyChanged") {
-      updateRuntime(blockId, (runtime) => ({ ...runtime, connectionProgress: null, notice: `${nodeLabel(event.node)}主机密钥已变化：${event.presentedFingerprint}` }));
+      updateRuntime(blockId, (runtime) => ({ ...runtime, connectionProgress: failConnectionProgress(runtime.connectionProgress, event.node, "主机密钥已变化"), notice: `${nodeLabel(event.node)}主机密钥已变化：${event.presentedFingerprint}` }));
     } else {
-      updateRuntime(blockId, (runtime) => ({ ...runtime, connectionProgress: null, notice: routeFailureNotice(event) }));
+      updateRuntime(blockId, (runtime) => ({ ...runtime, connectionProgress: failConnectionProgress(runtime.connectionProgress, event.node, event.message), notice: routeFailureNotice(event) }));
       if (event.node?.role === "target" && event.stage === "authenticate") consumeFailureHandler(connectionFailureHandlers.current, terminalFailureKey(blockId, epoch));
     }
   }, [isCurrentEpoch, updateRuntime]);
@@ -269,17 +270,18 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         notice: event.state === "connected" ? "" : runtime.notice,
         connectionProgress: event.state === "connected"
           ? completeConnectionProgress(runtime.connectionProgress)
-          : event.state === "closed" || event.state === "failed" ? null : runtime.connectionProgress,
+          : event.state === "failed" ? failConnectionProgress(runtime.connectionProgress, null, "连接失败")
+            : event.state === "closed" ? null : runtime.connectionProgress,
       }));
       if (event.state === "connected") connectionFailureHandlers.current.delete(`files:${blockId}`);
     } else if (event.type === "routeProgress") {
-      updateFileRuntime(blockId, (runtime) => ({ ...runtime, notice: "", connectionProgress: connectionProgressFromRouteEvent(event) }));
+      updateFileRuntime(blockId, (runtime) => ({ ...runtime, notice: "", connectionProgress: connectionProgressFromRouteEvent(event, runtime.connectionProgress) }));
     } else if (event.type === "hostKeyConfirmationRequired") {
       updateFileRuntime(blockId, (runtime) => ({ ...runtime, hostKeyPrompt: event }));
     } else if (event.type === "hostKeyChanged") {
-      updateFileRuntime(blockId, (runtime) => ({ ...runtime, connectionProgress: null, notice: `${nodeLabel(event.node)}主机密钥已变化：${event.presentedFingerprint}` }));
+      updateFileRuntime(blockId, (runtime) => ({ ...runtime, connectionProgress: failConnectionProgress(runtime.connectionProgress, event.node, "主机密钥已变化"), notice: `${nodeLabel(event.node)}主机密钥已变化：${event.presentedFingerprint}` }));
     } else {
-      updateFileRuntime(blockId, (runtime) => ({ ...runtime, connectionProgress: null, notice: routeFailureNotice(event) }));
+      updateFileRuntime(blockId, (runtime) => ({ ...runtime, connectionProgress: failConnectionProgress(runtime.connectionProgress, event.node, event.message), notice: routeFailureNotice(event) }));
       if (event.node?.role === "target" && event.stage === "authenticate") consumeFailureHandler(connectionFailureHandlers.current, `files:${blockId}`);
     }
   }, [isCurrentEpoch, updateFileRuntime]);
@@ -294,18 +296,19 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         notice: event.state === "connected" ? "" : runtime.notice,
         connectionProgress: event.state === "connected"
           ? completeConnectionProgress(runtime.connectionProgress)
-          : event.state === "closed" || event.state === "failed" ? null : runtime.connectionProgress,
+          : event.state === "failed" ? failConnectionProgress(runtime.connectionProgress, null, "连接失败")
+            : event.state === "closed" ? null : runtime.connectionProgress,
         ruleStates: event.state === "closed" || event.state === "failed" ? {} : runtime.ruleStates,
       }));
       if (event.state === "connected") connectionFailureHandlers.current.delete(`network:${blockId}`);
     } else if (event.type === "routeProgress") {
-      updateNetworkRuntime(blockId, (runtime) => ({ ...runtime, notice: "", connectionProgress: connectionProgressFromRouteEvent(event) }));
+      updateNetworkRuntime(blockId, (runtime) => ({ ...runtime, notice: "", connectionProgress: connectionProgressFromRouteEvent(event, runtime.connectionProgress) }));
     } else if (event.type === "hostKeyConfirmationRequired") {
       updateNetworkRuntime(blockId, (runtime) => ({ ...runtime, hostKeyPrompt: event }));
     } else if (event.type === "hostKeyChanged") {
-      updateNetworkRuntime(blockId, (runtime) => ({ ...runtime, connectionProgress: null, notice: `${nodeLabel(event.node)}主机密钥已变化：${event.presentedFingerprint}` }));
+      updateNetworkRuntime(blockId, (runtime) => ({ ...runtime, connectionProgress: failConnectionProgress(runtime.connectionProgress, event.node, "主机密钥已变化"), notice: `${nodeLabel(event.node)}主机密钥已变化：${event.presentedFingerprint}` }));
     } else {
-      updateNetworkRuntime(blockId, (runtime) => ({ ...runtime, connectionProgress: null, notice: routeFailureNotice(event), ruleStates: {} }));
+      updateNetworkRuntime(blockId, (runtime) => ({ ...runtime, connectionProgress: failConnectionProgress(runtime.connectionProgress, event.node, event.message), notice: routeFailureNotice(event), ruleStates: {} }));
       if (event.node?.role === "target" && event.stage === "authenticate") consumeFailureHandler(connectionFailureHandlers.current, `network:${blockId}`);
     }
   }, [isCurrentEpoch, updateNetworkRuntime]);

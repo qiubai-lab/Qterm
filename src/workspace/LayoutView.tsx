@@ -170,7 +170,8 @@ function TerminalBlock(props: Omit<Parameters<typeof LayoutBranch>[0], "node"> &
   const profile = profiles.find((item) => item.id === props.profileId);
   const drop = props.drag?.targetId === props.blockId ? props.drag.position : null;
   const status = runtime?.status ?? "closed";
-  const detail = profile && status === "connected" ? `${profile.username}@${profile.host}` : profile ? status : status === "connected" ? "本机" : status;
+  const endpoint = profile && status === "connected" ? `${profile.username}@${profile.host}` : null;
+  const detail = endpoint ?? (profile ? status : status === "connected" ? "本机" : status);
   const requestedProfileRef = useRef<string | null>(null);
 
   async function chooseTarget(profileId: string | null) {
@@ -195,7 +196,8 @@ function TerminalBlock(props: Omit<Parameters<typeof LayoutBranch>[0], "node"> &
     aria-label={`终端 Block ${profile?.name ?? "本地终端"}`}
   >
     <header className="terminal-block-header" onPointerDown={(event) => props.beginDrag(event, props.blockId)}>
-      <TerminalTargetPicker profiles={profiles} groups={profileGroups} recentProfileIds={document?.recentProfileIds ?? []} selectedProfileId={props.profileId} status={status} detail={detail} onSelect={(profileId) => void chooseTarget(profileId)} onManageConnections={props.onOpenConnectionManager}/>
+      <TerminalTargetPicker profiles={profiles} groups={profileGroups} recentProfileIds={document?.recentProfileIds ?? []} selectedProfileId={props.profileId} status={status} detail={detail} hideDetail={Boolean(runtime?.connectionProgress)} onSelect={(profileId) => void chooseTarget(profileId)} onManageConnections={props.onOpenConnectionManager}/>
+      <ConnectionRouteProgress progress={runtime?.connectionProgress} endpoint={endpoint}/>
       <div className="block-actions">
         <button aria-label="清除终端缓冲区" title="清除终端缓冲区" onClick={() => clearBlockBuffer(props.blockId)}><Icon name="clear" size={13}/></button>
         <button aria-label="打开当前文件夹" title={runtime?.cwd ? `打开 ${runtime.cwd}` : "打开当前文件夹"} disabled={status !== "connected"} onClick={() => dispatch({ type: "openFiles", workspaceId: props.workspace.id, anchorBlockId: props.blockId, profileId: props.profileId, path: runtime?.cwd ?? (props.profileId === null ? "~" : ".") })}><Icon name="files" size={13}/></button>
@@ -206,7 +208,6 @@ function TerminalBlock(props: Omit<Parameters<typeof LayoutBranch>[0], "node"> &
       </div>
     </header>
     <TerminalPanel key={props.profileId ?? "local"} blockId={props.blockId} sessionKey={`${props.blockId}:${props.profileId ?? "local"}`} local={props.profileId === null} visible={props.visible} />
-    <ConnectionRouteProgress progress={runtime?.connectionProgress}/>
     {runtime?.notice && <div className="block-notice">{runtime.notice}</div>}
     {drop && <div className={`drop-zone drop-${drop}`} />}
   </section>;
@@ -219,7 +220,8 @@ function FilesBlock(props: Omit<Parameters<typeof LayoutBranch>[0], "node"> & { 
     ? { sessionId: null, kind: "local", status: "connected", hostKeyPrompt: null, notice: "", connectionProgress: null }
     : { sessionId: null, kind: "sftp", status: "closed", hostKeyPrompt: null, notice: "", connectionProgress: null });
   const profile = profiles.find((item) => item.id === props.profileId);
-  const detail = profile && runtime.status === "connected" ? `${profile.username}@${profile.host}` : profile ? runtime.status : "本机";
+  const endpoint = profile && runtime.status === "connected" ? `${profile.username}@${profile.host}` : null;
+  const detail = endpoint ?? (profile ? runtime.status : "本机");
   const active = props.workspace.activeBlockId === props.blockId;
   const drop = props.drag?.targetId === props.blockId ? props.drag.position : null;
   const requestedProfileRef = useRef<string | null>(null);
@@ -247,13 +249,13 @@ function FilesBlock(props: Omit<Parameters<typeof LayoutBranch>[0], "node"> & { 
     aria-label={`文件窗口 ${props.path}`}
   >
     <header className="terminal-block-header" onPointerDown={(event) => props.beginDrag(event, props.blockId)}>
-      <TerminalTargetPicker profiles={profiles} groups={profileGroups} recentProfileIds={document?.recentProfileIds ?? []} selectedProfileId={props.profileId} status={runtime.status} detail={detail} onSelect={(profileId) => void chooseTarget(profileId)} onManageConnections={props.onOpenConnectionManager} icon="files" localName="本机文件" localDetail="本地文件系统" ariaContext="文件连接"/>
+      <TerminalTargetPicker profiles={profiles} groups={profileGroups} recentProfileIds={document?.recentProfileIds ?? []} selectedProfileId={props.profileId} status={runtime.status} detail={detail} hideDetail={Boolean(runtime.connectionProgress)} onSelect={(profileId) => void chooseTarget(profileId)} onManageConnections={props.onOpenConnectionManager} icon="files" localName="本机文件" localDetail="本地文件系统" ariaContext="文件连接"/>
+      <ConnectionRouteProgress progress={runtime.connectionProgress} endpoint={endpoint}/>
       <div className="block-actions">
         <button aria-label="关闭文件窗口" title="关闭" onClick={() => props.onRequestClose(props.blockId)}><Icon name="close" size={13}/></button>
       </div>
     </header>
     <FileBrowserPane key={`files:${props.profileId ?? "local"}`} initialPath={props.profileId !== null && props.path === "~" ? "." : props.path} runtime={runtime} onPathChange={updatePath}/>
-    <ConnectionRouteProgress progress={runtime.connectionProgress}/>
     {drop && <div className={`drop-zone drop-${drop}`} />}
   </section>;
 }
@@ -265,7 +267,8 @@ function NetworkBlock(props: Omit<Parameters<typeof LayoutBranch>[0], "node"> & 
   const active = props.workspace.activeBlockId === props.blockId;
   const drop = props.drag?.targetId === props.blockId ? props.drag.position : null;
   const status = runtime?.status ?? "closed";
-  const detail = profile ? (status === "connected" ? `${profile.username}@${profile.host}:${profile.port}` : status) : "选择 SSH 连接后管理网络规则";
+  const endpoint = profile && status === "connected" ? `${profile.username}@${profile.host}:${profile.port}` : null;
+  const detail = endpoint ?? (profile ? status : "选择 SSH 连接后管理网络规则");
   const pendingRuleIdRef = useRef<string | null>(null);
   const lockedRuleIds = new Set(Object.values(networkRuntimes).flatMap((item) => Object.entries(item.ruleStates)
     .filter(([, state]) => state === "starting" || state === "running" || state === "stopping")
@@ -302,11 +305,11 @@ function NetworkBlock(props: Omit<Parameters<typeof LayoutBranch>[0], "node"> & 
     aria-label={`网络窗口 ${profile?.name ?? "未选择连接"}`}
   >
     <header className="terminal-block-header" onPointerDown={(event) => props.beginDrag(event, props.blockId)}>
-      <TerminalTargetPicker profiles={profiles} groups={profileGroups} recentProfileIds={document?.recentProfileIds ?? []} selectedProfileId={props.profileId} status={status} detail={detail} onSelect={(profileId) => void chooseTarget(profileId)} onManageConnections={props.onOpenConnectionManager} icon="network" localName="选择连接" localDetail="Network Block 需要远程 SSH 连接" ariaContext="网络连接" allowLocal={false}/>
+      <TerminalTargetPicker profiles={profiles} groups={profileGroups} recentProfileIds={document?.recentProfileIds ?? []} selectedProfileId={props.profileId} status={status} detail={detail} hideDetail={Boolean(runtime?.connectionProgress)} onSelect={(profileId) => void chooseTarget(profileId)} onManageConnections={props.onOpenConnectionManager} icon="network" localName="选择连接" localDetail="Network Block 需要远程 SSH 连接" ariaContext="网络连接" allowLocal={false}/>
+      <ConnectionRouteProgress progress={runtime?.connectionProgress} endpoint={endpoint}/>
       <div className="block-actions"><button aria-label="关闭网络窗口" title="关闭" onClick={() => props.onRequestClose(props.blockId)}><Icon name="close" size={13}/></button></div>
     </header>
     <NetworkPane profileId={props.profileId} runtimeStates={runtime?.ruleStates} lockedRuleIds={lockedRuleIds} onStart={(rule) => void startRule(rule.id)} onStop={(rule) => void stopNetworkBlockRule(props.blockId, rule.id)}/>
-    <ConnectionRouteProgress progress={runtime?.connectionProgress}/>
     {runtime?.notice && <div className="block-notice">{runtime.notice}</div>}
     {drop && <div className={`drop-zone drop-${drop}`} />}
   </section>;

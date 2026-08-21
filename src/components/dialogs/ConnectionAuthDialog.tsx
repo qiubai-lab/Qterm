@@ -4,6 +4,7 @@ import { getVaultStatus, listCredentials, type CredentialSummary, type VaultStat
 import type { ConnectionProfile } from "../../lib/tauri/profiles";
 import type { SessionAuth } from "../../lib/tauri/sessions";
 import { DialogFrame } from "./DialogFrame";
+import { RequiredFieldLabel } from "../RequiredFieldLabel";
 import { MasterPasswordDialog } from "./MasterPasswordDialog";
 
 type AuthMethod = "password" | "credential" | "sshAgent";
@@ -76,7 +77,7 @@ export function ConnectionAuthDialog({ profile, onConnect, onClose }: { profile:
         <div key={method} className={`auth-method-content auth-method-panel${motionDirection ? ` auth-${motionDirection}` : " auth-idle"}`} data-method={method}>
           {method === "password" && <>
             <p className="auth-security-hint">密码只保留到本次连接请求完成，不写入连接或凭证库。</p>
-            <label>密码<input data-dialog-autofocus type="password" autoComplete="current-password" required value={password} disabled={submitting} onChange={(event) => setPassword(event.target.value)} placeholder="仅用于本次连接"/></label>
+            <label><RequiredFieldLabel>密码</RequiredFieldLabel><input data-dialog-autofocus type="password" autoComplete="current-password" required value={password} disabled={submitting} onChange={(event) => setPassword(event.target.value)} placeholder="仅用于本次连接"/></label>
           </>}
 
           {method === "credential" && <>

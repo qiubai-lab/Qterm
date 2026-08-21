@@ -36,6 +36,7 @@ const MAX_RECOVERY_FILE_BYTES: u64 = 4 * 1024;
 pub struct CredentialState {
     lifecycle: CredentialLifecycle<JsonCredentialVault>,
     pending_recovery_reset: Mutex<Option<PendingRecoveryReset>>,
+    pending_private_key: Mutex<Option<PendingPrivateKey>>,
 }
 
 pub(crate) struct PrivateKeyImportOutcome {
@@ -48,11 +49,33 @@ struct PendingRecoveryReset {
     replacement: RecoveryKeyFile,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum PendingPrivateKeySource {
+    File,
+    Generated,
+}
+
+struct PendingPrivateKey {
+    id: String,
+    source: PendingPrivateKeySource,
+    label: String,
+    detail: String,
+    bytes: Zeroizing<Vec<u8>>,
+}
+
+struct PendingPrivateKeySummary {
+    id: String,
+    source: PendingPrivateKeySource,
+    label: String,
+    detail: String,
+}
+
 impl CredentialState {
     pub fn new(vault: JsonCredentialVault) -> Self {
         Self {
             lifecycle: CredentialLifecycle::new(vault),
             pending_recovery_reset: Mutex::new(None),
+            pending_private_key: Mutex::new(None),
         }
     }
 
@@ -73,6 +96,116 @@ impl CredentialState {
     fn clear_pending_recovery_reset(&self) {
         let _ = self.take_pending_recovery_reset();
     }
+
+    fn remember_private_key(
+        &self,
+        source: PendingPrivateKeySource,
+        label: String,
+        detail: String,
+        bytes: Zeroizing<Vec<u8>>,
+    ) -> PendingPrivateKeySummary {
+        let pending = PendingPrivateKey {
+            id: uuid::Uuid::new_v4().to_string(),
+            source,
+            label,
+            detail,
+            bytes,
+        };
+        let summary = PendingPrivateKeySummary {
+            id: pending.id.clone(),
+            source,
+            label: pending.label.clone(),
+            detail: pending.detail.clone(),
+        };
+        *self
+            .pending_private_key
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(pending);
+        summary
+    }
+
+    fn prepare_private_key_path(&self, path: &Path) -> Result<PendingPrivateKeySummary, IpcError> {
+        let bytes = read_private_key(path)?;
+        let label = path
+            .file_name()
+            .and_then(|value| value.to_str())
+            .filter(|value| !value.trim().is_empty())
+            .unwrap_or("私钥文件")
+            .to_owned();
+        Ok(self.remember_private_key(
+            PendingPrivateKeySource::File,
+            label,
+            "本地私钥文件".into(),
+            bytes,
+        ))
+    }
+
+    fn prepare_generated_private_key(
+        &self,
+        algorithm: GeneratedPrivateKeyAlgorithm,
+        comment: Option<String>,
+    ) -> Result<PendingPrivateKeySummary, IpcError> {
+        let comment = GeneratedPrivateKeyComment::parse(comment).map_err(IpcError::from)?;
+        let bytes = generate_private_key_bytes(algorithm, comment.as_str())
+            .map_err(crate::application::error::ApplicationError::from)
+            .map_err(IpcError::from)?;
+        let label = match algorithm {
+            GeneratedPrivateKeyAlgorithm::Ed25519 => "Ed25519",
+            GeneratedPrivateKeyAlgorithm::EcdsaP256 => "ECDSA P-256",
+        };
+        Ok(self.remember_private_key(
+            PendingPrivateKeySource::Generated,
+            label.into(),
+            "已在 Rust 后端生成，尚未保存".into(),
+            bytes,
+        ))
+    }
+
+    fn commit_private_key(
+        &self,
+        draft_id: &str,
+        name: String,
+        passphrase: Option<String>,
+    ) -> Result<CredentialSummary, IpcError> {
+        let (source, bytes) = {
+            let pending = self
+                .pending_private_key
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            let draft = pending
+                .as_ref()
+                .filter(|draft| draft.id == draft_id)
+                .ok_or_else(|| IpcError::from(CredentialError::InvalidCredential))?;
+            (draft.source, draft.bytes.clone())
+        };
+        let summary = self.import_private_key_bytes(
+            name,
+            bytes,
+            if source == PendingPrivateKeySource::File {
+                passphrase
+            } else {
+                None
+            },
+        )?;
+        let mut pending = self
+            .pending_private_key
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if pending.as_ref().is_some_and(|draft| draft.id == draft_id) {
+            pending.take();
+        }
+        Ok(summary)
+    }
+
+    fn cancel_private_key(&self, draft_id: &str) {
+        let mut pending = self
+            .pending_private_key
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if pending.as_ref().is_some_and(|draft| draft.id == draft_id) {
+            pending.take();
+        }
+    }
     pub(crate) fn resolve_auth(&self, credential_id: &str) -> Result<AuthRequest, IpcError> {
         match self.lifecycle.load(credential_id).map_err(IpcError::from)? {
             CredentialMaterial::Password(value) => Ok(AuthRequest::Password(value)),
@@ -82,7 +215,8 @@ impl CredentialState {
         }
     }
 
-    pub(crate) fn import_private_key_path(
+    #[cfg(test)]
+    fn import_private_key_path(
         &self,
         name: String,
         path: &Path,
@@ -110,19 +244,6 @@ impl CredentialState {
                 algorithm.into(),
             )
             .map_err(IpcError::from)
-    }
-
-    pub(crate) fn generate_private_key(
-        &self,
-        name: String,
-        algorithm: GeneratedPrivateKeyAlgorithm,
-        comment: Option<String>,
-    ) -> Result<CredentialSummary, IpcError> {
-        let comment = GeneratedPrivateKeyComment::parse(comment).map_err(IpcError::from)?;
-        let bytes = generate_private_key_bytes(algorithm, comment.as_str())
-            .map_err(crate::application::error::ApplicationError::from)
-            .map_err(IpcError::from)?;
-        self.import_private_key_bytes(name, bytes, None)
     }
 
     pub(crate) fn import_or_reuse_private_key_path(
@@ -278,9 +399,8 @@ pub struct CreatePasswordDto {
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct ImportPrivateKeyDto {
-    name: String,
-    passphrase: Option<String>,
+pub struct PrivateKeyPathDto {
+    path: String,
 }
 
 #[derive(Clone, Copy, Deserialize)]
@@ -301,10 +421,47 @@ impl From<GeneratePrivateKeyAlgorithmDto> for GeneratedPrivateKeyAlgorithm {
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct GeneratePrivateKeyDto {
-    name: String,
+pub struct PrepareGeneratedPrivateKeyDto {
     algorithm: GeneratePrivateKeyAlgorithmDto,
     comment: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct CommitPrivateKeyDto {
+    draft_id: String,
+    name: String,
+    passphrase: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct PrivateKeyDraftIdDto {
+    draft_id: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrivateKeyDraftDto {
+    id: String,
+    source: &'static str,
+    label: String,
+    detail: String,
+}
+
+impl From<PendingPrivateKeySummary> for PrivateKeyDraftDto {
+    fn from(value: PendingPrivateKeySummary) -> Self {
+        Self {
+            id: value.id,
+            source: if value.source == PendingPrivateKeySource::File {
+                "file"
+            } else {
+                "generated"
+            },
+            label: value.label,
+            detail: value.detail,
+        }
+    }
 }
 
 #[derive(Deserialize)]
@@ -640,11 +797,10 @@ pub fn credential_create_password(
 }
 
 #[tauri::command]
-pub async fn credential_import_private_key(
-    input: ImportPrivateKeyDto,
+pub async fn credential_prepare_private_key(
     app: AppHandle,
     state: State<'_, CredentialState>,
-) -> Result<Option<CredentialSummaryDto>, IpcError> {
+) -> Result<Option<PrivateKeyDraftDto>, IpcError> {
     let Some(path) = app
         .dialog()
         .file()
@@ -655,19 +811,47 @@ pub async fn credential_import_private_key(
         return Ok(None);
     };
     state
-        .import_private_key_path(input.name, &path, input.passphrase)
-        .map(CredentialSummaryDto::from)
+        .prepare_private_key_path(&path)
+        .map(PrivateKeyDraftDto::from)
         .map(Some)
 }
 
 #[tauri::command]
-pub fn credential_generate_private_key(
-    input: GeneratePrivateKeyDto,
+pub fn credential_prepare_private_key_path(
+    input: PrivateKeyPathDto,
+    state: State<'_, CredentialState>,
+) -> Result<PrivateKeyDraftDto, IpcError> {
+    state
+        .prepare_private_key_path(Path::new(&input.path))
+        .map(PrivateKeyDraftDto::from)
+}
+
+#[tauri::command]
+pub fn credential_prepare_generated_private_key(
+    input: PrepareGeneratedPrivateKeyDto,
+    state: State<'_, CredentialState>,
+) -> Result<PrivateKeyDraftDto, IpcError> {
+    state
+        .prepare_generated_private_key(input.algorithm.into(), input.comment)
+        .map(PrivateKeyDraftDto::from)
+}
+
+#[tauri::command]
+pub fn credential_commit_private_key(
+    input: CommitPrivateKeyDto,
     state: State<'_, CredentialState>,
 ) -> Result<CredentialSummaryDto, IpcError> {
     state
-        .generate_private_key(input.name, input.algorithm.into(), input.comment)
+        .commit_private_key(&input.draft_id, input.name, input.passphrase)
         .map(CredentialSummaryDto::from)
+}
+
+#[tauri::command]
+pub fn credential_cancel_private_key(
+    input: PrivateKeyDraftIdDto,
+    state: State<'_, CredentialState>,
+) {
+    state.cancel_private_key(&input.draft_id);
 }
 
 fn read_private_key(path: &Path) -> Result<Zeroizing<Vec<u8>>, IpcError> {
@@ -785,14 +969,14 @@ impl From<crate::domain::credential::CredentialSummary> for CredentialSummaryDto
 #[cfg(test)]
 mod tests {
     use super::{
-        ClearVaultDto, CreatePasswordDto, CredentialState, GeneratePrivateKeyDto,
-        ImportPrivateKeyDto, PendingRecoveryReset, ResetMasterPasswordDto, read_recovery_file,
-        recovery_file_name, validate_clear_confirmation, wait_for_dialog_result,
-        write_recovery_file,
+        ClearVaultDto, CommitPrivateKeyDto, CreatePasswordDto, CredentialState,
+        PendingRecoveryReset, PrepareGeneratedPrivateKeyDto, PrivateKeyDraftIdDto,
+        PrivateKeyPathDto, ResetMasterPasswordDto, read_recovery_file, recovery_file_name,
+        validate_clear_confirmation, wait_for_dialog_result, write_recovery_file,
     };
     use crate::domain::{
         auth::SecretText,
-        credential::{CredentialError, RecoveryKeyFile},
+        credential::{CredentialError, GeneratedPrivateKeyAlgorithm, RecoveryKeyFile},
         settings::SecuritySettings,
     };
     use crate::infrastructure::persistence::json_credential_vault::JsonCredentialVault;
@@ -811,25 +995,36 @@ mod tests {
             .is_err()
         );
         assert!(
-            serde_json::from_value::<ImportPrivateKeyDto>(
-                json!({"name":"key","passphrase":null,"path":"forbidden"})
+            serde_json::from_value::<PrivateKeyPathDto>(
+                json!({"path":"C:/keys/id_ed25519","name":"forbidden"})
             )
             .is_err()
         );
         assert!(
-            serde_json::from_value::<GeneratePrivateKeyDto>(json!({
-                "name": "generated",
+            serde_json::from_value::<PrepareGeneratedPrivateKeyDto>(json!({
                 "algorithm": "rsa",
                 "comment": null
             }))
             .is_err()
         );
         assert!(
-            serde_json::from_value::<GeneratePrivateKeyDto>(json!({
-                "name": "generated",
+            serde_json::from_value::<PrepareGeneratedPrivateKeyDto>(json!({
                 "algorithm": "ed25519",
                 "comment": null,
                 "privateKey": "forbidden"
+            }))
+            .is_err()
+        );
+        assert!(
+            serde_json::from_value::<CommitPrivateKeyDto>(
+                json!({"draftId":"draft","name":"key","passphrase":null,"privateKey":"forbidden"})
+            )
+            .is_err()
+        );
+        assert!(
+            serde_json::from_value::<PrivateKeyDraftIdDto>(json!({
+                "draftId": "draft",
+                "name": "forbidden"
             }))
             .is_err()
         );
@@ -921,6 +1116,60 @@ mod tests {
         });
         state.clear_pending_recovery_reset();
         assert!(state.take_pending_recovery_reset().is_none());
+    }
+
+    #[test]
+    fn generated_private_key_is_not_persisted_until_a_valid_commit() {
+        let dir = tempdir().expect("dir");
+        let state = CredentialState::new(JsonCredentialVault::new_for_test(
+            dir.path().join("vault.json"),
+        ));
+        let recovery = state
+            .lifecycle
+            .prepare_initial_recovery()
+            .expect("recovery");
+        state
+            .lifecycle
+            .initialize(
+                SecretText::new("correct-master-password".into()),
+                recovery,
+                SecuritySettings::default(),
+            )
+            .expect("initialize");
+
+        let draft = state
+            .prepare_generated_private_key(GeneratedPrivateKeyAlgorithm::Ed25519, None)
+            .expect("prepare generated key");
+        assert!(
+            state
+                .lifecycle
+                .list()
+                .expect("list after prepare")
+                .is_empty()
+        );
+        assert!(
+            state
+                .commit_private_key(&draft.id, "".into(), None)
+                .is_err()
+        );
+        assert!(
+            state
+                .lifecycle
+                .list()
+                .expect("list after invalid commit")
+                .is_empty()
+        );
+
+        let saved = state
+            .commit_private_key(&draft.id, "Deploy key".into(), None)
+            .expect("commit generated key");
+        assert_eq!(saved.name, "Deploy key");
+        assert_eq!(state.lifecycle.list().expect("list after commit").len(), 1);
+        assert!(
+            state
+                .commit_private_key(&draft.id, "Duplicate".into(), None)
+                .is_err()
+        );
     }
 
     #[test]

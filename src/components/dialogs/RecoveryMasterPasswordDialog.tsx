@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 
 import { cancelMasterPasswordReset, prepareMasterPasswordReset, resetMasterPassword } from "../../lib/tauri/credentials";
+import { RequiredFieldLabel } from "../RequiredFieldLabel";
 import { DialogActionStatus, DialogFrame } from "./DialogFrame";
 
 type RecoveryPhase = "selectKey" | "newPassword" | "saveKey";
@@ -86,8 +87,8 @@ export function RecoveryMasterPasswordDialog({ onClose, onSuccess }: { onClose: 
   if (phase === "newPassword") {
     return <DialogFrame title="设置新主密码" subtitle="恢复密钥已验证" compact onClose={busy ? () => undefined : returnToKeySelection}>
       <form className="master-password-form" onSubmit={submitPassword}>
-        <label>新主密码<input data-dialog-autofocus type="password" autoComplete="new-password" value={newPassword} disabled={busy} onChange={(event) => setNewPassword(event.target.value)}/></label>
-        <label>确认新主密码<input type="password" autoComplete="new-password" value={confirmation} disabled={busy} onChange={(event) => setConfirmation(event.target.value)}/></label>
+        <label><RequiredFieldLabel>新主密码</RequiredFieldLabel><input data-dialog-autofocus required type="password" autoComplete="new-password" value={newPassword} disabled={busy} onChange={(event) => setNewPassword(event.target.value)}/></label>
+        <label><RequiredFieldLabel>确认新主密码</RequiredFieldLabel><input required type="password" autoComplete="new-password" value={confirmation} disabled={busy} onChange={(event) => setConfirmation(event.target.value)}/></label>
         <p className="callout">新主密码至少需要 12 个字符。下一步将先提示你保存替代恢复密钥，保存成功后旧密钥才会失效。</p>
         <footer className="dialog-actions dialog-actions-with-status"><DialogActionStatus message={message}/><div><button type="button" className="secondary-button" disabled={busy} onClick={returnToKeySelection}>返回</button><button type="submit" className="primary-button" disabled={busy || !newPassword || !confirmation}>继续</button></div></footer>
       </form>

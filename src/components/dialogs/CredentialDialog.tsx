@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { writeText as writeClipboardText } from "@tauri-apps/plugin-clipboard-manager";
 
-import { clearVault, createPasswordCredential, deleteCredential, generatePrivateKeyCredential, getCredentialPublicKey, getVaultStatus, importPrivateKeyCredential, listCredentials, onVaultStatusChanged, revealCredentialPassword, type CredentialKind, type CredentialSummary, type GeneratedPrivateKeyAlgorithm, type VaultStatus } from "../../lib/tauri/credentials";
+import { cancelPrivateKeyCredential, clearVault, commitPrivateKeyCredential, createPasswordCredential, deleteCredential, getCredentialPublicKey, getVaultStatus, listCredentials, onVaultStatusChanged, prepareDroppedPrivateKeyCredential, prepareGeneratedPrivateKeyCredential, preparePrivateKeyCredential, revealCredentialPassword, type CredentialKind, type CredentialSummary, type GeneratedPrivateKeyAlgorithm, type PrivateKeyDraft, type VaultStatus } from "../../lib/tauri/credentials";
 import { Icon } from "../Icon";
+import { RequiredFieldLabel } from "../RequiredFieldLabel";
 import { ChangeMasterPasswordDialog } from "./ChangeMasterPasswordDialog";
 import { DialogFrame } from "./DialogFrame";
 import { MasterPasswordDialog, type MasterPasswordMode } from "./MasterPasswordDialog";
@@ -34,7 +36,9 @@ export function CredentialDialog({ onClose }: { onClose: () => void }) {
   const [name, setName] = useState("");
   const [secret, setSecret] = useState("");
   const [passphrase, setPassphrase] = useState("");
-  const [privateKeyDialog, setPrivateKeyDialog] = useState<"import" | "generate" | null>(null);
+  const [privateKeyDialog, setPrivateKeyDialog] = useState<"generate" | null>(null);
+  const [privateKeyDropState, setPrivateKeyDropState] = useState<"idle" | "active" | "invalid">("idle");
+  const [privateKeyDraft, setPrivateKeyDraft] = useState<PrivateKeyDraft | null>(null);
   const [generationAlgorithm, setGenerationAlgorithm] = useState<GeneratedPrivateKeyAlgorithm>("ed25519");
   const [generationComment, setGenerationComment] = useState("");
   const [feedback, setFeedback] = useState<CredentialFeedback | null>(null);
@@ -54,6 +58,9 @@ export function CredentialDialog({ onClose }: { onClose: () => void }) {
   const feedbackTimerRef = useRef<number | null>(null);
   const itemElementsRef = useRef(new Map<string, HTMLButtonElement>());
   const managerAnchorRef = useRef<HTMLDivElement>(null);
+  const privateKeyDropRef = useRef<HTMLButtonElement>(null);
+  const prepareKeyRef = useRef<(path?: string) => Promise<void>>(async () => undefined);
+  const privateKeyDraftRef = useRef<PrivateKeyDraft | null>(null);
 
   const clearFeedback = useCallback(() => {
     if (feedbackTimerRef.current !== null) window.clearTimeout(feedbackTimerRef.current);
@@ -119,6 +126,10 @@ export function CredentialDialog({ onClose }: { onClose: () => void }) {
   }
 
   function start(kind: CredentialKind) {
+    const pendingDraft = privateKeyDraftRef.current;
+    if (pendingDraft) void cancelPrivateKeyCredential(pendingDraft.id);
+    privateKeyDraftRef.current = null;
+    setPrivateKeyDraft(null);
     clearPasswordReveal();
     clearPublicKey();
     setView({ type: "create", kind });
@@ -136,32 +147,76 @@ export function CredentialDialog({ onClose }: { onClose: () => void }) {
     } catch (error) { showManagerFeedback(errorMessage(error), "error"); } finally { setBusy(false); }
   }
 
-  async function importKey() {
+  async function prepareKey(path?: string) {
+    if (busy) return;
+    setBusy(true); setPrivateKeyDropState("idle"); clearFeedback();
+    try {
+      const draft = path ? await prepareDroppedPrivateKeyCredential(path) : await preparePrivateKeyCredential();
+      if (draft) { privateKeyDraftRef.current = draft; setPrivateKeyDraft(draft); }
+    } catch (error) { showManagerFeedback(errorMessage(error), "error"); } finally { setBusy(false); }
+  }
+  useEffect(() => { prepareKeyRef.current = prepareKey; });
+  useEffect(() => () => { const draft = privateKeyDraftRef.current; if (draft) void cancelPrivateKeyCredential(draft.id); }, []);
+
+  useEffect(() => {
+    if (view.type !== "create" || view.kind !== "privateKey") return;
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+    const insideDropzone = (position: { x: number; y: number }) => {
+      const rect = privateKeyDropRef.current?.getBoundingClientRect();
+      const ratio = window.devicePixelRatio || 1;
+      const x = position.x / ratio;
+      const y = position.y / ratio;
+      return Boolean(rect && x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom);
+    };
+    void getCurrentWebview().onDragDropEvent((event) => {
+      const payload = event.payload;
+      if (payload.type === "leave") { setPrivateKeyDropState("idle"); return; }
+      const inside = insideDropzone(payload.position);
+      if (payload.type === "enter" || payload.type === "over") {
+        setPrivateKeyDropState(inside && !busy ? "active" : "idle");
+        return;
+      }
+      setPrivateKeyDropState("idle");
+      if (!inside || busy) return;
+      if (payload.paths.length !== 1) { setPrivateKeyDropState("invalid"); return; }
+      void prepareKeyRef.current(payload.paths[0]);
+    }).then((stop) => { if (disposed) stop(); else unlisten = stop; }).catch(() => setPrivateKeyDropState("idle"));
+    return () => { disposed = true; unlisten?.(); setPrivateKeyDropState("idle"); };
+  }, [busy, name, passphrase, view]);
+
+  async function prepareGeneratedKey() {
     if (busy) return;
     setBusy(true); clearFeedback();
     try {
-      const created = await importPrivateKeyCredential(name, passphrase);
-      if (created) {
-        setPassphrase("");
-        setPrivateKeyDialog(null);
-        await refresh(created.id);
-        showItemFeedback(created.id, "私钥已导入并加密保存");
-        void generatePublicKey(created);
-      }
+      const draft = await prepareGeneratedPrivateKeyCredential(generationAlgorithm, generationComment);
+      privateKeyDraftRef.current = draft;
+      setPrivateKeyDraft(draft);
+      setGenerationComment("");
+      setPrivateKeyDialog(null);
     } catch (error) { showManagerFeedback(errorMessage(error), "error"); } finally { setBusy(false); }
   }
 
-  async function generateKey() {
-    if (busy) return;
+  async function savePrivateKey() {
+    if (busy || !name.trim() || !privateKeyDraft) return;
     setBusy(true); clearFeedback();
     try {
-      const created = await generatePrivateKeyCredential(name, generationAlgorithm, generationComment);
-      setGenerationComment("");
-      setPrivateKeyDialog(null);
+      const created = await commitPrivateKeyCredential(privateKeyDraft.id, name, privateKeyDraft.source === "file" ? passphrase : undefined);
+      privateKeyDraftRef.current = null;
+      setPrivateKeyDraft(null);
+      setPassphrase("");
       await refresh(created.id);
-      showItemFeedback(created.id, "私钥已生成并加密保存");
+      showItemFeedback(created.id, "私钥已加密保存");
       void generatePublicKey(created);
     } catch (error) { showManagerFeedback(errorMessage(error), "error"); } finally { setBusy(false); }
+  }
+
+  function cancelPrivateKeyDraft() {
+    const draft = privateKeyDraftRef.current;
+    privateKeyDraftRef.current = null;
+    setPrivateKeyDraft(null);
+    if (draft) void cancelPrivateKeyCredential(draft.id);
+    setView({ type: "empty" });
   }
 
   async function remove() {
@@ -311,20 +366,23 @@ export function CredentialDialog({ onClose }: { onClose: () => void }) {
         </aside>
 
         <section className="credential-editor-pane">
-          <div key={view.type === "detail" ? view.item.id : view.type === "create" ? view.kind : "empty"} className={`credential-editor-stage${view.type === "detail" && view.item.kind === "privateKey" ? " credential-detail-stage" : ""}`}>
+          <div key={view.type === "detail" ? view.item.id : view.type === "create" ? view.kind : "empty"} className={`credential-editor-stage${view.type === "detail" && view.item.kind === "privateKey" ? " credential-detail-stage" : ""}${view.type === "create" && view.kind === "privateKey" ? " credential-private-key-stage" : ""}`}>
             {view.type === "create" && view.kind === "password" && <>
               <div className="credential-editor-heading"><span><Icon name="key" size={16}/></span><div><strong>新建密码凭证</strong><p>密码使用主密码保护，不写入连接配置。</p></div></div>
-              <div className="credential-editor-form"><label>凭证名称<input data-dialog-autofocus maxLength={80} value={name} onChange={(event) => setName(event.target.value)} placeholder="例如：生产环境账户"/></label><label>密码<input type="password" autoComplete="new-password" value={secret} onChange={(event) => setSecret(event.target.value)}/></label></div>
+              <div className="credential-editor-form"><label><RequiredFieldLabel>凭证名称</RequiredFieldLabel><input data-dialog-autofocus required maxLength={80} value={name} onChange={(event) => setName(event.target.value)} placeholder="例如：生产环境账户"/></label><label><RequiredFieldLabel>密码</RequiredFieldLabel><input required type="password" autoComplete="new-password" value={secret} onChange={(event) => setSecret(event.target.value)}/></label></div>
               <footer className="dialog-actions credential-editor-actions"><button className="secondary-button" onClick={() => setView({ type: "empty" })}>取消</button><button className="primary-button" disabled={busy || !name.trim() || !secret} onClick={() => void savePassword()}>{busy ? "保存中…" : "保存凭证"}</button></footer>
             </>}
 
             {view.type === "create" && view.kind === "privateKey" && <>
               <div className="credential-editor-heading"><span><Icon name="key" size={16}/></span><div><strong>添加私钥凭证</strong><p>选择本地私钥文件，或在安全的 Rust 后端生成新密钥。</p></div></div>
-              <div className="credential-private-key-choices">
-                <button data-dialog-autofocus type="button" className="credential-private-key-choice" onClick={() => { setName(""); setPassphrase(""); setPrivateKeyDialog("import"); }}><span><Icon name="file" size={17}/></span><span><strong>从本地文件导入</strong><small>通过系统文件选择器读取并加密保存</small></span><Icon name="forward" size={14}/></button>
-                <button type="button" className="credential-private-key-choice" onClick={() => { setName(""); setGenerationAlgorithm("ed25519"); setGenerationComment(""); setPrivateKeyDialog("generate"); }}><span><Icon name="key" size={17}/></span><span><strong>生成新私钥</strong><small>支持 Ed25519 与 ECDSA P-256</small></span><Icon name="forward" size={14}/></button>
+              <div className="credential-private-key-create">
+                <div className="credential-private-key-fixed-form"><label><RequiredFieldLabel>凭证名称</RequiredFieldLabel><input data-dialog-autofocus required maxLength={80} value={name} onChange={(event) => setName(event.target.value)} placeholder="例如：部署私钥"/></label><label>私钥口令（可选）<input type="password" autoComplete="off" value={passphrase} disabled={privateKeyDraft?.source === "generated"} onChange={(event) => setPassphrase(event.target.value)} placeholder={privateKeyDraft?.source === "generated" ? "生成的私钥无需口令" : "加密私钥需要填写"}/></label></div>
+                <div className="credential-private-key-actions">
+                  <button ref={privateKeyDropRef} type="button" className={`credential-private-key-dropzone${privateKeyDraft?.source === "file" ? " selected" : ""}`} data-drop-state={privateKeyDropState} aria-pressed={privateKeyDraft?.source === "file"} disabled={busy || privateKeyDraft?.source === "generated"} onClick={() => void prepareKey()}><span><Icon name="file" size={19}/></span><span><strong>{privateKeyDraft?.source === "file" ? privateKeyDraft.label : busy ? "正在读取私钥…" : privateKeyDropState === "active" ? "松开以选择私钥文件" : "拖放私钥文件到这里或点击选择"}</strong><small>{privateKeyDraft?.source === "file" ? "已选择，点击保存后写入凭证库" : privateKeyDropState === "invalid" ? "一次只能拖入一个私钥文件" : "选择后可在保存前确认"}</small></span></button>
+                  <button type="button" className={`credential-private-key-generate${privateKeyDraft?.source === "generated" ? " selected" : ""}`} aria-pressed={privateKeyDraft?.source === "generated"} disabled={busy || privateKeyDraft?.source === "file"} onClick={() => { setGenerationAlgorithm("ed25519"); setGenerationComment(""); setPrivateKeyDialog("generate"); }}><span><Icon name="key" size={19}/></span><span><strong>{privateKeyDraft?.source === "generated" ? `已生成 ${privateKeyDraft.label} 私钥` : "生成新私钥"}</strong><small>{privateKeyDraft?.source === "generated" ? "尚未保存，点击可重新生成" : "支持 Ed25519 与 ECDSA P-256"}</small></span></button>
+                </div>
               </div>
-              <footer className="dialog-actions credential-editor-actions"><button className="secondary-button" onClick={() => setView({ type: "empty" })}>取消</button></footer>
+              <footer className="dialog-actions credential-editor-actions credential-private-key-footer"><span className="credential-private-key-validation" aria-live="polite">{!name.trim() && !privateKeyDraft ? "请填写凭证名称并选择或生成私钥" : !name.trim() ? "请填写凭证名称" : !privateKeyDraft ? "请选择文件或生成私钥" : "可以保存"}</span><button className="secondary-button" disabled={busy} onClick={cancelPrivateKeyDraft}>取消</button><button className="primary-button" disabled={busy || !name.trim() || !privateKeyDraft} onClick={() => void savePrivateKey()}>{busy ? "保存中…" : "保存私钥"}</button></footer>
             </>}
 
             {view.type === "detail" && <><div className="credential-editor-heading"><span><Icon name={view.item.kind === "password" ? "key" : "file"} size={16}/></span><div><strong>{view.item.name}</strong><p>此凭证可由多个连接安全引用。</p></div></div>
@@ -357,8 +415,7 @@ export function CredentialDialog({ onClose }: { onClose: () => void }) {
         showManagerFeedback("主密码已重置，新的恢复密钥已保存，旧文件已失效");
       }}
     />}
-    {privateKeyDialog === "import" && <DialogFrame title="从本地文件导入" subtitle="私钥正文不会进入界面" compact onClose={() => setPrivateKeyDialog(null)}><div className="credential-private-key-dialog-form"><label>凭证名称<input data-dialog-autofocus maxLength={80} value={name} onChange={(event) => setName(event.target.value)} placeholder="例如：部署私钥"/></label><label>私钥口令（可选）<input type="password" autoComplete="off" value={passphrase} onChange={(event) => setPassphrase(event.target.value)} placeholder="加密私钥需要填写"/></label><p className="dialog-note">确认后将打开系统文件选择窗口，文件仅由 Rust 后端读取。</p></div><footer className="dialog-actions end"><button className="secondary-button" disabled={busy} onClick={() => setPrivateKeyDialog(null)}>取消</button><button className="primary-button" disabled={busy || !name.trim()} onClick={() => void importKey()}>{busy ? "导入中…" : "选择文件并导入"}</button></footer></DialogFrame>}
-    {privateKeyDialog === "generate" && <DialogFrame title="生成新私钥" subtitle="随机生成并直接加密保存" compact onClose={() => setPrivateKeyDialog(null)}><div className="credential-private-key-dialog-form"><label>凭证名称<input data-dialog-autofocus maxLength={80} value={name} onChange={(event) => setName(event.target.value)} placeholder="例如：部署私钥"/></label><label>密钥类型<select value={generationAlgorithm} onChange={(event) => setGenerationAlgorithm(event.target.value as GeneratedPrivateKeyAlgorithm)}><option value="ed25519">Ed25519（推荐）</option><option value="ecdsaP256">ECDSA P-256</option></select></label><label>公钥注释（可选）<input maxLength={80} value={generationComment} onChange={(event) => setGenerationComment(event.target.value)} placeholder="例如：deploy@example"/></label><p className="dialog-note">私钥在 Rust 后端生成，正文不会进入界面；保存后由凭证库主密码加密保护。</p></div><footer className="dialog-actions end"><button className="secondary-button" disabled={busy} onClick={() => setPrivateKeyDialog(null)}>取消</button><button className="primary-button" disabled={busy || !name.trim()} onClick={() => void generateKey()}>{busy ? "生成中…" : "生成并保存"}</button></footer></DialogFrame>}
+    {privateKeyDialog === "generate" && <DialogFrame title="生成新私钥" subtitle="先生成候选密钥，确认后再保存" compact onClose={() => setPrivateKeyDialog(null)}><div className="credential-private-key-dialog-form"><label>密钥类型<select data-dialog-autofocus value={generationAlgorithm} onChange={(event) => setGenerationAlgorithm(event.target.value as GeneratedPrivateKeyAlgorithm)}><option value="ed25519">Ed25519（推荐）</option><option value="ecdsaP256">ECDSA P-256</option></select></label><label>公钥注释（可选）<input maxLength={80} value={generationComment} onChange={(event) => setGenerationComment(event.target.value)} placeholder="例如：deploy@example"/></label><p className="dialog-note">私钥只在 Rust 后端内存中生成；返回添加页确认名称并保存前，不会写入凭证库。</p></div><footer className="dialog-actions end"><button className="secondary-button" disabled={busy} onClick={() => setPrivateKeyDialog(null)}>取消</button><button className="primary-button" disabled={busy} onClick={() => void prepareGeneratedKey()}>{busy ? "生成中…" : "生成私钥"}</button></footer></DialogFrame>}
     {deleteRequested && <DialogFrame title="删除凭证？" subtitle={deleteRequested.name} compact onClose={() => setDeleteRequested(null)}><p className="confirm-copy">凭证将永久删除。引用它的连接会保留，但下次连接前需要重新选择凭证。</p><footer className="dialog-actions end"><button className="secondary-button" onClick={() => setDeleteRequested(null)}>取消</button><button data-dialog-autofocus className="danger-button filled" disabled={busy} onClick={() => void remove()}>确认删除</button></footer></DialogFrame>}
     {clearRequested && <DialogFrame title="清除整个凭证库？" subtitle="此操作无法撤销" compact onClose={() => setClearRequested(false)}><div className="destructive-confirmation"><p className="confirm-copy">主密钥、全部密码、私钥和连接中的凭证引用都会被清除，连接本身不会删除。</p><label>请输入“确认清除”以继续<input data-dialog-autofocus value={clearConfirmation} autoComplete="off" onChange={(event) => setClearConfirmation(event.target.value)}/></label></div><footer className="dialog-actions end"><button className="secondary-button" onClick={() => setClearRequested(false)}>取消</button><button className="danger-button filled" disabled={busy || clearConfirmation !== "确认清除"} onClick={() => void clear()}>永久清除</button></footer></DialogFrame>}
     {feedback && <CredentialFeedbackBubble feedback={feedback} getTarget={() => feedback.scope === "item" ? itemElementsRef.current.get(feedback.itemId) ?? null : managerAnchorRef.current}/>}
