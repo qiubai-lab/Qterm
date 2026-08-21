@@ -37,8 +37,8 @@ export function deleteNetworkRule(id: string): Promise<void> {
   return invoke<void>("network_rule_delete", { id });
 }
 
-export function connectNetworkSession(profileId: string, input: SessionConnectInput, onEvent: (event: SessionEvent) => void): Promise<string> {
-  return invoke<string>("network_session_connect", { profileId, input, onEvent: new Channel<SessionEvent>(onEvent) });
+export function connectNetworkSession(input: SessionConnectInput, onEvent: (event: SessionEvent) => void): Promise<string> {
+  return invoke<string>("network_session_connect", { input, onEvent: new Channel<SessionEvent>(onEvent) });
 }
 
 export function startNetworkRule(sessionId: string, ruleId: string): Promise<void> {

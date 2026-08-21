@@ -82,10 +82,14 @@ function Harness() {
     <button onClick={() => void startNetworkBlockRule(activeWorkspace.activeBlockId, "rule-1")}>start-network-rule</button>
     <button onClick={() => void selectNetworkTarget(activeWorkspace.id, activeWorkspace.activeBlockId, null)}>network-clear-target</button>
     <span data-testid="runtime">{runtimes[ids[0]]?.kind}:{runtimes[ids[0]]?.status}</span>
+    <span data-testid="runtime-notice">{runtimes[ids[0]]?.notice}</span>
+    <span data-testid="runtime-progress">{runtimes[ids[0]]?.connectionProgress?.phase}:{runtimes[ids[0]]?.connectionProgress?.message}</span>
     <span data-testid="runtime-cwd">{runtimes[ids[0]]?.cwd}</span>
     <span data-testid="file-runtime">{fileRuntimes[activeWorkspace.activeBlockId]?.kind}:{fileRuntimes[activeWorkspace.activeBlockId]?.status}</span>
+    <span data-testid="file-progress">{fileRuntimes[activeWorkspace.activeBlockId]?.connectionProgress?.phase}:{fileRuntimes[activeWorkspace.activeBlockId]?.connectionProgress?.message}</span>
     <span data-testid="file-path">{activeLeaf?.type === "files" ? activeLeaf.path : ""}</span>
     <span data-testid="network-runtime">{networkRuntimes[activeWorkspace.activeBlockId]?.status}:{networkRuntimes[activeWorkspace.activeBlockId]?.ruleStates["rule-1"]}</span>
+    <span data-testid="network-progress">{networkRuntimes[activeWorkspace.activeBlockId]?.connectionProgress?.phase}:{networkRuntimes[activeWorkspace.activeBlockId]?.connectionProgress?.message}</span>
   </>;
 }
 
@@ -256,7 +260,7 @@ describe("WorkspaceProvider multi-session routing", () => {
 
     act(() => {
       mocks.connections[0].event({ type: "stateChanged", state: "failed" });
-      mocks.connections[0].event({ type: "failed", code: "authentication-rejected", message: "认证失败" });
+      mocks.connections[0].event({ type: "failed", code: "authentication-rejected", message: "认证失败", node: null, stage: null });
     });
 
     expect(screen.getByTestId("runtime")).toHaveTextContent("local:connected");
@@ -417,6 +421,7 @@ describe("WorkspaceProvider multi-session routing", () => {
 
   it("owns and closes an SFTP session independently for a files block", async () => {
     mocks.connectFileSession.mockImplementation(async (_input, event) => {
+      event({ type: "routeProgress", stage: "connect", node: { profileId: "profile-1", name: "Server", host: "example.test", port: 22, index: 1, total: 2, role: "target" } });
       event({ type: "stateChanged", state: "connected" });
       return "files-session-1";
     });
@@ -426,6 +431,7 @@ describe("WorkspaceProvider multi-session routing", () => {
     await user.click(screen.getByRole("button", { name: "open-files" }));
     await user.click(screen.getByRole("button", { name: "connect-files" }));
     await waitFor(() => expect(screen.getByTestId("file-runtime")).toHaveTextContent("sftp:connected"));
+    expect(screen.getByTestId("file-progress")).toHaveTextContent("connected:连接成功");
     expect(mocks.connectSession).not.toHaveBeenCalled();
 
     await user.click(screen.getByRole("button", { name: "files-local" }));
@@ -439,8 +445,9 @@ describe("WorkspaceProvider multi-session routing", () => {
   });
 
   it("owns Network SSH state per block and closes it before clearing the profile", async () => {
-    mocks.connectNetworkSession.mockImplementation(async (_profileId, _input, event) => {
+    mocks.connectNetworkSession.mockImplementation(async (_input, event) => {
       mocks.networkConnections.push({ event });
+      event({ type: "routeProgress", stage: "connect", node: { profileId: "profile-1", name: "Server", host: "example.test", port: 22, index: 1, total: 2, role: "target" } });
       event({ type: "stateChanged", state: "connected" });
       return "network-session-1";
     });
@@ -450,6 +457,7 @@ describe("WorkspaceProvider multi-session routing", () => {
     await user.click(screen.getByRole("button", { name: "open-network" }));
     await user.click(screen.getByRole("button", { name: "connect-network" }));
     await waitFor(() => expect(screen.getByTestId("network-runtime")).toHaveTextContent("connected"));
+    expect(screen.getByTestId("network-progress")).toHaveTextContent("connected:连接成功");
     await user.click(screen.getByRole("button", { name: "start-network-rule" }));
     await waitFor(() => expect(mocks.startNetworkRule).toHaveBeenCalledWith("network-session-1", "rule-1"));
     expect(screen.getByTestId("network-runtime")).toHaveTextContent("connected:running");
@@ -471,9 +479,54 @@ describe("WorkspaceProvider multi-session routing", () => {
     await waitFor(() => expect(mocks.connections).toHaveLength(1));
     act(() => {
       mocks.connections[0].event({ type: "stateChanged", state: "failed" });
-      mocks.connections[0].event({ type: "failed", code: "authentication-rejected", message: "认证失败" });
-      mocks.connections[0].event({ type: "failed", code: "authentication-rejected", message: "认证失败" });
+      const node = { profileId: "profile-1", name: "Server", host: "example.test", port: 22, index: 0, total: 1, role: "target" as const };
+      mocks.connections[0].event({ type: "failed", code: "authentication-rejected", message: "认证失败", node, stage: "authenticate" });
+      mocks.connections[0].event({ type: "failed", code: "authentication-rejected", message: "认证失败", node, stage: "authenticate" });
     });
     expect(mocks.onFailure).toHaveBeenCalledOnce();
+  });
+
+  it("attributes jump-node failures without opening target authentication fallback", async () => {
+    mocks.connections.length = 0;
+    mocks.connectSession.mockImplementation(async (_input, event, terminal) => {
+      mocks.connections.push({ event, terminal });
+      return "ssh-jump-failure";
+    });
+    const user = userEvent.setup();
+    render(<WorkspaceProvider><Harness/></WorkspaceProvider>);
+    await user.click(screen.getByRole("button", { name: "connect-with-fallback" }));
+    await waitFor(() => expect(mocks.connections).toHaveLength(1));
+    const node = { profileId: "gateway-1", name: "Gateway", host: "gateway.example", port: 22, index: 0, total: 2, role: "jump" as const };
+    act(() => {
+      mocks.connections[0].event({ type: "failed", code: "jumpTunnelOpenFailed", message: "无法建立下一跳通道", node, stage: "openTunnel" });
+    });
+
+    expect(screen.getByTestId("runtime-notice")).toHaveTextContent("跳板“Gateway”（gateway.example:22）：无法建立下一跳通道");
+    expect(mocks.onFailure).not.toHaveBeenCalled();
+  });
+
+  it("turns jump-route progress into a successful terminal state", async () => {
+    mocks.connectSession.mockImplementation(async (_input, event, terminal) => {
+      mocks.connections.push({ event, terminal });
+      return "ssh-through-jump";
+    });
+    const user = userEvent.setup();
+    render(<WorkspaceProvider><Harness/></WorkspaceProvider>);
+    await user.click(screen.getByRole("button", { name: "connect-with-fallback" }));
+    await waitFor(() => expect(mocks.connections).toHaveLength(1));
+    const target = { profileId: "profile-1", name: "Server", host: "example.test", port: 22, index: 1, total: 2, role: "target" as const };
+
+    act(() => {
+      mocks.connections[0].event({ type: "routeProgress", node: target, stage: "connect" });
+    });
+    expect(screen.getByTestId("runtime-notice")).toBeEmptyDOMElement();
+    expect(screen.getByTestId("runtime-progress")).toHaveTextContent("connecting:正在连接节点 2 · Server");
+
+    act(() => {
+      mocks.connections[0].event({ type: "stateChanged", state: "connected" });
+    });
+    expect(screen.getByTestId("runtime")).toHaveTextContent("ssh:connected");
+    expect(screen.getByTestId("runtime-notice")).toBeEmptyDOMElement();
+    expect(screen.getByTestId("runtime-progress")).toHaveTextContent("connected:连接成功");
   });
 });

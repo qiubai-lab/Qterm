@@ -57,6 +57,12 @@ jobs:
             artifactName: qterm-macos-arm64
             bundlePath: |
               src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
+          - name: macOS Intel
+            os: macos-15-intel
+            target: x86_64-apple-darwin
+            artifactName: qterm-macos-x64
+            bundlePath: |
+              src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/*.dmg
           - name: Windows x64
             os: windows-2025
             target: x86_64-pc-windows-msvc
@@ -86,6 +92,9 @@ jobs:
           case "${{ matrix.target }}" in
             aarch64-apple-darwin)
               test "$(uname -m)" = "arm64"
+              ;;
+            x86_64-apple-darwin)
+              test "$(uname -m)" = "x86_64"
               ;;
             x86_64-pc-windows-msvc)
               test "$RUNNER_ARCH" = "X64"

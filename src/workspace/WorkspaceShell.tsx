@@ -10,7 +10,7 @@ import { ConnectionAuthDialog } from "../components/dialogs/ConnectionAuthDialog
 import { MasterPasswordDialog, type MasterPasswordMode } from "../components/dialogs/MasterPasswordDialog";
 import { TerminalLockChoiceDialog, TerminalLockScreen } from "../components/dialogs/TerminalLockDialogs";
 import { getVaultStatus, lockVault, onVaultStatusChanged, type VaultStatus } from "../lib/tauri/credentials";
-import type { ConnectionProfile } from "../lib/tauri/profiles";
+import { getProfileRouteRequirements, type ConnectionProfile } from "../lib/tauri/profiles";
 import { getSettings, type SecuritySettings } from "../lib/tauri/settings";
 import { closeCurrentWindow, minimizeCurrentWindow, startDraggingCurrentWindow, toggleMaximizeCurrentWindow } from "../lib/tauri/window";
 import { WorkspaceCanvas, type ConnectionOwner } from "./LayoutView";
@@ -336,7 +336,8 @@ export function WorkspaceShell() {
       setAuthRequest({ owner, blockId, profile });
     };
     try {
-      if (profile.authPreference !== "sshAgent" && profile.authPreference !== "manual" && profile.credentialId) {
+      const routeRequirements = await getProfileRouteRequirements(profile.id);
+      if (routeRequirements.usesCredential) {
         const status = await getVaultStatus();
         if (!targetCurrent()) return;
         if (!status.unlocked) {
@@ -452,7 +453,7 @@ export function WorkspaceShell() {
     {tool === "help" && <HelpDialog onClose={() => setTool(null)}/>}
     {lockChoiceOpen && <TerminalLockChoiceDialog vaultUnlocked={Boolean(vaultStatus?.unlocked)} busy={vaultLockBusy} message={vaultLockError} onClose={() => { setLockChoiceOpen(false); setVaultLockError(""); }} onLockVault={() => void applyLockScope("vault")} onLockTerminalAndVault={() => void applyLockScope("terminalAndVault")}/>}
     {closeRequest && <DialogFrame title={closeRequest.title} subtitle="未保存的终端输出无法恢复" onClose={() => setCloseRequest(null)}><p className="confirm-copy">{closeRequest.detail}</p><p className="callout">将断开 {connectedCount(closeRequest.ids)} 个活动会话。</p><footer className="dialog-actions end"><button className="secondary-button" onClick={() => setCloseRequest(null)}>取消</button><button className="danger-button filled" onClick={() => void confirmClose()}>关闭并断开</button></footer></DialogFrame>}
-    {hostPrompt && <DialogFrame title="确认主机身份" subtitle="首次连接需要核对主机密钥" onClose={() => void rejectPromptHostKey(hostPrompt.owner, hostPrompt.blockId)}><p className="confirm-copy">请通过可信渠道核对以下指纹：</p><code className="fingerprint">{hostPrompt.prompt.algorithm}<br/>{hostPrompt.prompt.fingerprint}</code><footer className="dialog-actions end"><button className="danger-button" onClick={() => void rejectPromptHostKey(hostPrompt.owner, hostPrompt.blockId)}>拒绝</button><button className="primary-button" onClick={() => void acceptPromptHostKey(hostPrompt.owner, hostPrompt.blockId)}>信任并继续</button></footer></DialogFrame>}
+    {hostPrompt && <DialogFrame title="确认主机身份" subtitle={`${hostPrompt.prompt.node.role === "jump" ? "跳板" : "目标"}“${hostPrompt.prompt.node.name}” · ${hostPrompt.prompt.node.host}:${hostPrompt.prompt.node.port}`} onClose={() => void rejectPromptHostKey(hostPrompt.owner, hostPrompt.blockId)}><p className="confirm-copy">请通过可信渠道核对当前节点的主机密钥指纹：</p><code className="fingerprint">{hostPrompt.prompt.algorithm}<br/>{hostPrompt.prompt.fingerprint}</code><footer className="dialog-actions end"><button className="danger-button" onClick={() => void rejectPromptHostKey(hostPrompt.owner, hostPrompt.blockId)}>拒绝</button><button className="primary-button" onClick={() => void acceptPromptHostKey(hostPrompt.owner, hostPrompt.blockId)}>信任并继续</button></footer></DialogFrame>}
     {storageNotice && <div className="global-notice" role="status"><span>{storageNotice}</span><button aria-label="关闭提示" onClick={dismissStorageNotice}><Icon name="close" size={13}/></button></div>}
   </main>;
 

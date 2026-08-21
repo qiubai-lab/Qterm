@@ -5,8 +5,9 @@ mod infrastructure;
 mod ports;
 
 use commands::credential::{
-    CredentialState, credential_create_password, credential_delete, credential_import_private_key,
-    credential_list, credential_public_key, credential_reveal_password,
+    CredentialState, credential_create_password, credential_delete,
+    credential_generate_private_key, credential_import_private_key, credential_list,
+    credential_public_key, credential_reveal_password,
     credential_vault_cancel_master_password_reset, credential_vault_change_master_password,
     credential_vault_clear, credential_vault_initialize, credential_vault_lock,
     credential_vault_prepare_master_password_reset, credential_vault_reset_master_password,
@@ -26,9 +27,10 @@ use commands::network::{
     network_rule_stop, network_rule_update, network_session_connect,
 };
 use commands::profile::{
-    ProfileState, profile_create, profile_delete, profile_group_create, profile_group_delete,
-    profile_group_list, profile_group_update, profile_import_ssh_config_commit,
-    profile_import_ssh_config_preview, profile_list, profile_update,
+    ProfileState, profile_clear_unsupported_storage, profile_create, profile_delete,
+    profile_group_create, profile_group_delete, profile_group_list, profile_group_update,
+    profile_import_ssh_config_commit, profile_import_ssh_config_preview, profile_jump_candidates,
+    profile_list, profile_route_requirements, profile_update,
 };
 use commands::session::{
     SessionState, session_accept_host_key, session_close, session_connect, session_reject_host_key,
@@ -146,9 +148,12 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             profile_list,
+            profile_jump_candidates,
+            profile_route_requirements,
             profile_create,
             profile_update,
             profile_delete,
+            profile_clear_unsupported_storage,
             profile_group_list,
             profile_group_create,
             profile_group_update,
@@ -174,6 +179,7 @@ pub fn run() {
             credential_list,
             credential_create_password,
             credential_import_private_key,
+            credential_generate_private_key,
             credential_public_key,
             credential_reveal_password,
             credential_delete,

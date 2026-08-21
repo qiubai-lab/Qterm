@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-export type IconName = "workspace" | "plus" | "terminal" | "browser" | "computer" | "server" | "network" | "connections" | "files" | "file" | "filePlus" | "folderPlus" | "edit" | "save" | "check" | "copy" | "upload" | "key" | "lock" | "trash" | "clear" | "back" | "forward" | "refresh" | "settings" | "help" | "splitHorizontal" | "splitVertical" | "menu" | "windowMinimize" | "windowMaximize" | "close" | "more" | "eye" | "eyeOff";
+export type IconName = "workspace" | "plus" | "terminal" | "browser" | "computer" | "server" | "network" | "connections" | "files" | "file" | "filePlus" | "folderPlus" | "edit" | "save" | "check" | "copy" | "upload" | "key" | "lock" | "trash" | "clear" | "back" | "forward" | "chevronDown" | "refresh" | "settings" | "help" | "splitHorizontal" | "splitVertical" | "menu" | "windowMinimize" | "windowMaximize" | "close" | "more" | "eye" | "eyeOff";
 
 export function Icon({ name, size = 16 }: { name: IconName; size?: number }) {
   const paths: Record<IconName, ReactNode> = {
@@ -27,6 +27,7 @@ export function Icon({ name, size = 16 }: { name: IconName; size?: number }) {
     clear: <><path d="m15 4 5 5-9 9H6l-2-2Z"/><path d="m12 17 3 3M4 20h16"/></>,
     back: <path d="m15 6-6 6 6 6"/>,
     forward: <path d="m9 6 6 6-6 6"/>,
+    chevronDown: <path d="m6 9 6 6 6-6"/>,
     refresh: <><path d="M19 7v5h-5"/><path d="M18 12a6 6 0 1 0-1.8 4.3"/></>,
     settings: <><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6 1.7 1.7 0 0 0 10 3v-.2h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/></>,
     help: <><circle cx="12" cy="12" r="9"/><path d="M9.8 9a2.4 2.4 0 1 1 3.4 2.2c-.8.4-1.2.9-1.2 1.8M12 17h.01"/></>,

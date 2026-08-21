@@ -4,8 +4,8 @@
 
 - 密码和私钥口令仅用于当前认证请求，不写入 profile、JSON、日志或 telemetry。
 - IPC command 收到口令后立即包装为 `SecretText`；该包装禁止明文 `Debug`/`Display`/`Serialize`，并在 drop 时 zeroize。
-- 私钥只能来自用户通过系统文件选择器明确选择的路径。Rust state 记录最近一次选择，私钥检查 command 拒绝不匹配的任意路径；取消选择会清除旧授权。应用不提供目录枚举或 `~/.ssh` 扫描接口。
-- 私钥正文只在 Rust SSH infrastructure 中读取，限制为 1 MiB，并置于 drop 时清零的字节缓冲区；正文不返回前端，也不复制到应用数据目录。
+- 私钥只能来自用户通过系统文件选择器明确选择的路径，或由 Rust SSH infrastructure 使用系统 CSPRNG 生成。Rust state 记录最近一次文件选择，私钥检查 command 拒绝不匹配的任意路径；取消选择会清除旧授权。应用不提供目录枚举、`~/.ssh` 扫描或 WebView 私钥粘贴接口。
+- 导入或生成的私钥正文只在 Rust SSH infrastructure 中处理；导入文件限制为 1 MiB，原始和序列化字节置于 drop 时清零的缓冲区。正文不返回前端；仅作为凭证库密文写入应用数据目录。
 
 ## 私钥权限
 

@@ -54,6 +54,35 @@ pub enum CredentialKind {
     PrivateKey,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GeneratedPrivateKeyAlgorithm {
+    Ed25519,
+    EcdsaP256,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GeneratedPrivateKeyComment(String);
+
+impl GeneratedPrivateKeyComment {
+    pub fn parse(value: Option<String>) -> Result<Self, CredentialError> {
+        let value = value.unwrap_or_default();
+        let value = value.trim();
+        let value = if value.is_empty() {
+            "qterm-generated"
+        } else {
+            value
+        };
+        if value.chars().count() > 80 || value.chars().any(char::is_control) {
+            return Err(CredentialError::InvalidCredential);
+        }
+        Ok(Self(value.to_owned()))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CredentialSummary {
     pub id: CredentialId,
@@ -98,5 +127,28 @@ impl std::fmt::Debug for CredentialMaterial {
                 .field("has_passphrase", &passphrase.is_some())
                 .finish(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::GeneratedPrivateKeyComment;
+
+    #[test]
+    fn generated_private_key_comments_are_trimmed_and_bounded() {
+        assert_eq!(
+            GeneratedPrivateKeyComment::parse(Some(" deploy@example ".into()))
+                .expect("valid")
+                .as_str(),
+            "deploy@example"
+        );
+        assert_eq!(
+            GeneratedPrivateKeyComment::parse(None)
+                .expect("default")
+                .as_str(),
+            "qterm-generated"
+        );
+        assert!(GeneratedPrivateKeyComment::parse(Some("line\nbreak".into())).is_err());
+        assert!(GeneratedPrivateKeyComment::parse(Some("x".repeat(81))).is_err());
     }
 }

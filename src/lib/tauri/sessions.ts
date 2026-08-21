@@ -11,17 +11,32 @@ export type SessionState =
 
 export type SessionEvent =
   | { type: "stateChanged"; state: SessionState }
+  | { type: "routeProgress"; node: SessionNode; stage: SessionRouteStage }
   | {
       type: "hostKeyConfirmationRequired";
+      node: SessionNode;
       algorithm: string;
       fingerprint: string;
     }
   | {
       type: "hostKeyChanged";
+      node: SessionNode;
       trustedFingerprint: string;
       presentedFingerprint: string;
     }
-  | { type: "failed"; code: string; message: string };
+  | { type: "failed"; code: string; message: string; node: SessionNode | null; stage: SessionRouteStage | null };
+
+export type SessionRouteStage = "connect" | "verifyHostKey" | "authenticate" | "openTunnel" | "startSession";
+
+export interface SessionNode {
+  profileId: string;
+  name: string;
+  host: string;
+  port: number;
+  index: number;
+  total: number;
+  role: "jump" | "target";
+}
 
 export type SessionAuth =
   | { method: "password"; password: string }
@@ -29,9 +44,7 @@ export type SessionAuth =
   | { method: "storedCredential"; credentialId: string };
 
 export interface SessionConnectInput {
-  host: string;
-  port: number;
-  username: string;
+  profileId: string;
   auth: SessionAuth;
 }
 

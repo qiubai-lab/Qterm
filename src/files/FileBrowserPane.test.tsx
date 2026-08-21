@@ -35,7 +35,7 @@ vi.mock("./MarkdownPreview", () => ({ MarkdownPreview: ({ content }: { content: 
 import { FileBrowserPane } from "./FileBrowserPane";
 import { displayLocalPath, isWindowsDriveRoot, parentPath } from "./path";
 
-const localRuntime = { sessionId: null, kind: "local" as const, status: "connected" as const, hostKeyPrompt: null, notice: "" };
+const localRuntime = { sessionId: null, kind: "local" as const, status: "connected" as const, hostKeyPrompt: null, notice: "", connectionProgress: null };
 
 describe("FileBrowserPane", () => {
   beforeEach(() => {

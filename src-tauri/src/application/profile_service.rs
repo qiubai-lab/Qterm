@@ -6,8 +6,9 @@ use crate::{
     domain::{
         credential::CredentialId,
         profile::{
-            AuthPreference, ConnectionProfile, ProfileField, ProfileGroup, ProfileGroupId,
-            ProfileId, ProfileValidationError, ValidationReason,
+            AuthPreference, ConnectionProfile, JumpRouteError, ProfileField, ProfileGroup,
+            ProfileGroupId, ProfileId, ProfileValidationError, ValidationReason,
+            evaluate_jump_candidate, resolve_profile_route,
         },
     },
     ports::{
@@ -24,6 +25,7 @@ pub struct ProfileInput {
     pub auth_preference: AuthPreference,
     pub credential_id: Option<String>,
     pub group_id: Option<String>,
+    pub jump_profile_ids: Vec<String>,
 }
 
 pub fn delete_profile_with_network_rules<PR, NR>(
@@ -57,6 +59,18 @@ where
     }
 }
 
+pub fn clear_unsupported_portable_config<PR, NR>(
+    profiles: &ProfileService<PR>,
+    networks: &NetworkService<NR>,
+) -> Result<(), ApplicationError>
+where
+    PR: ProfileRepository,
+    NR: NetworkRepository,
+{
+    profiles.clear_unsupported_storage()?;
+    networks.clear_storage()
+}
+
 pub struct ProfileGroupInput {
     pub name: String,
 }
@@ -79,6 +93,57 @@ where
 
     pub fn list_groups(&self) -> Result<Vec<ProfileGroup>, ApplicationError> {
         self.repository.list_groups().map_err(map_repository_error)
+    }
+
+    pub fn route(&self, id: &str) -> Result<Vec<ConnectionProfile>, ApplicationError> {
+        let id = ProfileId::parse(id).map_err(map_validation_error)?;
+        let profiles = self.list()?;
+        resolve_profile_route(&profiles, &id).map_err(map_jump_route_error)
+    }
+
+    pub fn jump_candidates(
+        &self,
+        current_id: Option<&str>,
+        selected_ids: &[String],
+    ) -> Result<Vec<JumpCandidate>, ApplicationError> {
+        let current_id = current_id
+            .map(ProfileId::parse)
+            .transpose()
+            .map_err(map_validation_error)?;
+        let profiles = self.list()?;
+        let selected_ids = selected_ids
+            .iter()
+            .map(ProfileId::parse)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(map_validation_error)?;
+        Ok(profiles
+            .iter()
+            .map(|profile| {
+                let result = evaluate_jump_candidate(
+                    &profiles,
+                    current_id.as_ref(),
+                    &selected_ids,
+                    profile.id(),
+                );
+                let uses_credential = result.as_ref().is_ok_and(|route| {
+                    route.iter().any(|item| {
+                        matches!(
+                            item.auth_preference(),
+                            AuthPreference::Password | AuthPreference::PrivateKey
+                        )
+                    })
+                });
+                JumpCandidate {
+                    profile: profile.clone(),
+                    route: result
+                        .as_ref()
+                        .map(|route| route.iter().map(|item| item.name().to_owned()).collect())
+                        .unwrap_or_default(),
+                    error: result.err(),
+                    uses_credential,
+                }
+            })
+            .collect())
     }
 
     pub fn create(&self, input: ProfileInput) -> Result<ConnectionProfile, ApplicationError> {
@@ -130,12 +195,25 @@ where
         let id = CredentialId::parse(id.to_owned()).map_err(ApplicationError::from)?;
         self.repository
             .clear_credential_references(&id)
-            .map_err(map_repository_error)
+            .map_err(|error| match error {
+                ProfileRepositoryError::ReferencedAsJump => ApplicationError::new(
+                    ApplicationErrorCode::ProfileReferencedAsJump,
+                    "该凭证属于正在被用作跳板的连接，请先调整跳板引用",
+                    false,
+                ),
+                other => map_repository_error(other),
+            })
     }
 
     pub fn clear_all_credential_references(&self) -> Result<(), ApplicationError> {
         self.repository
             .clear_all_credential_references()
+            .map_err(map_repository_error)
+    }
+
+    pub fn clear_unsupported_storage(&self) -> Result<(), ApplicationError> {
+        self.repository
+            .clear_unsupported_storage()
             .map_err(map_repository_error)
     }
 
@@ -192,7 +270,29 @@ fn build_profile(
         .map(ProfileGroupId::parse)
         .transpose()
         .map_err(map_validation_error)?;
-    Ok(profile.with_group_id(group_id))
+    let jump_profile_ids = input
+        .jump_profile_ids
+        .into_iter()
+        .map(ProfileId::parse)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|_| {
+            ApplicationError::new(
+                ApplicationErrorCode::InvalidProfileJump,
+                "跳板连接配置 ID 无效",
+                false,
+            )
+        })?;
+    Ok(profile
+        .with_group_id(group_id)
+        .with_jump_profile_ids(jump_profile_ids))
+}
+
+#[derive(Clone, Debug)]
+pub struct JumpCandidate {
+    pub profile: ConnectionProfile,
+    pub route: Vec<String>,
+    pub error: Option<JumpRouteError>,
+    pub uses_credential: bool,
 }
 
 fn map_validation_error(error: ProfileValidationError) -> ApplicationError {
@@ -244,6 +344,12 @@ fn map_repository_error(error: ProfileRepositoryError) -> ApplicationError {
             "连接分组不存在",
             false,
         ),
+        ProfileRepositoryError::ReferencedAsJump => ApplicationError::new(
+            ApplicationErrorCode::ProfileReferencedAsJump,
+            "该连接正被其他连接用作跳板",
+            false,
+        ),
+        ProfileRepositoryError::InvalidJumpRoute(error) => map_jump_route_error(error),
         ProfileRepositoryError::CorruptData => ApplicationError::new(
             ApplicationErrorCode::ProfileStorageCorrupt,
             "连接配置文件已损坏",
@@ -259,12 +365,29 @@ fn map_repository_error(error: ProfileRepositoryError) -> ApplicationError {
             "连接配置文件包含禁止保存的敏感字段",
             false,
         ),
+        ProfileRepositoryError::StorageIsCurrent => ApplicationError::new(
+            ApplicationErrorCode::ProfileStorageClearRejected,
+            "连接配置已经是受支持版本，未执行清除",
+            false,
+        ),
         ProfileRepositoryError::Io => ApplicationError::new(
             ApplicationErrorCode::ProfileStorageUnavailable,
             "暂时无法访问连接配置文件",
             true,
         ),
     }
+}
+
+fn map_jump_route_error(error: JumpRouteError) -> ApplicationError {
+    let message = match error {
+        JumpRouteError::SelfReference => "连接不能将自身设为跳板",
+        JumpRouteError::TooDeep => "跳板连接路径最多包含 4 个中间节点",
+        JumpRouteError::MissingProfile => "跳板连接引用不存在",
+        JumpRouteError::ManualAuthentication => "中间节点不能使用每次手动认证",
+        JumpRouteError::MissingCredential => "中间节点未关联可用凭证",
+        JumpRouteError::DuplicateProfile => "同一个连接不能重复作为跃点",
+    };
+    ApplicationError::new(ApplicationErrorCode::InvalidProfileJump, message, false)
 }
 
 #[cfg(test)]
@@ -274,7 +397,8 @@ mod tests {
     use tempfile::tempdir;
 
     use super::{
-        ProfileGroupInput, ProfileInput, ProfileService, delete_profile_with_network_rules,
+        ProfileGroupInput, ProfileInput, ProfileService, clear_unsupported_portable_config,
+        delete_profile_with_network_rules,
     };
     use crate::{
         application::{
@@ -319,6 +443,10 @@ mod tests {
         ) -> Result<usize, NetworkRepositoryError> {
             Err(NetworkRepositoryError::Io)
         }
+
+        fn clear_storage(&self) -> Result<(), NetworkRepositoryError> {
+            Err(NetworkRepositoryError::Io)
+        }
     }
 
     fn input(name: &str) -> ProfileInput {
@@ -330,6 +458,7 @@ mod tests {
             auth_preference: AuthPreference::Password,
             credential_id: None,
             group_id: None,
+            jump_profile_ids: Vec::new(),
         }
     }
 
@@ -503,5 +632,31 @@ mod tests {
             service.list().expect("profiles"),
             vec![profile.with_group_id(None)]
         );
+    }
+
+    #[test]
+    fn clearing_unsupported_portable_config_removes_profiles_and_network_rules_together() {
+        let directory = tempdir().expect("temporary directory");
+        let profile_path = directory.path().join("connections.json");
+        let network_path = directory.path().join("network-forwards.json");
+        fs::write(
+            &profile_path,
+            br#"{"schemaVersion":5,"groups":[],"profiles":[]}"#,
+        )
+        .expect("legacy profiles");
+        let networks = NetworkService::new(JsonNetworkRepository::new(network_path.clone()));
+        networks
+            .create(NetworkRuleInput {
+                profile_id: "profile-1".into(),
+                name: "SOCKS".into(),
+                kind: ForwardRuleKind::socks5("127.0.0.1", 1080).expect("kind"),
+            })
+            .expect("network rule");
+        let profiles = ProfileService::new(JsonProfileRepository::new(profile_path.clone()));
+
+        clear_unsupported_portable_config(&profiles, &networks).expect("clear both stores");
+
+        assert!(!profile_path.exists());
+        assert!(!network_path.exists());
     }
 }

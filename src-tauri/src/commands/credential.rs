@@ -20,11 +20,13 @@ use crate::{
     domain::{
         auth::{AuthRequest, SecretBytes, SecretText},
         credential::{
-            CredentialError, CredentialKind, CredentialMaterial, CredentialSummary, RecoveryKeyFile,
+            CredentialError, CredentialKind, CredentialMaterial, CredentialSummary,
+            GeneratedPrivateKeyAlgorithm, GeneratedPrivateKeyComment, RecoveryKeyFile,
         },
     },
     infrastructure::{
-        persistence::json_credential_vault::JsonCredentialVault, ssh::auth::load_private_key_bytes,
+        persistence::json_credential_vault::JsonCredentialVault,
+        ssh::auth::{generate_private_key_bytes, load_private_key_bytes},
     },
 };
 
@@ -87,6 +89,15 @@ impl CredentialState {
         passphrase: Option<String>,
     ) -> Result<CredentialSummary, IpcError> {
         let bytes = read_private_key(path)?;
+        self.import_private_key_bytes(name, bytes, passphrase)
+    }
+
+    fn import_private_key_bytes(
+        &self,
+        name: String,
+        bytes: Zeroizing<Vec<u8>>,
+        passphrase: Option<String>,
+    ) -> Result<CredentialSummary, IpcError> {
         let passphrase = passphrase.map(SecretText::new);
         let loaded = load_private_key_bytes(&bytes, passphrase.as_ref())
             .map_err(crate::application::error::ApplicationError::from)?;
@@ -99,6 +110,19 @@ impl CredentialState {
                 algorithm.into(),
             )
             .map_err(IpcError::from)
+    }
+
+    pub(crate) fn generate_private_key(
+        &self,
+        name: String,
+        algorithm: GeneratedPrivateKeyAlgorithm,
+        comment: Option<String>,
+    ) -> Result<CredentialSummary, IpcError> {
+        let comment = GeneratedPrivateKeyComment::parse(comment).map_err(IpcError::from)?;
+        let bytes = generate_private_key_bytes(algorithm, comment.as_str())
+            .map_err(crate::application::error::ApplicationError::from)
+            .map_err(IpcError::from)?;
+        self.import_private_key_bytes(name, bytes, None)
     }
 
     pub(crate) fn import_or_reuse_private_key_path(
@@ -257,6 +281,30 @@ pub struct CreatePasswordDto {
 pub struct ImportPrivateKeyDto {
     name: String,
     passphrase: Option<String>,
+}
+
+#[derive(Clone, Copy, Deserialize)]
+#[serde(rename_all = "camelCase")]
+enum GeneratePrivateKeyAlgorithmDto {
+    Ed25519,
+    EcdsaP256,
+}
+
+impl From<GeneratePrivateKeyAlgorithmDto> for GeneratedPrivateKeyAlgorithm {
+    fn from(value: GeneratePrivateKeyAlgorithmDto) -> Self {
+        match value {
+            GeneratePrivateKeyAlgorithmDto::Ed25519 => Self::Ed25519,
+            GeneratePrivateKeyAlgorithmDto::EcdsaP256 => Self::EcdsaP256,
+        }
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct GeneratePrivateKeyDto {
+    name: String,
+    algorithm: GeneratePrivateKeyAlgorithmDto,
+    comment: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -612,6 +660,16 @@ pub async fn credential_import_private_key(
         .map(Some)
 }
 
+#[tauri::command]
+pub fn credential_generate_private_key(
+    input: GeneratePrivateKeyDto,
+    state: State<'_, CredentialState>,
+) -> Result<CredentialSummaryDto, IpcError> {
+    state
+        .generate_private_key(input.name, input.algorithm.into(), input.comment)
+        .map(CredentialSummaryDto::from)
+}
+
 fn read_private_key(path: &Path) -> Result<Zeroizing<Vec<u8>>, IpcError> {
     let file = File::open(path).map_err(|_| {
         crate::application::error::ApplicationError::from(
@@ -727,9 +785,10 @@ impl From<crate::domain::credential::CredentialSummary> for CredentialSummaryDto
 #[cfg(test)]
 mod tests {
     use super::{
-        ClearVaultDto, CreatePasswordDto, CredentialState, ImportPrivateKeyDto,
-        PendingRecoveryReset, ResetMasterPasswordDto, read_recovery_file, recovery_file_name,
-        validate_clear_confirmation, wait_for_dialog_result, write_recovery_file,
+        ClearVaultDto, CreatePasswordDto, CredentialState, GeneratePrivateKeyDto,
+        ImportPrivateKeyDto, PendingRecoveryReset, ResetMasterPasswordDto, read_recovery_file,
+        recovery_file_name, validate_clear_confirmation, wait_for_dialog_result,
+        write_recovery_file,
     };
     use crate::domain::{
         auth::SecretText,
@@ -755,6 +814,23 @@ mod tests {
             serde_json::from_value::<ImportPrivateKeyDto>(
                 json!({"name":"key","passphrase":null,"path":"forbidden"})
             )
+            .is_err()
+        );
+        assert!(
+            serde_json::from_value::<GeneratePrivateKeyDto>(json!({
+                "name": "generated",
+                "algorithm": "rsa",
+                "comment": null
+            }))
+            .is_err()
+        );
+        assert!(
+            serde_json::from_value::<GeneratePrivateKeyDto>(json!({
+                "name": "generated",
+                "algorithm": "ed25519",
+                "comment": null,
+                "privateKey": "forbidden"
+            }))
             .is_err()
         );
         assert!(

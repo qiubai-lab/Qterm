@@ -4,7 +4,7 @@ const { invoke } = vi.hoisted(() => ({ invoke: vi.fn() }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn() }));
 
-import { cancelMasterPasswordReset, changeMasterPassword, clearVault, createPasswordCredential, getCredentialPublicKey, importPrivateKeyCredential, prepareMasterPasswordReset, resetMasterPassword } from "./credentials";
+import { cancelMasterPasswordReset, changeMasterPassword, clearVault, createPasswordCredential, generatePrivateKeyCredential, getCredentialPublicKey, importPrivateKeyCredential, prepareMasterPasswordReset, resetMasterPassword } from "./credentials";
 
 describe("credential vault IPC client", () => {
   beforeEach(() => invoke.mockReset());
@@ -19,6 +19,12 @@ describe("credential vault IPC client", () => {
     invoke.mockResolvedValue(undefined);
     await importPrivateKeyCredential("Deploy", "key-secret");
     expect(invoke).toHaveBeenCalledWith("credential_import_private_key", { input: { name: "Deploy", passphrase: "key-secret" } });
+  });
+
+  it("generates private keys through a closed algorithm DTO without returning key material", async () => {
+    invoke.mockResolvedValue({ id: "key-2", name: "Generated", kind: "privateKey", detail: "ecdsa-p256" });
+    await generatePrivateKeyCredential("Generated", "ecdsaP256", "deploy@example");
+    expect(invoke).toHaveBeenCalledWith("credential_generate_private_key", { input: { name: "Generated", algorithm: "ecdsaP256", comment: "deploy@example" } });
   });
 
   it("requires the destructive confirmation phrase when clearing", async () => {

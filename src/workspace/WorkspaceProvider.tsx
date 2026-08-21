@@ -5,13 +5,15 @@ import { connectFileSession } from "../lib/tauri/files";
 import { connectNetworkSession, startNetworkRule, stopNetworkRule, type NetworkRuleRuntimeState } from "../lib/tauri/network";
 import { closeLocalSession, connectLocalSession, getLocalTerminalCapabilities, resizeLocalSession, writeLocalSession, type LocalSessionEvent, type LocalTerminalCapabilities } from "../lib/tauri/localSessions";
 import { listProfileGroups, listProfiles, type ConnectionProfile, type ProfileGroup } from "../lib/tauri/profiles";
-import { acceptHostKey, closeSession, connectSession, rejectHostKey, resizeSession, writeSession, type SessionAuth, type SessionEvent, type SessionState } from "../lib/tauri/sessions";
+import { acceptHostKey, closeSession, connectSession, rejectHostKey, resizeSession, writeSession, type SessionAuth, type SessionEvent, type SessionNode, type SessionState } from "../lib/tauri/sessions";
 import { loadWorkspaces, saveWorkspaces } from "../lib/tauri/workspaces";
+import { completeConnectionProgress, connectionProgressFromRouteEvent, initialConnectionProgress, type ConnectionRouteProgressState } from "./connectionProgress";
 import { blockIds, findLeaf } from "./layout";
 import { createWorkspaceDocument, type Workspace, type WorkspaceDocument } from "./model";
 import { workspaceReducer, type WorkspaceAction } from "./reducer";
 
 export interface HostKeyPrompt {
+  node: SessionNode;
   algorithm: string;
   fingerprint: string;
 }
@@ -22,6 +24,7 @@ export interface TerminalRuntime {
   status: SessionState;
   hostKeyPrompt: HostKeyPrompt | null;
   notice: string;
+  connectionProgress: ConnectionRouteProgressState | null;
   cwd: string | null;
 }
 
@@ -31,6 +34,7 @@ export interface FileRuntime {
   status: SessionState;
   hostKeyPrompt: HostKeyPrompt | null;
   notice: string;
+  connectionProgress: ConnectionRouteProgressState | null;
 }
 
 export interface NetworkRuntime {
@@ -38,6 +42,7 @@ export interface NetworkRuntime {
   status: SessionState;
   hostKeyPrompt: HostKeyPrompt | null;
   notice: string;
+  connectionProgress: ConnectionRouteProgressState | null;
   ruleStates: Record<string, NetworkRuleRuntimeState>;
 }
 
@@ -83,9 +88,9 @@ interface WorkspaceContextValue {
   dismissStorageNotice: () => void;
 }
 
-const defaultRuntime: TerminalRuntime = { sessionId: null, kind: null, status: "closed", hostKeyPrompt: null, notice: "", cwd: null };
-const defaultFileRuntime: FileRuntime = { sessionId: null, kind: "local", status: "connected", hostKeyPrompt: null, notice: "" };
-const defaultNetworkRuntime: NetworkRuntime = { sessionId: null, status: "closed", hostKeyPrompt: null, notice: "", ruleStates: {} };
+const defaultRuntime: TerminalRuntime = { sessionId: null, kind: null, status: "closed", hostKeyPrompt: null, notice: "", connectionProgress: null, cwd: null };
+const defaultFileRuntime: FileRuntime = { sessionId: null, kind: "local", status: "connected", hostKeyPrompt: null, notice: "", connectionProgress: null };
+const defaultNetworkRuntime: NetworkRuntime = { sessionId: null, status: "closed", hostKeyPrompt: null, notice: "", connectionProgress: null, ruleStates: {} };
 const MAX_PENDING_TERMINAL_OUTPUT = 256 * 1024;
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
 
@@ -235,15 +240,21 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         ...runtime,
         status: event.state,
         sessionId: event.state === "closed" || event.state === "failed" ? null : runtime.sessionId,
+        notice: event.state === "connected" ? "" : runtime.notice,
+        connectionProgress: event.state === "connected"
+          ? completeConnectionProgress(runtime.connectionProgress)
+          : event.state === "closed" || event.state === "failed" ? null : runtime.connectionProgress,
       }));
       if (event.state === "connected") connectionFailureHandlers.current.delete(terminalFailureKey(blockId, epoch));
+    } else if (event.type === "routeProgress") {
+      updateRuntime(blockId, (runtime) => ({ ...runtime, notice: "", connectionProgress: connectionProgressFromRouteEvent(event) }));
     } else if (event.type === "hostKeyConfirmationRequired") {
       updateRuntime(blockId, (runtime) => ({ ...runtime, hostKeyPrompt: event }));
     } else if (event.type === "hostKeyChanged") {
-      updateRuntime(blockId, (runtime) => ({ ...runtime, notice: `主机密钥已变化：${event.presentedFingerprint}` }));
+      updateRuntime(blockId, (runtime) => ({ ...runtime, connectionProgress: null, notice: `${nodeLabel(event.node)}主机密钥已变化：${event.presentedFingerprint}` }));
     } else {
-      updateRuntime(blockId, (runtime) => ({ ...runtime, notice: event.message }));
-      consumeFailureHandler(connectionFailureHandlers.current, terminalFailureKey(blockId, epoch));
+      updateRuntime(blockId, (runtime) => ({ ...runtime, connectionProgress: null, notice: routeFailureNotice(event) }));
+      if (event.node?.role === "target" && event.stage === "authenticate") consumeFailureHandler(connectionFailureHandlers.current, terminalFailureKey(blockId, epoch));
     }
   }, [isCurrentEpoch, updateRuntime]);
 
@@ -255,15 +266,21 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         ...runtime,
         status: event.state,
         sessionId: event.state === "closed" || event.state === "failed" ? null : runtime.sessionId,
+        notice: event.state === "connected" ? "" : runtime.notice,
+        connectionProgress: event.state === "connected"
+          ? completeConnectionProgress(runtime.connectionProgress)
+          : event.state === "closed" || event.state === "failed" ? null : runtime.connectionProgress,
       }));
       if (event.state === "connected") connectionFailureHandlers.current.delete(`files:${blockId}`);
+    } else if (event.type === "routeProgress") {
+      updateFileRuntime(blockId, (runtime) => ({ ...runtime, notice: "", connectionProgress: connectionProgressFromRouteEvent(event) }));
     } else if (event.type === "hostKeyConfirmationRequired") {
       updateFileRuntime(blockId, (runtime) => ({ ...runtime, hostKeyPrompt: event }));
     } else if (event.type === "hostKeyChanged") {
-      updateFileRuntime(blockId, (runtime) => ({ ...runtime, notice: `主机密钥已变化：${event.presentedFingerprint}` }));
+      updateFileRuntime(blockId, (runtime) => ({ ...runtime, connectionProgress: null, notice: `${nodeLabel(event.node)}主机密钥已变化：${event.presentedFingerprint}` }));
     } else {
-      updateFileRuntime(blockId, (runtime) => ({ ...runtime, notice: event.message }));
-      consumeFailureHandler(connectionFailureHandlers.current, `files:${blockId}`);
+      updateFileRuntime(blockId, (runtime) => ({ ...runtime, connectionProgress: null, notice: routeFailureNotice(event) }));
+      if (event.node?.role === "target" && event.stage === "authenticate") consumeFailureHandler(connectionFailureHandlers.current, `files:${blockId}`);
     }
   }, [isCurrentEpoch, updateFileRuntime]);
 
@@ -274,16 +291,22 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         ...runtime,
         status: event.state,
         sessionId: event.state === "closed" || event.state === "failed" ? null : runtime.sessionId,
+        notice: event.state === "connected" ? "" : runtime.notice,
+        connectionProgress: event.state === "connected"
+          ? completeConnectionProgress(runtime.connectionProgress)
+          : event.state === "closed" || event.state === "failed" ? null : runtime.connectionProgress,
         ruleStates: event.state === "closed" || event.state === "failed" ? {} : runtime.ruleStates,
       }));
       if (event.state === "connected") connectionFailureHandlers.current.delete(`network:${blockId}`);
+    } else if (event.type === "routeProgress") {
+      updateNetworkRuntime(blockId, (runtime) => ({ ...runtime, notice: "", connectionProgress: connectionProgressFromRouteEvent(event) }));
     } else if (event.type === "hostKeyConfirmationRequired") {
       updateNetworkRuntime(blockId, (runtime) => ({ ...runtime, hostKeyPrompt: event }));
     } else if (event.type === "hostKeyChanged") {
-      updateNetworkRuntime(blockId, (runtime) => ({ ...runtime, notice: `主机密钥已变化：${event.presentedFingerprint}` }));
+      updateNetworkRuntime(blockId, (runtime) => ({ ...runtime, connectionProgress: null, notice: `${nodeLabel(event.node)}主机密钥已变化：${event.presentedFingerprint}` }));
     } else {
-      updateNetworkRuntime(blockId, (runtime) => ({ ...runtime, notice: event.message, ruleStates: {} }));
-      consumeFailureHandler(connectionFailureHandlers.current, `network:${blockId}`);
+      updateNetworkRuntime(blockId, (runtime) => ({ ...runtime, connectionProgress: null, notice: routeFailureNotice(event), ruleStates: {} }));
+      if (event.node?.role === "target" && event.stage === "authenticate") consumeFailureHandler(connectionFailureHandlers.current, `network:${blockId}`);
     }
   }, [isCurrentEpoch, updateNetworkRuntime]);
 
@@ -394,10 +417,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     if (onFailure) connectionFailureHandlers.current.set(failureKey, onFailure);
     const key = epochKey(blockId, epoch);
     finishedEpochs.current.delete(key);
-    updateRuntime(blockId, () => ({ ...defaultRuntime, kind: "ssh", status: "connecting", cwd: "." }));
+    updateRuntime(blockId, () => ({ ...defaultRuntime, kind: "ssh", status: "connecting", connectionProgress: initialConnectionProgress(profile.jumpProfileIds?.length ?? 0), cwd: "." }));
     try {
       const sessionId = await connectSession(
-        { host: profile.host, port: profile.port, username: profile.username, auth },
+        { profileId: profile.id, auth },
         (event) => onSessionEvent(blockId, epoch, event),
         (data) => { if (isCurrentEpoch(blockId, epoch)) deliverTerminalOutput(blockId, data); },
       );
@@ -454,10 +477,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     const epoch = nextEpoch(blockId);
     const key = epochKey(blockId, epoch);
     finishedEpochs.current.delete(key);
-    updateFileRuntime(blockId, () => ({ ...defaultFileRuntime, kind: "sftp", status: "connecting" }));
+    updateFileRuntime(blockId, () => ({ ...defaultFileRuntime, kind: "sftp", status: "connecting", connectionProgress: initialConnectionProgress(profile.jumpProfileIds?.length ?? 0) }));
     try {
       const sessionId = await connectFileSession(
-        { host: profile.host, port: profile.port, username: profile.username, auth },
+        { profileId: profile.id, auth },
         (event) => onFileSessionEvent(blockId, epoch, event),
       );
       if (!isCurrentEpoch(blockId, epoch)) {
@@ -485,11 +508,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     if (!connectionIntentAllows(connectionTargetIntents.current, "network", blockId, profile.id)) return;
     if (onFailure) connectionFailureHandlers.current.set(`network:${blockId}`, onFailure);
     const epoch = nextEpoch(blockId);
-    updateNetworkRuntime(blockId, () => ({ ...defaultNetworkRuntime, status: "connecting" }));
+    updateNetworkRuntime(blockId, () => ({ ...defaultNetworkRuntime, status: "connecting", connectionProgress: initialConnectionProgress(profile.jumpProfileIds?.length ?? 0) }));
     try {
       const sessionId = await connectNetworkSession(
-        profile.id,
-        { host: profile.host, port: profile.port, username: profile.username, auth },
+        { profileId: profile.id, auth },
         (event) => onNetworkSessionEvent(blockId, epoch, event),
       );
       if (!isCurrentEpoch(blockId, epoch)) await closeSession(sessionId).catch(() => undefined);
@@ -695,4 +717,12 @@ function connectionIntentKey(owner: "terminal" | "files" | "network", blockId: s
 function connectionIntentAllows(intents: Map<string, string | null>, owner: "terminal" | "files" | "network", blockId: string, profileId: string | null): boolean {
   const key = connectionIntentKey(owner, blockId);
   return !intents.has(key) || intents.get(key) === profileId;
+}
+
+function nodeLabel(node: Extract<SessionEvent, { type: "routeProgress" }>['node']): string {
+  return `${node.role === "jump" ? "跳板" : "目标"}“${node.name}”（${node.host}:${node.port}）`;
+}
+
+function routeFailureNotice(event: Extract<SessionEvent, { type: "failed" }>): string {
+  return event.node ? `${nodeLabel(event.node)}：${event.message}` : event.message;
 }

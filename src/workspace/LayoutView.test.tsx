@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Workspace } from "./model";
-import type { TerminalRuntime } from "./WorkspaceProvider";
+import type { FileRuntime, NetworkRuntime, TerminalRuntime } from "./WorkspaceProvider";
 
 const dispatch = vi.fn();
 const selectBlockTarget = vi.fn().mockResolvedValue(undefined);
@@ -16,9 +16,10 @@ const profiles = [
   { id: "password-profile", name: "Password Server", host: "password.example", port: 22, username: "root", authPreference: "password" as const, credentialId: null, groupId: null },
   { id: "key-profile", name: "Key Server", host: "key.example", port: 22, username: "deploy", authPreference: "privateKey" as const, credentialId: null, groupId: null },
 ];
-const connectedLocalRuntime = { sessionId: "local-1", kind: "local" as const, status: "connected" as const, hostKeyPrompt: null, notice: "", cwd: "C:/work" };
+const connectedLocalRuntime = { sessionId: "local-1", kind: "local" as const, status: "connected" as const, hostKeyPrompt: null, notice: "", connectionProgress: null, cwd: "C:/work" };
 let terminalRuntimes: Record<string, TerminalRuntime> = { "block-1": connectedLocalRuntime };
-let networkRuntimes: Record<string, { sessionId: string | null; status: "closed" | "connected"; hostKeyPrompt: null; notice: string; ruleStates: Record<string, "stopped" | "running"> }> = {};
+let fileRuntimes: Record<string, FileRuntime> = {};
+let networkRuntimes: Record<string, NetworkRuntime> = {};
 
 afterEach(cleanup);
 
@@ -38,7 +39,7 @@ vi.mock("./WorkspaceProvider", () => ({
   useWorkspace: () => ({
     dispatch,
     runtimes: terminalRuntimes,
-    fileRuntimes: {},
+    fileRuntimes,
     networkRuntimes,
     profiles,
     selectBlockTarget,
@@ -69,6 +70,7 @@ describe("WorkspaceCanvas terminal actions", () => {
     stopNetworkBlockRule.mockClear();
     clearBlockBuffer.mockClear();
     terminalRuntimes = { "block-1": connectedLocalRuntime };
+    fileRuntimes = {};
     networkRuntimes = {};
   });
   it("does not expose terminal maximize or restore controls", () => {
@@ -125,7 +127,7 @@ describe("WorkspaceCanvas terminal actions", () => {
     await user.click(screen.getByRole("button", { name: "启动测试规则" }));
     expect(onRequestAuthConnection).toHaveBeenCalledWith("network", "network-1", profiles[0]);
 
-    networkRuntimes = { "network-1": { sessionId: "network-session", status: "connected", hostKeyPrompt: null, notice: "", ruleStates: {} } };
+    networkRuntimes = { "network-1": { sessionId: "network-session", status: "connected", hostKeyPrompt: null, notice: "", connectionProgress: null, ruleStates: {} } };
     view.rerender(<WorkspaceCanvas workspace={networkWorkspace} visible onRequestClose={vi.fn()} onRequestAuthConnection={onRequestAuthConnection}/>);
     await waitFor(() => expect(startNetworkBlockRule).toHaveBeenCalledWith("network-1", "rule-1"));
   });
@@ -134,6 +136,21 @@ describe("WorkspaceCanvas terminal actions", () => {
     render(<WorkspaceCanvas workspace={{ ...workspace, activeBlockId: "files-1", layout: { type: "files", blockId: "files-1", profileId: null, path: "C:/work" } }} visible onRequestClose={vi.fn()} onRequestAuthConnection={vi.fn()}/>);
     expect(screen.getByLabelText("测试文件窗口")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "关闭文件窗口" })).toBeInTheDocument();
+  });
+
+  it("uses the shared connection route widget in terminal, files, and network blocks", () => {
+    const progress = { totalNodes: 3, completedNodes: 0, activeNode: 1, phase: "connecting" as const, message: "正在连接节点 1" };
+    terminalRuntimes = { "block-1": { ...connectedLocalRuntime, kind: "ssh", status: "connecting", connectionProgress: progress } };
+    const view = render(<WorkspaceCanvas workspace={{ ...workspace, layout: { type: "terminal", blockId: "block-1", profileId: "password-profile" } }} visible onRequestClose={vi.fn()} onRequestAuthConnection={vi.fn()}/>);
+    expect(screen.getByRole("status")).toHaveTextContent("正在连接节点 1");
+
+    fileRuntimes = { "files-1": { sessionId: null, kind: "sftp", status: "connecting", hostKeyPrompt: null, notice: "", connectionProgress: progress } };
+    view.rerender(<WorkspaceCanvas workspace={{ ...workspace, activeBlockId: "files-1", layout: { type: "files", blockId: "files-1", profileId: "password-profile", path: "." } }} visible onRequestClose={vi.fn()} onRequestAuthConnection={vi.fn()}/>);
+    expect(screen.getByRole("status")).toHaveTextContent("正在连接节点 1");
+
+    networkRuntimes = { "network-1": { sessionId: null, status: "connecting", hostKeyPrompt: null, notice: "", connectionProgress: progress, ruleStates: {} } };
+    view.rerender(<WorkspaceCanvas workspace={{ ...workspace, activeBlockId: "network-1", layout: { type: "network", blockId: "network-1", profileId: "password-profile" } }} visible onRequestClose={vi.fn()} onRequestAuthConnection={vi.fn()}/>);
+    expect(screen.getByRole("status")).toHaveTextContent("正在连接节点 1");
   });
 
   it("uses the folder target picker to connect a files-owned SFTP session", async () => {

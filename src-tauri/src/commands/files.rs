@@ -17,6 +17,7 @@ use crate::{
     commands::{
         credential::CredentialState,
         error::IpcError,
+        profile::ProfileState,
         session::{SessionConnectDto, SessionEventDto, SessionState, build_connect_request},
     },
     domain::{
@@ -109,10 +110,12 @@ pub fn files_session_connect(
     on_event: Channel<SessionEventDto>,
     session_state: State<'_, SessionState>,
     credential_state: State<'_, CredentialState>,
+    profile_state: State<'_, ProfileState>,
 ) -> Result<String, IpcError> {
     let request = build_connect_request(
         input,
         &credential_state,
+        &profile_state,
         SessionPurpose::Files,
         Arc::new(|_| {}),
     )?;

@@ -81,6 +81,12 @@ where
         self.repository.delete(&id).map_err(map_repository_error)
     }
 
+    pub fn clear_storage(&self) -> Result<(), ApplicationError> {
+        self.repository
+            .clear_storage()
+            .map_err(map_repository_error)
+    }
+
     pub fn delete_profile_rules(&self, profile_id: &str) -> Result<usize, ApplicationError> {
         let profile_id =
             ProfileId::parse(profile_id).map_err(|_| invalid_rule("连接配置 ID 无效"))?;

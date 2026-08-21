@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 
 import { getVaultStatus, listCredentials, type CredentialSummary, type VaultStatus } from "../../lib/tauri/credentials";
-import { createProfile, createProfileGroup, deleteProfile, deleteProfileGroup, listProfileGroups, updateProfile, updateProfileGroup, type ConnectionProfile, type ProfileGroup, type ProfileInput } from "../../lib/tauri/profiles";
+import { clearUnsupportedProfileStorage, createProfile, createProfileGroup, deleteProfile, deleteProfileGroup, listJumpCandidates, listProfileGroups, updateProfile, updateProfileGroup, type ConnectionProfile, type JumpCandidate, type ProfileGroup, type ProfileInput } from "../../lib/tauri/profiles";
 import { findLeaf, terminalBlockIds } from "../../workspace/layout";
 import { useWorkspace } from "../../workspace/WorkspaceProvider";
 import { Icon } from "../Icon";
@@ -10,8 +10,8 @@ import { CredentialDialog } from "./CredentialDialog";
 import { MasterPasswordDialog } from "./MasterPasswordDialog";
 import { SshConfigImportDialog } from "./SshConfigImportDialog";
 
-const empty: ProfileInput = { name: "", host: "", port: 22, username: "", authPreference: "password", credentialId: null, groupId: null };
-type EditorTab = "connection" | "authentication";
+const empty: ProfileInput = { name: "", host: "", port: 22, username: "", authPreference: "password", credentialId: null, groupId: null, jumpProfileIds: [] };
+type EditorTab = "connection" | "authentication" | "jump";
 type TabMotion = "idle" | "forward" | "backward";
 type SaveState = "idle" | "saving" | "success";
 type ContextMenuState = {
@@ -67,6 +67,15 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
   const saveResetTimerRef = useRef<number | null>(null);
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [message, setMessage] = useState("");
+  const [profileStorageUnsupported, setProfileStorageUnsupported] = useState(false);
+  const [clearStorageRequested, setClearStorageRequested] = useState(false);
+  const [clearStorageBusy, setClearStorageBusy] = useState(false);
+  const [clearStorageMessage, setClearStorageMessage] = useState("");
+  const [jumpRows, setJumpRows] = useState<Array<string | null>>([null]);
+  const [jumpCandidates, setJumpCandidates] = useState<JumpCandidate[]>([]);
+  const [jumpPickerOpen, setJumpPickerOpen] = useState<number | null>(null);
+  const [jumpCandidatesLoading, setJumpCandidatesLoading] = useState(false);
+  const [jumpCandidatesError, setJumpCandidatesError] = useState("");
   const activeLeaf = findLeaf(activeWorkspace.layout, activeBlockId);
   const terminalBlockId = activeLeaf?.type === "terminal" ? activeLeaf.blockId : terminalBlockIds(activeWorkspace.layout)[0];
   const selected = profiles.find((profile) => profile.id === selectedId) ?? null;
@@ -85,8 +94,12 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     void listProfileGroups().then((items) => {
       setGroups(items);
+      setProfileStorageUnsupported(false);
       setCollapsedGroupIds(new Set(items.map((group) => group.id)));
-    }).catch((error) => setMessage(errorMessage(error)));
+    }).catch((error) => {
+      setProfileStorageUnsupported(errorCode(error) === "profileStorageVersionUnsupported");
+      setMessage(errorMessage(error));
+    });
   }, []);
   useEffect(() => {
     if (initializedSelectionRef.current || profiles.length === 0) return;
@@ -112,7 +125,9 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
   function editProfile(profile: ConnectionProfile) {
     const changedProfile = profile.id !== selectedId;
     setSelectedId(profile.id);
-    setEditor({ name: profile.name, host: profile.host, port: profile.port, username: profile.username, authPreference: profile.authPreference, credentialId: profile.credentialId, groupId: profile.groupId });
+    setEditor({ name: profile.name, host: profile.host, port: profile.port, username: profile.username, authPreference: profile.authPreference, credentialId: profile.credentialId, groupId: profile.groupId, jumpProfileIds: profile.jumpProfileIds ?? [] });
+    setJumpRows(profile.jumpProfileIds?.length ? [...profile.jumpProfileIds] : [null]);
+    setJumpPickerOpen(null);
     if (changedProfile && saveState === "idle") { setEditorTab("connection"); setTabMotion("idle"); }
   }
 
@@ -153,14 +168,79 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
     }
   }
 
+  async function openJumpPicker(index: number) {
+    setJumpPickerOpen(index);
+    setJumpCandidatesLoading(true);
+    setJumpCandidatesError("");
+    try {
+      setJumpCandidates(await listJumpCandidates(selectedId, jumpRows.filter((id, rowIndex): id is string => rowIndex !== index && Boolean(id))));
+    } catch (error) {
+      setJumpCandidatesError(errorMessage(error));
+      setJumpCandidates([]);
+    } finally {
+      setJumpCandidatesLoading(false);
+    }
+  }
+
+  function chooseJumpCandidate(index: number, candidate: JumpCandidate | null) {
+    if (candidate && !candidate.selectable) return;
+    setJumpRows((current) => candidate
+      ? current.map((value, rowIndex) => rowIndex === index ? candidate.profile.id : value)
+      : current.slice(0, index + 1).map((value, rowIndex) => rowIndex === index ? null : value));
+    setJumpPickerOpen(null);
+  }
+
   function startNewProfile(groupId: string | null = null) {
-    setSelectedId(null); setSelectedIds(new Set()); setEditor({ ...empty, groupId }); setEditorTab("connection"); setTabMotion("idle"); setMessage(""); setSaveState("idle");
+    setSelectedId(null); setSelectedIds(new Set()); setEditor({ ...empty, groupId }); setJumpRows([null]); setEditorTab("connection"); setTabMotion("idle"); setMessage(""); setSaveState("idle");
   }
 
   function selectEditorTab(next: EditorTab) {
     if (next === editorTab) return;
-    setTabMotion(next === "authentication" ? "forward" : "backward");
+    const order: EditorTab[] = ["connection", "authentication", "jump"];
+    setTabMotion(order.indexOf(next) > order.indexOf(editorTab) ? "forward" : "backward");
     setEditorTab(next);
+  }
+
+  function moveEditorTab(event: KeyboardEvent<HTMLButtonElement>, current: EditorTab) {
+    const tabs: EditorTab[] = ["connection", "authentication", "jump"];
+    let index = tabs.indexOf(current);
+    if (event.key === "ArrowRight") index = (index + 1) % tabs.length;
+    else if (event.key === "ArrowLeft") index = (index - 1 + tabs.length) % tabs.length;
+    else if (event.key === "Home") index = 0;
+    else if (event.key === "End") index = tabs.length - 1;
+    else return;
+    event.preventDefault();
+    selectEditorTab(tabs[index]);
+    event.currentTarget.parentElement?.querySelectorAll<HTMLElement>("[role='tab']")[index]?.focus();
+  }
+
+  function addJumpRow() {
+    if (jumpRows.length >= 4 || !jumpRows[jumpRows.length - 1]) return;
+    setJumpRows((current) => [...current, null]);
+  }
+
+  function removeJumpRow(index: number) {
+    setJumpRows((current) => current.length === 1 ? [null] : current.filter((_, rowIndex) => rowIndex !== index));
+    setJumpPickerOpen(null);
+  }
+
+  async function clearUnsupportedStorage() {
+    if (clearStorageBusy) return;
+    setClearStorageBusy(true);
+    setClearStorageMessage("");
+    try {
+      await clearUnsupportedProfileStorage();
+      await refreshProfiles();
+      setGroups(await listProfileGroups());
+      setProfileStorageUnsupported(false);
+      setClearStorageRequested(false);
+      startNewProfile();
+      setMessage("旧连接配置与网络转发规则已清除");
+    } catch (error) {
+      setClearStorageMessage(errorMessage(error));
+    } finally {
+      setClearStorageBusy(false);
+    }
   }
 
   async function save() {
@@ -168,7 +248,7 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
     if (saveResetTimerRef.current !== null) window.clearTimeout(saveResetTimerRef.current);
     setSaveState("saving"); setMessage("");
     try {
-      const input = { ...editor, name: editor.name.trim() || editor.host.trim() };
+      const input = { ...editor, name: editor.name.trim() || editor.host.trim(), jumpProfileIds: jumpRows.filter((id): id is string => Boolean(id)) };
       setEditor(input);
       const profile = selectedId ? await updateProfile(selectedId, input) : await createProfile(input);
       await refreshProfiles(); setSelectedId(profile.id); setSelectedIds(new Set([profile.id]));
@@ -395,8 +475,8 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
     <DialogFrame
       title="连接管理"
       subtitle="管理 SSH 连接配置"
-      headerActions={<><span className={`vault-status-button ${vaultStatus.initialized ? "initialized" : "uninitialized"}`}><span aria-hidden="true"/>{vaultStatus.unlocked ? "凭证库已解锁" : vaultStatus.initialized ? "凭证库已锁定" : vaultStatus.legacy ? "旧版凭证库" : "凭证库未初始化"}</span><button type="button" className="connection-import-button" onClick={() => setSshConfigImportOpen(true)}><Icon name="upload" size={13}/>导入</button></>}
-      onClose={credentialManagerOpen || credentialUnlockOpen || sshConfigImportOpen || deleteRequested || groupEditor || groupDeleteRequested || contextMenu ? () => undefined : onClose}
+      headerActions={<>{profileStorageUnsupported && <span className="connection-storage-warning"><span className="connection-storage-warning-message" role="alert" title="连接配置文件版本不受支持">连接配置文件版本不受支持</span><button type="button" className="danger-button connection-storage-clear" onClick={() => { setClearStorageMessage(""); setClearStorageRequested(true); }}><Icon name="trash" size={13}/>清除旧配置</button></span>}<span className={`vault-status-button ${vaultStatus.initialized ? "initialized" : "uninitialized"}`}><span aria-hidden="true"/>{vaultStatus.unlocked ? "凭证库已解锁" : vaultStatus.initialized ? "凭证库已锁定" : vaultStatus.legacy ? "旧版凭证库" : "凭证库未初始化"}</span><button type="button" className="connection-import-button" onClick={() => setSshConfigImportOpen(true)}><Icon name="upload" size={13}/>导入</button></>}
+      onClose={credentialManagerOpen || credentialUnlockOpen || sshConfigImportOpen || jumpPickerOpen !== null || deleteRequested || clearStorageRequested || groupEditor || groupDeleteRequested || contextMenu ? () => undefined : onClose}
       wide
     >
       <div className="connection-dialog-grid">
@@ -435,8 +515,9 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
         <div className="connection-editor">
           <div className="connection-editor-tabs" role="tablist" aria-label="连接配置" data-active={editorTab}>
             <span className="connection-editor-tab-indicator" aria-hidden="true"/>
-            <button type="button" role="tab" aria-selected={editorTab === "connection"} tabIndex={editorTab === "connection" ? 0 : -1} onClick={() => selectEditorTab("connection")} onKeyDown={(event) => { if (event.key === "ArrowRight") { selectEditorTab("authentication"); (event.currentTarget.nextElementSibling as HTMLElement | null)?.focus(); } }}><span>连接信息</span></button>
-            <button type="button" role="tab" aria-selected={editorTab === "authentication"} tabIndex={editorTab === "authentication" ? 0 : -1} onClick={() => selectEditorTab("authentication")} onKeyDown={(event) => { if (event.key === "ArrowLeft") { selectEditorTab("connection"); (event.currentTarget.previousElementSibling as HTMLElement | null)?.focus(); } }}><span>认证方式</span></button>
+            <button type="button" role="tab" aria-selected={editorTab === "connection"} tabIndex={editorTab === "connection" ? 0 : -1} onClick={() => selectEditorTab("connection")} onKeyDown={(event) => moveEditorTab(event, "connection")}><span>连接信息</span></button>
+            <button type="button" role="tab" aria-selected={editorTab === "authentication"} tabIndex={editorTab === "authentication" ? 0 : -1} onClick={() => selectEditorTab("authentication")} onKeyDown={(event) => moveEditorTab(event, "authentication")}><span>认证方式</span></button>
+            <button type="button" role="tab" aria-selected={editorTab === "jump"} tabIndex={editorTab === "jump" ? 0 : -1} onClick={() => selectEditorTab("jump")} onKeyDown={(event) => moveEditorTab(event, "jump")}><span>跳板连接 <small className="experimental-tag">实验</small></span></button>
           </div>
           <div className="connection-editor-scroll">
             {editorTab === "connection" && <div className={`form-grid connection-tab-panel${tabMotion === "backward" ? " tab-backward" : tabMotion === "forward" ? " tab-forward" : ""}`} role="tabpanel" aria-label="连接信息">
@@ -455,9 +536,26 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
               {editor.authPreference === "sshAgent" && <div className="agent-auth-note span-2"><strong>使用系统 SSH Agent</strong><p>应用只请求 Agent 完成签名，不读取、不扫描也不保存私钥。</p></div>}
               {editor.authPreference === "manual" && <div className="agent-auth-note span-2"><strong>每次连接时手动选择</strong><p>连接前选择一次性密码、凭证库凭证或 SSH Agent，本次选择不会保存。</p></div>}
             </div>}
-            {message && <p className="inline-message" role="alert">{message}</p>}
+            {editorTab === "jump" && <div className={`jump-route-panel connection-tab-panel${tabMotion === "forward" ? " tab-forward" : tabMotion === "backward" ? " tab-backward" : ""}`} role="tabpanel" aria-label="跳板连接">
+              <JumpRouteFlow profiles={profiles} jumpRows={jumpRows} targetName={editor.name || "当前服务器"} targetEndpoint={editor.host ? `${editor.username || "user"}@${editor.host}:${editor.port}` : "未填写目标"}/>
+              <div className="jump-route-rows">
+                {jumpRows.map((profileId, index) => {
+                  const profile = profiles.find((item) => item.id === profileId);
+                  return <div className="jump-route-row" key={`${index}-${profileId ?? "direct"}`}>
+                    <label id={`jump-profile-label-${index}`}>跃点 {index + 1}</label>
+                    <div className={`jump-route-row-control${profileId || jumpRows.length > 1 ? " has-remove" : ""}`}>
+                      <button type="button" className="jump-profile-trigger" aria-labelledby={`jump-profile-label-${index}`} aria-haspopup="dialog" onClick={() => void openJumpPicker(index)}>
+                        <span><strong>{profile?.name ?? "直接连接"}</strong><small>{profile ? `${profile.username}@${profile.host}:${profile.port}` : "不经过其他 SSH 节点"}</small></span><Icon name="connections" size={14}/>
+                      </button>
+                      {(profileId || jumpRows.length > 1) && <button type="button" className="jump-route-remove" aria-label={`删除跃点 ${index + 1}`} onClick={() => removeJumpRow(index)}><Icon name="trash" size={13}/></button>}
+                    </div>
+                  </div>;
+                })}
+              </div>
+              <button type="button" className="jump-route-add" disabled={jumpRows.length >= 4 || !jumpRows[jumpRows.length - 1]} onClick={addJumpRow}><Icon name="plus" size={13}/>添加跃点</button>
+            </div>}
           </div>
-          <footer className="dialog-actions connection-editor-actions">{selected && <button className="danger-button" onClick={() => requestDelete(profiles.filter((profile) => selectedIds.has(profile.id)))}>{selectedIds.size > 1 ? `删除 ${selectedIds.size} 项` : "删除"}</button>}<button className={`primary-button connection-save-button ${saveState}`} data-state={saveState} disabled={saveState !== "idle"} aria-live="polite" onClick={() => void save()}><span>{saveState === "saving" ? "保存中…" : saveState === "success" ? "保存成功" : "保存配置"}</span></button></footer>
+          <footer className="dialog-actions connection-editor-actions dialog-actions-with-status"><DialogActionStatus message={profileStorageUnsupported ? "" : message}/><div className="connection-footer-buttons">{selected && <button className="danger-button" onClick={() => requestDelete(profiles.filter((profile) => selectedIds.has(profile.id)))}>{selectedIds.size > 1 ? `删除 ${selectedIds.size} 项` : "删除"}</button>}<button className={`primary-button connection-save-button ${saveState}`} data-state={saveState} disabled={saveState !== "idle" || profileStorageUnsupported} aria-live="polite" onClick={() => void save()}><span>{saveState === "saving" ? "保存中…" : saveState === "success" ? "保存成功" : "保存配置"}</span></button></div></footer>
         </div>
       </div>
     </DialogFrame>
@@ -489,6 +587,17 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
         <button className="danger" role="menuitem" onClick={() => { setContextMenu(null); requestDelete(contextProfiles); }}>{contextProfiles.length > 1 ? `删除 ${contextProfiles.length} 个连接` : "删除连接"}</button>
       </> : null}
     </div>}
+    {jumpPickerOpen !== null && <JumpProfilePicker
+      index={jumpPickerOpen}
+      currentProfileId={jumpRows[jumpPickerOpen]}
+      candidates={jumpCandidates}
+      groups={groups}
+      loading={jumpCandidatesLoading}
+      error={jumpCandidatesError}
+      vaultUnlocked={vaultStatus.unlocked}
+      onClose={() => setJumpPickerOpen(null)}
+      onSelect={(candidate) => chooseJumpCandidate(jumpPickerOpen, candidate)}
+    />}
     {groupEditor && <DialogFrame title={groupEditor === "new" ? "新建分组" : "管理分组"} subtitle="连接分组仅支持一层" compact onClose={() => setGroupEditor(null)}>
       <label>分组名称<input data-dialog-autofocus value={groupName} maxLength={80} onChange={(event) => setGroupName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void saveGroup(); }}/></label>
       {groupMessage && <p className="inline-message" role="alert">{groupMessage}</p>}
@@ -501,6 +610,10 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
     {deleteRequested && <DialogFrame title={deleteRequested.length > 1 ? `删除 ${deleteRequested.length} 个连接？` : "删除连接？"} subtitle={deleteRequested.length > 1 ? deleteRequested.map((profile) => profile.name).join("、") : deleteRequested[0].name} compact dismissible={!deleteBusy} onClose={() => { if (!deleteBusy) setDeleteRequested(null); }}>
       <p className="confirm-copy">删除后将同时移除{deleteRequested.length > 1 ? "这些连接" : "此连接"}及其关联的网络转发规则；共享凭证保持不变。此操作无法撤销。</p>
       <footer className="dialog-actions dialog-actions-with-status"><DialogActionStatus message={deleteMessage}/><div><button className="secondary-button" disabled={deleteBusy} onClick={() => setDeleteRequested(null)}>取消</button><button className="danger-button filled" data-dialog-autofocus disabled={deleteBusy} onClick={() => void remove()}>{deleteBusy ? "正在删除…" : "确认删除"}</button></div></footer>
+    </DialogFrame>}
+    {clearStorageRequested && <DialogFrame title="清除旧配置？" subtitle="连接配置版本不受支持" compact dismissible={!clearStorageBusy} onClose={() => { if (!clearStorageBusy) setClearStorageRequested(false); }}>
+      <p className="confirm-copy">将永久删除旧版连接配置和全部网络转发规则。凭证库与 Workspace 保持不变。此操作无法撤销。</p>
+      <footer className="dialog-actions dialog-actions-with-status"><DialogActionStatus message={clearStorageMessage}/><div><button className="secondary-button" disabled={clearStorageBusy} onClick={() => setClearStorageRequested(false)}>取消</button><button className="danger-button filled" data-dialog-autofocus disabled={clearStorageBusy} onClick={() => void clearUnsupportedStorage()}>{clearStorageBusy ? "正在清除…" : "确认清除"}</button></div></footer>
     </DialogFrame>}
     {credentialManagerOpen && (
       <CredentialDialog onClose={() => {
@@ -531,6 +644,91 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
   </>;
 }
 
+function JumpProfilePicker({ index, currentProfileId, candidates, groups, loading, error, vaultUnlocked, onClose, onSelect }: {
+  index: number;
+  currentProfileId: string | null;
+  candidates: JumpCandidate[];
+  groups: ProfileGroup[];
+  loading: boolean;
+  error: string;
+  vaultUnlocked: boolean;
+  onClose: () => void;
+  onSelect: (candidate: JumpCandidate | null) => void;
+}) {
+  const knownGroupIds = new Set(groups.map((group) => group.id));
+  const groupedCandidates = [
+    { id: "ungrouped", name: "未分组", candidates: candidates.filter((candidate) => !candidate.profile.groupId || !knownGroupIds.has(candidate.profile.groupId)) },
+    ...groups.map((group) => ({ id: group.id, name: group.name, candidates: candidates.filter((candidate) => candidate.profile.groupId === group.id) })),
+  ].filter((group) => group.candidates.length > 0);
+  const selectableCount = candidates.filter((candidate) => candidate.selectable).length;
+  return <DialogFrame
+    title={`选择跃点 ${index + 1}`}
+    subtitle="按连接分组选择一个 SSH 中间节点"
+    className="jump-profile-picker-dialog"
+    headerActions={<span className="jump-picker-count">{loading ? "检查中…" : `${selectableCount}/${candidates.length} 可选`}</span>}
+    onClose={onClose}
+  >
+    <div className="jump-picker-layout">
+      <div className="jump-picker-list" role="listbox" aria-label={`选择跃点 ${index + 1}`}>
+        <section className="jump-picker-group jump-picker-direct" role="group" aria-labelledby={`jump-picker-direct-${index}`}>
+          <header><strong id={`jump-picker-direct-${index}`}>连接方式</strong><small>不使用中间节点</small></header>
+          <button type="button" className="jump-picker-option" role="option" aria-selected={!currentProfileId} data-dialog-autofocus={loading || !currentProfileId || undefined} onClick={() => onSelect(null)}>
+            <span className="jump-picker-option-icon"><Icon name="computer" size={15}/></span>
+            <span className="jump-picker-option-copy"><strong>直接连接</strong><small>从本机直接访问目标服务器</small></span>
+            <span className="jump-picker-option-status">{!currentProfileId && <><Icon name="check" size={12}/>当前选择</>}</span>
+          </button>
+        </section>
+        {loading && <div className="jump-picker-loading" role="status"><Icon name="refresh" size={15}/><span>正在检查连接资格与路径引用…</span></div>}
+        {!loading && groupedCandidates.map((group) => <section className="jump-picker-group" role="group" aria-labelledby={`jump-picker-group-${group.id}`} key={group.id}>
+          <header><strong id={`jump-picker-group-${group.id}`}>{group.name}</strong><small>{group.candidates.length} 个连接</small></header>
+          {group.candidates.map((candidate) => {
+            const selected = currentProfileId === candidate.profile.id;
+            const locked = candidate.selectable && candidate.usesCredential && !vaultUnlocked;
+            const status = candidate.reason ?? (locked ? "连接时需要解锁凭证库" : "可作为跃点");
+            return <button
+              type="button"
+              className="jump-picker-option"
+              role="option"
+              aria-selected={selected}
+              aria-disabled={!candidate.selectable}
+              data-disabled={!candidate.selectable || undefined}
+              data-dialog-autofocus={selected || undefined}
+              key={candidate.profile.id}
+              onClick={() => onSelect(candidate)}
+            >
+              <span className="jump-picker-option-icon"><Icon name="server" size={15}/></span>
+              <span className="jump-picker-option-copy"><strong>{candidate.profile.name}</strong><small>{candidate.profile.username}@{candidate.profile.host}:{candidate.profile.port}</small></span>
+              <span className={`jump-picker-option-status${candidate.selectable ? locked ? " locked" : "" : " unavailable"}`}>{locked && <Icon name="lock" size={11}/>}<span>{status}</span>{selected && <Icon name="check" size={12}/>}</span>
+            </button>;
+          })}
+        </section>)}
+        {!loading && candidates.length === 0 && !error && <div className="jump-picker-empty"><Icon name="connections" size={22}/><strong>没有其他连接</strong><p>创建并保存连接后即可将其选作跃点。</p></div>}
+      </div>
+      <footer className="dialog-actions dialog-actions-with-status jump-picker-actions"><DialogActionStatus message={error}/><div><button type="button" className="secondary-button" onClick={onClose}>取消</button></div></footer>
+    </div>
+  </DialogFrame>;
+}
+
+function JumpRouteFlow({ profiles, jumpRows, targetName, targetEndpoint }: { profiles: ConnectionProfile[]; jumpRows: Array<string | null>; targetName: string; targetEndpoint: string }) {
+  const jumps = jumpRows.flatMap((id) => {
+    const profile = profiles.find((item) => item.id === id);
+    return profile ? [profile] : [];
+  });
+  const ariaLabel = ["本机", ...jumps.map((profile) => profile.name), targetName].join(" 到 ");
+  return <section className="jump-route-flow" aria-labelledby="jump-route-flow-title">
+    <header><span><strong id="jump-route-flow-title">连接路径预览</strong><small className="jump-route-flow-subtitle">跃点按从本机到目标服务器的顺序执行，并使用各自保存的认证方式。</small></span><small className="jump-route-flow-limit">最多 4 个跃点</small></header>
+    <div className="jump-route-flow-track" role="img" aria-label={ariaLabel}>
+      <JumpFlowNode icon="computer" label="本机" value="当前设备"/>
+      {jumps.map((profile, index) => <span className="jump-route-flow-segment" key={profile.id}><span className="jump-route-flow-connector" aria-hidden="true"/><JumpFlowNode icon="server" label={`跃点 ${index + 1}`} value={profile.name}/></span>)}
+      <span className="jump-route-flow-segment"><span className="jump-route-flow-connector" aria-hidden="true"/><JumpFlowNode icon="server" label={targetName} value={targetEndpoint}/></span>
+    </div>
+  </section>;
+}
+
+function JumpFlowNode({ icon, label, value }: { icon: "computer" | "server"; label: string; value: string }) {
+  return <span className="jump-route-flow-node" aria-hidden="true"><span className="jump-route-flow-icon"><Icon name={icon} size={15}/></span><span><small>{label}</small><code title={value}>{value}</code></span></span>;
+}
+
 function findProfileId(node: import("../../workspace/model").LayoutNode, blockId: string): string | null {
   if (node.type === "terminal") return node.blockId === blockId ? node.profileId : null;
   if (node.type === "files" || node.type === "network") return null;
@@ -546,6 +744,7 @@ function profileToInput(profile: ConnectionProfile, groupId: string | null): Pro
     authPreference: profile.authPreference,
     credentialId: profile.credentialId,
     groupId,
+    jumpProfileIds: profile.jumpProfileIds ?? [],
   };
 }
 
@@ -567,6 +766,10 @@ function dropGroupAtPoint(x: number, y: number, draggedProfiles: ConnectionProfi
 
 function errorMessage(error: unknown): string {
   return typeof error === "object" && error && "message" in error ? String(error.message) : "操作失败";
+}
+
+function errorCode(error: unknown): string | null {
+  return typeof error === "object" && error && "code" in error ? String(error.code) : null;
 }
 
 function authPreferenceLabel(preference: ConnectionProfile["authPreference"]): string {

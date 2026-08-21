@@ -11,14 +11,37 @@ use russh::{
     keys::{
         Algorithm, EcdsaCurve, HashAlg, PrivateKey, PrivateKeyWithHashAlg,
         agent::{AgentIdentity, client::AgentClient},
-        ssh_key::Error as SshKeyError,
+        ssh_key::{Error as SshKeyError, LineEnding, rand_core::UnwrapErr},
     },
 };
 use zeroize::Zeroizing;
 
-use crate::domain::auth::{AuthFailure, AuthRequest, AuthWarning, PrivateKeyAlgorithm, SecretText};
+use crate::domain::{
+    auth::{AuthFailure, AuthRequest, AuthWarning, PrivateKeyAlgorithm, SecretText},
+    credential::GeneratedPrivateKeyAlgorithm,
+};
 
 const MAX_PRIVATE_KEY_BYTES: u64 = 1024 * 1024;
+
+pub(crate) fn generate_private_key_bytes(
+    algorithm: GeneratedPrivateKeyAlgorithm,
+    comment: &str,
+) -> Result<Zeroizing<Vec<u8>>, AuthFailure> {
+    let algorithm = match algorithm {
+        GeneratedPrivateKeyAlgorithm::Ed25519 => Algorithm::Ed25519,
+        GeneratedPrivateKeyAlgorithm::EcdsaP256 => Algorithm::Ecdsa {
+            curve: EcdsaCurve::NistP256,
+        },
+    };
+    let mut rng = UnwrapErr(getrandom::SysRng);
+    let mut key =
+        PrivateKey::random(&mut rng, algorithm).map_err(|_| AuthFailure::KeyGenerationFailed)?;
+    key.set_comment(comment);
+    let encoded = key
+        .to_openssh(LineEnding::LF)
+        .map_err(|_| AuthFailure::KeyGenerationFailed)?;
+    Ok(Zeroizing::new(encoded.as_bytes().to_vec()))
+}
 
 /// A parsed key owned only by the SSH infrastructure boundary.
 pub(crate) struct LoadedPrivateKey {
@@ -365,10 +388,16 @@ mod tests {
     };
     use tempfile::tempdir;
 
-    use super::{agent_rsa_hash, load_private_key, map_auth_result};
+    use super::{
+        agent_rsa_hash, generate_private_key_bytes, load_private_key, load_private_key_bytes,
+        map_auth_result,
+    };
     #[cfg(unix)]
     use crate::domain::auth::AuthWarning;
-    use crate::domain::auth::{AuthFailure, PrivateKeyAlgorithm, SecretText};
+    use crate::domain::{
+        auth::{AuthFailure, PrivateKeyAlgorithm, SecretText},
+        credential::GeneratedPrivateKeyAlgorithm,
+    };
     use russh::{MethodKind, MethodSet, client::AuthResult};
 
     fn test_key() -> PrivateKey {
@@ -394,6 +423,35 @@ mod tests {
         let public_key = loaded.openssh_public_key().expect("encode public key");
         assert!(public_key.starts_with("ssh-ed25519 "));
         assert!(!public_key.contains("PRIVATE"));
+    }
+
+    #[test]
+    fn generates_unique_round_trip_openssh_keys_for_the_supported_algorithms() {
+        for (algorithm, expected) in [
+            (
+                GeneratedPrivateKeyAlgorithm::Ed25519,
+                PrivateKeyAlgorithm::Ed25519,
+            ),
+            (
+                GeneratedPrivateKeyAlgorithm::EcdsaP256,
+                PrivateKeyAlgorithm::EcdsaP256,
+            ),
+        ] {
+            let first = generate_private_key_bytes(algorithm, "deploy@example")
+                .expect("generate first key");
+            let second = generate_private_key_bytes(algorithm, "deploy@example")
+                .expect("generate second key");
+            assert_ne!(first.as_slice(), second.as_slice());
+
+            let loaded = load_private_key_bytes(&first, None).expect("generated key round trips");
+            assert_eq!(loaded.algorithm(), expected);
+            assert!(
+                loaded
+                    .openssh_public_key()
+                    .expect("public key")
+                    .ends_with(" deploy@example")
+            );
+        }
     }
 
     #[test]

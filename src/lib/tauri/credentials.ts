@@ -4,6 +4,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 export interface VaultStatus { initialized: boolean; unlocked: boolean; legacy: boolean }
 export interface FileOperationResult { completed: boolean }
 export type CredentialKind = "password" | "privateKey";
+export type GeneratedPrivateKeyAlgorithm = "ed25519" | "ecdsaP256";
 export interface CredentialSummary { id: string; name: string; kind: CredentialKind; detail: string | null }
 export interface VaultStatusChanged { unlocked: boolean; reason: "manual" | "windowsSession" | "timeout" }
 
@@ -20,6 +21,7 @@ export const onVaultStatusChanged = (handler: (event: VaultStatusChanged) => voi
 export const listCredentials = (): Promise<CredentialSummary[]> => invoke("credential_list");
 export const createPasswordCredential = (name: string, password: string): Promise<CredentialSummary> => invoke("credential_create_password", { input: { name, password } });
 export const importPrivateKeyCredential = (name: string, passphrase?: string): Promise<CredentialSummary | null> => invoke("credential_import_private_key", { input: { name, passphrase: passphrase || null } });
+export const generatePrivateKeyCredential = (name: string, algorithm: GeneratedPrivateKeyAlgorithm, comment?: string): Promise<CredentialSummary> => invoke("credential_generate_private_key", { input: { name, algorithm, comment: comment || null } });
 export const revealCredentialPassword = (credentialId: string): Promise<string> => invoke("credential_reveal_password", { input: { credentialId } });
 export const getCredentialPublicKey = (credentialId: string): Promise<string> => invoke("credential_public_key", { input: { credentialId } });
 export const deleteCredential = (credentialId: string): Promise<void> => invoke("credential_delete", { input: { credentialId } });

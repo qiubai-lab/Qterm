@@ -150,6 +150,15 @@ impl NetworkRepository for JsonNetworkRepository {
         }
         Ok(deleted)
     }
+
+    fn clear_storage(&self) -> Result<(), NetworkRepositoryError> {
+        let _guard = self.lock()?;
+        match fs::remove_file(&self.path) {
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+            Err(_) => Err(NetworkRepositoryError::Io),
+        }
+    }
 }
 
 #[derive(Deserialize, Serialize)]
@@ -426,5 +435,20 @@ mod tests {
             assert_eq!(repository.list().expect_err("reject"), expected);
             assert_eq!(fs::read(path).expect("unchanged"), bytes);
         }
+    }
+
+    #[test]
+    fn clearing_storage_removes_the_entire_network_rule_document() {
+        let directory = tempdir().expect("tempdir");
+        let path = directory.path().join("network-forwards.json");
+        let repository = JsonNetworkRepository::new(path.clone());
+        repository.insert(rule()).expect("insert");
+
+        repository.clear_storage().expect("clear storage");
+
+        assert!(!path.exists());
+        repository
+            .clear_storage()
+            .expect("missing storage is already clear");
     }
 }

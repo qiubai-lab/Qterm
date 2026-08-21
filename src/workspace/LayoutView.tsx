@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 
 import { Icon } from "../components/Icon";
+import { ConnectionRouteProgress } from "../components/ConnectionRouteProgress";
 import { FileBrowserPane } from "../files/FileBrowserPane";
 import type { ConnectionProfile } from "../lib/tauri/profiles";
 import { NetworkPane } from "../network/NetworkPane";
@@ -205,6 +206,7 @@ function TerminalBlock(props: Omit<Parameters<typeof LayoutBranch>[0], "node"> &
       </div>
     </header>
     <TerminalPanel key={props.profileId ?? "local"} blockId={props.blockId} sessionKey={`${props.blockId}:${props.profileId ?? "local"}`} local={props.profileId === null} visible={props.visible} />
+    <ConnectionRouteProgress progress={runtime?.connectionProgress}/>
     {runtime?.notice && <div className="block-notice">{runtime.notice}</div>}
     {drop && <div className={`drop-zone drop-${drop}`} />}
   </section>;
@@ -214,8 +216,8 @@ function FilesBlock(props: Omit<Parameters<typeof LayoutBranch>[0], "node"> & { 
   const { document, dispatch, fileRuntimes, profiles, profileGroups = [], selectFileTarget } = useWorkspace();
   const requestConnection = props.onRequestAuthConnection;
   const runtime: FileRuntime = fileRuntimes[props.blockId] ?? (props.profileId === null
-    ? { sessionId: null, kind: "local", status: "connected", hostKeyPrompt: null, notice: "" }
-    : { sessionId: null, kind: "sftp", status: "closed", hostKeyPrompt: null, notice: "" });
+    ? { sessionId: null, kind: "local", status: "connected", hostKeyPrompt: null, notice: "", connectionProgress: null }
+    : { sessionId: null, kind: "sftp", status: "closed", hostKeyPrompt: null, notice: "", connectionProgress: null });
   const profile = profiles.find((item) => item.id === props.profileId);
   const detail = profile && runtime.status === "connected" ? `${profile.username}@${profile.host}` : profile ? runtime.status : "本机";
   const active = props.workspace.activeBlockId === props.blockId;
@@ -251,6 +253,7 @@ function FilesBlock(props: Omit<Parameters<typeof LayoutBranch>[0], "node"> & { 
       </div>
     </header>
     <FileBrowserPane key={`files:${props.profileId ?? "local"}`} initialPath={props.profileId !== null && props.path === "~" ? "." : props.path} runtime={runtime} onPathChange={updatePath}/>
+    <ConnectionRouteProgress progress={runtime.connectionProgress}/>
     {drop && <div className={`drop-zone drop-${drop}`} />}
   </section>;
 }
@@ -303,6 +306,7 @@ function NetworkBlock(props: Omit<Parameters<typeof LayoutBranch>[0], "node"> & 
       <div className="block-actions"><button aria-label="关闭网络窗口" title="关闭" onClick={() => props.onRequestClose(props.blockId)}><Icon name="close" size={13}/></button></div>
     </header>
     <NetworkPane profileId={props.profileId} runtimeStates={runtime?.ruleStates} lockedRuleIds={lockedRuleIds} onStart={(rule) => void startRule(rule.id)} onStop={(rule) => void stopNetworkBlockRule(props.blockId, rule.id)}/>
+    <ConnectionRouteProgress progress={runtime?.connectionProgress}/>
     {runtime?.notice && <div className="block-notice">{runtime.notice}</div>}
     {drop && <div className={`drop-zone drop-${drop}`} />}
   </section>;

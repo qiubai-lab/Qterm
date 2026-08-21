@@ -11,6 +11,7 @@ pub trait NetworkRepository: Send + Sync {
     fn update(&self, rule: ForwardRule) -> Result<(), NetworkRepositoryError>;
     fn delete(&self, id: &NetworkRuleId) -> Result<(), NetworkRepositoryError>;
     fn delete_by_profile(&self, profile_id: &ProfileId) -> Result<usize, NetworkRepositoryError>;
+    fn clear_storage(&self) -> Result<(), NetworkRepositoryError>;
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

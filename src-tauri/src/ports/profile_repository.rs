@@ -2,7 +2,7 @@ use std::{error::Error, fmt};
 
 use crate::domain::{
     credential::CredentialId,
-    profile::{ConnectionProfile, ProfileGroup, ProfileGroupId, ProfileId},
+    profile::{ConnectionProfile, JumpRouteError, ProfileGroup, ProfileGroupId, ProfileId},
 };
 
 pub trait ProfileRepository: Send + Sync {
@@ -19,6 +19,7 @@ pub trait ProfileRepository: Send + Sync {
     fn delete(&self, id: &ProfileId) -> Result<(), ProfileRepositoryError>;
     fn clear_credential_references(&self, id: &CredentialId) -> Result<(), ProfileRepositoryError>;
     fn clear_all_credential_references(&self) -> Result<(), ProfileRepositoryError>;
+    fn clear_unsupported_storage(&self) -> Result<(), ProfileRepositoryError>;
     fn insert_group(&self, group: ProfileGroup) -> Result<(), ProfileRepositoryError>;
     fn update_group(&self, group: ProfileGroup) -> Result<(), ProfileRepositoryError>;
     fn delete_group(&self, id: &ProfileGroupId) -> Result<(), ProfileRepositoryError>;
@@ -30,9 +31,12 @@ pub enum ProfileRepositoryError {
     NotFound,
     GroupAlreadyExists,
     GroupNotFound,
+    ReferencedAsJump,
+    InvalidJumpRoute(JumpRouteError),
     CorruptData,
     UnsupportedSchemaVersion(u64),
     SensitiveField,
+    StorageIsCurrent,
     Io,
 }
 
@@ -43,9 +47,12 @@ impl fmt::Display for ProfileRepositoryError {
             Self::NotFound => "profile was not found",
             Self::GroupAlreadyExists => "profile group already exists",
             Self::GroupNotFound => "profile group was not found",
+            Self::ReferencedAsJump => "profile is referenced as a jump",
+            Self::InvalidJumpRoute(_) => "profile jump route is invalid",
             Self::CorruptData => "profile storage is corrupt",
             Self::UnsupportedSchemaVersion(_) => "profile storage schema is not supported",
             Self::SensitiveField => "profile storage contains a forbidden sensitive field",
+            Self::StorageIsCurrent => "profile storage is already current",
             Self::Io => "profile storage is unavailable",
         };
         formatter.write_str(message)

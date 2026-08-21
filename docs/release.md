@@ -4,12 +4,12 @@
 
 ## 触发方式
 
-- **推送 `v*` 标签**：构建 macOS ARM64、Windows x64、Linux x64 三个平台的安装包，并将产物发布到与标签同名的 GitHub Release。
+- **推送 `v*` 标签**：构建 macOS ARM64、macOS Intel、Windows x64、Linux x64 四个平台的安装包，并将产物发布到与标签同名的 GitHub Release。
 - **手动触发（workflow_dispatch）**：只构建并上传为 workflow artifacts（保留 14 天），**不会**发布 Release，用于验证打包改动。
 
 ## 发布前检查
 
-1. `main` 分支最近一次 CI 全绿，尤其是三个平台的 Desktop build。
+1. `main` 分支最近一次 CI 全绿，尤其是四个平台的 Desktop build。
 2. 本地通过全部质量门：
 
    ```bash
@@ -43,13 +43,14 @@ git push origin v0.2.0
 ## 流水线行为
 
 - `validate-release-version` job：标签触发时读取 Cargo 包版本并校验标签；手动触发时直接通过。
-- `build` job：版本校验通过后三个原生 runner 并行构建（`fail-fast: false`，单平台失败不影响其他平台），产物先上传为 workflow artifacts，命名为 `qterm-{平台}-{commit sha}`。
+- `build` job：版本校验通过后四个原生 runner 并行构建（`fail-fast: false`，单平台失败不影响其他平台），产物先上传为 workflow artifacts，命名为 `qterm-{平台}-{commit sha}`。
 - `release` job：仅在标签推送（`refs/tags/v*`）时运行，等待全部平台构建成功后，下载所有 artifacts 并通过 `softprops/action-gh-release` 把安装包附加到该标签的 Release。该 job 单独持有 `contents: write` 权限。
 - Release 标题与正文由 action 默认生成，发布后可手动在 Releases 页面编辑补充更新说明。
 
 流水线只收集最终安装包（见各平台 `bundlePath` glob），Tauri 的中间产物（如 AppDir 内容、`.app` 目录、构建用共享库）不会进入 workflow artifacts 和 Release：
 
 - macOS ARM64：`.dmg`
+- macOS Intel：`.dmg`
 - Windows x64：`.msi`、NSIS `.exe`
 - Linux x64：`.AppImage`、`.deb`、`.rpm`
 

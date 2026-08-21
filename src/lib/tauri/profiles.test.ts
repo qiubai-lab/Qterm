@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const { invoke } = vi.hoisted(() => ({ invoke: vi.fn() }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
 
-import { deleteProfile, importSshConfig, previewSshConfigImport } from "./profiles";
+import { clearUnsupportedProfileStorage, deleteProfile, getProfileRouteRequirements, importSshConfig, listJumpCandidates, previewSshConfigImport } from "./profiles";
 
 describe("profile SSH Config IPC client", () => {
   beforeEach(() => invoke.mockReset());
@@ -29,5 +29,19 @@ describe("profile SSH Config IPC client", () => {
     invoke.mockResolvedValue({ deletedNetworkRules: 4 });
     await expect(deleteProfile("profile-1")).resolves.toEqual({ deletedNetworkRules: 4 });
     expect(invoke).toHaveBeenCalledWith("profile_delete", { id: "profile-1" });
+  });
+
+  it("queries jump candidates and route requirements using only profile identifiers", async () => {
+    invoke.mockResolvedValueOnce([]).mockResolvedValueOnce({ usesCredential: true, routeNames: ["Gateway", "Production"] });
+    await listJumpCandidates("profile-1");
+    expect(invoke).toHaveBeenNthCalledWith(1, "profile_jump_candidates", { currentProfileId: "profile-1", selectedProfileIds: [] });
+    await getProfileRouteRequirements("profile-1");
+    expect(invoke).toHaveBeenNthCalledWith(2, "profile_route_requirements", { profileId: "profile-1" });
+  });
+
+  it("clears unsupported portable connection and network storage without accepting paths", async () => {
+    invoke.mockResolvedValue(undefined);
+    await clearUnsupportedProfileStorage();
+    expect(invoke).toHaveBeenCalledWith("profile_clear_unsupported_storage");
   });
 });

@@ -35,9 +35,7 @@ describe("SSH session IPC client", () => {
     const onTerminalData = vi.fn();
     await connectSession(
       {
-        host: "example.com",
-        port: 22,
-        username: "deploy",
+        profileId: "profile-1",
         auth: { method: "password", password: "temporary" },
       },
       onEvent,

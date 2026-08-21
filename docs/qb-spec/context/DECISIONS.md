@@ -1,12 +1,26 @@
 # Decisions
 
+## 2026-08-21 — 凭证库只在 Rust 内生成 Ed25519 与 ECDSA P-256 私钥
+
+Status: accepted
+
+凭证管理的私钥添加页提供两个等高全宽入口：系统文件选择器导入，以及 Rust 后端生成。生成 IPC 只接受凭证名称、`ed25519 | ecdsaP256` 算法和最多 80 字符的公钥注释；不接受私钥正文、种子或路径。SSH infrastructure 使用系统 CSPRNG 生成并以 zeroizing 缓冲序列化 OpenSSH 私钥，随后复用既有凭证 vault 加密保存；WebView 只接收非敏感凭证摘要和按凭证 ID 派生的公钥。RSA 继续因既有依赖安全公告而禁用，生成密钥不额外设置 key-level passphrase。
+
+## 2026-08-21 — 使用 Qterm profile 引用实现纯 Rust SSH 跳板路径
+
+Status: accepted
+
+连接 profile 保存 0–4 个有序 `jumpProfileIds`，显式表达从本机到目标的中间节点。该能力是 Qterm 自有配置语义，不解析或执行 OpenSSH `ProxyJump`、`ProxyCommand`。被选 profile 作为跃点时只使用自身端点和认证，不递归展开它作为目标时配置的路径。Rust domain 统一计算候选资格和完整路径，WebView 只提交目标 profile ID；候选列表展示全部连接，并为自身、重复、超深、手动认证、缺失凭证或失效引用提供不可选原因。被引用的跃点不得删除或修改为会破坏依赖路径的状态，`connections.json` 升级为严格 schema v6，开发期不迁移 v5。
+
+每个 Terminal、Files 或 Network session 独占自己的 route。首节点使用普通 `russh` 连接，后续通过上一节点的 `direct-tcpip` channel 和 `connect_stream` 建立；中间节点只能使用自身已配置且类型匹配的凭证或 SSH Agent，不提供临时人工认证。每个节点独立校验 host key，并以节点角色、序号、端点和阶段报告进度与失败。任一失败、取消或关闭都会清理所有上游 handle；本期不做连接池、共享或自动重连。
+
 ## 2026-08-21 — SSH Config 只经预览导入并逐项授权私钥
 
 Status: accepted
 
 连接管理页头提供常驻“导入”入口，先显示紧凑说明窗；只有用户明确点击“选择配置”后才打开默认定位 `~/.ssh` 的系统文件选择器。配置路径只由 Rust 以一次性预览令牌持有，提交时重新解析同一授权文件。Include 由应用做深度、文件数和总字节数限制；Match、ProxyCommand、ProxyJump 不执行，只隔离或提示。通配 Host 可提供默认值，但不生成连接候选。连接信息与凭证在独立 Tab 中确认，提交协议不接受 groupId，连接统一导入“未分组”；管理器标题栏提供“重新选择”。
 
-新连接默认使用手动认证。`IdentityFile` 只有在用户逐项勾选、解锁或初始化凭证库后才导入；加密私钥可随该项提供口令。IdentityFile 路径始终停留在 Rust 侧，前端预览只获得文件名、可用状态和不透明索引，提交时也不能传入任意路径或私钥正文。私钥按解析后的公钥身份去重：已有相同公钥时复用，同名但公钥不同仍可新建；同批次相同私钥也只创建一次。现有 profile 与 vault 持久化 schema 保持不变；SSH Config 高级语义不接入当前 SSH 运行时。
+新连接默认使用手动认证。`IdentityFile` 只有在用户逐项勾选、解锁或初始化凭证库后才导入；加密私钥可随该项提供口令。IdentityFile 路径始终停留在 Rust 侧，前端预览只获得文件名、可用状态和不透明索引，提交时也不能传入任意路径或私钥正文。私钥按解析后的公钥身份去重：已有相同公钥时复用，同名但公钥不同仍可新建；同批次相同私钥也只创建一次。SSH Config 高级语义不接入 SSH 运行时；Qterm 自有的 profile 跳板引用仍由连接管理单独配置。
 
 ## 2026-08-18 — 使用 Tauri 2
 
@@ -198,7 +212,7 @@ profile 增加 `manual` 连接策略。该策略每次连接都先打开认证�
 
 Status: accepted
 
-`connections.json` v4、`secrets.vault` v3、`network-forwards.json` v1 与 `workspaces.json` v5 的 reader 只接受精确当前版本。运行时不复制旧 app-data 文件，也不读取或迁移旧 profile、network rule、vault、workspace records。旧版 vault 只在用户进入凭证管理并完成现有破坏性确认后清除，同时解除 credential references；未来版本或其他不兼容文件仍返回稳定版本错误并保持原始字节不变。
+`connections.json` v6、`secrets.vault` v3、`network-forwards.json` v1 与 `workspaces.json` v5 的 reader 只接受精确当前版本。运行时不复制旧 app-data 文件，也不读取或迁移旧 profile、network rule、vault、workspace records。旧版 vault 只在用户进入凭证管理并完成现有破坏性确认后清除，同时解除 credential references。连接配置版本不支持时，用户可在连接管理 footer 二次确认，同时清除 `connections.json` 与 `network-forwards.json`；后端重新确认版本后才删除，凭证与 Workspace 保留。其他损坏、敏感字段或未来竞态状态不得借此入口删除。
 
 ## 2026-08-20 — 凭证库使用用户保管且可轮换的恢复密钥
 

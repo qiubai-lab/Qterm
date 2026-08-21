@@ -19,7 +19,7 @@ Qterm 基于 Tauri 2、React、TypeScript 与 Rust 构建，将本地终端、SS
 
 各平台最新安装包统一发布在 [GitHub Releases](https://github.com/qiubai-lab/Qterm/releases/latest)：macOS `.dmg`、Windows `.msi`/NSIS `.exe`、Linux `.AppImage`/`.deb`/`.rpm`。
 
-### macOS（Apple Silicon）
+### macOS
 
 推荐通过 Homebrew 安装，cask 会自动处理未公证应用的隔离属性，打开时不会触发 Gatekeeper"已损坏"提示：
 
@@ -43,7 +43,7 @@ brew uninstall --cask --zap qterm  # 卸载并清理全部配置、缓存与应�
 brew untap qiubai-lab/tap          # 卸载后如不再需要，可移除 tap
 ```
 
-也可以从 [Releases](https://github.com/qiubai-lab/Qterm/releases/latest) 直接下载 `Qterm_*_aarch64.dmg`，打开后将 Qterm 拖入「应用程序」。由于应用未经过 Apple 公证，通过浏览器下载的 dmg 会带有隔离属性，首次打开若提示"Qterm 已损坏，无法打开"，在终端执行一次即可正常使用：
+也可以从 [Releases](https://github.com/qiubai-lab/Qterm/releases/latest) 直接下载 dmg（Apple Silicon 选 `Qterm_*_aarch64.dmg`，Intel 选 `Qterm_*_x86_64.dmg`），打开后将 Qterm 拖入「应用程序」。由于应用未经过 Apple 公证，通过浏览器下载的 dmg 会带有隔离属性，首次打开若提示"Qterm 已损坏，无法打开"，在终端执行一次即可正常使用：
 
 ```bash
 xattr -cr /Applications/Qterm.app

@@ -6,6 +6,7 @@ const MAX_USERNAME_LENGTH: usize = 128;
 const MAX_PROFILE_ID_LENGTH: usize = 128;
 const MAX_GROUP_ID_LENGTH: usize = 128;
 const MAX_GROUP_NAME_LENGTH: usize = 80;
+pub const MAX_JUMP_PROFILES: usize = 4;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AuthPreference {
@@ -103,6 +104,7 @@ pub struct ConnectionProfile {
     auth_preference: AuthPreference,
     credential_id: Option<CredentialId>,
     group_id: Option<ProfileGroupId>,
+    jump_profile_ids: Vec<ProfileId>,
 }
 
 impl ConnectionProfile {
@@ -158,6 +160,7 @@ impl ConnectionProfile {
             auth_preference,
             credential_id,
             group_id: None,
+            jump_profile_ids: Vec::new(),
         })
     }
 
@@ -193,6 +196,10 @@ impl ConnectionProfile {
         self.group_id.as_ref()
     }
 
+    pub fn jump_profile_ids(&self) -> &[ProfileId] {
+        &self.jump_profile_ids
+    }
+
     pub fn with_group_id(mut self, group_id: Option<ProfileGroupId>) -> Self {
         self.group_id = group_id;
         self
@@ -203,6 +210,11 @@ impl ConnectionProfile {
             AuthPreference::Password | AuthPreference::PrivateKey => credential_id,
             AuthPreference::SshAgent | AuthPreference::Manual => None,
         };
+        self
+    }
+
+    pub fn with_jump_profile_ids(mut self, jump_profile_ids: Vec<ProfileId>) -> Self {
+        self.jump_profile_ids = jump_profile_ids;
         self
     }
 }
@@ -216,6 +228,84 @@ pub enum ProfileField {
     Host,
     Port,
     Username,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum JumpRouteError {
+    SelfReference,
+    TooDeep,
+    MissingProfile,
+    ManualAuthentication,
+    MissingCredential,
+    DuplicateProfile,
+}
+
+pub fn validate_jump_routes(profiles: &[ConnectionProfile]) -> Result<(), JumpRouteError> {
+    for profile in profiles {
+        resolve_profile_route(profiles, profile.id())?;
+    }
+    Ok(())
+}
+
+pub fn resolve_profile_route(
+    profiles: &[ConnectionProfile],
+    target_id: &ProfileId,
+) -> Result<Vec<ConnectionProfile>, JumpRouteError> {
+    let target = find_profile(profiles, target_id).ok_or(JumpRouteError::MissingProfile)?;
+    if target.jump_profile_ids().len() > MAX_JUMP_PROFILES {
+        return Err(JumpRouteError::TooDeep);
+    }
+    let mut route = Vec::with_capacity(target.jump_profile_ids().len() + 1);
+    let mut visited = std::collections::HashSet::new();
+    for jump_id in target.jump_profile_ids() {
+        if jump_id == target.id() {
+            return Err(JumpRouteError::SelfReference);
+        }
+        if !visited.insert(jump_id.as_str().to_owned()) {
+            return Err(JumpRouteError::DuplicateProfile);
+        }
+        let jump = find_profile(profiles, jump_id).ok_or(JumpRouteError::MissingProfile)?;
+        ensure_jump_eligible(jump)?;
+        route.push(jump.clone());
+    }
+    route.push(target.clone());
+    Ok(route)
+}
+
+pub fn evaluate_jump_candidate(
+    profiles: &[ConnectionProfile],
+    current_id: Option<&ProfileId>,
+    selected_ids: &[ProfileId],
+    candidate_id: &ProfileId,
+) -> Result<Vec<ConnectionProfile>, JumpRouteError> {
+    if current_id == Some(candidate_id) {
+        return Err(JumpRouteError::SelfReference);
+    }
+    if selected_ids.iter().any(|id| id == candidate_id) {
+        return Err(JumpRouteError::DuplicateProfile);
+    }
+    let candidate = find_profile(profiles, candidate_id).ok_or(JumpRouteError::MissingProfile)?;
+    ensure_jump_eligible(candidate)?;
+    Ok(vec![candidate.clone()])
+}
+
+fn find_profile<'a>(
+    profiles: &'a [ConnectionProfile],
+    id: &ProfileId,
+) -> Option<&'a ConnectionProfile> {
+    profiles.iter().find(|profile| profile.id() == id)
+}
+
+fn ensure_jump_eligible(profile: &ConnectionProfile) -> Result<(), JumpRouteError> {
+    match profile.auth_preference() {
+        AuthPreference::Manual => Err(JumpRouteError::ManualAuthentication),
+        AuthPreference::Password | AuthPreference::PrivateKey
+            if profile.credential_id().is_none() =>
+        {
+            Err(JumpRouteError::MissingCredential)
+        }
+        _ => Ok(()),
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -277,7 +367,8 @@ fn normalize_required(
 #[cfg(test)]
 mod tests {
     use super::{
-        AuthPreference, ConnectionProfile, ProfileField, ProfileGroup, ProfileGroupId, ProfileId,
+        AuthPreference, ConnectionProfile, JumpRouteError, ProfileField, ProfileGroup,
+        ProfileGroupId, ProfileId, evaluate_jump_candidate, resolve_profile_route,
     };
     use crate::domain::credential::CredentialId;
 
@@ -292,6 +383,109 @@ mod tests {
             Some(CredentialId::parse("credential-1").expect("credential")),
         )
         .expect("fixture profile must be valid")
+    }
+
+    fn route_profile(
+        id: &str,
+        preference: AuthPreference,
+        credential: bool,
+        jumps: &[&str],
+    ) -> ConnectionProfile {
+        ConnectionProfile::new(
+            ProfileId::parse(id).expect("id"),
+            id,
+            format!("{id}.example.com"),
+            22,
+            "deploy",
+            preference,
+            credential
+                .then(|| CredentialId::parse(format!("credential-{id}")).expect("credential")),
+        )
+        .expect("profile")
+        .with_jump_profile_ids(
+            jumps
+                .iter()
+                .map(|value| ProfileId::parse(*value).expect("jump profile id"))
+                .collect(),
+        )
+    }
+
+    #[test]
+    fn resolves_jump_profiles_from_outermost_node_to_target() {
+        let profiles = vec![
+            route_profile(
+                "target",
+                AuthPreference::Manual,
+                false,
+                &["jump-1", "jump-2"],
+            ),
+            route_profile("jump-2", AuthPreference::SshAgent, false, &[]),
+            route_profile("jump-1", AuthPreference::PrivateKey, true, &[]),
+        ];
+
+        let route =
+            resolve_profile_route(&profiles, &ProfileId::parse("target").expect("target id"))
+                .expect("valid route");
+
+        assert_eq!(
+            route
+                .iter()
+                .map(|profile| profile.id().as_str())
+                .collect::<Vec<_>>(),
+            vec!["jump-1", "jump-2", "target"]
+        );
+    }
+
+    #[test]
+    fn rejects_duplicates_excess_depth_and_ineligible_jump_candidates() {
+        let duplicate = vec![
+            route_profile("a", AuthPreference::SshAgent, false, &["b", "b"]),
+            route_profile("b", AuthPreference::SshAgent, false, &[]),
+        ];
+        assert_eq!(
+            resolve_profile_route(&duplicate, &ProfileId::parse("a").expect("id")),
+            Err(JumpRouteError::DuplicateProfile)
+        );
+
+        let mut deep = vec![route_profile(
+            "target",
+            AuthPreference::Manual,
+            false,
+            &["node-1", "node-2", "node-3", "node-4", "node-5"],
+        )];
+        deep.extend((1..=5).map(|index| {
+            route_profile(
+                &format!("node-{index}"),
+                AuthPreference::SshAgent,
+                false,
+                &[],
+            )
+        }));
+        assert_eq!(
+            resolve_profile_route(&deep, &ProfileId::parse("target").expect("id")),
+            Err(JumpRouteError::TooDeep)
+        );
+
+        let manual = vec![route_profile("manual", AuthPreference::Manual, false, &[])];
+        assert_eq!(
+            evaluate_jump_candidate(&manual, None, &[], &ProfileId::parse("manual").expect("id"),),
+            Err(JumpRouteError::ManualAuthentication)
+        );
+        let missing = vec![route_profile(
+            "password",
+            AuthPreference::Password,
+            false,
+            &[],
+        )];
+        assert_eq!(
+            evaluate_jump_candidate(
+                &missing,
+                None,
+                &[],
+                &ProfileId::parse("password").expect("id"),
+            ),
+            Err(JumpRouteError::MissingCredential)
+        );
     }
 
     #[test]

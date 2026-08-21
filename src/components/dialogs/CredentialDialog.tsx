@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { writeText as writeClipboardText } from "@tauri-apps/plugin-clipboard-manager";
 
-import { clearVault, createPasswordCredential, deleteCredential, getCredentialPublicKey, getVaultStatus, importPrivateKeyCredential, listCredentials, onVaultStatusChanged, revealCredentialPassword, type CredentialKind, type CredentialSummary, type VaultStatus } from "../../lib/tauri/credentials";
+import { clearVault, createPasswordCredential, deleteCredential, generatePrivateKeyCredential, getCredentialPublicKey, getVaultStatus, importPrivateKeyCredential, listCredentials, onVaultStatusChanged, revealCredentialPassword, type CredentialKind, type CredentialSummary, type GeneratedPrivateKeyAlgorithm, type VaultStatus } from "../../lib/tauri/credentials";
 import { Icon } from "../Icon";
 import { ChangeMasterPasswordDialog } from "./ChangeMasterPasswordDialog";
 import { DialogFrame } from "./DialogFrame";
@@ -34,6 +34,9 @@ export function CredentialDialog({ onClose }: { onClose: () => void }) {
   const [name, setName] = useState("");
   const [secret, setSecret] = useState("");
   const [passphrase, setPassphrase] = useState("");
+  const [privateKeyDialog, setPrivateKeyDialog] = useState<"import" | "generate" | null>(null);
+  const [generationAlgorithm, setGenerationAlgorithm] = useState<GeneratedPrivateKeyAlgorithm>("ed25519");
+  const [generationComment, setGenerationComment] = useState("");
   const [feedback, setFeedback] = useState<CredentialFeedback | null>(null);
   const [busy, setBusy] = useState(false);
   const [deleteRequested, setDeleteRequested] = useState<CredentialSummary | null>(null);
@@ -140,9 +143,24 @@ export function CredentialDialog({ onClose }: { onClose: () => void }) {
       const created = await importPrivateKeyCredential(name, passphrase);
       if (created) {
         setPassphrase("");
+        setPrivateKeyDialog(null);
         await refresh(created.id);
         showItemFeedback(created.id, "私钥已导入并加密保存");
+        void generatePublicKey(created);
       }
+    } catch (error) { showManagerFeedback(errorMessage(error), "error"); } finally { setBusy(false); }
+  }
+
+  async function generateKey() {
+    if (busy) return;
+    setBusy(true); clearFeedback();
+    try {
+      const created = await generatePrivateKeyCredential(name, generationAlgorithm, generationComment);
+      setGenerationComment("");
+      setPrivateKeyDialog(null);
+      await refresh(created.id);
+      showItemFeedback(created.id, "私钥已生成并加密保存");
+      void generatePublicKey(created);
     } catch (error) { showManagerFeedback(errorMessage(error), "error"); } finally { setBusy(false); }
   }
 
@@ -198,6 +216,9 @@ export function CredentialDialog({ onClose }: { onClose: () => void }) {
       clearPublicKey();
       setSecret("");
       setPassphrase("");
+      setPrivateKeyDialog(null);
+      setGenerationAlgorithm("ed25519");
+      setGenerationComment("");
       setItems([]);
       setView({ type: "empty" });
       setChangeRequested(false);
@@ -259,7 +280,7 @@ export function CredentialDialog({ onClose }: { onClose: () => void }) {
     else clearPublicKey();
   }
 
-  const blocked = Boolean(masterMode || deleteRequested || clearRequested || changeRequested || recoveryRequested);
+  const blocked = Boolean(masterMode || deleteRequested || clearRequested || changeRequested || recoveryRequested || privateKeyDialog);
   const initialized = Boolean(status?.initialized);
   const legacy = Boolean(status?.legacy);
   const unlocked = Boolean(status?.unlocked);
@@ -298,16 +319,19 @@ export function CredentialDialog({ onClose }: { onClose: () => void }) {
             </>}
 
             {view.type === "create" && view.kind === "privateKey" && <>
-              <div className="credential-editor-heading"><span><Icon name="file" size={16}/></span><div><strong>导入私钥凭证</strong><p>文件仅在 Rust 后端读取并加密，设备路径不会保存。</p></div></div>
-              <div className="credential-editor-form"><label>凭证名称<input data-dialog-autofocus maxLength={80} value={name} onChange={(event) => setName(event.target.value)} placeholder="例如：部署私钥"/></label><label>私钥口令（可选）<input type="password" autoComplete="off" value={passphrase} onChange={(event) => setPassphrase(event.target.value)} placeholder="加密私钥需要填写"/></label><p className="dialog-note">确认后将打开系统文件选择窗口，私钥正文不会进入界面。</p></div>
-              <footer className="dialog-actions credential-editor-actions"><button className="secondary-button" onClick={() => setView({ type: "empty" })}>取消</button><button className="primary-button" disabled={busy || !name.trim()} onClick={() => void importKey()}>{busy ? "导入中…" : "选择并导入"}</button></footer>
+              <div className="credential-editor-heading"><span><Icon name="key" size={16}/></span><div><strong>添加私钥凭证</strong><p>选择本地私钥文件，或在安全的 Rust 后端生成新密钥。</p></div></div>
+              <div className="credential-private-key-choices">
+                <button data-dialog-autofocus type="button" className="credential-private-key-choice" onClick={() => { setName(""); setPassphrase(""); setPrivateKeyDialog("import"); }}><span><Icon name="file" size={17}/></span><span><strong>从本地文件导入</strong><small>通过系统文件选择器读取并加密保存</small></span><Icon name="forward" size={14}/></button>
+                <button type="button" className="credential-private-key-choice" onClick={() => { setName(""); setGenerationAlgorithm("ed25519"); setGenerationComment(""); setPrivateKeyDialog("generate"); }}><span><Icon name="key" size={17}/></span><span><strong>生成新私钥</strong><small>支持 Ed25519 与 ECDSA P-256</small></span><Icon name="forward" size={14}/></button>
+              </div>
+              <footer className="dialog-actions credential-editor-actions"><button className="secondary-button" onClick={() => setView({ type: "empty" })}>取消</button></footer>
             </>}
 
             {view.type === "detail" && <><div className="credential-editor-heading"><span><Icon name={view.item.kind === "password" ? "key" : "file"} size={16}/></span><div><strong>{view.item.name}</strong><p>此凭证可由多个连接安全引用。</p></div></div>
               <div className="credential-detail-grid"><div><span>类型</span><strong>{view.item.kind === "password" ? "密码凭证" : "私钥凭证"}</strong></div>{view.item.detail && <div><span>密钥算法</span><strong>{view.item.detail}</strong></div>}<div><span>存储状态</span><strong>已加密</strong></div></div>
               {view.item.kind === "password" && <div className="password-field credential-password-field"><label>凭证密码</label><div className="password-input-shell"><input aria-label="凭证密码" readOnly type="text" value={revealedPassword?.id === view.item.id ? revealedPassword.value : "••••••••••••"}/><button type="button" className="password-visibility-button" aria-label={revealedPassword?.id === view.item.id ? "隐藏密码" : "显示密码"} aria-pressed={revealedPassword?.id === view.item.id} disabled={revealingId === view.item.id} onClick={() => void togglePasswordReveal(view.item)}><Icon name={revealedPassword?.id === view.item.id ? "eyeOff" : "eye"} size={14}/></button></div></div>}
               <div className="credential-detail-note"><Icon name="connections" size={15}/><p>删除凭证会解除连接引用，但不会删除连接本身。</p></div>
-              {view.item.kind === "privateKey" && <section className="credential-public-key"><header><p><strong>OpenSSH 公钥</strong><span>可直接添加到服务器 authorized_keys</span></p><button type="button" className="icon-button credential-public-key-copy" aria-label="复制公钥" title="复制公钥" disabled={publicKey?.id !== view.item.id} onClick={() => { if (publicKey?.id === view.item.id) void copyPublicKey(view.item.id, publicKey.value); }}><Icon name="copy" size={13}/></button></header><textarea aria-label="OpenSSH 公钥" aria-busy={publicKeyBusyId === view.item.id} readOnly wrap="soft" value={publicKey?.id === view.item.id ? publicKey.value : publicKeyBusyId === view.item.id ? "正在生成公钥…" : "暂时无法生成公钥，请重新选择该私钥后重试。"}/></section>}
+              {view.item.kind === "privateKey" && <section className="credential-public-key"><header><p><strong>OpenSSH 公钥</strong><span>可直接添加到服务器 authorized_keys</span></p><div className="credential-public-key-actions"><button type="button" className="icon-button credential-public-key-action" aria-label="重新生成公钥" title="重新生成公钥" disabled={publicKeyBusyId === view.item.id} onClick={() => void generatePublicKey(view.item)}><Icon name="refresh" size={13}/></button><button type="button" className="icon-button credential-public-key-action" aria-label="复制公钥" title="复制公钥" disabled={publicKeyBusyId === view.item.id || publicKey?.id !== view.item.id} onClick={() => { if (publicKey?.id === view.item.id) void copyPublicKey(view.item.id, publicKey.value); }}><Icon name="copy" size={13}/></button></div></header><textarea aria-label="OpenSSH 公钥" aria-busy={publicKeyBusyId === view.item.id} readOnly wrap="soft" value={publicKey?.id === view.item.id ? publicKey.value : publicKeyBusyId === view.item.id ? "正在生成公钥…" : "暂时无法生成公钥，请点击刷新按钮重试。"}/></section>}
               <footer className="dialog-actions credential-editor-actions"><button className="danger-button" onClick={() => { clearFeedback(); setDeleteRequested(view.item); }}>删除凭证</button></footer>
             </>}
 
@@ -333,6 +357,8 @@ export function CredentialDialog({ onClose }: { onClose: () => void }) {
         showManagerFeedback("主密码已重置，新的恢复密钥已保存，旧文件已失效");
       }}
     />}
+    {privateKeyDialog === "import" && <DialogFrame title="从本地文件导入" subtitle="私钥正文不会进入界面" compact onClose={() => setPrivateKeyDialog(null)}><div className="credential-private-key-dialog-form"><label>凭证名称<input data-dialog-autofocus maxLength={80} value={name} onChange={(event) => setName(event.target.value)} placeholder="例如：部署私钥"/></label><label>私钥口令（可选）<input type="password" autoComplete="off" value={passphrase} onChange={(event) => setPassphrase(event.target.value)} placeholder="加密私钥需要填写"/></label><p className="dialog-note">确认后将打开系统文件选择窗口，文件仅由 Rust 后端读取。</p></div><footer className="dialog-actions end"><button className="secondary-button" disabled={busy} onClick={() => setPrivateKeyDialog(null)}>取消</button><button className="primary-button" disabled={busy || !name.trim()} onClick={() => void importKey()}>{busy ? "导入中…" : "选择文件并导入"}</button></footer></DialogFrame>}
+    {privateKeyDialog === "generate" && <DialogFrame title="生成新私钥" subtitle="随机生成并直接加密保存" compact onClose={() => setPrivateKeyDialog(null)}><div className="credential-private-key-dialog-form"><label>凭证名称<input data-dialog-autofocus maxLength={80} value={name} onChange={(event) => setName(event.target.value)} placeholder="例如：部署私钥"/></label><label>密钥类型<select value={generationAlgorithm} onChange={(event) => setGenerationAlgorithm(event.target.value as GeneratedPrivateKeyAlgorithm)}><option value="ed25519">Ed25519（推荐）</option><option value="ecdsaP256">ECDSA P-256</option></select></label><label>公钥注释（可选）<input maxLength={80} value={generationComment} onChange={(event) => setGenerationComment(event.target.value)} placeholder="例如：deploy@example"/></label><p className="dialog-note">私钥在 Rust 后端生成，正文不会进入界面；保存后由凭证库主密码加密保护。</p></div><footer className="dialog-actions end"><button className="secondary-button" disabled={busy} onClick={() => setPrivateKeyDialog(null)}>取消</button><button className="primary-button" disabled={busy || !name.trim()} onClick={() => void generateKey()}>{busy ? "生成中…" : "生成并保存"}</button></footer></DialogFrame>}
     {deleteRequested && <DialogFrame title="删除凭证？" subtitle={deleteRequested.name} compact onClose={() => setDeleteRequested(null)}><p className="confirm-copy">凭证将永久删除。引用它的连接会保留，但下次连接前需要重新选择凭证。</p><footer className="dialog-actions end"><button className="secondary-button" onClick={() => setDeleteRequested(null)}>取消</button><button data-dialog-autofocus className="danger-button filled" disabled={busy} onClick={() => void remove()}>确认删除</button></footer></DialogFrame>}
     {clearRequested && <DialogFrame title="清除整个凭证库？" subtitle="此操作无法撤销" compact onClose={() => setClearRequested(false)}><div className="destructive-confirmation"><p className="confirm-copy">主密钥、全部密码、私钥和连接中的凭证引用都会被清除，连接本身不会删除。</p><label>请输入“确认清除”以继续<input data-dialog-autofocus value={clearConfirmation} autoComplete="off" onChange={(event) => setClearConfirmation(event.target.value)}/></label></div><footer className="dialog-actions end"><button className="secondary-button" onClick={() => setClearRequested(false)}>取消</button><button className="danger-button filled" disabled={busy || clearConfirmation !== "确认清除"} onClick={() => void clear()}>永久清除</button></footer></DialogFrame>}
     {feedback && <CredentialFeedbackBubble feedback={feedback} getTarget={() => feedback.scope === "item" ? itemElementsRef.current.get(feedback.itemId) ?? null : managerAnchorRef.current}/>}

@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   clearVault: vi.fn(),
   createPasswordCredential: vi.fn(),
   deleteCredential: vi.fn(),
+  generatePrivateKeyCredential: vi.fn(),
   getCredentialPublicKey: vi.fn(),
   getVaultStatus: vi.fn(),
   importPrivateKeyCredential: vi.fn(),
@@ -30,6 +31,7 @@ beforeEach(() => {
   ]);
   mocks.createPasswordCredential.mockResolvedValue({ id: "password-2", name: "新密码", kind: "password", detail: null });
   mocks.deleteCredential.mockResolvedValue(undefined);
+  mocks.generatePrivateKeyCredential.mockResolvedValue({ id: "generated-key", name: "新生成私钥", kind: "privateKey", detail: "ecdsa-p256" });
   mocks.getCredentialPublicKey.mockResolvedValue("ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITestKey deploy@example");
   mocks.revealCredentialPassword.mockResolvedValue("server-secret");
   mocks.writeClipboardText.mockResolvedValue(undefined);
@@ -112,7 +114,7 @@ describe("CredentialDialog", () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
-  it("creates password credentials and imports private keys through separate flows", async () => {
+  it("creates password credentials and opens equal private key import and generation choices", async () => {
     const user = userEvent.setup();
     render(<CredentialDialog onClose={vi.fn()}/>);
     await screen.findByText("生产密码");
@@ -123,10 +125,47 @@ describe("CredentialDialog", () => {
     await waitFor(() => expect(mocks.createPasswordCredential).toHaveBeenCalledWith("新密码", "server-secret"));
 
     await user.click(screen.getByRole("button", { name: "导入私钥" }));
-    await user.type(screen.getByLabelText("凭证名称"), "新私钥");
-    await user.type(screen.getByLabelText("私钥口令（可选）"), "key-secret");
-    await user.click(screen.getByRole("button", { name: "选择并导入" }));
+    expect(screen.queryByRole("button", { name: "选择并导入" })).not.toBeInTheDocument();
+    const localChoice = screen.getByRole("button", { name: /从本地文件导入/ });
+    const generateChoice = screen.getByRole("button", { name: /生成新私钥/ });
+    expect(localChoice).toHaveClass("credential-private-key-choice");
+    expect(generateChoice).toHaveClass("credential-private-key-choice");
+    expect(localChoice.compareDocumentPosition(generateChoice) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    await user.click(localChoice);
+    const importDialog = screen.getByRole("dialog", { name: "从本地文件导入" });
+    await user.type(within(importDialog).getByLabelText("凭证名称"), "新私钥");
+    await user.type(within(importDialog).getByLabelText("私钥口令（可选）"), "key-secret");
+    await user.click(within(importDialog).getByRole("button", { name: "选择文件并导入" }));
     await waitFor(() => expect(mocks.importPrivateKeyCredential).toHaveBeenCalledWith("新私钥", "key-secret"));
+  });
+
+  it("generates an ECDSA P-256 credential in Rust and selects the saved result", async () => {
+    const user = userEvent.setup();
+    mocks.listCredentials
+      .mockResolvedValueOnce([
+        { id: "password-1", name: "生产密码", kind: "password", detail: null },
+        { id: "key-1", name: "部署私钥", kind: "privateKey", detail: "ed25519" },
+      ])
+      .mockResolvedValueOnce([
+        { id: "password-1", name: "生产密码", kind: "password", detail: null },
+        { id: "key-1", name: "部署私钥", kind: "privateKey", detail: "ed25519" },
+        { id: "generated-key", name: "新生成私钥", kind: "privateKey", detail: "ecdsa-p256" },
+      ]);
+    render(<CredentialDialog onClose={vi.fn()}/>);
+    await user.click(await screen.findByRole("button", { name: "导入私钥" }));
+    await user.click(screen.getByRole("button", { name: /生成新私钥/ }));
+
+    const generateDialog = screen.getByRole("dialog", { name: "生成新私钥" });
+    expect(within(generateDialog).getByLabelText("密钥类型")).toHaveValue("ed25519");
+    await user.type(within(generateDialog).getByLabelText("凭证名称"), "新生成私钥");
+    await user.selectOptions(within(generateDialog).getByLabelText("密钥类型"), "ecdsaP256");
+    await user.type(within(generateDialog).getByLabelText("公钥注释（可选）"), "deploy@example");
+    await user.click(within(generateDialog).getByRole("button", { name: "生成并保存" }));
+
+    await waitFor(() => expect(mocks.generatePrivateKeyCredential).toHaveBeenCalledWith("新生成私钥", "ecdsaP256", "deploy@example"));
+    expect(await screen.findByText("ecdsa-p256")).toBeInTheDocument();
+    await waitFor(() => expect(mocks.getCredentialPublicKey).toHaveBeenCalledWith("generated-key"));
   });
 
   it("requires confirmation before deleting and preserves the connection contract", async () => {
@@ -189,5 +228,48 @@ describe("CredentialDialog", () => {
     act(() => { if (typeof dismiss === "function") dismiss(); });
     expect(screen.queryByText("公钥已复制")).not.toBeInTheDocument();
     timeoutSpy.mockRestore();
+  });
+
+  it("refreshes the selected private key public key before copying and disables both actions while busy", async () => {
+    const user = userEvent.setup();
+    render(<CredentialDialog onClose={vi.fn()}/>);
+    await user.click(await screen.findByRole("button", { name: /部署私钥私钥/ }));
+    await waitFor(() => expect(mocks.getCredentialPublicKey).toHaveBeenCalledOnce());
+
+    const refreshButton = screen.getByRole("button", { name: "重新生成公钥" });
+    const copyButton = screen.getByRole("button", { name: "复制公钥" });
+    expect(refreshButton.compareDocumentPosition(copyButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    let resolveRefresh!: (value: string) => void;
+    mocks.getCredentialPublicKey.mockImplementationOnce(() => new Promise<string>((resolve) => { resolveRefresh = resolve; }));
+    await user.click(refreshButton);
+
+    expect(mocks.getCredentialPublicKey).toHaveBeenCalledTimes(2);
+    expect(mocks.getCredentialPublicKey).toHaveBeenLastCalledWith("key-1");
+    expect(refreshButton).toBeDisabled();
+    expect(copyButton).toBeDisabled();
+    expect(screen.getByLabelText("OpenSSH 公钥")).toHaveAttribute("aria-busy", "true");
+    expect(screen.getByLabelText("OpenSSH 公钥")).toHaveValue("正在生成公钥…");
+
+    resolveRefresh("ssh-ed25519 AAAARefreshedKey deploy@example");
+    await waitFor(() => expect(screen.getByLabelText("OpenSSH 公钥")).toHaveValue("ssh-ed25519 AAAARefreshedKey deploy@example"));
+    expect(refreshButton).toBeEnabled();
+    expect(copyButton).toBeEnabled();
+  });
+
+  it("restores the public key refresh action after a derivation failure", async () => {
+    const user = userEvent.setup();
+    render(<CredentialDialog onClose={vi.fn()}/>);
+    await user.click(await screen.findByRole("button", { name: /部署私钥私钥/ }));
+    await waitFor(() => expect(mocks.getCredentialPublicKey).toHaveBeenCalledOnce());
+
+    mocks.getCredentialPublicKey.mockRejectedValueOnce({ message: "无法解析私钥" });
+    const refreshButton = screen.getByRole("button", { name: "重新生成公钥" });
+    await user.click(refreshButton);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("无法解析私钥");
+    expect(refreshButton).toBeEnabled();
+    expect(screen.getByRole("button", { name: "复制公钥" })).toBeDisabled();
+    expect(screen.getByLabelText("OpenSSH 公钥")).toHaveValue("暂时无法生成公钥，请点击刷新按钮重试。");
   });
 });

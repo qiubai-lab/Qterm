@@ -69,8 +69,10 @@ fn error_code(code: ApplicationErrorCode) -> &'static str {
         ApplicationErrorCode::InvalidProfileHost => "invalidProfileHost",
         ApplicationErrorCode::InvalidProfilePort => "invalidProfilePort",
         ApplicationErrorCode::InvalidProfileUsername => "invalidProfileUsername",
+        ApplicationErrorCode::InvalidProfileJump => "invalidProfileJump",
         ApplicationErrorCode::ProfileAlreadyExists => "profileAlreadyExists",
         ApplicationErrorCode::ProfileNotFound => "profileNotFound",
+        ApplicationErrorCode::ProfileReferencedAsJump => "profileReferencedAsJump",
         ApplicationErrorCode::ProfileGroupAlreadyExists => "profileGroupAlreadyExists",
         ApplicationErrorCode::ProfileGroupNotFound => "profileGroupNotFound",
         ApplicationErrorCode::ProfileStorageCorrupt => "profileStorageCorrupt",
@@ -80,6 +82,7 @@ fn error_code(code: ApplicationErrorCode) -> &'static str {
         ApplicationErrorCode::ProfileStorageContainsSensitiveData => {
             "profileStorageContainsSensitiveData"
         }
+        ApplicationErrorCode::ProfileStorageClearRejected => "profileStorageClearRejected",
         ApplicationErrorCode::ProfileStorageUnavailable => "profileStorageUnavailable",
         ApplicationErrorCode::SshConfigNotFound => "sshConfigNotFound",
         ApplicationErrorCode::SshConfigUnreadable => "sshConfigUnreadable",
@@ -107,6 +110,7 @@ fn error_code(code: ApplicationErrorCode) -> &'static str {
         ApplicationErrorCode::InvalidKeyPassphrase => "invalidKeyPassphrase",
         ApplicationErrorCode::UnsupportedPrivateKey => "unsupportedPrivateKey",
         ApplicationErrorCode::CorruptPrivateKey => "corruptPrivateKey",
+        ApplicationErrorCode::PrivateKeyGenerationFailed => "privateKeyGenerationFailed",
         ApplicationErrorCode::SshAgentUnavailable => "sshAgentUnavailable",
         ApplicationErrorCode::SshAgentEmpty => "sshAgentEmpty",
         ApplicationErrorCode::SshAgentRejected => "sshAgentRejected",

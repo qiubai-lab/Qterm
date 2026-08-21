@@ -163,32 +163,18 @@ pub fn network_rule_delete(id: String, state: State<'_, NetworkState>) -> Result
 #[tauri::command]
 pub fn network_session_connect(
     input: SessionConnectDto,
-    profile_id: String,
     on_event: Channel<SessionEventDto>,
     session_state: State<'_, SessionState>,
     credential_state: State<'_, CredentialState>,
     profile_state: State<'_, ProfileState>,
 ) -> Result<String, IpcError> {
-    let profile = profile_state.profile(&profile_id)?;
-    let mut request = build_connect_request(
+    let request = build_connect_request(
         input,
         &credential_state,
+        &profile_state,
         SessionPurpose::Network,
         Arc::new(|_| {}),
     )?;
-    if request.endpoint.host() != profile.host()
-        || request.endpoint.port() != profile.port()
-        || request.username != profile.username()
-    {
-        return Err(IpcError::from(
-            crate::application::error::ApplicationError::new(
-                crate::application::error::ApplicationErrorCode::InvalidSessionTarget,
-                "网络会话目标与连接配置不一致",
-                false,
-            ),
-        ));
-    }
-    request.profile_id = Some(profile_id);
     let events = Arc::new(move |event| {
         let _ = on_event.send(SessionEventDto::from(event));
     });

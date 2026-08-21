@@ -22,8 +22,9 @@ use crate::{
         files::{DirectoryListing, FileDocument, FileEntry, content_revision},
         network::ForwardRuleKind,
         session::{
-            HostEndpoint, HostKeyCheck, PresentedHostKey, SessionEvent, SessionFailure,
-            SessionState, SessionStateMachine, TerminalSize,
+            HostEndpoint, HostKeyCheck, PresentedHostKey, RouteNodeMetadata, RouteNodeRole,
+            RouteStage, SessionEvent, SessionFailure, SessionState, SessionStateMachine,
+            TerminalSize,
         },
         transfer::{RemotePath, TransferEvent},
     },
@@ -48,12 +49,35 @@ const MAX_DIRECTORY_DOWNLOAD_ENTRIES: usize = 100_000;
 const MAX_DIRECTORY_DOWNLOAD_DEPTH: usize = 128;
 
 pub struct SessionConnectRequest {
-    pub endpoint: HostEndpoint,
-    pub username: String,
-    pub auth: AuthRequest,
+    pub route: Vec<SessionRouteNode>,
     pub purpose: SessionPurpose,
     pub profile_id: Option<String>,
     pub terminal_output: Arc<dyn Fn(Vec<u8>) + Send + Sync>,
+}
+
+pub struct SessionRouteNode {
+    pub profile_id: String,
+    pub name: String,
+    pub endpoint: HostEndpoint,
+    pub username: String,
+    pub auth: AuthRequest,
+}
+
+impl SessionRouteNode {
+    fn metadata(&self, index: usize, total: usize) -> RouteNodeMetadata {
+        RouteNodeMetadata {
+            profile_id: self.profile_id.clone(),
+            name: self.name.clone(),
+            endpoint: self.endpoint.clone(),
+            index,
+            total,
+            role: if index + 1 == total {
+                RouteNodeRole::Target
+            } else {
+                RouteNodeRole::Jump
+            },
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -86,8 +110,13 @@ impl SshSessionManager {
         let id = Uuid::new_v4().to_string();
         let (cancel_sender, cancel_receiver) = oneshot::channel();
         let (control_sender, control_receiver) = mpsc::channel(128);
+        let route_length = request.route.len();
         let entry = Arc::new(SessionEntry::new(
-            request.endpoint.clone(),
+            request
+                .route
+                .last()
+                .map(|node| node.metadata(route_length - 1, route_length))
+                .expect("validated session route"),
             request.purpose,
             request.profile_id.clone(),
             events,
@@ -117,10 +146,14 @@ impl SshSessionManager {
             .ok_or(SessionControlError::NoHostKeyDecision)?;
         if self
             .host_keys
-            .accept(&entry.endpoint, &pending.key)
+            .accept(&pending.endpoint, &pending.key)
             .is_err()
         {
-            entry.fail(SessionFailure::KnownHostsUnavailable);
+            entry.fail_at(
+                SessionFailure::KnownHostsUnavailable,
+                pending.node,
+                RouteStage::VerifyHostKey,
+            );
             let _ = pending.decision.send(HostKeyDecision::Cancel);
             return Err(SessionControlError::KnownHostsUnavailable);
         }
@@ -171,6 +204,21 @@ impl SshSessionManager {
                 entry.purpose == SessionPurpose::Network
                     && entry.profile_id.as_deref() == Some(profile_id)
             })
+            .cloned()
+            .collect::<Vec<_>>();
+        for entry in &entries {
+            entry.begin_close();
+        }
+        entries.len()
+    }
+
+    pub fn close_all_network_sessions(&self) -> usize {
+        let entries = self
+            .sessions
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .values()
+            .filter(|entry| entry.purpose == SessionPurpose::Network)
             .cloned()
             .collect::<Vec<_>>();
         for entry in &entries {
@@ -495,7 +543,7 @@ pub enum TransferRequest {
 }
 
 struct SessionEntry {
-    endpoint: HostEndpoint,
+    target: RouteNodeMetadata,
     purpose: SessionPurpose,
     profile_id: Option<String>,
     state: Mutex<SessionStateMachine>,
@@ -508,7 +556,7 @@ struct SessionEntry {
 
 impl SessionEntry {
     fn new(
-        endpoint: HostEndpoint,
+        target: RouteNodeMetadata,
         purpose: SessionPurpose,
         profile_id: Option<String>,
         events: EventSink,
@@ -516,7 +564,7 @@ impl SessionEntry {
         control: mpsc::Sender<SessionControl>,
     ) -> Self {
         Self {
-            endpoint,
+            target,
             purpose,
             profile_id,
             state: Mutex::new(SessionStateMachine::new()),
@@ -554,8 +602,16 @@ impl SessionEntry {
     }
 
     fn fail(&self, failure: SessionFailure) {
+        self.fail_at(failure, self.target.clone(), RouteStage::StartSession);
+    }
+
+    fn fail_at(&self, failure: SessionFailure, node: RouteNodeMetadata, stage: RouteStage) {
         if self.transition(SessionState::Failed) {
-            self.emit(SessionEvent::Failed(failure));
+            self.emit(SessionEvent::Failed {
+                failure,
+                node: Some(node),
+                stage: Some(stage),
+            });
         }
     }
 
@@ -625,6 +681,8 @@ impl SessionEntry {
 }
 
 struct PendingHostKey {
+    endpoint: HostEndpoint,
+    node: RouteNodeMetadata,
     key: PresentedHostKey,
     decision: oneshot::Sender<HostKeyDecision>,
 }
@@ -696,10 +754,12 @@ enum RemoteMutation {
 
 struct ClientHandler {
     entry: Arc<SessionEntry>,
+    node: RouteNodeMetadata,
     host_keys: Arc<KnownHostService>,
     remote_forwards: RemoteForwardMap,
     forward_tasks: ForwardTaskRegistry,
     forward_permits: ForwardPermits,
+    allow_remote_forwards: bool,
 }
 
 impl Handler for ClientHandler {
@@ -711,45 +771,67 @@ impl Handler for ClientHandler {
             public_key.to_openssh().map_err(russh::Error::from)?,
             public_key.fingerprint(HashAlg::Sha256).to_string(),
         );
-        match self.host_keys.check(&self.entry.endpoint, &presented) {
+        match self.host_keys.check(&self.node.endpoint, &presented) {
             Ok(HostKeyCheck::Trusted) => Ok(true),
             Ok(HostKeyCheck::Changed {
                 trusted_fingerprint,
             }) => {
                 self.entry.emit(SessionEvent::HostKeyChanged {
+                    node: self.node.clone(),
                     trusted_fingerprint,
                     presented_fingerprint: presented.fingerprint().to_owned(),
                 });
-                self.entry.fail(SessionFailure::HostKeyChanged);
+                self.entry.fail_at(
+                    SessionFailure::HostKeyChanged,
+                    self.node.clone(),
+                    RouteStage::VerifyHostKey,
+                );
                 Ok(false)
             }
             Ok(HostKeyCheck::Unknown) => {
                 self.entry.transition(SessionState::AwaitingHostKey);
-                self.entry.emit(SessionEvent::HostKeyConfirmationRequired {
-                    algorithm: presented.algorithm().to_owned(),
-                    fingerprint: presented.fingerprint().to_owned(),
-                });
+                let algorithm = presented.algorithm().to_owned();
+                let fingerprint = presented.fingerprint().to_owned();
                 let (sender, receiver) = oneshot::channel();
                 self.entry.set_pending(PendingHostKey {
+                    endpoint: self.node.endpoint.clone(),
+                    node: self.node.clone(),
                     key: presented,
                     decision: sender,
+                });
+                self.entry.emit(SessionEvent::HostKeyConfirmationRequired {
+                    node: self.node.clone(),
+                    algorithm,
+                    fingerprint,
                 });
                 match tokio::time::timeout(HOST_KEY_DECISION_TIMEOUT, receiver).await {
                     Ok(Ok(HostKeyDecision::Accept)) => Ok(true),
                     Ok(Ok(HostKeyDecision::Reject)) => {
-                        self.entry.fail(SessionFailure::HostKeyRejected);
+                        self.entry.fail_at(
+                            SessionFailure::HostKeyRejected,
+                            self.node.clone(),
+                            RouteStage::VerifyHostKey,
+                        );
                         Ok(false)
                     }
                     Ok(Ok(HostKeyDecision::Cancel)) => Ok(false),
                     _ => {
                         self.entry.take_pending();
-                        self.entry.fail(SessionFailure::HostKeyDecisionTimeout);
+                        self.entry.fail_at(
+                            SessionFailure::HostKeyDecisionTimeout,
+                            self.node.clone(),
+                            RouteStage::VerifyHostKey,
+                        );
                         Ok(false)
                     }
                 }
             }
             Err(_) => {
-                self.entry.fail(SessionFailure::KnownHostsUnavailable);
+                self.entry.fail_at(
+                    SessionFailure::KnownHostsUnavailable,
+                    self.node.clone(),
+                    RouteStage::VerifyHostKey,
+                );
                 Ok(false)
             }
         }
@@ -765,8 +847,9 @@ impl Handler for ClientHandler {
         reply: ChannelOpenHandle,
         _session: &mut client::Session,
     ) -> Result<(), Self::Error> {
-        if let Some((rule_id, target_host, target_port)) =
-            remote_target(&self.remote_forwards, connected_address, connected_port)
+        if self.allow_remote_forwards
+            && let Some((rule_id, target_host, target_port)) =
+                remote_target(&self.remote_forwards, connected_address, connected_port)
         {
             let Ok(permit) = Arc::clone(&self.forward_permits).try_acquire_owned() else {
                 reply.reject(ChannelOpenFailure::ResourceShortage).await;
@@ -786,10 +869,200 @@ impl Handler for ClientHandler {
     }
 }
 
+async fn connect_route(
+    entry: Arc<SessionEntry>,
+    host_keys: Arc<KnownHostService>,
+    config: Arc<Config>,
+    network_runtime: &NetworkForwardRuntime,
+    route: Vec<SessionRouteNode>,
+    cancel: &mut oneshot::Receiver<()>,
+) -> Option<(
+    client::Handle<ClientHandler>,
+    Vec<client::Handle<ClientHandler>>,
+)> {
+    let total = route.len();
+    let mut handles: Vec<client::Handle<ClientHandler>> = Vec::with_capacity(total);
+    let mut metadata: Vec<RouteNodeMetadata> = Vec::with_capacity(total);
+
+    for (index, node) in route.into_iter().enumerate() {
+        let node_metadata = node.metadata(index, total);
+        if index > 0 {
+            let previous = metadata[index - 1].clone();
+            entry.emit(SessionEvent::RouteProgress {
+                node: previous.clone(),
+                stage: RouteStage::OpenTunnel,
+            });
+            let tunnel = handles[index - 1].channel_open_direct_tcpip(
+                node.endpoint.host().to_owned(),
+                u32::from(node.endpoint.port()),
+                "127.0.0.1",
+                0,
+            );
+            let channel = tokio::select! {
+                result = tunnel => match result {
+                    Ok(channel) => channel,
+                    Err(_) => {
+                        if entry.state() != SessionState::Failed {
+                            entry.fail_at(
+                                SessionFailure::TunnelOpenFailed,
+                                previous,
+                                RouteStage::OpenTunnel,
+                            );
+                        }
+                        disconnect_handles(&mut handles).await;
+                        return None;
+                    }
+                },
+                _ = &mut *cancel => {
+                    disconnect_handles(&mut handles).await;
+                    entry.transition(SessionState::Closed);
+                    return None;
+                }
+            };
+            entry.emit(SessionEvent::RouteProgress {
+                node: node_metadata.clone(),
+                stage: RouteStage::Connect,
+            });
+            let handler = route_handler(
+                Arc::clone(&entry),
+                Arc::clone(&host_keys),
+                network_runtime,
+                node_metadata.clone(),
+            );
+            let connection = tokio::time::timeout(
+                CONNECT_TIMEOUT,
+                client::connect_stream(Arc::clone(&config), channel.into_stream(), handler),
+            );
+            let handle = tokio::select! {
+                result = connection => match result {
+                    Ok(Ok(handle)) => handle,
+                    _ => {
+                        if entry.state() != SessionState::Failed {
+                            entry.fail_at(
+                                SessionFailure::ConnectionFailed,
+                                node_metadata.clone(),
+                                RouteStage::Connect,
+                            );
+                        }
+                        disconnect_handles(&mut handles).await;
+                        return None;
+                    }
+                },
+                _ = &mut *cancel => {
+                    disconnect_handles(&mut handles).await;
+                    entry.transition(SessionState::Closed);
+                    return None;
+                }
+            };
+            handles.push(handle);
+        } else {
+            entry.emit(SessionEvent::RouteProgress {
+                node: node_metadata.clone(),
+                stage: RouteStage::Connect,
+            });
+            let handler = route_handler(
+                Arc::clone(&entry),
+                Arc::clone(&host_keys),
+                network_runtime,
+                node_metadata.clone(),
+            );
+            let address = (node.endpoint.host().to_owned(), node.endpoint.port());
+            let connection = tokio::time::timeout(
+                CONNECT_TIMEOUT,
+                client::connect(Arc::clone(&config), address, handler),
+            );
+            let handle = tokio::select! {
+                result = connection => match result {
+                    Ok(Ok(handle)) => handle,
+                    _ => {
+                        if entry.state() != SessionState::Failed {
+                            entry.fail_at(
+                                SessionFailure::ConnectionFailed,
+                                node_metadata.clone(),
+                                RouteStage::Connect,
+                            );
+                        }
+                        return None;
+                    }
+                },
+                _ = &mut *cancel => {
+                    entry.transition(SessionState::Closed);
+                    return None;
+                }
+            };
+            handles.push(handle);
+        }
+
+        if !entry.transition(SessionState::Authenticating) {
+            disconnect_handles(&mut handles).await;
+            return None;
+        }
+        entry.emit(SessionEvent::RouteProgress {
+            node: node_metadata.clone(),
+            stage: RouteStage::Authenticate,
+        });
+        let authentication = authenticate(
+            handles.last_mut().expect("connected route handle"),
+            node.username,
+            node.auth,
+        );
+        tokio::select! {
+            result = authentication => if let Err(error) = result {
+                entry.fail_at(
+                    SessionFailure::Authentication(error),
+                    node_metadata.clone(),
+                    RouteStage::Authenticate,
+                );
+                disconnect_handles(&mut handles).await;
+                return None;
+            },
+            _ = &mut *cancel => {
+                disconnect_handles(&mut handles).await;
+                entry.transition(SessionState::Closed);
+                return None;
+            }
+        }
+        metadata.push(node_metadata);
+        if index + 1 < total && !entry.transition(SessionState::Connecting) {
+            disconnect_handles(&mut handles).await;
+            return None;
+        }
+    }
+
+    let handle = handles.pop().expect("validated session route is not empty");
+    Some((handle, handles))
+}
+
+fn route_handler(
+    entry: Arc<SessionEntry>,
+    host_keys: Arc<KnownHostService>,
+    network_runtime: &NetworkForwardRuntime,
+    node: RouteNodeMetadata,
+) -> ClientHandler {
+    let allow_remote_forwards = node.role == RouteNodeRole::Target;
+    ClientHandler {
+        entry,
+        node,
+        host_keys,
+        remote_forwards: Arc::clone(&network_runtime.remote_forwards),
+        forward_tasks: Arc::clone(&network_runtime.forward_tasks),
+        forward_permits: Arc::clone(&network_runtime.forward_permits),
+        allow_remote_forwards,
+    }
+}
+
+async fn disconnect_handles(handles: &mut Vec<client::Handle<ClientHandler>>) {
+    while let Some(handle) = handles.pop() {
+        let _ = handle
+            .disconnect(Disconnect::ByApplication, "route closed", "en")
+            .await;
+    }
+}
+
 async fn run_session(
     entry: Arc<SessionEntry>,
     host_keys: Arc<KnownHostService>,
-    request: SessionConnectRequest,
+    mut request: SessionConnectRequest,
     mut cancel: oneshot::Receiver<()>,
     mut controls: mpsc::Receiver<SessionControl>,
 ) {
@@ -811,58 +1084,19 @@ async fn run_session(
         nodelay: true,
         ..Config::default()
     });
-    let address = (request.endpoint.host().to_owned(), request.endpoint.port());
-    let handler = ClientHandler {
-        entry: Arc::clone(&entry),
+    let Some((mut handle, upstream_handles)) = connect_route(
+        Arc::clone(&entry),
         host_keys,
-        remote_forwards: Arc::clone(&network_runtime.remote_forwards),
-        forward_tasks: Arc::clone(&network_runtime.forward_tasks),
-        forward_permits: Arc::clone(&network_runtime.forward_permits),
-    };
-    let connection =
-        tokio::time::timeout(CONNECT_TIMEOUT, client::connect(config, address, handler));
-    let mut handle = tokio::select! {
-        result = connection => match result {
-            Ok(Ok(handle)) => handle,
-            _ => {
-                if entry.state() == SessionState::Closing {
-                    entry.transition(SessionState::Closed);
-                } else if entry.state() != SessionState::Failed {
-                    entry.fail(SessionFailure::ConnectionFailed);
-                }
-                return;
-            }
-        },
-        _ = &mut cancel => {
-            entry.transition(SessionState::Closed);
-            return;
-        }
-    };
-
-    if !entry.transition(SessionState::Authenticating) {
+        config,
+        &network_runtime,
+        std::mem::take(&mut request.route),
+        &mut cancel,
+    )
+    .await
+    else {
         return;
-    }
-    let authentication = authenticate(&mut handle, request.username, request.auth);
-    tokio::select! {
-        result = authentication => match result {
-            Ok(_) => {}
-            Err(error) => {
-                entry.fail(SessionFailure::Authentication(error));
-                return;
-            }
-        },
-        _ = &mut cancel => {
-            entry.transition(SessionState::Closing);
-        }
-    }
-
-    if entry.state() != SessionState::Authenticating {
-        let _ = handle
-            .disconnect(Disconnect::ByApplication, "session closed", "en")
-            .await;
-        entry.transition(SessionState::Closed);
-        return;
-    }
+    };
+    let mut upstream_handles = upstream_handles;
 
     if request.purpose == SessionPurpose::Files {
         entry.transition(SessionState::Connected);
@@ -943,6 +1177,7 @@ async fn run_session(
         let _ = handle
             .disconnect(Disconnect::ByApplication, "file session closed", "en")
             .await;
+        disconnect_handles(&mut upstream_handles).await;
         entry.transition(SessionState::Closed);
         return;
     }
@@ -956,6 +1191,7 @@ async fn run_session(
             network_runtime,
         )
         .await;
+        disconnect_handles(&mut upstream_handles).await;
         return;
     }
 
@@ -963,6 +1199,10 @@ async fn run_session(
         Ok(channel) => channel,
         Err(_) => {
             entry.fail(SessionFailure::ConnectionFailed);
+            let _ = handle
+                .disconnect(Disconnect::ByApplication, "session failed", "en")
+                .await;
+            disconnect_handles(&mut upstream_handles).await;
             return;
         }
     };
@@ -973,6 +1213,10 @@ async fn run_session(
         || terminal.request_shell(false).await.is_err()
     {
         entry.fail(SessionFailure::ConnectionFailed);
+        let _ = handle
+            .disconnect(Disconnect::ByApplication, "session failed", "en")
+            .await;
+        disconnect_handles(&mut upstream_handles).await;
         return;
     }
     let (mut terminal_read, terminal_write) = terminal.split();
@@ -1077,6 +1321,7 @@ async fn run_session(
     let _ = handle
         .disconnect(Disconnect::ByApplication, "session closed", "en")
         .await;
+    disconnect_handles(&mut upstream_handles).await;
     entry.transition(SessionState::Closed);
 }
 
@@ -2136,6 +2381,7 @@ mod tests {
         fs,
         io::{Read, Write},
         net::{TcpListener, TcpStream},
+        path::Path,
         process::{Child, Command, Stdio},
         sync::{Arc, Mutex},
         thread,
@@ -2147,17 +2393,53 @@ mod tests {
 
     use super::{
         HostKeyDecision, PendingHostKey, SessionConnectRequest, SessionEntry, SessionPurpose,
-        SshSessionManager, TransferRequest, scan_local_upload_entries,
+        SessionRouteNode, SshSessionManager, TransferRequest, scan_local_upload_entries,
     };
     use crate::{
         domain::{
             auth::{AuthRequest, SecretText},
             network::ForwardRuleKind,
-            session::{HostEndpoint, PresentedHostKey, SessionEvent, SessionFailure, SessionState},
+            session::{
+                HostEndpoint, PresentedHostKey, RouteNodeMetadata, RouteNodeRole, SessionEvent,
+                SessionFailure, SessionState,
+            },
             transfer::{RemotePath, TransferEvent},
         },
         infrastructure::persistence::json_known_host_repository::JsonKnownHostRepository,
     };
+
+    fn route_metadata(host: &str, port: u16) -> RouteNodeMetadata {
+        RouteNodeMetadata {
+            profile_id: "profile-1".into(),
+            name: "Test profile".into(),
+            endpoint: HostEndpoint::new(host, u32::from(port)).expect("endpoint"),
+            index: 0,
+            total: 1,
+            role: RouteNodeRole::Target,
+        }
+    }
+
+    fn connect_request(
+        endpoint: HostEndpoint,
+        username: String,
+        auth: AuthRequest,
+        purpose: SessionPurpose,
+        profile_id: Option<String>,
+        terminal_output: Arc<dyn Fn(Vec<u8>) + Send + Sync>,
+    ) -> SessionConnectRequest {
+        SessionConnectRequest {
+            route: vec![SessionRouteNode {
+                profile_id: profile_id.clone().unwrap_or_else(|| "profile-1".into()),
+                name: "Test profile".into(),
+                endpoint,
+                username,
+                auth,
+            }],
+            purpose,
+            profile_id,
+            terminal_output,
+        }
+    }
 
     #[test]
     fn unknown_session_controls_are_rejected() {
@@ -2178,7 +2460,7 @@ mod tests {
         let (cancel_sender, _cancel_receiver) = oneshot::channel();
         let (control_sender, _control_receiver) = mpsc::channel(1);
         let entry = SessionEntry::new(
-            HostEndpoint::new("example.com", 22).expect("endpoint"),
+            route_metadata("example.com", 22),
             SessionPurpose::Terminal,
             None,
             Arc::new(|_| {}),
@@ -2188,6 +2470,8 @@ mod tests {
         entry.transition(SessionState::AwaitingHostKey);
         let (decision_sender, mut decision_receiver) = oneshot::channel();
         entry.set_pending(PendingHostKey {
+            endpoint: HostEndpoint::new("example.com", 22).expect("endpoint"),
+            node: route_metadata("example.com", 22),
             key: PresentedHostKey::new("ssh-ed25519".into(), "key".into(), "SHA256:x".into()),
             decision: decision_sender,
         });
@@ -2212,7 +2496,7 @@ mod tests {
             let (control_sender, control_receiver) = mpsc::channel(1);
             (
                 Arc::new(SessionEntry::new(
-                    HostEndpoint::new("example.com", 22).expect("endpoint"),
+                    route_metadata("example.com", 22),
                     purpose,
                     profile_id.map(str::to_owned),
                     Arc::new(|_| {}),
@@ -2257,7 +2541,7 @@ mod tests {
         let (cancel_sender, _cancel_receiver) = oneshot::channel();
         let (control_sender, _control_receiver) = mpsc::channel(1);
         let entry = Arc::new(SessionEntry::new(
-            HostEndpoint::new("example.com", 22).expect("endpoint"),
+            route_metadata("example.com", 22),
             SessionPurpose::Files,
             None,
             Arc::new(|_| {}),
@@ -2292,7 +2576,7 @@ mod tests {
         let (cancel_sender, _cancel_receiver) = oneshot::channel();
         let (control_sender, _control_receiver) = mpsc::channel(1);
         let entry = Arc::new(SessionEntry::new(
-            HostEndpoint::new("example.com", 22).expect("endpoint"),
+            route_metadata("example.com", 22),
             SessionPurpose::Network,
             Some("profile-1".into()),
             Arc::new(|_| {}),
@@ -2331,14 +2615,14 @@ mod tests {
         let events = Arc::new(Mutex::new(Vec::new()));
         let event_sink = Arc::clone(&events);
         let id = manager.connect(
-            super::SessionConnectRequest {
-                endpoint: HostEndpoint::new("127.0.0.1", port.into()).expect("endpoint"),
-                username: "test".into(),
-                auth: AuthRequest::Password(SecretText::new("temporary".into())),
-                purpose: SessionPurpose::Terminal,
-                profile_id: None,
-                terminal_output: Arc::new(|_| {}),
-            },
+            connect_request(
+                HostEndpoint::new("127.0.0.1", port.into()).expect("endpoint"),
+                "test".into(),
+                AuthRequest::Password(SecretText::new("temporary".into())),
+                SessionPurpose::Terminal,
+                None,
+                Arc::new(|_| {}),
+            ),
             Arc::new(move |event| {
                 event_sink
                     .lock()
@@ -2357,7 +2641,10 @@ mod tests {
                 .any(|event| {
                     matches!(
                         event,
-                        SessionEvent::Failed(SessionFailure::ConnectionFailed)
+                        SessionEvent::Failed {
+                            failure: SessionFailure::ConnectionFailed,
+                            ..
+                        }
                     )
                 })
             {
@@ -2373,7 +2660,10 @@ mod tests {
                 .iter()
                 .any(|event| matches!(
                     event,
-                    SessionEvent::Failed(SessionFailure::ConnectionFailed)
+                    SessionEvent::Failed {
+                        failure: SessionFailure::ConnectionFailed,
+                        ..
+                    }
                 ))
         );
         assert!(manager.close(&id).is_ok());
@@ -2402,6 +2692,127 @@ mod tests {
         assert!(plan.directories.iter().any(|path| path == "bundle/nested"));
         assert_eq!(plan.files.len(), 2);
         assert_eq!(plan.total, 8);
+    }
+
+    #[test]
+    #[ignore = "requires local OpenSSH sshd executable with TCP forwarding enabled"]
+    fn local_openssh_connects_to_a_target_through_a_jump_profile() {
+        let directory = tempdir().expect("temporary integration directory");
+        let jump_port = reserve_loopback_port();
+        let target_port = reserve_loopback_port();
+        let client_key = directory.path().join("route-client-key");
+        let jump_host_key = directory.path().join("jump-host-key");
+        let target_host_key = directory.path().join("target-host-key");
+        generate_ed25519_key(&client_key);
+        generate_ed25519_key(&jump_host_key);
+        generate_ed25519_key(&target_host_key);
+        let authorized_keys = directory.path().join("route-authorized-keys");
+        fs::copy(client_key.with_extension("pub"), &authorized_keys).expect("authorized key");
+
+        let sshd_config = |name: &str, port: u16, host_key: &Path, forwarding: bool| {
+            let path = directory.path().join(format!("{name}-sshd_config"));
+            fs::write(
+                &path,
+                format!(
+                    "Port {port}\nListenAddress 127.0.0.1\nHostKey {}\nPidFile {}\nAuthorizedKeysFile {}\nStrictModes no\nPasswordAuthentication no\nKbdInteractiveAuthentication no\nPubkeyAuthentication yes\nUsePAM no\nAllowTcpForwarding {}\nLogLevel ERROR\n",
+                    host_key.display(),
+                    directory.path().join(format!("{name}.pid")).display(),
+                    authorized_keys.display(),
+                    if forwarding { "yes" } else { "no" },
+                ),
+            )
+            .expect("sshd config");
+            path
+        };
+        let jump_config = sshd_config("jump", jump_port, &jump_host_key, true);
+        let target_config = sshd_config("target", target_port, &target_host_key, false);
+        let start = |config: &Path| {
+            Command::new("/usr/sbin/sshd")
+                .args(["-D", "-e", "-f"])
+                .arg(config)
+                .stdout(Stdio::null())
+                .stderr(Stdio::piped())
+                .spawn()
+                .expect("start local sshd")
+        };
+        let mut jump_server = SshdGuard(start(&jump_config));
+        let mut target_server = SshdGuard(start(&target_config));
+        wait_for_sshd(&mut jump_server.0, jump_port);
+        wait_for_sshd(&mut target_server.0, target_port);
+
+        let manager = Arc::new(SshSessionManager::new(JsonKnownHostRepository::new(
+            directory.path().join("route-known-hosts.json"),
+        )));
+        let username = std::env::var("USER").expect("current username");
+        let (event_sender, event_receiver) = std::sync::mpsc::channel();
+        let (terminal_sender, terminal_receiver) = std::sync::mpsc::channel();
+        let session_id = manager.connect(
+            SessionConnectRequest {
+                route: vec![
+                    SessionRouteNode {
+                        profile_id: "jump-profile".into(),
+                        name: "Gateway".into(),
+                        endpoint: HostEndpoint::new("127.0.0.1", jump_port.into())
+                            .expect("jump endpoint"),
+                        username: username.clone(),
+                        auth: AuthRequest::PrivateKey {
+                            path: client_key.clone(),
+                            passphrase: None,
+                        },
+                    },
+                    SessionRouteNode {
+                        profile_id: "target-profile".into(),
+                        name: "Target".into(),
+                        endpoint: HostEndpoint::new("127.0.0.1", target_port.into())
+                            .expect("target endpoint"),
+                        username,
+                        auth: AuthRequest::PrivateKey {
+                            path: client_key,
+                            passphrase: None,
+                        },
+                    },
+                ],
+                purpose: SessionPurpose::Terminal,
+                profile_id: Some("target-profile".into()),
+                terminal_output: Arc::new(move |data| {
+                    let _ = terminal_sender.send(data);
+                }),
+            },
+            Arc::new(move |event| {
+                let _ = event_sender.send(event);
+            }),
+        );
+        loop {
+            match event_receiver
+                .recv_timeout(Duration::from_secs(10))
+                .expect("route event")
+            {
+                SessionEvent::HostKeyConfirmationRequired { .. } => manager
+                    .accept_host_key(&session_id)
+                    .expect("accept route host key"),
+                SessionEvent::StateChanged(SessionState::Connected) => break,
+                SessionEvent::Failed {
+                    failure,
+                    node,
+                    stage,
+                } => {
+                    panic!("route failed at {node:?} {stage:?}: {failure:?}")
+                }
+                _ => {}
+            }
+        }
+        manager
+            .write(&session_id, b"printf 'JUMP_ROUTE_OK\\n'\r".to_vec())
+            .expect("write target terminal");
+        let mut output = Vec::new();
+        while !String::from_utf8_lossy(&output).contains("JUMP_ROUTE_OK") {
+            output.extend(
+                terminal_receiver
+                    .recv_timeout(Duration::from_secs(10))
+                    .expect("target output"),
+            );
+        }
+        manager.close(&session_id).expect("close route");
     }
 
     #[test]
@@ -2449,19 +2860,19 @@ mod tests {
         let (event_sender, event_receiver) = std::sync::mpsc::channel();
         let (terminal_sender, terminal_receiver) = std::sync::mpsc::channel();
         let session_id = manager.connect(
-            SessionConnectRequest {
-                endpoint: HostEndpoint::new("127.0.0.1", port.into()).expect("endpoint"),
-                username: std::env::var("USER").expect("current username"),
-                auth: AuthRequest::PrivateKey {
+            connect_request(
+                HostEndpoint::new("127.0.0.1", port.into()).expect("endpoint"),
+                std::env::var("USER").expect("current username"),
+                AuthRequest::PrivateKey {
                     path: client_key.clone(),
                     passphrase: None,
                 },
-                purpose: SessionPurpose::Terminal,
-                profile_id: None,
-                terminal_output: Arc::new(move |data| {
+                SessionPurpose::Terminal,
+                None,
+                Arc::new(move |data| {
                     let _ = terminal_sender.send(data);
                 }),
-            },
+            ),
             Arc::new(move |event| {
                 let _ = event_sender.send(event);
             }),
@@ -2475,7 +2886,7 @@ mod tests {
                     .accept_host_key(&session_id)
                     .expect("accept temporary host key"),
                 SessionEvent::StateChanged(SessionState::Connected) => break,
-                SessionEvent::Failed(failure) => panic!("connection failed: {failure:?}"),
+                SessionEvent::Failed { failure, .. } => panic!("connection failed: {failure:?}"),
                 _ => {}
             }
         }
@@ -2496,19 +2907,19 @@ mod tests {
         let (second_event_sender, second_event_receiver) = std::sync::mpsc::channel();
         let (second_terminal_sender, second_terminal_receiver) = std::sync::mpsc::channel();
         let second_session_id = manager.connect(
-            SessionConnectRequest {
-                endpoint: HostEndpoint::new("127.0.0.1", port.into()).expect("endpoint"),
-                username: std::env::var("USER").expect("current username"),
-                auth: AuthRequest::PrivateKey {
+            connect_request(
+                HostEndpoint::new("127.0.0.1", port.into()).expect("endpoint"),
+                std::env::var("USER").expect("current username"),
+                AuthRequest::PrivateKey {
                     path: client_key,
                     passphrase: None,
                 },
-                purpose: SessionPurpose::Terminal,
-                profile_id: None,
-                terminal_output: Arc::new(move |data| {
+                SessionPurpose::Terminal,
+                None,
+                Arc::new(move |data| {
                     let _ = second_terminal_sender.send(data);
                 }),
-            },
+            ),
             Arc::new(move |event| {
                 let _ = second_event_sender.send(event);
             }),
@@ -2522,7 +2933,9 @@ mod tests {
                     .accept_host_key(&second_session_id)
                     .expect("accept second host key"),
                 SessionEvent::StateChanged(SessionState::Connected) => break,
-                SessionEvent::Failed(failure) => panic!("second connection failed: {failure:?}"),
+                SessionEvent::Failed { failure, .. } => {
+                    panic!("second connection failed: {failure:?}")
+                }
                 _ => {}
             }
         }
@@ -2877,17 +3290,17 @@ mod tests {
         )));
         let (event_sender, event_receiver) = std::sync::mpsc::channel();
         let session_id = manager.connect(
-            SessionConnectRequest {
-                endpoint: HostEndpoint::new("127.0.0.1", ssh_port.into()).expect("endpoint"),
-                username: std::env::var("USER").expect("current username"),
-                auth: AuthRequest::PrivateKey {
+            connect_request(
+                HostEndpoint::new("127.0.0.1", ssh_port.into()).expect("endpoint"),
+                std::env::var("USER").expect("current username"),
+                AuthRequest::PrivateKey {
                     path: client_key,
                     passphrase: None,
                 },
-                purpose: SessionPurpose::Network,
-                profile_id: Some("profile-network".into()),
-                terminal_output: Arc::new(|_| {}),
-            },
+                SessionPurpose::Network,
+                Some("profile-network".into()),
+                Arc::new(|_| {}),
+            ),
             Arc::new(move |event| {
                 let _ = event_sender.send(event);
             }),
@@ -2901,7 +3314,7 @@ mod tests {
                     .accept_host_key(&session_id)
                     .expect("accept temporary host key"),
                 SessionEvent::StateChanged(SessionState::Connected) => break,
-                SessionEvent::Failed(failure) => panic!("connection failed: {failure:?}"),
+                SessionEvent::Failed { failure, .. } => panic!("connection failed: {failure:?}"),
                 _ => {}
             }
         }

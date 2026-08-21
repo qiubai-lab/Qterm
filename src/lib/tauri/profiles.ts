@@ -11,6 +11,7 @@ export interface ConnectionProfile {
   authPreference: AuthPreference;
   credentialId?: string | null;
   groupId: string | null;
+  jumpProfileIds?: string[];
 }
 
 export interface ProfileInput {
@@ -21,6 +22,21 @@ export interface ProfileInput {
   authPreference: AuthPreference;
   credentialId?: string | null;
   groupId: string | null;
+  jumpProfileIds: string[];
+}
+
+export interface JumpCandidate {
+  profile: ConnectionProfile;
+  selectable: boolean;
+  reasonCode: string | null;
+  reason: string | null;
+  usesCredential: boolean;
+  routeNames: string[];
+}
+
+export interface ProfileRouteRequirements {
+  usesCredential: boolean;
+  routeNames: string[];
 }
 
 export interface ProfileGroup {
@@ -81,6 +97,14 @@ export function listProfiles(): Promise<ConnectionProfile[]> {
   return invoke<ConnectionProfile[]>("profile_list");
 }
 
+export function listJumpCandidates(currentProfileId: string | null, selectedProfileIds: string[] = []): Promise<JumpCandidate[]> {
+  return invoke<JumpCandidate[]>("profile_jump_candidates", { currentProfileId, selectedProfileIds });
+}
+
+export function getProfileRouteRequirements(profileId: string): Promise<ProfileRouteRequirements> {
+  return invoke<ProfileRouteRequirements>("profile_route_requirements", { profileId });
+}
+
 export function createProfile(input: ProfileInput): Promise<ConnectionProfile> {
   return invoke<ConnectionProfile>("profile_create", { input });
 }
@@ -94,6 +118,10 @@ export function updateProfile(
 
 export function deleteProfile(id: string): Promise<ProfileDeleteResult> {
   return invoke<ProfileDeleteResult>("profile_delete", { id });
+}
+
+export function clearUnsupportedProfileStorage(): Promise<void> {
+  return invoke<void>("profile_clear_unsupported_storage");
 }
 
 export function listProfileGroups(): Promise<ProfileGroup[]> {

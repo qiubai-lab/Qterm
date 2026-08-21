@@ -56,7 +56,9 @@ describe("application layout styles", () => {
     expect(declarations(".ssh-config-import-list")).toContain("overflow:auto");
     expect(declarations(".ssh-config-import-panel")).toContain("min-height:0");
     expect(declarations(".ssh-config-import-panel")).toContain("overflow:hidden");
-    expect(declarations(".ssh-config-import-tabs")).toContain("margin:7px 10px 6px");
+    expect(declarations(".connection-editor-tabs.ssh-config-import-tabs")).toContain("grid-template-columns:1fr 1fr");
+    expect(declarations(".connection-editor-tabs.ssh-config-import-tabs")).toContain("margin:7px 10px 6px");
+    expect(declarations(".ssh-config-import-tabs .connection-editor-tab-indicator")).toContain("width:calc(50% - 3px)");
     expect(declarations(".ssh-config-import-prompt-copy")).toContain("display:grid");
     expect(declarations(".ssh-config-import-source-label")).toContain("max-width:160px");
     expect(declarations(".ssh-config-import-dialog .ssh-config-import-source-label")).toContain("height:26px");
@@ -246,10 +248,27 @@ describe("application layout styles", () => {
   });
 
   it("uses a sliding segmented connection tab with directional, reduced-motion-aware content transitions", () => {
-    expect(declarations(".dialog-actions.connection-editor-actions")).toContain("justify-content:flex-end");
-    expect(declarations(".connection-editor-tabs")).toContain("grid-template-columns:1fr 1fr");
+    expect(declarations(".dialog-actions.connection-editor-actions")).toContain("justify-content:space-between");
+    expect(declarations(".connection-editor-tabs")).toContain("grid-template-columns:repeat(3,1fr)");
     expect(declarations(".connection-editor-tab-indicator")).toContain("transition:transform 260ms");
     expect(declarations('.connection-editor-tabs[data-active="authentication"] .connection-editor-tab-indicator')).toContain("translateX(100%)");
+    expect(declarations('.connection-editor-tabs[data-active="jump"] .connection-editor-tab-indicator')).toContain("translateX(200%)");
+    expect(declarations(".jump-route-panel")).toContain("overflow:auto");
+    expect(declarations(".jump-route-flow-node")).toContain("min-width:0");
+    expect(declarations(".jump-route-row-control")).toContain("grid-template-columns:minmax(0,1fr)");
+    expect(declarations(".jump-route-row-control.has-remove")).toContain("grid-template-columns:minmax(0,1fr) 38px");
+    expect(declarations(".jump-route-remove")).toContain("width:38px");
+    expect(declarations(".jump-route-remove")).toContain("height:38px");
+    expect(declarations(".jump-route-remove")).toContain("color:#ff9b98");
+    expect(declarations(".jump-route-add")).toContain("width:100%");
+    expect(declarations(".jump-route-add")).toContain("border:1px dashed var(--subtle)");
+    expect(declarations(".jump-profile-picker-dialog .dialog-content")).toContain("overflow:hidden");
+    expect(declarations(".jump-picker-list")).toContain("overflow:auto");
+    expect(declarations(".jump-picker-option")).toContain("grid-template-columns:28px minmax(0,1fr) minmax(95px,auto)");
+    expect(declarations(".connection-storage-warning")).toContain("min-width:0");
+    expect(declarations(".connection-storage-warning-message")).toContain("text-overflow:ellipsis");
+    expect(declarations(".connection-storage-clear")).toContain("height:27px");
+    expect(declarations(".connection-storage-clear")).toContain("gap:5px");
     expect(declarations(".connection-editor-tabs button>span")).toContain("transition:");
     expect(declarations(".connection-tab-panel.tab-forward")).toContain("animation:connection-tab-forward");
     expect(declarations(".connection-tab-panel.tab-backward")).toContain("animation:connection-tab-backward");
@@ -271,7 +290,13 @@ describe("application layout styles", () => {
     expect(declarations(".credential-public-key textarea")).toContain("flex:1");
     expect(declarations(".credential-public-key textarea")).toContain("padding:10px 12px");
     expect(declarations(".credential-public-key textarea")).toContain("overflow:auto");
-    expect(declarations(".credential-public-key-copy")).toContain("width:25px");
+    expect(declarations(".credential-public-key-actions")).toContain("display:flex");
+    expect(declarations(".credential-public-key-actions")).toContain("gap:3px");
+    expect(declarations(".credential-public-key-action")).toContain("width:25px");
+    expect(declarations(".credential-public-key-action")).toContain("height:25px");
+    expect(declarations(".credential-private-key-choices")).toContain("grid-template-rows:repeat(2,minmax(64px,1fr))");
+    expect(declarations(".credential-private-key-choice")).toContain("width:100%");
+    expect(declarations(".credential-private-key-choice")).toContain("min-height:64px");
     expect(declarations(".credential-feedback-bubble")).toContain("position:fixed");
     expect(declarations(".credential-feedback-bubble")).toContain("pointer-events:none");
     expect(styles).not.toContain(".credential-message");

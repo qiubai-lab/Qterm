@@ -12,12 +12,13 @@ use crate::{
     application::{
         error::{ApplicationError, ApplicationErrorCode},
         profile_service::{
-            ProfileGroupInput, ProfileInput, ProfileService, delete_profile_with_network_rules,
+            JumpCandidate, ProfileGroupInput, ProfileInput, ProfileService,
+            clear_unsupported_portable_config, delete_profile_with_network_rules,
         },
     },
     commands::{credential::CredentialState, error::IpcError},
     commands::{network::NetworkState, session::SessionState},
-    domain::profile::{AuthPreference, ConnectionProfile, ProfileGroup},
+    domain::profile::{AuthPreference, ConnectionProfile, JumpRouteError, ProfileGroup},
     infrastructure::{
         persistence::json_profile_repository::JsonProfileRepository,
         ssh::config_import::{
@@ -72,6 +73,10 @@ impl ProfileState {
             })
     }
 
+    pub(crate) fn route(&self, id: &str) -> Result<Vec<ConnectionProfile>, IpcError> {
+        self.service.route(id).map_err(IpcError::from)
+    }
+
     fn create_many(&self, inputs: Vec<ProfileInput>) -> Result<Vec<ConnectionProfile>, IpcError> {
         self.service.create_many(inputs).map_err(IpcError::from)
     }
@@ -123,6 +128,7 @@ pub struct CreateProfileDto {
     auth_preference: AuthPreferenceDto,
     credential_id: Option<String>,
     group_id: Option<String>,
+    jump_profile_ids: Vec<String>,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
@@ -145,6 +151,26 @@ pub struct ProfileDto {
     auth_preference: AuthPreferenceDto,
     credential_id: Option<String>,
     group_id: Option<String>,
+    #[serde(default)]
+    jump_profile_ids: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JumpCandidateDto {
+    profile: ProfileDto,
+    selectable: bool,
+    reason_code: Option<&'static str>,
+    reason: Option<&'static str>,
+    uses_credential: bool,
+    route_names: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProfileRouteRequirementsDto {
+    uses_credential: bool,
+    route_names: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -246,6 +272,40 @@ pub fn profile_list(state: State<'_, ProfileState>) -> Result<Vec<ProfileDto>, I
 }
 
 #[tauri::command]
+pub fn profile_jump_candidates(
+    current_profile_id: Option<String>,
+    selected_profile_ids: Vec<String>,
+    state: State<'_, ProfileState>,
+) -> Result<Vec<JumpCandidateDto>, IpcError> {
+    state
+        .service
+        .jump_candidates(current_profile_id.as_deref(), &selected_profile_ids)
+        .map(|candidates| candidates.into_iter().map(JumpCandidateDto::from).collect())
+        .map_err(IpcError::from)
+}
+
+#[tauri::command]
+pub fn profile_route_requirements(
+    profile_id: String,
+    state: State<'_, ProfileState>,
+) -> Result<ProfileRouteRequirementsDto, IpcError> {
+    state
+        .route(&profile_id)
+        .map(|route| ProfileRouteRequirementsDto {
+            uses_credential: route.iter().any(|profile| {
+                matches!(
+                    profile.auth_preference(),
+                    AuthPreference::Password | AuthPreference::PrivateKey
+                ) && profile.credential_id().is_some()
+            }),
+            route_names: route
+                .into_iter()
+                .map(|profile| profile.name().to_owned())
+                .collect(),
+        })
+}
+
+#[tauri::command]
 pub fn profile_create(
     input: CreateProfileDto,
     state: State<'_, ProfileState>,
@@ -284,6 +344,17 @@ pub fn profile_delete(
     Ok(ProfileDeleteResultDto {
         deleted_network_rules,
     })
+}
+
+#[tauri::command]
+pub fn profile_clear_unsupported_storage(
+    state: State<'_, ProfileState>,
+    network: State<'_, NetworkState>,
+    sessions: State<'_, SessionState>,
+) -> Result<(), IpcError> {
+    clear_unsupported_portable_config(&state.service, &network.service)?;
+    sessions.manager().close_all_network_sessions();
+    Ok(())
 }
 
 #[tauri::command]
@@ -509,6 +580,7 @@ fn imported_profile_input(
         },
         credential_id,
         group_id: None,
+        jump_profile_ids: Vec::new(),
     }
 }
 
@@ -667,6 +739,7 @@ impl From<CreateProfileDto> for ProfileInput {
             auth_preference: value.auth_preference.into(),
             credential_id: value.credential_id,
             group_id: value.group_id,
+            jump_profile_ids: value.jump_profile_ids,
         }
     }
 }
@@ -710,7 +783,47 @@ impl From<&ConnectionProfile> for ProfileDto {
             auth_preference: profile.auth_preference().into(),
             credential_id: profile.credential_id().map(|id| id.as_str().to_owned()),
             group_id: profile.group_id().map(|id| id.as_str().to_owned()),
+            jump_profile_ids: profile
+                .jump_profile_ids()
+                .iter()
+                .map(|id| id.as_str().to_owned())
+                .collect(),
         }
+    }
+}
+
+impl From<JumpCandidate> for JumpCandidateDto {
+    fn from(candidate: JumpCandidate) -> Self {
+        let (reason_code, reason) = candidate
+            .error
+            .map(jump_candidate_reason)
+            .map(|(code, message)| (Some(code), Some(message)))
+            .unwrap_or((None, None));
+        Self {
+            profile: ProfileDto::from(&candidate.profile),
+            selectable: reason.is_none(),
+            reason_code,
+            reason,
+            uses_credential: candidate.uses_credential,
+            route_names: candidate.route,
+        }
+    }
+}
+
+fn jump_candidate_reason(error: JumpRouteError) -> (&'static str, &'static str) {
+    match error {
+        JumpRouteError::SelfReference => ("selfReference", "当前连接不能作为自己的跳板"),
+        JumpRouteError::TooDeep => ("tooDeep", "连接路径最多支持 4 个跳板节点"),
+        JumpRouteError::MissingProfile => ("missingProfile", "该连接的跳板引用已经失效"),
+        JumpRouteError::ManualAuthentication => (
+            "manualAuthentication",
+            "该连接需要每次手动认证，不能作为中间节点",
+        ),
+        JumpRouteError::MissingCredential => (
+            "missingCredential",
+            "该连接未关联可用凭证，不能作为中间节点",
+        ),
+        JumpRouteError::DuplicateProfile => ("duplicateProfile", "该连接已经用于其他跃点"),
     }
 }
 
@@ -772,13 +885,22 @@ mod tests {
         )
         .expect("fixture profile");
 
-        let profile = profile.with_group_id(Some(
-            ProfileGroupId::parse("group-1").expect("fixture group id"),
-        ));
+        let profile = profile
+            .with_group_id(Some(
+                ProfileGroupId::parse("group-1").expect("fixture group id"),
+            ))
+            .with_jump_profile_ids(vec![
+                ProfileId::parse("gateway-1").expect("jump id"),
+                ProfileId::parse("gateway-2").expect("jump id"),
+            ]);
         let value = serde_json::to_value(ProfileDto::from(&profile)).expect("serialize profile");
         let object = value.as_object().expect("profile object");
         assert_eq!(object.get("credentialId"), Some(&json!("credential-1")));
         assert_eq!(object.get("groupId"), Some(&json!("group-1")));
+        assert_eq!(
+            object.get("jumpProfileIds"),
+            Some(&json!(["gateway-1", "gateway-2"]))
+        );
         for forbidden in ["password", "passphrase", "privateKeyData"] {
             assert!(!object.contains_key(forbidden));
         }

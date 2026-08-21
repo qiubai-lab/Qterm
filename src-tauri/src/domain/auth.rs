@@ -91,6 +91,7 @@ pub enum AuthFailure {
     InvalidPassphrase,
     UnsupportedKey,
     CorruptKey,
+    KeyGenerationFailed,
     SshAgentUnavailable,
     SshAgentEmpty,
     SshAgentRejected,

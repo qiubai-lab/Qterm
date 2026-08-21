@@ -25,8 +25,8 @@ describe("network IPC adapter", () => {
     expect(invoke).toHaveBeenLastCalledWith("network_rule_update", { id: "rule-1", input });
     await deleteNetworkRule("rule-1");
     expect(invoke).toHaveBeenLastCalledWith("network_rule_delete", { id: "rule-1" });
-    await connectNetworkSession("profile-1", { host: "host", port: 22, username: "dev", auth: { method: "sshAgent" } }, vi.fn());
-    expect(invoke).toHaveBeenLastCalledWith("network_session_connect", expect.objectContaining({ profileId: "profile-1", input: expect.any(Object), onEvent: expect.any(Object) }));
+    await connectNetworkSession({ profileId: "profile-1", auth: { method: "sshAgent" } }, vi.fn());
+    expect(invoke).toHaveBeenLastCalledWith("network_session_connect", expect.objectContaining({ input: { profileId: "profile-1", auth: { method: "sshAgent" } }, onEvent: expect.any(Object) }));
     await startNetworkRule("session-1", "rule-1");
     expect(invoke).toHaveBeenLastCalledWith("network_rule_start", { sessionId: "session-1", ruleId: "rule-1" });
     await stopNetworkRule("session-1", "rule-1");

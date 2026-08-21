@@ -13,12 +13,15 @@ use serde_json::Value;
 use crate::{
     domain::{
         credential::CredentialId,
-        profile::{AuthPreference, ConnectionProfile, ProfileGroup, ProfileGroupId, ProfileId},
+        profile::{
+            AuthPreference, ConnectionProfile, ProfileGroup, ProfileGroupId, ProfileId,
+            validate_jump_routes,
+        },
     },
     ports::profile_repository::{ProfileRepository, ProfileRepositoryError},
 };
 
-const PROFILE_SCHEMA_VERSION: u64 = 4;
+const PROFILE_SCHEMA_VERSION: u64 = 6;
 const MAX_PROFILE_DOCUMENT_BYTES: u64 = 4 * 1024 * 1024;
 
 pub struct JsonProfileRepository {
@@ -104,6 +107,7 @@ impl JsonProfileRepository {
             profiles.push(profile);
         }
 
+        validate_jump_routes(&profiles).map_err(|_| ProfileRepositoryError::CorruptData)?;
         Ok(ProfileCatalog { groups, profiles })
     }
 
@@ -164,6 +168,8 @@ impl ProfileRepository for JsonProfileRepository {
             return Err(ProfileRepositoryError::GroupNotFound);
         }
         catalog.profiles.push(profile);
+        validate_jump_routes(&catalog.profiles)
+            .map_err(ProfileRepositoryError::InvalidJumpRoute)?;
         self.save_unlocked(&catalog)
     }
 
@@ -187,6 +193,8 @@ impl ProfileRepository for JsonProfileRepository {
             }
         }
         catalog.profiles.extend(profiles);
+        validate_jump_routes(&catalog.profiles)
+            .map_err(ProfileRepositoryError::InvalidJumpRoute)?;
         self.save_unlocked(&catalog)
     }
 
@@ -205,12 +213,21 @@ impl ProfileRepository for JsonProfileRepository {
             .find(|stored| stored.id() == profile.id())
             .ok_or(ProfileRepositoryError::NotFound)?;
         *stored = profile;
+        validate_jump_routes(&catalog.profiles)
+            .map_err(ProfileRepositoryError::InvalidJumpRoute)?;
         self.save_unlocked(&catalog)
     }
 
     fn delete(&self, id: &ProfileId) -> Result<(), ProfileRepositoryError> {
         let _guard = self.acquire_lock()?;
         let mut catalog = self.load_unlocked()?;
+        if catalog
+            .profiles
+            .iter()
+            .any(|profile| profile.jump_profile_ids().contains(id))
+        {
+            return Err(ProfileRepositoryError::ReferencedAsJump);
+        }
         let original_length = catalog.profiles.len();
         catalog.profiles.retain(|profile| profile.id() != id);
         if catalog.profiles.len() == original_length {
@@ -222,6 +239,21 @@ impl ProfileRepository for JsonProfileRepository {
     fn clear_credential_references(&self, id: &CredentialId) -> Result<(), ProfileRepositoryError> {
         let _guard = self.acquire_lock()?;
         let mut catalog = self.load_unlocked()?;
+        let jump_ids = catalog
+            .profiles
+            .iter()
+            .flat_map(|profile| {
+                profile
+                    .jump_profile_ids()
+                    .iter()
+                    .map(|id| id.as_str().to_owned())
+            })
+            .collect::<HashSet<_>>();
+        if catalog.profiles.iter().any(|profile| {
+            profile.credential_id() == Some(id) && jump_ids.contains(profile.id().as_str())
+        }) {
+            return Err(ProfileRepositoryError::ReferencedAsJump);
+        }
         catalog.profiles = catalog
             .profiles
             .into_iter()
@@ -239,12 +271,45 @@ impl ProfileRepository for JsonProfileRepository {
     fn clear_all_credential_references(&self) -> Result<(), ProfileRepositoryError> {
         let _guard = self.acquire_lock()?;
         let mut catalog = self.load_unlocked()?;
+        let credential_jump_ids = catalog
+            .profiles
+            .iter()
+            .filter(|profile| {
+                matches!(
+                    profile.auth_preference(),
+                    AuthPreference::Password | AuthPreference::PrivateKey
+                )
+            })
+            .map(|profile| profile.id().as_str().to_owned())
+            .collect::<HashSet<_>>();
         catalog.profiles = catalog
             .profiles
             .into_iter()
-            .map(|profile| profile.with_credential_id(None))
+            .map(|profile| {
+                let jump_profile_ids = profile
+                    .jump_profile_ids()
+                    .iter()
+                    .filter(|id| !credential_jump_ids.contains(id.as_str()))
+                    .cloned()
+                    .collect();
+                profile
+                    .with_credential_id(None)
+                    .with_jump_profile_ids(jump_profile_ids)
+            })
             .collect();
+        validate_jump_routes(&catalog.profiles)
+            .map_err(ProfileRepositoryError::InvalidJumpRoute)?;
         self.save_unlocked(&catalog)
+    }
+
+    fn clear_unsupported_storage(&self) -> Result<(), ProfileRepositoryError> {
+        let _guard = self.acquire_lock()?;
+        match self.load_unlocked() {
+            Err(ProfileRepositoryError::UnsupportedSchemaVersion(_)) => {}
+            Err(error) => return Err(error),
+            Ok(_) => return Err(ProfileRepositoryError::StorageIsCurrent),
+        }
+        fs::remove_file(&self.path).map_err(|_| ProfileRepositoryError::Io)
     }
 
     fn insert_group(&self, group: ProfileGroup) -> Result<(), ProfileRepositoryError> {
@@ -351,6 +416,8 @@ struct ProfileRecord {
     credential_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     group_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    jump_profile_ids: Vec<String>,
 }
 
 impl ProfileRecord {
@@ -364,6 +431,11 @@ impl ProfileRecord {
             auth_preference: profile.auth_preference().into(),
             credential_id: profile.credential_id().map(|id| id.as_str().to_owned()),
             group_id: profile.group_id().map(|id| id.as_str().to_owned()),
+            jump_profile_ids: profile
+                .jump_profile_ids()
+                .iter()
+                .map(|id| id.as_str().to_owned())
+                .collect(),
         }
     }
 
@@ -386,7 +458,15 @@ impl ProfileRecord {
             .map(ProfileGroupId::parse)
             .transpose()
             .map_err(|_| ProfileRepositoryError::CorruptData)?;
-        Ok(profile.with_group_id(group_id))
+        let jump_profile_ids = self
+            .jump_profile_ids
+            .into_iter()
+            .map(ProfileId::parse)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|_| ProfileRepositoryError::CorruptData)?;
+        Ok(profile
+            .with_group_id(group_id)
+            .with_jump_profile_ids(jump_profile_ids))
     }
 }
 
@@ -500,19 +580,26 @@ mod tests {
     }
 
     #[test]
-    fn stores_schema_v4_credential_references_and_never_serializes_secret_fields() {
+    fn stores_schema_v6_ordered_jumps_and_credential_references_without_secret_fields() {
         let directory = tempdir().expect("temporary directory");
         let path = directory.path().join("profiles.json");
         let repository = JsonProfileRepository::new(path.clone());
 
         repository
-            .insert(profile("profile-1", "Production"))
+            .insert(profile("jump-1", "Gateway"))
+            .expect("insert jump profile");
+        repository
+            .insert(
+                profile("profile-1", "Production")
+                    .with_jump_profile_ids(vec![ProfileId::parse("jump-1").expect("jump id")]),
+            )
             .expect("insert profile");
 
         let json = fs::read_to_string(path).expect("read profile document");
-        assert!(json.contains("\"schemaVersion\": 4"));
+        assert!(json.contains("\"schemaVersion\": 6"));
         assert!(json.contains("\"groups\": []"));
         assert!(json.contains("\"credentialId\": \"credential-1\""));
+        assert!(json.contains("\"jumpProfileIds\": ["));
         assert!(!json.contains("privateKeyPath"));
         for forbidden in ["password", "passphrase", "privateKeyData", "ciphertext"] {
             assert!(!json.contains(forbidden), "must not persist {forbidden}");
@@ -588,6 +675,25 @@ mod tests {
     }
 
     #[test]
+    fn blocks_deleting_a_profile_that_is_used_as_a_jump() {
+        let directory = tempdir().expect("temporary directory");
+        let repository = JsonProfileRepository::new(directory.path().join("profiles.json"));
+        let jump = profile("jump-1", "Gateway");
+        repository.insert(jump.clone()).expect("jump");
+        repository
+            .insert(
+                profile("target-1", "Production").with_jump_profile_ids(vec![jump.id().clone()]),
+            )
+            .expect("target");
+
+        assert_eq!(
+            repository.delete(jump.id()),
+            Err(ProfileRepositoryError::ReferencedAsJump)
+        );
+        assert_eq!(repository.list().expect("profiles").len(), 2);
+    }
+
+    #[test]
     fn batch_insert_validates_every_profile_before_writing_any() {
         let directory = tempdir().expect("temporary directory");
         let repository = JsonProfileRepository::new(directory.path().join("profiles.json"));
@@ -647,7 +753,7 @@ mod tests {
         assert!(repository.list_groups().expect("groups").is_empty());
         assert_eq!(repository.list().expect("profiles")[0].group_id(), None);
         let json = fs::read_to_string(path).expect("profile document");
-        assert!(json.contains("\"schemaVersion\": 4"));
+        assert!(json.contains("\"schemaVersion\": 6"));
         assert!(!json.contains("\"groupId\""));
     }
 
@@ -673,7 +779,7 @@ mod tests {
 
     #[test]
     fn rejects_old_profile_schemas_without_modifying_them() {
-        for schema_version in [1, 2, 3] {
+        for schema_version in [1, 2, 3, 4, 5] {
             let directory = tempdir().expect("temporary directory");
             let path = directory.path().join("profiles.json");
             fs::write(
@@ -721,11 +827,34 @@ mod tests {
     }
 
     #[test]
+    fn clears_only_an_unsupported_profile_document() {
+        let directory = tempdir().expect("temporary directory");
+        let path = directory.path().join("profiles.json");
+        let repository = JsonProfileRepository::new(path.clone());
+        fs::write(&path, br#"{"schemaVersion":5,"groups":[],"profiles":[]}"#)
+            .expect("legacy fixture");
+
+        repository
+            .clear_unsupported_storage()
+            .expect("clear unsupported storage");
+        assert!(!path.exists());
+
+        repository
+            .insert(profile("profile-1", "Production"))
+            .expect("current fixture");
+        assert_eq!(
+            repository.clear_unsupported_storage(),
+            Err(ProfileRepositoryError::StorageIsCurrent)
+        );
+        assert!(path.exists(), "current storage must remain intact");
+    }
+
+    #[test]
     fn rejects_dangling_group_references_without_overwriting_the_source() {
         let directory = tempdir().expect("temporary directory");
         let path = directory.path().join("profiles.json");
         let original = br#"{
-  "schemaVersion": 4,
+  "schemaVersion": 6,
   "groups": [],
   "profiles": [{
     "id": "profile-1",

@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   connectNetworkBlock: vi.fn().mockResolvedValue(undefined),
   resolveConfiguredAuth: vi.fn(),
   getVaultStatus: vi.fn(),
+  getProfileRouteRequirements: vi.fn(),
   lockVault: vi.fn(),
   unlockVault: vi.fn(),
   onVaultStatusChanged: vi.fn(),
@@ -38,6 +39,7 @@ vi.mock("../components/dialogs/ConnectionAuthDialog", () => ({ ConnectionAuthDia
 vi.mock("../components/dialogs/ConnectionDialog", () => ({ ConnectionDialog: () => <div role="dialog" aria-label="连接管理"/> }));
 vi.mock("../components/dialogs/MasterPasswordDialog", () => ({ MasterPasswordDialog: ({ mode, onSuccess }: { mode: string; onSuccess: () => void }) => <div role="dialog" aria-label="解锁凭证库">{mode}<button onClick={onSuccess}>解锁</button></div> }));
 vi.mock("../lib/tauri/credentials", () => ({ getVaultStatus: mocks.getVaultStatus, lockVault: mocks.lockVault, unlockVault: mocks.unlockVault, onVaultStatusChanged: mocks.onVaultStatusChanged }));
+vi.mock("../lib/tauri/profiles", () => ({ getProfileRouteRequirements: mocks.getProfileRouteRequirements }));
 vi.mock("../lib/tauri/settings", () => ({ getSettings: mocks.getSettings }));
 vi.mock("../lib/tauri/window", () => ({ closeCurrentWindow: mocks.closeCurrentWindow, minimizeCurrentWindow: mocks.minimizeCurrentWindow, startDraggingCurrentWindow: vi.fn(), toggleMaximizeCurrentWindow: mocks.toggleMaximizeCurrentWindow }));
 
@@ -45,6 +47,10 @@ import { WorkspaceShell } from "./WorkspaceShell";
 
 beforeEach(() => {
   mocks.getVaultStatus.mockResolvedValue({ initialized: true, unlocked: true });
+  mocks.getProfileRouteRequirements.mockImplementation(async () => ({
+    usesCredential: requestedProfile.authPreference === "password" || requestedProfile.authPreference === "privateKey",
+    routeNames: [requestedProfile.name],
+  }));
   mocks.lockVault.mockResolvedValue(undefined);
   mocks.unlockVault.mockResolvedValue(undefined);
   mocks.onVaultStatusChanged.mockResolvedValue(() => undefined);
@@ -94,6 +100,20 @@ describe("WorkspaceShell configured connection routing", () => {
     mocks.getVaultStatus.mockResolvedValue({ initialized: true, unlocked: true });
     await user.click(screen.getByRole("button", { name: "解锁" }));
     await waitFor(() => expect(mocks.connectBlock).toHaveBeenCalledWith("block-1", requestedProfile, { method: "storedCredential", credentialId: "credential-1" }, expect.any(Function)));
+  });
+
+  it("requires vault unlock when an intermediate jump node uses a stored credential", async () => {
+    requestedProfile = { ...connectionProfile, jumpProfileIds: ["gateway-1"] };
+    mocks.getProfileRouteRequirements.mockResolvedValue({ usesCredential: true, routeNames: ["Gateway", "Server"] });
+    mocks.getVaultStatus.mockResolvedValue({ initialized: true, unlocked: false });
+    mocks.resolveConfiguredAuth.mockResolvedValue({ method: "sshAgent" });
+    const user = userEvent.setup();
+    render(<WorkspaceShell/>);
+
+    await user.click(screen.getByRole("button", { name: "请求远程连接" }));
+
+    expect(await screen.findByRole("dialog", { name: "解锁凭证库" })).toBeInTheDocument();
+    expect(mocks.connectBlock).not.toHaveBeenCalled();
   });
 
   it("opens manual authentication without checking or unlocking the vault", async () => {

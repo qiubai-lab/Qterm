@@ -7,6 +7,7 @@ import { ConnectionDialog } from "./ConnectionDialog";
 
 const mocks = vi.hoisted(() => ({
   clearVault: vi.fn(),
+  clearUnsupportedProfileStorage: vi.fn(),
   createProfile: vi.fn(),
   createProfileGroup: vi.fn(),
   deletePassword: vi.fn(),
@@ -15,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   getVaultStatus: vi.fn(),
   hasSavedPassword: vi.fn(),
   listProfileGroups: vi.fn(),
+  listJumpCandidates: vi.fn(),
   loadPassword: vi.fn(),
   listCredentials: vi.fn(),
   lockVault: vi.fn(),
@@ -55,11 +57,13 @@ vi.mock("../../lib/tauri/credentials", () => ({
   savePassword: mocks.savePassword,
 }));
 vi.mock("../../lib/tauri/profiles", () => ({
+  clearUnsupportedProfileStorage: mocks.clearUnsupportedProfileStorage,
   createProfile: mocks.createProfile,
   createProfileGroup: mocks.createProfileGroup,
   deleteProfile: mocks.deleteProfile,
   deleteProfileGroup: mocks.deleteProfileGroup,
   listProfileGroups: mocks.listProfileGroups,
+  listJumpCandidates: mocks.listJumpCandidates,
   updateProfile: mocks.updateProfile,
   updateProfileGroup: mocks.updateProfileGroup,
 }));
@@ -83,6 +87,7 @@ beforeEach(() => {
   workspaceProfiles = profiles;
   Object.defineProperty(document, "elementFromPoint", { configurable: true, value: elementFromPoint });
   mocks.clearVault.mockResolvedValue(undefined);
+  mocks.clearUnsupportedProfileStorage.mockResolvedValue(undefined);
   mocks.createProfile.mockResolvedValue({ ...profile, id: "profile-new" });
   mocks.createProfileGroup.mockResolvedValue(group);
   mocks.deleteProfile.mockResolvedValue({ deletedNetworkRules: 0 });
@@ -90,6 +95,7 @@ beforeEach(() => {
   mocks.getVaultStatus.mockResolvedValue({ initialized: false, unlocked: false });
   mocks.hasSavedPassword.mockResolvedValue(false);
   mocks.listProfileGroups.mockResolvedValue([group]);
+  mocks.listJumpCandidates.mockResolvedValue([{ profile, selectable: false, reasonCode: "selfReference", reason: "当前连接不能作为自己的跳板", usesCredential: true, routeNames: [] }]);
   mocks.loadPassword.mockResolvedValue("stored-secret");
   mocks.listCredentials.mockResolvedValue([{ id: "password-1", name: "生产密码", kind: "password", detail: null }]);
   mocks.lockVault.mockResolvedValue(undefined);
@@ -174,6 +180,105 @@ describe("ConnectionDialog", () => {
     await user.click(screen.getByRole("tab", { name: "认证方式" }));
     expect(screen.getByRole("tab", { name: "认证方式" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("tabpanel", { name: "认证方式" })).toBeInTheDocument();
+  });
+
+  it("shows every jump candidate with disabled reasons and keeps locked valid routes selectable", async () => {
+    const manual = { ...profile, id: "manual-1", name: "临时入口", host: "manual.example", groupId: null, authPreference: "manual" as const, credentialId: null };
+    const gateway = { ...profile, id: "gateway-1", name: "办公网关", host: "gateway.example", authPreference: "privateKey" as const, credentialId: "key-1" };
+    workspaceProfiles = [profile, manual, gateway];
+    mocks.getVaultStatus.mockResolvedValue({ initialized: true, unlocked: false, legacy: false });
+    mocks.listJumpCandidates.mockResolvedValue([
+      { profile, selectable: false, reasonCode: "selfReference", reason: "当前连接不能作为自己的跳板", usesCredential: true, routeNames: [] },
+      { profile: manual, selectable: false, reasonCode: "manualAuthentication", reason: "该连接需要每次手动认证，不能作为中间节点", usesCredential: false, routeNames: [] },
+      { profile: gateway, selectable: true, reasonCode: null, reason: null, usesCredential: true, routeNames: ["办公网关"] },
+    ]);
+    mocks.updateProfile.mockResolvedValue({ ...profile, jumpProfileIds: [gateway.id] });
+    const user = userEvent.setup();
+    render(<ConnectionDialog onClose={vi.fn()}/>);
+
+    await user.click(await screen.findByRole("tab", { name: /跳板连接/ }));
+    expect(screen.getByRole("img", { name: "本机 到 K8S服务器" })).toBeInTheDocument();
+    const directTrigger = screen.getByRole("button", { name: /跃点 1/ });
+    expect(directTrigger.closest(".jump-route-row-control")).not.toHaveClass("has-remove");
+    expect(directTrigger).toHaveAttribute("aria-haspopup", "dialog");
+    expect(screen.queryByRole("listbox", { name: "选择跃点 1" })).not.toBeInTheDocument();
+    expect(screen.getByText("跃点按从本机到目标服务器的顺序执行，并使用各自保存的认证方式。").closest("header")).toBeInTheDocument();
+    await user.click(directTrigger);
+    const picker = await screen.findByRole("dialog", { name: "选择跃点 1" });
+    const listbox = within(picker).getByRole("listbox", { name: "选择跃点 1" });
+    expect(within(listbox).getByRole("group", { name: /Production/ })).toContainElement(within(listbox).getByRole("option", { name: /办公网关/ }));
+    expect(within(listbox).getByRole("group", { name: /未分组/ })).toContainElement(within(listbox).getByRole("option", { name: /临时入口/ }));
+    expect(within(listbox).getByRole("option", { name: /K8S服务器/ })).toHaveAttribute("aria-disabled", "true");
+    expect(within(listbox).getByText("当前连接不能作为自己的跳板")).toBeInTheDocument();
+    expect(within(listbox).getByRole("option", { name: /临时入口/ })).toHaveAttribute("aria-disabled", "true");
+    expect(within(listbox).getByText("该连接需要每次手动认证，不能作为中间节点")).toBeInTheDocument();
+    const gatewayOption = within(listbox).getByRole("option", { name: /办公网关/ });
+    expect(gatewayOption).not.toHaveAttribute("aria-disabled", "true");
+    expect(within(gatewayOption).getByText("连接时需要解锁凭证库")).toBeInTheDocument();
+
+    await user.click(gatewayOption);
+    expect(screen.queryByRole("dialog", { name: "选择跃点 1" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "跃点 1" })).toHaveTextContent("办公网关");
+    expect(screen.getByRole("img", { name: "本机 到 办公网关 到 K8S服务器" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "保存配置" }));
+    await waitFor(() => expect(mocks.updateProfile).toHaveBeenCalledWith("profile-1", expect.objectContaining({ jumpProfileIds: ["gateway-1"] })));
+  });
+
+  it("keeps an unsupported-version error in the footer and confirms clearing both configuration stores", async () => {
+    workspaceProfiles = [];
+    mocks.listProfileGroups
+      .mockRejectedValueOnce({ code: "profileStorageVersionUnsupported", message: "连接配置文件版本不受支持", retryable: false })
+      .mockResolvedValueOnce([]);
+    const user = userEvent.setup();
+    render(<ConnectionDialog onClose={vi.fn()}/>);
+
+    const warning = await screen.findByText("连接配置文件版本不受支持");
+    expect(warning.closest(".dialog-header-actions")).toBeInTheDocument();
+    expect(warning.closest(".connection-editor-actions")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "保存配置" })).toBeDisabled();
+    const clearButton = screen.getByRole("button", { name: "清除旧配置" });
+    expect(clearButton.querySelector("svg")).toBeInTheDocument();
+    await user.click(clearButton);
+    expect(screen.getByText(/永久删除旧版连接配置和全部网络转发规则/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "确认清除" }));
+
+    await waitFor(() => expect(mocks.clearUnsupportedProfileStorage).toHaveBeenCalledTimes(1));
+    expect(mocks.refreshProfiles).toHaveBeenCalled();
+    expect(await screen.findByText("旧连接配置与网络转发规则已清除")).toBeInTheDocument();
+  });
+
+  it("adds and removes ordered jump rows while enforcing the four-hop limit", async () => {
+    const gateways = Array.from({ length: 4 }, (_, index) => ({
+      ...profile,
+      id: `gateway-${index + 1}`,
+      name: `网关 ${index + 1}`,
+      authPreference: "sshAgent" as const,
+      credentialId: null,
+    }));
+    workspaceProfiles = [profile, ...gateways];
+    mocks.listJumpCandidates.mockImplementation(async (_currentId: string, selectedIds: string[]) => gateways.map((gateway) => ({
+      profile: gateway,
+      selectable: !selectedIds.includes(gateway.id),
+      reasonCode: selectedIds.includes(gateway.id) ? "duplicateProfile" : null,
+      reason: selectedIds.includes(gateway.id) ? "该连接已经用于其他跃点" : null,
+      usesCredential: false,
+      routeNames: [gateway.name],
+    })));
+    const user = userEvent.setup();
+    render(<ConnectionDialog onClose={vi.fn()}/>);
+    await user.click(await screen.findByRole("tab", { name: /跳板连接/ }));
+
+    for (let index = 0; index < 4; index += 1) {
+      await user.click(screen.getByRole("button", { name: `跃点 ${index + 1}` }));
+      await user.click(await screen.findByRole("option", { name: new RegExp(`网关 ${index + 1}`) }));
+      if (index < 3) await user.click(screen.getByRole("button", { name: "添加跃点" }));
+    }
+    expect(screen.getByRole("button", { name: "添加跃点" })).toBeDisabled();
+    expect(screen.getByRole("img", { name: "本机 到 网关 1 到 网关 2 到 网关 3 到 网关 4 到 K8S服务器" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "删除跃点 2" }));
+    expect(screen.getByRole("button", { name: "跃点 2" })).toHaveTextContent("网关 3");
+    expect(screen.getByRole("button", { name: "添加跃点" })).toBeEnabled();
   });
 
   it("keeps mouse, keyboard, and context-menu profile selection inside the manager", async () => {
@@ -569,6 +674,7 @@ describe("ConnectionDialog", () => {
       authPreference: "password",
       credentialId: "password-1",
       groupId: "group-1",
+      jumpProfileIds: [],
     }));
     expect(mocks.refreshProfiles).toHaveBeenCalled();
     expect(screen.getByLabelText("名称")).toHaveValue("K8S服务器 副本 2");

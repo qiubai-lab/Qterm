@@ -113,20 +113,56 @@ pub enum SessionFailure {
     HostKeyDecisionTimeout,
     KnownHostsUnavailable,
     Authentication(crate::domain::auth::AuthFailure),
+    TunnelOpenFailed,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RouteNodeRole {
+    Jump,
+    Target,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RouteStage {
+    Connect,
+    VerifyHostKey,
+    Authenticate,
+    OpenTunnel,
+    StartSession,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RouteNodeMetadata {
+    pub profile_id: String,
+    pub name: String,
+    pub endpoint: HostEndpoint,
+    pub index: usize,
+    pub total: usize,
+    pub role: RouteNodeRole,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SessionEvent {
     StateChanged(SessionState),
+    RouteProgress {
+        node: RouteNodeMetadata,
+        stage: RouteStage,
+    },
     HostKeyConfirmationRequired {
+        node: RouteNodeMetadata,
         algorithm: String,
         fingerprint: String,
     },
     HostKeyChanged {
+        node: RouteNodeMetadata,
         trusted_fingerprint: String,
         presented_fingerprint: String,
     },
-    Failed(SessionFailure),
+    Failed {
+        failure: SessionFailure,
+        node: Option<RouteNodeMetadata>,
+        stage: Option<RouteStage>,
+    },
 }
 
 pub struct SessionStateMachine {
@@ -150,6 +186,8 @@ impl SessionStateMachine {
             (SessionState::Connecting, SessionState::AwaitingHostKey)
                 | (SessionState::Connecting, SessionState::Authenticating)
                 | (SessionState::AwaitingHostKey, SessionState::Authenticating)
+                | (SessionState::AwaitingHostKey, SessionState::Connecting)
+                | (SessionState::Authenticating, SessionState::Connecting)
                 | (SessionState::Authenticating, SessionState::Connected)
                 | (SessionState::Connected, SessionState::Closing)
                 | (SessionState::Connecting, SessionState::Closing)
@@ -251,6 +289,26 @@ mod tests {
         machine.transition(SessionState::Closing).expect("closing");
         machine.transition(SessionState::Closed).expect("closed");
         assert!(machine.transition(SessionState::Failed).is_err());
+    }
+
+    #[test]
+    fn session_state_machine_allows_repeating_connect_and_authenticate_for_route_nodes() {
+        let mut machine = SessionStateMachine::new();
+        machine
+            .transition(SessionState::Authenticating)
+            .expect("jump auth");
+        machine
+            .transition(SessionState::Connecting)
+            .expect("next hop");
+        machine
+            .transition(SessionState::AwaitingHostKey)
+            .expect("target host key");
+        machine
+            .transition(SessionState::Authenticating)
+            .expect("target auth");
+        machine
+            .transition(SessionState::Connected)
+            .expect("target connected");
     }
 
     #[test]
