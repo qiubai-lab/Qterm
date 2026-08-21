@@ -32,6 +32,17 @@ brew trust qiubai-lab/tap
 brew install --cask qterm
 ```
 
+后续升级与卸载：
+
+```bash
+brew upgrade --cask qterm          # 升级到新版本
+
+brew uninstall --cask qterm        # 卸载（保留配置与数据）
+brew uninstall --cask --zap qterm  # 卸载并清理全部配置、缓存与应用数据
+
+brew untap qiubai-lab/tap          # 卸载后如不再需要，可移除 tap
+```
+
 也可以从 [Releases](https://github.com/qiubai-lab/Qterm/releases/latest) 直接下载 `Qterm_*_aarch64.dmg`，打开后将 Qterm 拖入「应用程序」。由于应用未经过 Apple 公证，通过浏览器下载的 dmg 会带有隔离属性，首次打开若提示"Qterm 已损坏，无法打开"，在终端执行一次即可正常使用：
 
 ```bash

@@ -232,7 +232,7 @@ describe("application layout styles", () => {
     expect(declarations(".connection-drag-preview")).toContain("position:fixed");
     expect(declarations(".connection-drag-preview")).toContain("pointer-events:none");
     expect(styles).toContain("@keyframes connection-menu-in");
-    expect(styles).toContain(".connection-context-menu,.file-context-menu,.network-context-menu{animation:none}");
+    expect(styles).toContain(".connection-context-menu,.file-context-menu,.network-context-menu,.terminal-context-menu{animation:none}");
   });
 
   it("anchors connection save feedback to the button and disables spinner motion when requested", () => {
@@ -289,11 +289,13 @@ describe("application layout styles", () => {
     expect(declarations(".file-code-editor")).toContain("min-height:0");
     expect(declarations(".file-code-editor .cm-scroller")).toContain("overflow:auto");
     expect(declarations(".file-context-menu")).toContain("position:fixed");
+    expect(declarations(".terminal-context-menu")).toContain("position:fixed");
+    expect(declarations(".terminal-context-menu")).toContain("z-index:120");
     expect(declarations(".file-preview-toolbar .file-edit-button,.file-preview-toolbar .file-cancel-button,.file-preview-toolbar .file-save-button")).toContain("height:23px");
     expect(declarations(".file-preview-toolbar .file-edit-button,.file-preview-toolbar .file-cancel-button,.file-preview-toolbar .file-save-button")).toContain("display:flex");
     expect(styles).toContain(".file-preview-toolbar .file-save-button{width:48px}");
     expect(declarations(".file-code-editor:not([data-read-only]) .cm-cursor,.file-code-editor:not([data-read-only]) .cm-dropCursor")).toContain("border-left-color:var(--accent)");
-    expect(styles).toContain(".connection-context-menu,.file-context-menu,.network-context-menu{animation:none}");
+    expect(styles).toContain(".connection-context-menu,.file-context-menu,.network-context-menu,.terminal-context-menu{animation:none}");
   });
 
   it("shares terminal typography with the file code editor without replacing editor rendering states", () => {

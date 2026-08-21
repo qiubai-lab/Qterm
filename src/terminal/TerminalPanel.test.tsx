@@ -1,4 +1,4 @@
-import { act, render } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -10,6 +10,12 @@ const mocks = vi.hoisted(() => ({
     refresh: ReturnType<typeof vi.fn>;
     clear: ReturnType<typeof vi.fn>;
     reset: ReturnType<typeof vi.fn>;
+    paste: ReturnType<typeof vi.fn>;
+    focus: ReturnType<typeof vi.fn>;
+    selectAll: ReturnType<typeof vi.fn>;
+    hasSelection: ReturnType<typeof vi.fn>;
+    getSelection: ReturnType<typeof vi.fn>;
+    keyHandler: ((event: KeyboardEvent) => boolean) | null;
   }>,
   fits: [] as Array<{ fit: ReturnType<typeof vi.fn>; proposeDimensions: ReturnType<typeof vi.fn> }>,
   registerWriter: vi.fn<(blockId: string, writer: (data: Uint8Array) => void, clearer: (reset: boolean) => void) => () => void>(() => vi.fn()),
@@ -18,6 +24,15 @@ const mocks = vi.hoisted(() => ({
   hydrated: true,
   localTerminalCapabilities: { windowsPty: { backend: "conpty" as const, buildNumber: 26100 } } as { windowsPty: { backend: "conpty"; buildNumber: number } | null } | null,
   writeBlock: vi.fn().mockResolvedValue(undefined),
+  clearBlockBuffer: vi.fn(),
+  writeClipboardText: vi.fn().mockResolvedValue(undefined),
+  readClipboardText: vi.fn().mockResolvedValue(""),
+  runtimes: {} as Record<string, { status: string }>,
+}));
+
+vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({
+  readText: mocks.readClipboardText,
+  writeText: mocks.writeClipboardText,
 }));
 
 vi.mock("@xterm/addon-fit", () => ({
@@ -41,6 +56,12 @@ vi.mock("@xterm/xterm", () => ({
     refresh = vi.fn();
     clear = vi.fn();
     reset = vi.fn();
+    paste = vi.fn();
+    focus = vi.fn();
+    selectAll = vi.fn();
+    hasSelection = vi.fn(() => false);
+    getSelection = vi.fn(() => "");
+    keyHandler: ((event: KeyboardEvent) => boolean) | null = null;
     parser = { registerOscHandler: vi.fn(() => ({ dispose: vi.fn() })) };
 
     options: Record<string, unknown>;
@@ -61,6 +82,10 @@ vi.mock("@xterm/xterm", () => ({
     onData() {
       return { dispose: vi.fn() };
     }
+
+    attachCustomKeyEventHandler(handler: (event: KeyboardEvent) => boolean) {
+      this.keyHandler = handler;
+    }
   },
 }));
 
@@ -72,6 +97,8 @@ vi.mock("../workspace/WorkspaceProvider", () => ({
     localTerminalCapabilities: mocks.localTerminalCapabilities,
     startLocalBlock: mocks.startLocalBlock,
     writeBlock: mocks.writeBlock,
+    clearBlockBuffer: mocks.clearBlockBuffer,
+    runtimes: mocks.runtimes,
     resizeBlock: vi.fn(),
   }),
 }));
@@ -96,6 +123,10 @@ describe("TerminalPanel view lifetime", () => {
     mocks.registerWriter.mockClear();
     mocks.startLocalBlock.mockClear();
     mocks.writeBlock.mockClear();
+    mocks.clearBlockBuffer.mockClear();
+    mocks.writeClipboardText.mockClear();
+    mocks.readClipboardText.mockReset().mockResolvedValue("");
+    mocks.runtimes = {};
     mocks.hydrated = true;
     mocks.localTerminalCapabilities = { windowsPty: { backend: "conpty", buildNumber: 26100 } };
     vi.useFakeTimers();
@@ -269,6 +300,134 @@ describe("TerminalPanel view lifetime", () => {
     expect(fit.proposeDimensions).toHaveBeenCalledTimes(2);
     expect(fit.fit).toHaveBeenCalledOnce();
     expect(terminal.refresh).toHaveBeenCalledWith(0, 23);
+    view.unmount();
+  });
+});
+
+describe("TerminalPanel clipboard interaction", () => {
+  beforeEach(() => {
+    mocks.terminals.length = 0;
+    mocks.registerWriter.mockClear();
+    mocks.clearBlockBuffer.mockClear();
+    mocks.writeClipboardText.mockClear();
+    mocks.readClipboardText.mockReset().mockResolvedValue("");
+    mocks.runtimes = { "block-menu": { status: "connected" }, "block-keys": { status: "connected" } };
+    vi.useFakeTimers();
+    vi.stubGlobal("ResizeObserver", ResizeObserverMock);
+  });
+
+  afterEach(() => {
+    vi.runOnlyPendingTimers();
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it("replaces the native menu and enables copy only when the terminal has a selection", async () => {
+    const view = render(<TerminalPanel blockId="block-menu" sessionKey="block-menu:local" local={false} visible/>);
+    const terminal = mocks.terminals[0];
+    const surface = screen.getByLabelText("终端 block-menu");
+
+    fireEvent.contextMenu(surface, { clientX: 40, clientY: 50 });
+    expect(screen.getByRole("menu", { name: "终端菜单" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: /复制/ })).toBeDisabled();
+
+    terminal.hasSelection.mockReturnValue(true);
+    terminal.getSelection.mockReturnValue("selected output");
+    fireEvent.contextMenu(surface, { clientX: 40, clientY: 50 });
+    await act(async () => { fireEvent.click(screen.getByRole("menuitem", { name: /复制/ })); });
+
+    expect(mocks.writeClipboardText).toHaveBeenCalledWith("selected output");
+    expect(screen.queryByRole("menu", { name: "终端菜单" })).not.toBeInTheDocument();
+    view.unmount();
+  });
+
+  it("pastes single-line clipboard text directly and confirms multi-line text without exposing it", async () => {
+    mocks.readClipboardText.mockResolvedValueOnce("echo safe").mockResolvedValueOnce("secret one\nsecret two");
+    const view = render(<TerminalPanel blockId="block-menu" sessionKey="block-menu:local" local={false} visible/>);
+    const terminal = mocks.terminals[0];
+    const surface = screen.getByLabelText("终端 block-menu");
+
+    fireEvent.contextMenu(surface, { clientX: 40, clientY: 50 });
+    await act(async () => { fireEvent.click(screen.getByRole("menuitem", { name: /粘贴/ })); });
+    expect(terminal.paste).toHaveBeenCalledWith("echo safe");
+
+    fireEvent.contextMenu(surface, { clientX: 40, clientY: 50 });
+    await act(async () => { fireEvent.click(screen.getByRole("menuitem", { name: /粘贴/ })); });
+    expect(screen.getByRole("dialog", { name: "确认粘贴？" })).toHaveTextContent("2 行");
+    expect(screen.queryByText("secret one")).not.toBeInTheDocument();
+    expect(terminal.paste).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "粘贴到终端" }));
+    expect(terminal.paste).toHaveBeenLastCalledWith("secret one\nsecret two");
+    view.unmount();
+  });
+
+  it("runs select-all and the existing buffer-clear action on the triggering terminal", () => {
+    const view = render(<TerminalPanel blockId="block-menu" sessionKey="block-menu:local" local={false} visible/>);
+    const terminal = mocks.terminals[0];
+    const surface = screen.getByLabelText("终端 block-menu");
+
+    fireEvent.keyDown(surface, { key: "ContextMenu" });
+    fireEvent.click(screen.getByRole("menuitem", { name: "全选" }));
+    expect(terminal.selectAll).toHaveBeenCalledOnce();
+
+    fireEvent.contextMenu(surface, { clientX: 40, clientY: 50 });
+    fireEvent.click(screen.getByRole("menuitem", { name: "清除终端缓冲区" }));
+    expect(mocks.clearBlockBuffer).toHaveBeenCalledWith("block-menu");
+    view.unmount();
+  });
+
+  it("supports Shift+F10 menu navigation and restores terminal focus on Escape", () => {
+    const view = render(<TerminalPanel blockId="block-menu" sessionKey="block-menu:local" local={false} visible/>);
+    const terminal = mocks.terminals[0];
+    const surface = screen.getByLabelText("终端 block-menu");
+
+    fireEvent.keyDown(surface, { key: "F10", shiftKey: true });
+    act(() => vi.runOnlyPendingTimers());
+    const menu = screen.getByRole("menu", { name: "终端菜单" });
+    expect(screen.getByRole("menuitem", { name: /粘贴/ })).toHaveFocus();
+
+    fireEvent.keyDown(menu, { key: "ArrowDown" });
+    expect(screen.getByRole("menuitem", { name: "全选" })).toHaveFocus();
+    fireEvent.keyDown(window, { key: "Escape" });
+    act(() => vi.runOnlyPendingTimers());
+
+    expect(screen.queryByRole("menu", { name: "终端菜单" })).not.toBeInTheDocument();
+    expect(terminal.focus).toHaveBeenCalled();
+    view.unmount();
+  });
+
+  it("uses Windows desktop clipboard shortcuts without swallowing Ctrl+C when there is no selection", async () => {
+    vi.stubGlobal("navigator", { platform: "Win32", userAgent: "Windows" });
+    mocks.readClipboardText.mockResolvedValue("from outside");
+    const view = render(<TerminalPanel blockId="block-keys" sessionKey="block-keys:local" local={false} visible/>);
+    const terminal = mocks.terminals[0];
+
+    expect(terminal.keyHandler?.(new KeyboardEvent("keydown", { key: "c", ctrlKey: true }))).toBe(true);
+    expect(mocks.writeClipboardText).not.toHaveBeenCalled();
+
+    terminal.hasSelection.mockReturnValue(true);
+    terminal.getSelection.mockReturnValue("inside terminal");
+    expect(terminal.keyHandler?.(new KeyboardEvent("keydown", { key: "c", ctrlKey: true }))).toBe(false);
+    await act(async () => undefined);
+    expect(mocks.writeClipboardText).toHaveBeenCalledWith("inside terminal");
+
+    expect(terminal.keyHandler?.(new KeyboardEvent("keydown", { key: "v", ctrlKey: true }))).toBe(false);
+    await act(async () => undefined);
+    expect(terminal.paste).toHaveBeenCalledWith("from outside");
+    view.unmount();
+  });
+
+  it("preserves plain Ctrl+V for Linux terminal programs while supporting Ctrl+Shift+V", async () => {
+    vi.stubGlobal("navigator", { platform: "Linux x86_64", userAgent: "Linux" });
+    mocks.readClipboardText.mockResolvedValue("clipboard");
+    const view = render(<TerminalPanel blockId="block-keys" sessionKey="block-keys:local" local={false} visible/>);
+    const terminal = mocks.terminals[0];
+
+    expect(terminal.keyHandler?.(new KeyboardEvent("keydown", { key: "v", ctrlKey: true }))).toBe(true);
+    expect(terminal.keyHandler?.(new KeyboardEvent("keydown", { key: "v", ctrlKey: true, shiftKey: true }))).toBe(false);
+    await act(async () => undefined);
+    expect(terminal.paste).toHaveBeenCalledWith("clipboard");
     view.unmount();
   });
 });
