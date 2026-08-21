@@ -5,6 +5,18 @@ import { createWorkspaceDocument } from "./model";
 import { workspaceReducer } from "./reducer";
 
 describe("workspace reducer", () => {
+  it("keeps six unique remote profiles in most-recent-first order", () => {
+    let state = createWorkspaceDocument();
+    for (const profileId of ["profile-1", "profile-2", "profile-3", "profile-4", "profile-5", "profile-6", "profile-7"]) {
+      state = workspaceReducer(state, { type: "recordRecentProfile", profileId });
+    }
+    expect(state.recentProfileIds).toEqual(["profile-7", "profile-6", "profile-5", "profile-4", "profile-3", "profile-2"]);
+
+    state = workspaceReducer(state, { type: "recordRecentProfile", profileId: "profile-4" });
+    expect(state.recentProfileIds).toEqual(["profile-4", "profile-7", "profile-6", "profile-5", "profile-3", "profile-2"]);
+    expect(workspaceReducer(state, { type: "recordRecentProfile", profileId: null })).toBe(state);
+  });
+
   it("keeps at least one workspace and terminal block", () => {
     const initial = createWorkspaceDocument();
     const workspace = initial.workspaces[0];

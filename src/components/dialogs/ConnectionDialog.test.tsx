@@ -197,6 +197,61 @@ describe("ConnectionDialog", () => {
     expect(mocks.selectBlockTarget).not.toHaveBeenCalled();
   });
 
+  it("adds and removes profiles with the platform modifier while ordinary activation restores single selection", async () => {
+    const second = { ...profile, id: "profile-2", name: "备用服务器", host: "backup.example" };
+    const third = { ...profile, id: "profile-3", name: "测试服务器", host: "test.example" };
+    workspaceProfiles = [profile, second, third];
+    render(<ConnectionDialog onClose={vi.fn()}/>);
+
+    fireEvent.click((await screen.findByText("Production", { selector: ".connection-group-toggle strong" })).closest("button")!);
+    const firstItem = screen.getByRole("button", { name: /K8S服务器/ });
+    const secondItem = screen.getByRole("button", { name: /备用服务器/ });
+    const thirdItem = screen.getByRole("button", { name: /测试服务器/ });
+    expect(firstItem).toHaveAttribute("aria-pressed", "true");
+
+    fireEvent.click(secondItem, { metaKey: true });
+    fireEvent.keyDown(thirdItem, { key: "Enter", ctrlKey: true });
+    expect(firstItem).toHaveAttribute("aria-pressed", "true");
+    expect(secondItem).toHaveAttribute("aria-pressed", "true");
+    expect(thirdItem).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByLabelText("名称")).toHaveValue("测试服务器");
+
+    fireEvent.click(thirdItem, { ctrlKey: true });
+    expect(thirdItem).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByLabelText("名称")).toHaveValue("K8S服务器");
+
+    fireEvent.click(secondItem);
+    expect(firstItem).toHaveAttribute("aria-pressed", "false");
+    expect(secondItem).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("keeps a multi-selection on right click and deletes it through one confirmation", async () => {
+    const second = { ...profile, id: "profile-2", name: "备用服务器", host: "backup.example" };
+    workspaceProfiles = [profile, second];
+    const user = userEvent.setup();
+    render(<ConnectionDialog onClose={vi.fn()}/>);
+
+    fireEvent.click((await screen.findByText("Production", { selector: ".connection-group-toggle strong" })).closest("button")!);
+    const secondItem = screen.getByRole("button", { name: /备用服务器/ });
+    fireEvent.click(secondItem, { metaKey: true });
+    fireEvent.contextMenu(secondItem);
+    const menu = screen.getByRole("menu", { name: "2 个已选连接菜单" });
+    expect(within(menu).queryByRole("menuitem", { name: "编辑连接" })).not.toBeInTheDocument();
+    expect(within(menu).queryByRole("separator")).not.toBeInTheDocument();
+    await user.click(within(menu).getByRole("menuitem", { name: "删除 2 个连接" }));
+
+    const confirmation = screen.getByRole("dialog", { name: "删除 2 个连接？" });
+    expect(within(confirmation).getByText(/这些连接及其关联的网络转发规则/)).toBeInTheDocument();
+    await user.click(within(confirmation).getByRole("button", { name: "确认删除" }));
+    await waitFor(() => {
+      expect(mocks.deleteProfile).toHaveBeenCalledTimes(2);
+      expect(mocks.deleteProfile).toHaveBeenCalledWith("profile-1");
+      expect(mocks.deleteProfile).toHaveBeenCalledWith("profile-2");
+    });
+    expect(mocks.refreshProfiles).toHaveBeenCalledOnce();
+    expect(await screen.findByRole("alert")).toHaveTextContent("已删除 2 个连接配置");
+  });
+
   it("selects a reusable credential reference without exposing password viewing", async () => {
     const user = userEvent.setup();
     mocks.getVaultStatus.mockResolvedValue({ initialized: true, unlocked: true });
@@ -432,6 +487,34 @@ describe("ConnectionDialog", () => {
     expect(ungroupedTarget).toHaveClass("drop-target");
     fireEvent.pointerUp(currentItem, { pointerId: 6, clientX: 30, clientY: 34 });
     await waitFor(() => expect(mocks.updateProfile).toHaveBeenCalledWith("profile-1", expect.objectContaining({ groupId: null })));
+  });
+
+  it("drags every selected connection and skips members already in the target group", async () => {
+    const staging = { id: "group-2", name: "Staging" };
+    const second = { ...profile, id: "profile-2", name: "备用服务器", host: "backup.example", groupId: staging.id };
+    workspaceProfiles = [profile, second];
+    mocks.listProfileGroups.mockResolvedValue([group, staging]);
+    render(<ConnectionDialog onClose={vi.fn()}/>);
+
+    fireEvent.click((await screen.findByText("Production", { selector: ".connection-group-toggle strong" })).closest("button")!);
+    const stagingToggle = screen.getByText("Staging", { selector: ".connection-group-toggle strong" }).closest("button")!;
+    fireEvent.click(stagingToggle);
+    const firstItem = screen.getByRole("button", { name: /K8S服务器/ });
+    const secondItem = screen.getByRole("button", { name: /备用服务器/ });
+    fireEvent.click(secondItem, { metaKey: true });
+
+    elementFromPoint.mockReturnValue(stagingToggle.closest("header")!);
+    fireEvent.pointerDown(firstItem, { pointerId: 20, button: 0, clientX: 10, clientY: 10 });
+    fireEvent.pointerMove(firstItem, { pointerId: 20, clientX: 30, clientY: 34 });
+    expect(document.querySelector(".connection-drag-count")).toHaveTextContent("2");
+    expect(firstItem).toHaveClass("dragging");
+    expect(secondItem).toHaveClass("dragging");
+    fireEvent.pointerUp(firstItem, { pointerId: 20, clientX: 30, clientY: 34 });
+
+    await waitFor(() => expect(mocks.updateProfile).toHaveBeenCalledOnce());
+    expect(mocks.updateProfile).toHaveBeenCalledWith("profile-1", expect.objectContaining({ groupId: "group-2" }));
+    expect(mocks.refreshProfiles).toHaveBeenCalledOnce();
+    expect(await screen.findByRole("alert")).toHaveTextContent("已将“K8S服务器”移到Staging");
   });
 
   it("cancels a pointer drag without moving and keeps sub-threshold clicks available", async () => {

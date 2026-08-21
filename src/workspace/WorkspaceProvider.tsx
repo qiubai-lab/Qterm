@@ -4,7 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useReducer,
 import { connectFileSession } from "../lib/tauri/files";
 import { connectNetworkSession, startNetworkRule, stopNetworkRule, type NetworkRuleRuntimeState } from "../lib/tauri/network";
 import { closeLocalSession, connectLocalSession, getLocalTerminalCapabilities, resizeLocalSession, writeLocalSession, type LocalSessionEvent, type LocalTerminalCapabilities } from "../lib/tauri/localSessions";
-import { listProfiles, type ConnectionProfile } from "../lib/tauri/profiles";
+import { listProfileGroups, listProfiles, type ConnectionProfile, type ProfileGroup } from "../lib/tauri/profiles";
 import { acceptHostKey, closeSession, connectSession, rejectHostKey, resizeSession, writeSession, type SessionAuth, type SessionEvent, type SessionState } from "../lib/tauri/sessions";
 import { loadWorkspaces, saveWorkspaces } from "../lib/tauri/workspaces";
 import { blockIds, findLeaf } from "./layout";
@@ -46,6 +46,7 @@ interface WorkspaceContextValue {
   document: WorkspaceDocument;
   dispatch: Dispatch<WorkspaceAction>;
   profiles: ConnectionProfile[];
+  profileGroups: ProfileGroup[];
   refreshProfiles: () => Promise<void>;
   runtimes: Record<string, TerminalRuntime>;
   fileRuntimes: Record<string, FileRuntime>;
@@ -96,6 +97,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [document, dispatch] = useReducer(workspaceReducer, undefined, createWorkspaceDocument);
   const [hydrated, setHydrated] = useState(false);
   const [profiles, setProfiles] = useState<ConnectionProfile[]>([]);
+  const [profileGroups, setProfileGroups] = useState<ProfileGroup[]>([]);
   const [runtimes, setRuntimes] = useState<Record<string, TerminalRuntime>>({});
   const [fileRuntimes, setFileRuntimes] = useState<Record<string, FileRuntime>>({});
   const [networkRuntimes, setNetworkRuntimes] = useState<Record<string, NetworkRuntime>>({});
@@ -124,7 +126,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
   const refreshProfiles = useCallback(async () => {
     if (!isTauriRuntime()) return;
-    setProfiles(await listProfiles());
+    const [items, groups] = await Promise.all([listProfiles(), listProfileGroups()]);
+    setProfiles(items);
+    setProfileGroups(groups);
   }, []);
 
   useEffect(() => {
@@ -133,11 +137,12 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       return;
     }
     let active = true;
-    void Promise.all([loadWorkspaces(), listProfiles()]).then(
-      ([stored, items]) => {
+    void Promise.all([loadWorkspaces(), listProfiles(), listProfileGroups()]).then(
+      ([stored, items, groups]) => {
         if (!active) return;
         if (stored) dispatch({ type: "hydrate", document: stored });
         setProfiles(items);
+        setProfileGroups(groups);
         setHydrated(true);
       },
       (error: unknown) => {
@@ -415,6 +420,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
   const selectBlockTarget = useCallback(async (workspaceId: string, blockId: string, profileId: string | null) => {
     connectionTargetIntents.current.set(connectionIntentKey("terminal", blockId), profileId);
+    dispatch({ type: "recordRecentProfile", profileId });
     dispatch({ type: "setBlockProfile", workspaceId, blockId, profileId });
     await closeCurrentSession(blockId);
   }, [closeCurrentSession]);
@@ -432,6 +438,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
   const selectFileTarget = useCallback(async (workspaceId: string, blockId: string, profileId: string | null) => {
     connectionTargetIntents.current.set(connectionIntentKey("files", blockId), profileId);
+    dispatch({ type: "recordRecentProfile", profileId });
     await closeCurrentFileSession(blockId);
     if (!connectionIntentAllows(connectionTargetIntents.current, "files", blockId, profileId)) return;
     updateFileRuntime(blockId, () => profileId === null ? defaultFileRuntime : { ...defaultFileRuntime, kind: "sftp", status: "closed" });
@@ -466,6 +473,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
   const selectNetworkTarget = useCallback(async (workspaceId: string, blockId: string, profileId: string | null) => {
     connectionTargetIntents.current.set(connectionIntentKey("network", blockId), profileId);
+    dispatch({ type: "recordRecentProfile", profileId });
     await closeCurrentNetworkSession(blockId);
     if (!connectionIntentAllows(connectionTargetIntents.current, "network", blockId, profileId)) return;
     dispatch({ type: "setNetworkProfile", workspaceId, blockId, profileId });
@@ -635,14 +643,14 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
   const activeWorkspace = document.workspaces.find((workspace) => workspace.id === document.activeWorkspaceId) ?? document.workspaces[0];
   const value = useMemo<WorkspaceContextValue>(() => ({
-    hydrated, document, dispatch, profiles, refreshProfiles, runtimes, fileRuntimes, networkRuntimes, localTerminalCapabilities, activeWorkspace,
+    hydrated, document, dispatch, profiles, profileGroups, refreshProfiles, runtimes, fileRuntimes, networkRuntimes, localTerminalCapabilities, activeWorkspace,
     activeBlockId: activeWorkspace.activeBlockId, registerWriter, clearBlockBuffer, setBlockCwd, startLocalBlock, selectBlockTarget, connectBlock, disconnectBlock,
     selectFileTarget, connectFileBlock, selectNetworkTarget, connectNetworkBlock, startNetworkBlockRule, stopNetworkBlockRule, writeBlock, resizeBlock,
     isConnectionTargetCurrent,
     acceptBlockHostKey, rejectBlockHostKey, acceptFileHostKey, rejectFileHostKey, acceptNetworkHostKey, rejectNetworkHostKey, connectedCount,
     closeSessions, blocksForWorkspace,
     storageNotice, dismissStorageNotice,
-  }), [hydrated, document, profiles, refreshProfiles, runtimes, fileRuntimes, networkRuntimes, localTerminalCapabilities, activeWorkspace, registerWriter, clearBlockBuffer, setBlockCwd, startLocalBlock, selectBlockTarget, connectBlock, disconnectBlock, selectFileTarget, connectFileBlock, selectNetworkTarget, connectNetworkBlock, startNetworkBlockRule, stopNetworkBlockRule, writeBlock, resizeBlock, acceptBlockHostKey, rejectBlockHostKey, acceptFileHostKey, rejectFileHostKey, acceptNetworkHostKey, rejectNetworkHostKey, isConnectionTargetCurrent, connectedCount, closeSessions, blocksForWorkspace, storageNotice, dismissStorageNotice]);
+  }), [hydrated, document, profiles, profileGroups, refreshProfiles, runtimes, fileRuntimes, networkRuntimes, localTerminalCapabilities, activeWorkspace, registerWriter, clearBlockBuffer, setBlockCwd, startLocalBlock, selectBlockTarget, connectBlock, disconnectBlock, selectFileTarget, connectFileBlock, selectNetworkTarget, connectNetworkBlock, startNetworkBlockRule, stopNetworkBlockRule, writeBlock, resizeBlock, acceptBlockHostKey, rejectBlockHostKey, acceptFileHostKey, rejectFileHostKey, acceptNetworkHostKey, rejectNetworkHostKey, isConnectionTargetCurrent, connectedCount, closeSessions, blocksForWorkspace, storageNotice, dismissStorageNotice]);
 
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;
 }

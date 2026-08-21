@@ -14,7 +14,7 @@ use crate::{
     ports::workspace_repository::{WorkspaceRepository, WorkspaceRepositoryError},
 };
 
-const SCHEMA_VERSION: u64 = 5;
+const SCHEMA_VERSION: u64 = 6;
 const MAX_DOCUMENT_BYTES: u64 = 4 * 1024 * 1024;
 
 pub struct JsonWorkspaceRepository {
@@ -46,7 +46,7 @@ impl JsonWorkspaceRepository {
             Err(_) => return Err(WorkspaceRepositoryError::Io),
         }
         let bytes = fs::read(&self.path).map_err(|_| WorkspaceRepositoryError::Io)?;
-        let value: Value =
+        let mut value: Value =
             serde_json::from_slice(&bytes).map_err(|_| WorkspaceRepositoryError::CorruptData)?;
         if contains_forbidden_field(&value) {
             return Err(WorkspaceRepositoryError::SensitiveField);
@@ -55,8 +55,16 @@ impl JsonWorkspaceRepository {
             .get("schemaVersion")
             .and_then(Value::as_u64)
             .ok_or(WorkspaceRepositoryError::CorruptData)?;
-        if version != SCHEMA_VERSION {
-            return Err(WorkspaceRepositoryError::UnsupportedSchemaVersion(version));
+        match version {
+            SCHEMA_VERSION => {}
+            5 => {
+                let object = value
+                    .as_object_mut()
+                    .ok_or(WorkspaceRepositoryError::CorruptData)?;
+                object.insert("schemaVersion".into(), Value::from(SCHEMA_VERSION));
+                object.insert("recentProfileIds".into(), Value::Array(Vec::new()));
+            }
+            _ => return Err(WorkspaceRepositoryError::UnsupportedSchemaVersion(version)),
         }
         let document = serde_json::from_value::<DocumentRecord>(value)
             .map_err(|_| WorkspaceRepositoryError::CorruptData)?
@@ -102,6 +110,7 @@ impl WorkspaceRepository for JsonWorkspaceRepository {
 struct DocumentRecord {
     schema_version: u64,
     active_workspace_id: String,
+    recent_profile_ids: Vec<String>,
     workspaces: Vec<WorkspaceRecord>,
 }
 
@@ -156,6 +165,7 @@ impl DocumentRecord {
         Self {
             schema_version: SCHEMA_VERSION,
             active_workspace_id: document.active_workspace_id.clone(),
+            recent_profile_ids: document.recent_profile_ids.clone(),
             workspaces: document
                 .workspaces
                 .iter()
@@ -167,6 +177,7 @@ impl DocumentRecord {
     fn into_domain(self) -> WorkspaceDocument {
         WorkspaceDocument {
             active_workspace_id: self.active_workspace_id,
+            recent_profile_ids: self.recent_profile_ids,
             workspaces: self
                 .workspaces
                 .into_iter()
@@ -336,6 +347,7 @@ mod tests {
     fn document() -> WorkspaceDocument {
         WorkspaceDocument {
             active_workspace_id: "workspace-1".into(),
+            recent_profile_ids: vec!["profile-1".into()],
             workspaces: vec![Workspace {
                 id: "workspace-1".into(),
                 name: "Workspace".into(),
@@ -358,7 +370,7 @@ mod tests {
     }
 
     #[test]
-    fn round_trips_v5_network_schema_without_runtime_or_secret_fields() {
+    fn round_trips_v6_recent_profiles_without_runtime_or_secret_fields() {
         let directory = tempdir().expect("temporary directory");
         let path = directory.path().join("workspaces.json");
         let repository = JsonWorkspaceRepository::new(path.clone());
@@ -366,7 +378,8 @@ mod tests {
 
         assert_eq!(repository.load().expect("load workspace"), Some(document()));
         let json = fs::read_to_string(path).expect("workspace json");
-        assert!(json.contains("\"schemaVersion\": 5"));
+        assert!(json.contains("\"schemaVersion\": 6"));
+        assert!(json.contains("\"recentProfileIds\""));
         assert!(json.contains("\"type\": \"network\""));
         assert!(json.contains("\"blockId\": \"block-1\""));
         assert!(json.contains("\"profileId\": \"profile-1\""));
@@ -378,7 +391,28 @@ mod tests {
     }
 
     #[test]
-    fn rejects_legacy_workspace_schemas_without_overwriting_source() {
+    fn migrates_v5_workspace_schema_without_overwriting_until_save() {
+        let directory = tempdir().expect("temporary directory");
+        let path = directory.path().join("workspaces.json");
+        let mut value = serde_json::to_value(super::DocumentRecord::from_domain(&document()))
+            .expect("workspace fixture");
+        value["schemaVersion"] = serde_json::json!(5);
+        value
+            .as_object_mut()
+            .expect("object")
+            .remove("recentProfileIds");
+        let fixture = serde_json::to_vec_pretty(&value).expect("serialize fixture");
+        fs::write(&path, &fixture).expect("v5 fixture");
+        let repository = JsonWorkspaceRepository::new(path.clone());
+
+        let mut expected = document();
+        expected.recent_profile_ids.clear();
+        assert_eq!(repository.load(), Ok(Some(expected)));
+        assert_eq!(fs::read(path).expect("preserved"), fixture);
+    }
+
+    #[test]
+    fn rejects_older_workspace_schemas_without_overwriting_source() {
         for version in [1, 2, 3, 4] {
             let directory = tempdir().expect("temporary directory");
             let path = directory.path().join("workspaces.json");

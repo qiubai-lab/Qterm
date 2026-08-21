@@ -26,15 +26,16 @@ let requestedProfile: ConnectionProfile = connectionProfile;
 const workspace = { id: "workspace-1", name: "Workspace 1", activeBlockId: "block-1", layout: { type: "terminal" as const, blockId: "block-1", profileId: null } };
 
 vi.mock("./configuredAuth", () => ({ resolveConfiguredAuth: mocks.resolveConfiguredAuth }));
-vi.mock("./LayoutView", () => ({ WorkspaceCanvas: ({ onRequestAuthConnection }: { onRequestAuthConnection: (owner: "terminal", blockId: string, profile: typeof requestedProfile) => void }) => <button onClick={() => onRequestAuthConnection("terminal", "block-1", requestedProfile)}>请求远程连接</button> }));
+vi.mock("./LayoutView", () => ({ WorkspaceCanvas: ({ onRequestAuthConnection, onOpenConnectionManager }: { onRequestAuthConnection: (owner: "terminal", blockId: string, profile: typeof requestedProfile) => void; onOpenConnectionManager: () => void }) => <><button onClick={() => onRequestAuthConnection("terminal", "block-1", requestedProfile)}>请求远程连接</button><button onClick={onOpenConnectionManager}>从连接选择器管理连接</button></> }));
 vi.mock("./WorkspaceProvider", () => ({ useWorkspace: () => ({
-  document: { schemaVersion: 5, activeWorkspaceId: workspace.id, workspaces: [workspace] }, activeWorkspace: workspace,
+  document: { schemaVersion: 6, activeWorkspaceId: workspace.id, recentProfileIds: [], workspaces: [workspace] }, activeWorkspace: workspace,
   dispatch: mocks.dispatch, runtimes: {}, fileRuntimes: {}, networkRuntimes: {}, connectBlock: mocks.connectBlock, connectFileBlock: mocks.connectFileBlock, connectNetworkBlock: mocks.connectNetworkBlock,
   isConnectionTargetCurrent: mocks.isConnectionTargetCurrent,
   connectedCount: vi.fn().mockReturnValue(0), closeSessions: vi.fn().mockResolvedValue(undefined), blocksForWorkspace: vi.fn().mockReturnValue(["block-1"]),
   acceptBlockHostKey: vi.fn(), rejectBlockHostKey: vi.fn(), acceptFileHostKey: vi.fn(), rejectFileHostKey: vi.fn(), acceptNetworkHostKey: vi.fn(), rejectNetworkHostKey: vi.fn(), storageNotice: "", dismissStorageNotice: vi.fn(),
 }) }));
 vi.mock("../components/dialogs/ConnectionAuthDialog", () => ({ ConnectionAuthDialog: ({ profile: item }: { profile: typeof connectionProfile }) => <div role="dialog" aria-label={`认证 ${item.name}`}/> }));
+vi.mock("../components/dialogs/ConnectionDialog", () => ({ ConnectionDialog: () => <div role="dialog" aria-label="连接管理"/> }));
 vi.mock("../components/dialogs/MasterPasswordDialog", () => ({ MasterPasswordDialog: ({ mode, onSuccess }: { mode: string; onSuccess: () => void }) => <div role="dialog" aria-label="解锁凭证库">{mode}<button onClick={onSuccess}>解锁</button></div> }));
 vi.mock("../lib/tauri/credentials", () => ({ getVaultStatus: mocks.getVaultStatus, lockVault: mocks.lockVault, unlockVault: mocks.unlockVault, onVaultStatusChanged: mocks.onVaultStatusChanged }));
 vi.mock("../lib/tauri/settings", () => ({ getSettings: mocks.getSettings }));
@@ -58,6 +59,14 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.clearAllMocks(); requestedProfile = connectionProfile; });
 
 describe("WorkspaceShell configured connection routing", () => {
+  it("opens the existing connection manager from a block target picker", async () => {
+    const user = userEvent.setup();
+    render(<WorkspaceShell/>);
+
+    await user.click(screen.getByRole("button", { name: "从连接选择器管理连接" }));
+    expect(screen.getByRole("dialog", { name: "连接管理" })).toBeInTheDocument();
+  });
+
   it("tries configured authentication first and opens the prompt only after failure", async () => {
     mocks.resolveConfiguredAuth.mockResolvedValue({ method: "sshAgent" });
     const user = userEvent.setup();

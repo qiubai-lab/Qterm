@@ -1,6 +1,6 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Workspace } from "./model";
 import type { TerminalRuntime } from "./WorkspaceProvider";
@@ -19,6 +19,8 @@ const profiles = [
 const connectedLocalRuntime = { sessionId: "local-1", kind: "local" as const, status: "connected" as const, hostKeyPrompt: null, notice: "", cwd: "C:/work" };
 let terminalRuntimes: Record<string, TerminalRuntime> = { "block-1": connectedLocalRuntime };
 let networkRuntimes: Record<string, { sessionId: string | null; status: "closed" | "connected"; hostKeyPrompt: null; notice: string; ruleStates: Record<string, "stopped" | "running"> }> = {};
+
+afterEach(cleanup);
 
 vi.mock("../terminal/TerminalPanel", () => ({
   TerminalPanel: () => <div aria-label="测试终端"/>,
@@ -77,6 +79,16 @@ describe("WorkspaceCanvas terminal actions", () => {
     expect(screen.getByRole("button", { name: "上下分割" })).toBeInTheDocument();
   });
 
+  it("opens connection management from the block target picker", async () => {
+    const user = userEvent.setup();
+    const onOpenConnectionManager = vi.fn();
+    render(<WorkspaceCanvas workspace={workspace} visible onRequestClose={vi.fn()} onRequestAuthConnection={vi.fn()} onOpenConnectionManager={onOpenConnectionManager}/>);
+
+    await user.click(screen.getByRole("button", { name: "选择终端连接，当前：本地终端" }));
+    await user.click(screen.getByRole("button", { name: "管理连接…" }));
+    expect(onOpenConnectionManager).toHaveBeenCalledOnce();
+  });
+
   it("opens the current terminal directory as an internal files leaf", () => {
     const view = render(<WorkspaceCanvas workspace={workspace} visible onRequestClose={vi.fn()} onRequestAuthConnection={vi.fn()}/>);
     within(view.container).getByRole("button", { name: "打开当前文件夹" }).click();
@@ -130,7 +142,8 @@ describe("WorkspaceCanvas terminal actions", () => {
     const filesWorkspace: Workspace = { ...workspace, activeBlockId: "files-1", layout: { type: "files", blockId: "files-1", profileId: null, path: "C:/work" } };
     const view = render(<WorkspaceCanvas workspace={filesWorkspace} visible onRequestClose={vi.fn()} onRequestAuthConnection={onRequestAuthConnection}/>);
     await user.click(within(view.container).getByRole("button", { name: /选择文件连接/ }));
-    await user.click(within(view.container).getByRole("menuitemradio", { name: /Password Server/ }));
+    await user.type(screen.getByRole("searchbox", { name: "搜索文件连接" }), "Password Server");
+    await user.click(screen.getByRole("button", { name: /Password Server/ }));
     expect(selectFileTarget).toHaveBeenCalledWith("workspace-1", "files-1", "password-profile");
     expect(onRequestAuthConnection).toHaveBeenCalledWith("files", "files-1", profiles[0]);
   });
@@ -140,11 +153,13 @@ describe("WorkspaceCanvas terminal actions", () => {
     const onRequestAuthConnection = vi.fn();
     const view = render(<WorkspaceCanvas workspace={workspace} visible onRequestClose={vi.fn()} onRequestAuthConnection={onRequestAuthConnection}/>);
     await user.click(within(view.container).getByRole("button", { name: /选择终端连接/ }));
-    await user.click(within(view.container).getByRole("menuitemradio", { name: /Password Server/ }));
+    await user.type(screen.getByRole("searchbox", { name: "搜索终端连接" }), "Password Server");
+    await user.click(screen.getByRole("button", { name: /Password Server/ }));
     expect(selectBlockTarget).toHaveBeenCalledWith("workspace-1", "block-1", "password-profile");
     expect(onRequestAuthConnection).toHaveBeenCalledWith("terminal", "block-1", profiles[0]);
     await user.click(within(view.container).getByRole("button", { name: /选择终端连接/ }));
-    await user.click(within(view.container).getByRole("menuitemradio", { name: /Key Server/ }));
+    await user.type(screen.getByRole("searchbox", { name: "搜索终端连接" }), "Key Server");
+    await user.click(screen.getByRole("button", { name: /Key Server/ }));
     expect(onRequestAuthConnection).toHaveBeenLastCalledWith("terminal", "block-1", profiles[1]);
   });
 

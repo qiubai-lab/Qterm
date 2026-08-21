@@ -25,6 +25,7 @@ impl WorkspaceState {
 pub struct WorkspaceDocumentDto {
     schema_version: u64,
     active_workspace_id: String,
+    recent_profile_ids: Vec<String>,
     workspaces: Vec<WorkspaceDto>,
 }
 
@@ -90,7 +91,7 @@ pub fn workspace_save(
     document: WorkspaceDocumentDto,
     state: State<'_, WorkspaceState>,
 ) -> Result<(), IpcError> {
-    if document.schema_version != 5 {
+    if document.schema_version != 6 {
         return Err(IpcError::from(
             crate::application::error::ApplicationError::new(
                 crate::application::error::ApplicationErrorCode::InvalidWorkspaceDocument,
@@ -108,8 +109,9 @@ pub fn workspace_save(
 impl WorkspaceDocumentDto {
     fn from_domain(document: &WorkspaceDocument) -> Self {
         Self {
-            schema_version: 5,
+            schema_version: 6,
             active_workspace_id: document.active_workspace_id.clone(),
+            recent_profile_ids: document.recent_profile_ids.clone(),
             workspaces: document
                 .workspaces
                 .iter()
@@ -121,6 +123,7 @@ impl WorkspaceDocumentDto {
     fn into_domain(self) -> WorkspaceDocument {
         WorkspaceDocument {
             active_workspace_id: self.active_workspace_id,
+            recent_profile_ids: self.recent_profile_ids,
             workspaces: self
                 .workspaces
                 .into_iter()
@@ -260,8 +263,9 @@ mod tests {
 
     fn document() -> serde_json::Value {
         json!({
-            "schemaVersion": 5,
+            "schemaVersion": 6,
             "activeWorkspaceId": "workspace-1",
+            "recentProfileIds": ["profile-1"],
             "workspaces": [{
                 "id": "workspace-1",
                 "name": "Workspace",
@@ -287,7 +291,7 @@ mod tests {
     }
 
     #[test]
-    fn workspace_dto_accepts_v5_network_layout_fields() {
+    fn workspace_dto_accepts_v6_recent_profiles_and_network_layout_fields() {
         assert!(serde_json::from_value::<WorkspaceDocumentDto>(document()).is_ok());
     }
 

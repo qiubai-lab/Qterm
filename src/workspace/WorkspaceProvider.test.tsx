@@ -26,7 +26,7 @@ const mocks = vi.hoisted(() => ({
   networkConnections: [] as Array<{ event: (event: SessionEvent) => void }>,
 }));
 
-vi.mock("../lib/tauri/profiles", () => ({ listProfiles: vi.fn().mockResolvedValue([]) }));
+vi.mock("../lib/tauri/profiles", () => ({ listProfiles: vi.fn().mockResolvedValue([]), listProfileGroups: vi.fn().mockResolvedValue([]) }));
 vi.mock("../lib/tauri/workspaces", () => ({ loadWorkspaces: vi.fn().mockResolvedValue(null), saveWorkspaces: vi.fn().mockResolvedValue(undefined) }));
 vi.mock("../lib/tauri/sessions", () => ({
   connectSession: mocks.connectSession,
@@ -52,11 +52,12 @@ import { WorkspaceProvider, useWorkspace } from "./WorkspaceProvider";
 const profile = { id: "profile-1", name: "Server", host: "example.test", port: 22, username: "user", authPreference: "password" as const, credentialId: null, groupId: null };
 
 function Harness() {
-  const { activeWorkspace, dispatch, registerWriter, clearBlockBuffer, startLocalBlock, connectBlock, connectFileBlock, connectNetworkBlock, startNetworkBlockRule, selectBlockTarget, selectFileTarget, selectNetworkTarget, writeBlock, resizeBlock, runtimes, fileRuntimes, networkRuntimes } = useWorkspace();
+  const { document, activeWorkspace, dispatch, registerWriter, clearBlockBuffer, startLocalBlock, connectBlock, connectFileBlock, connectNetworkBlock, startNetworkBlockRule, selectBlockTarget, selectFileTarget, selectNetworkTarget, writeBlock, resizeBlock, runtimes, fileRuntimes, networkRuntimes } = useWorkspace();
   const ids = blockIds(activeWorkspace.layout);
   const activeLeaf = findLeaf(activeWorkspace.layout, activeWorkspace.activeBlockId);
   return <>
     <output>{ids.length}</output>
+    <output data-testid="recent-profiles">{document.recentProfileIds.join(",")}</output>
     <button onClick={() => dispatch({ type: "splitBlock", workspaceId: activeWorkspace.id, blockId: activeWorkspace.activeBlockId, direction: "horizontal" })}>split</button>
     <button onClick={() => ids.forEach((id, index) => registerWriter(id, mocks.writers[index], mocks.clearers[index]))}>register</button>
     <button onClick={() => mocks.unregisterWriters.push(registerWriter(ids[0], mocks.writers[0], mocks.clearers[0]))}>register-old-writer</button>
@@ -194,6 +195,7 @@ describe("WorkspaceProvider multi-session routing", () => {
 
     await user.click(screen.getByRole("button", { name: "select-remote-target" }));
     await user.click(screen.getByRole("button", { name: "select-local-target" }));
+    expect(screen.getByTestId("recent-profiles")).toHaveTextContent("profile-1");
     await user.click(screen.getByRole("button", { name: "local" }));
     await waitFor(() => expect(screen.getByTestId("runtime")).toHaveTextContent("local:connected"));
     await user.click(screen.getByRole("button", { name: "connect" }));

@@ -21,7 +21,8 @@ type ContextMenuState = {
 };
 type DropTarget = string | "ungrouped" | null;
 type PointerDragState = {
-  profile: ConnectionProfile;
+  profiles: ConnectionProfile[];
+  anchorProfile: ConnectionProfile;
   pointerId: number;
   startX: number;
   startY: number;
@@ -37,6 +38,7 @@ type PointerDragState = {
 export function ConnectionDialog({ onClose }: { onClose: () => void }) {
   const { profiles, refreshProfiles, activeWorkspace, activeBlockId, selectBlockTarget } = useWorkspace();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [editor, setEditor] = useState<ProfileInput>(empty);
   const [groups, setGroups] = useState<ProfileGroup[]>([]);
   const [collapsedGroupIds, setCollapsedGroupIds] = useState<Set<string>>(() => new Set());
@@ -52,7 +54,7 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
   const [credentialManagerOpen, setCredentialManagerOpen] = useState(false);
   const [credentialUnlockOpen, setCredentialUnlockOpen] = useState(false);
   const [sshConfigImportOpen, setSshConfigImportOpen] = useState(false);
-  const [deleteRequested, setDeleteRequested] = useState<ConnectionProfile | null>(null);
+  const [deleteRequested, setDeleteRequested] = useState<ConnectionProfile[] | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteMessage, setDeleteMessage] = useState("");
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
@@ -73,6 +75,9 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
   const ungroupedProfiles = profiles.filter((profile) => !profile.groupId || !knownGroupIds.has(profile.groupId));
   const contextGroup = contextMenu?.target.type === "group" ? contextMenu.target.group : null;
   const contextProfile = contextMenu?.target.type === "profile" ? contextMenu.target.profile : null;
+  const contextProfiles = contextProfile
+    ? selectedIds.has(contextProfile.id) ? profiles.filter((profile) => selectedIds.has(profile.id)) : [contextProfile]
+    : [];
 
   useEffect(() => {
     void refreshCredentialSummaries();
@@ -104,11 +109,38 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
     if (saveResetTimerRef.current !== null) window.clearTimeout(saveResetTimerRef.current);
   }, []);
 
-  function chooseProfile(profile: ConnectionProfile) {
+  function editProfile(profile: ConnectionProfile) {
     const changedProfile = profile.id !== selectedId;
     setSelectedId(profile.id);
     setEditor({ name: profile.name, host: profile.host, port: profile.port, username: profile.username, authPreference: profile.authPreference, credentialId: profile.credentialId, groupId: profile.groupId });
     if (changedProfile && saveState === "idle") { setEditorTab("connection"); setTabMotion("idle"); }
+  }
+
+  function chooseProfile(profile: ConnectionProfile) {
+    setSelectedIds(new Set([profile.id]));
+    editProfile(profile);
+  }
+
+  function toggleProfileSelection(profile: ConnectionProfile) {
+    const next = new Set(selectedIds);
+    if (next.has(profile.id)) {
+      next.delete(profile.id);
+      setSelectedIds(next);
+      if (selectedId === profile.id) {
+        const replacement = profiles.find((item) => next.has(item.id));
+        if (replacement) editProfile(replacement);
+        else startNewProfile();
+      }
+      return;
+    }
+    next.add(profile.id);
+    setSelectedIds(next);
+    editProfile(profile);
+  }
+
+  function activateProfile(profile: ConnectionProfile, additive: boolean) {
+    if (additive) toggleProfileSelection(profile);
+    else chooseProfile(profile);
   }
 
   async function refreshCredentialSummaries() {
@@ -122,7 +154,7 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
   }
 
   function startNewProfile(groupId: string | null = null) {
-    setSelectedId(null); setEditor({ ...empty, groupId }); setEditorTab("connection"); setTabMotion("idle"); setMessage(""); setSaveState("idle");
+    setSelectedId(null); setSelectedIds(new Set()); setEditor({ ...empty, groupId }); setEditorTab("connection"); setTabMotion("idle"); setMessage(""); setSaveState("idle");
   }
 
   function selectEditorTab(next: EditorTab) {
@@ -139,28 +171,33 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
       const input = { ...editor, name: editor.name.trim() || editor.host.trim() };
       setEditor(input);
       const profile = selectedId ? await updateProfile(selectedId, input) : await createProfile(input);
-      await refreshProfiles(); setSelectedId(profile.id);
+      await refreshProfiles(); setSelectedId(profile.id); setSelectedIds(new Set([profile.id]));
       setSaveState("success");
       saveResetTimerRef.current = window.setTimeout(() => { setSaveState("idle"); saveResetTimerRef.current = null; }, 1400);
     } catch (error) { setSaveState("idle"); setMessage(errorMessage(error)); }
   }
 
-  function requestDelete(profile: ConnectionProfile) {
+  function requestDelete(requestedProfiles: ConnectionProfile | ConnectionProfile[]) {
     setDeleteMessage("");
-    setDeleteRequested(profile);
+    setDeleteRequested(Array.isArray(requestedProfiles) ? requestedProfiles : [requestedProfiles]);
   }
 
-  async function remove(profile: ConnectionProfile | null = deleteRequested) {
-    if (!profile) return;
+  async function remove(requestedProfiles: ConnectionProfile[] | null = deleteRequested) {
+    if (!requestedProfiles?.length) return;
     setDeleteBusy(true); setDeleteMessage("");
     try {
-      const result = await deleteProfile(profile.id); await refreshProfiles();
-      if (findProfileId(activeWorkspace.layout, terminalBlockId) === profile.id) await selectBlockTarget(activeWorkspace.id, terminalBlockId, null);
-      if (selectedId === profile.id) startNewProfile();
+      const results = await Promise.all(requestedProfiles.map((profile) => deleteProfile(profile.id)));
+      await refreshProfiles();
+      const deletedIds = new Set(requestedProfiles.map((profile) => profile.id));
+      if (deletedIds.has(findProfileId(activeWorkspace.layout, terminalBlockId) ?? "")) await selectBlockTarget(activeWorkspace.id, terminalBlockId, null);
+      if (selectedId && deletedIds.has(selectedId)) startNewProfile();
+      else setSelectedIds((current) => new Set([...current].filter((id) => !deletedIds.has(id))));
       setDeleteRequested(null);
-      setMessage(result.deletedNetworkRules > 0
-        ? `连接配置已删除，已同时删除 ${result.deletedNetworkRules} 条关联网络转发规则；共享凭证保持不变`
-        : "连接配置已删除，共享凭证保持不变");
+      const deletedNetworkRules = results.reduce((total, result) => total + result.deletedNetworkRules, 0);
+      const prefix = requestedProfiles.length > 1 ? `已删除 ${requestedProfiles.length} 个连接配置` : "连接配置已删除";
+      setMessage(deletedNetworkRules > 0
+        ? `${prefix}，已同时删除 ${deletedNetworkRules} 条关联网络转发规则；共享凭证保持不变`
+        : `${prefix}，共享凭证保持不变`);
     } catch (error) { setDeleteMessage(errorMessage(error)); }
     finally { setDeleteBusy(false); }
   }
@@ -210,6 +247,7 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
 
   function openContextMenu(event: MouseEvent<HTMLElement>, target: ContextMenuState["target"]) {
     event.preventDefault();
+    if (target.type === "profile" && !selectedIds.has(target.profile.id)) chooseProfile(target.profile);
     setContextMenu({
       x: Math.max(8, Math.min(event.clientX, window.innerWidth - 190)),
       y: Math.max(8, Math.min(event.clientY, window.innerHeight - 250)),
@@ -220,6 +258,7 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
   function openContextMenuFromKeyboard(event: KeyboardEvent<HTMLElement>, target: ContextMenuState["target"]) {
     if (event.key !== "ContextMenu" && !(event.shiftKey && event.key === "F10")) return;
     event.preventDefault();
+    if (target.type === "profile" && !selectedIds.has(target.profile.id)) chooseProfile(target.profile);
     const bounds = event.currentTarget.getBoundingClientRect();
     setContextMenu({
       x: Math.max(8, Math.min(bounds.left + 14, window.innerWidth - 190)),
@@ -230,9 +269,15 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
 
   function beginPointerDrag(event: ReactPointerEvent<HTMLElement>, profile: ConnectionProfile) {
     if (event.button !== 0) return;
+    const additive = event.metaKey || event.ctrlKey;
+    const draggedProfiles = selectedIds.has(profile.id)
+      ? profiles.filter((item) => selectedIds.has(item.id))
+      : [profile];
+    if (!selectedIds.has(profile.id) && !additive) chooseProfile(profile);
     const bounds = event.currentTarget.getBoundingClientRect();
     const drag: PointerDragState = {
-      profile,
+      profiles: draggedProfiles,
+      anchorProfile: profile,
       pointerId: event.pointerId,
       startX: event.clientX,
       startY: event.clientY,
@@ -256,7 +301,7 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
     if (!active) return;
     event.preventDefault();
     suppressClickRef.current = true;
-    const targetGroupId = dropGroupAtPoint(event.clientX, event.clientY, current.profile.groupId);
+    const targetGroupId = dropGroupAtPoint(event.clientX, event.clientY, current.profiles);
     const next = { ...current, active: true, x: event.clientX, y: event.clientY, targetGroupId };
     pointerDragRef.current = next;
     setPointerDrag(next);
@@ -266,13 +311,13 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
   function endPointerDrag(event: ReactPointerEvent<HTMLElement>) {
     const current = pointerDragRef.current;
     if (!current || current.pointerId !== event.pointerId) return;
-    const { active, profile, targetGroupId } = current;
+    const { active, profiles: draggedProfiles, targetGroupId } = current;
     clearPointerDrag();
     event.currentTarget.releasePointerCapture?.(event.pointerId);
     if (!active) return;
     event.preventDefault();
     window.setTimeout(() => { suppressClickRef.current = false; }, 0);
-    if (targetGroupId !== undefined) void moveProfile(profile, targetGroupId);
+    if (targetGroupId !== undefined) void moveProfiles(draggedProfiles, targetGroupId);
   }
 
   function cancelPointerDrag(event?: ReactPointerEvent<HTMLElement>) {
@@ -288,15 +333,16 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
     setPointerDrag(null); setDropTarget(null);
   }
 
-  async function moveProfile(profile: ConnectionProfile, groupId: string | null) {
+  async function moveProfiles(requestedProfiles: ConnectionProfile[], groupId: string | null) {
     setContextMenu(null);
-    if ((profile.groupId ?? null) === groupId) return;
+    const movableProfiles = requestedProfiles.filter((profile) => (profile.groupId ?? null) !== groupId);
+    if (movableProfiles.length === 0) return;
     try {
-      await updateProfile(profile.id, profileToInput(profile, groupId));
-      if (selectedId === profile.id) setEditor((current) => ({ ...current, groupId }));
+      await Promise.all(movableProfiles.map((profile) => updateProfile(profile.id, profileToInput(profile, groupId))));
+      if (selectedId && movableProfiles.some((profile) => profile.id === selectedId)) setEditor((current) => ({ ...current, groupId }));
       await refreshProfiles();
       const destination = groups.find((group) => group.id === groupId)?.name ?? "未分组";
-      setMessage(`已将“${profile.name}”移到${destination}`);
+      setMessage(movableProfiles.length > 1 ? `已将 ${movableProfiles.length} 个连接移到${destination}` : `已将“${movableProfiles[0].name}”移到${destination}`);
     } catch (error) { setMessage(errorMessage(error)); }
   }
 
@@ -322,23 +368,26 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
   }
 
   function profileItem(profile: ConnectionProfile) {
+    const isSelected = selectedIds.has(profile.id);
+    const isDragging = pointerDrag?.active && pointerDrag.profiles.some((item) => item.id === profile.id);
     return <div
       key={profile.id}
       role="button"
       tabIndex={0}
-      className={`${selectedId === profile.id ? "connection-item selected" : "connection-item"}${pointerDrag?.active && pointerDrag.profile.id === profile.id ? " dragging" : ""}`}
-      onClick={(event) => { if (suppressClickRef.current) { event.preventDefault(); return; } chooseProfile(profile); }}
+      aria-pressed={isSelected}
+      className={`${isSelected ? "connection-item selected" : "connection-item"}${isDragging ? " dragging" : ""}`}
+      onClick={(event) => { if (suppressClickRef.current) { event.preventDefault(); return; } activateProfile(profile, event.metaKey || event.ctrlKey); }}
       onMouseDown={(event) => { if (event.button === 2) openContextMenu(event, { type: "profile", profile }); }}
       onContextMenu={(event) => openContextMenu(event, { type: "profile", profile })}
       onKeyDown={(event) => {
         openContextMenuFromKeyboard(event, { type: "profile", profile });
-        if (event.key === "Enter" || event.key === " ") { event.preventDefault(); chooseProfile(profile); }
+        if (event.key === "Enter" || event.key === " ") { event.preventDefault(); activateProfile(profile, event.metaKey || event.ctrlKey); }
       }}
       onPointerDown={(event) => beginPointerDrag(event, profile)}
       onPointerMove={movePointerDrag}
       onPointerUp={endPointerDrag}
       onPointerCancel={cancelPointerDrag}
-      onLostPointerCapture={() => { if (pointerDragRef.current?.profile.id === profile.id) clearPointerDrag(); }}
+      onLostPointerCapture={() => { if (pointerDragRef.current?.anchorProfile.id === profile.id) clearPointerDrag(); }}
     ><span className="connection-item-status" aria-hidden="true"/><span className="connection-item-copy"><strong className="connection-item-name">{profile.name}</strong><small className="connection-item-endpoint"><span className="connection-item-address" title={`${profile.username}@${profile.host}:${profile.port}`}>{profile.username}@{profile.host}:{profile.port}</span><span className="connection-item-auth">{authPreferenceLabel(profile.authPreference)}</span></small></span></div>;
   }
 
@@ -408,7 +457,7 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
             </div>}
             {message && <p className="inline-message" role="alert">{message}</p>}
           </div>
-          <footer className="dialog-actions connection-editor-actions">{selected && <button className="danger-button" onClick={() => requestDelete(selected)}>删除</button>}<button className={`primary-button connection-save-button ${saveState}`} data-state={saveState} disabled={saveState !== "idle"} aria-live="polite" onClick={() => void save()}><span>{saveState === "saving" ? "保存中…" : saveState === "success" ? "保存成功" : "保存配置"}</span></button></footer>
+          <footer className="dialog-actions connection-editor-actions">{selected && <button className="danger-button" onClick={() => requestDelete(profiles.filter((profile) => selectedIds.has(profile.id)))}>{selectedIds.size > 1 ? `删除 ${selectedIds.size} 项` : "删除"}</button>}<button className={`primary-button connection-save-button ${saveState}`} data-state={saveState} disabled={saveState !== "idle"} aria-live="polite" onClick={() => void save()}><span>{saveState === "saving" ? "保存中…" : saveState === "success" ? "保存成功" : "保存配置"}</span></button></footer>
         </div>
       </div>
     </DialogFrame>
@@ -419,12 +468,12 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
         width: pointerDrag.width,
         transform: `translate3d(${pointerDrag.x - pointerDrag.grabX}px, ${pointerDrag.y - pointerDrag.grabY}px, 0)`,
       }}
-    ><strong>{pointerDrag.profile.name}</strong><small>{pointerDrag.profile.username}@{pointerDrag.profile.host}:{pointerDrag.profile.port}</small></div>}
+    ><strong>{pointerDrag.anchorProfile.name}{pointerDrag.profiles.length > 1 && <span className="connection-drag-count">{pointerDrag.profiles.length}</span>}</strong><small>{pointerDrag.profiles.length > 1 ? `移动 ${pointerDrag.profiles.length} 个连接` : `${pointerDrag.anchorProfile.username}@${pointerDrag.anchorProfile.host}:${pointerDrag.anchorProfile.port}`}</small></div>}
     {contextMenu && <div
       ref={contextMenuRef}
       className="connection-context-menu"
       role="menu"
-      aria-label={contextGroup ? `${contextGroup.name} 分组菜单` : `${contextProfile?.name ?? "连接"} 连接菜单`}
+      aria-label={contextGroup ? `${contextGroup.name} 分组菜单` : contextProfiles.length > 1 ? `${contextProfiles.length} 个已选连接菜单` : `${contextProfile?.name ?? "连接"} 连接菜单`}
       style={{ left: contextMenu.x, top: contextMenu.y }}
       onContextMenu={(event) => event.preventDefault()}
     >
@@ -434,10 +483,10 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
         <div className="connection-context-menu-separator" role="separator"/>
         <button className="danger" role="menuitem" onClick={() => { setContextMenu(null); setGroupDeleteRequested(contextGroup); }}>删除分组</button>
       </> : contextProfile ? <>
-        <button role="menuitem" onClick={() => { setContextMenu(null); chooseProfile(contextProfile); }}>编辑连接</button>
-        <button role="menuitem" onClick={() => void duplicateProfile(contextProfile)}>复制连接</button>
-        <div className="connection-context-menu-separator" role="separator"/>
-        <button className="danger" role="menuitem" onClick={() => { setContextMenu(null); requestDelete(contextProfile); }}>删除连接</button>
+        {contextProfiles.length === 1 && <button role="menuitem" onClick={() => { setContextMenu(null); chooseProfile(contextProfile); }}>编辑连接</button>}
+        {contextProfiles.length === 1 && <button role="menuitem" onClick={() => void duplicateProfile(contextProfile)}>复制连接</button>}
+        {contextProfiles.length === 1 && <div className="connection-context-menu-separator" role="separator"/>}
+        <button className="danger" role="menuitem" onClick={() => { setContextMenu(null); requestDelete(contextProfiles); }}>{contextProfiles.length > 1 ? `删除 ${contextProfiles.length} 个连接` : "删除连接"}</button>
       </> : null}
     </div>}
     {groupEditor && <DialogFrame title={groupEditor === "new" ? "新建分组" : "管理分组"} subtitle="连接分组仅支持一层" compact onClose={() => setGroupEditor(null)}>
@@ -449,8 +498,8 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
       <p className="confirm-copy">该分组内的连接不会被删除，而会自动移到“未分组”。</p>
       <footer className="dialog-actions end"><button className="secondary-button" onClick={() => setGroupDeleteRequested(null)}>取消</button><button className="danger-button filled" data-dialog-autofocus onClick={() => void removeGroup()}>确认删除</button></footer>
     </DialogFrame>}
-    {deleteRequested && <DialogFrame title="删除连接？" subtitle={deleteRequested.name} compact dismissible={!deleteBusy} onClose={() => { if (!deleteBusy) setDeleteRequested(null); }}>
-      <p className="confirm-copy">删除后将同时移除此连接及其关联的网络转发规则；共享凭证保持不变。此操作无法撤销。</p>
+    {deleteRequested && <DialogFrame title={deleteRequested.length > 1 ? `删除 ${deleteRequested.length} 个连接？` : "删除连接？"} subtitle={deleteRequested.length > 1 ? deleteRequested.map((profile) => profile.name).join("、") : deleteRequested[0].name} compact dismissible={!deleteBusy} onClose={() => { if (!deleteBusy) setDeleteRequested(null); }}>
+      <p className="confirm-copy">删除后将同时移除{deleteRequested.length > 1 ? "这些连接" : "此连接"}及其关联的网络转发规则；共享凭证保持不变。此操作无法撤销。</p>
       <footer className="dialog-actions dialog-actions-with-status"><DialogActionStatus message={deleteMessage}/><div><button className="secondary-button" disabled={deleteBusy} onClick={() => setDeleteRequested(null)}>取消</button><button className="danger-button filled" data-dialog-autofocus disabled={deleteBusy} onClick={() => void remove()}>{deleteBusy ? "正在删除…" : "确认删除"}</button></div></footer>
     </DialogFrame>}
     {credentialManagerOpen && (
@@ -509,11 +558,11 @@ function duplicateProfileName(name: string, profiles: ConnectionProfile[]): stri
   return `${base} ${suffix}`;
 }
 
-function dropGroupAtPoint(x: number, y: number, currentGroupId: string | null): string | null | undefined {
+function dropGroupAtPoint(x: number, y: number, draggedProfiles: ConnectionProfile[]): string | null | undefined {
   const target = document.elementFromPoint(x, y)?.closest<HTMLElement>("[data-profile-drop-group]");
   if (!target) return undefined;
   const groupId = target.dataset.profileDropGroup || null;
-  return groupId === (currentGroupId ?? null) ? undefined : groupId;
+  return draggedProfiles.every((profile) => (profile.groupId ?? null) === groupId) ? undefined : groupId;
 }
 
 function errorMessage(error: unknown): string {

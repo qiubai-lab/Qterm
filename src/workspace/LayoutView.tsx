@@ -28,7 +28,7 @@ interface IndicatorBounds {
   ready: boolean;
 }
 
-export function WorkspaceCanvas({ workspace, visible, onRequestClose, onRequestAuthConnection }: { workspace: Workspace; visible: boolean; onRequestClose: (blockId: string) => void; onRequestAuthConnection: (owner: ConnectionOwner, blockId: string, profile: ConnectionProfile) => void }) {
+export function WorkspaceCanvas({ workspace, visible, onRequestClose, onRequestAuthConnection, onOpenConnectionManager }: { workspace: Workspace; visible: boolean; onRequestClose: (blockId: string) => void; onRequestAuthConnection: (owner: ConnectionOwner, blockId: string, profile: ConnectionProfile) => void; onOpenConnectionManager?: () => void }) {
   const { dispatch } = useWorkspace();
   const [drag, setDrag] = useState<DragState | null>(null);
   const dragRef = useRef<DragState | null>(null);
@@ -95,7 +95,7 @@ export function WorkspaceCanvas({ workspace, visible, onRequestClose, onRequestA
   }
 
   return <div ref={canvasRef} className="workspace-canvas">
-    <LayoutBranch node={workspace.layout} workspace={workspace} visible={visible} drag={drag} beginDrag={beginDrag} onRequestClose={onRequestClose} onRequestAuthConnection={onRequestAuthConnection} />
+    <LayoutBranch node={workspace.layout} workspace={workspace} visible={visible} drag={drag} beginDrag={beginDrag} onRequestClose={onRequestClose} onRequestAuthConnection={onRequestAuthConnection} onOpenConnectionManager={onOpenConnectionManager} />
     <div
       className={`active-block-indicator${indicatorBounds?.ready ? " ready" : ""}`}
       aria-hidden="true"
@@ -110,7 +110,7 @@ export function WorkspaceCanvas({ workspace, visible, onRequestClose, onRequestA
   </div>;
 }
 
-function LayoutBranch(props: { node: LayoutNode; workspace: Workspace; visible: boolean; drag: DragState | null; beginDrag: (event: ReactPointerEvent<HTMLElement>, blockId: string) => void; onRequestClose: (blockId: string) => void; onRequestAuthConnection: (owner: ConnectionOwner, blockId: string, profile: ConnectionProfile) => void }) {
+function LayoutBranch(props: { node: LayoutNode; workspace: Workspace; visible: boolean; drag: DragState | null; beginDrag: (event: ReactPointerEvent<HTMLElement>, blockId: string) => void; onRequestClose: (blockId: string) => void; onRequestAuthConnection: (owner: ConnectionOwner, blockId: string, profile: ConnectionProfile) => void; onOpenConnectionManager?: () => void }) {
   if (props.node.type === "terminal") {
     return <TerminalBlock {...props} blockId={props.node.blockId} profileId={props.node.profileId} />;
   }
@@ -162,7 +162,7 @@ function SplitBranch(props: Omit<Parameters<typeof LayoutBranch>[0], "node"> & {
 }
 
 function TerminalBlock(props: Omit<Parameters<typeof LayoutBranch>[0], "node"> & { blockId: string; profileId: string | null }) {
-  const { dispatch, runtimes, profiles, selectBlockTarget, clearBlockBuffer } = useWorkspace();
+  const { document, dispatch, runtimes, profiles, profileGroups = [], selectBlockTarget, clearBlockBuffer } = useWorkspace();
   const requestConnection = props.onRequestAuthConnection;
   const runtime = runtimes[props.blockId];
   const active = props.workspace.activeBlockId === props.blockId;
@@ -194,7 +194,7 @@ function TerminalBlock(props: Omit<Parameters<typeof LayoutBranch>[0], "node"> &
     aria-label={`终端 Block ${profile?.name ?? "本地终端"}`}
   >
     <header className="terminal-block-header" onPointerDown={(event) => props.beginDrag(event, props.blockId)}>
-      <TerminalTargetPicker profiles={profiles} selectedProfileId={props.profileId} status={status} detail={detail} onSelect={(profileId) => void chooseTarget(profileId)}/>
+      <TerminalTargetPicker profiles={profiles} groups={profileGroups} recentProfileIds={document?.recentProfileIds ?? []} selectedProfileId={props.profileId} status={status} detail={detail} onSelect={(profileId) => void chooseTarget(profileId)} onManageConnections={props.onOpenConnectionManager}/>
       <div className="block-actions">
         <button aria-label="清除终端缓冲区" title="清除终端缓冲区" onClick={() => clearBlockBuffer(props.blockId)}><Icon name="clear" size={13}/></button>
         <button aria-label="打开当前文件夹" title={runtime?.cwd ? `打开 ${runtime.cwd}` : "打开当前文件夹"} disabled={status !== "connected"} onClick={() => dispatch({ type: "openFiles", workspaceId: props.workspace.id, anchorBlockId: props.blockId, profileId: props.profileId, path: runtime?.cwd ?? (props.profileId === null ? "~" : ".") })}><Icon name="files" size={13}/></button>
@@ -211,7 +211,7 @@ function TerminalBlock(props: Omit<Parameters<typeof LayoutBranch>[0], "node"> &
 }
 
 function FilesBlock(props: Omit<Parameters<typeof LayoutBranch>[0], "node"> & { blockId: string; profileId: string | null; path: string }) {
-  const { dispatch, fileRuntimes, profiles, selectFileTarget } = useWorkspace();
+  const { document, dispatch, fileRuntimes, profiles, profileGroups = [], selectFileTarget } = useWorkspace();
   const requestConnection = props.onRequestAuthConnection;
   const runtime: FileRuntime = fileRuntimes[props.blockId] ?? (props.profileId === null
     ? { sessionId: null, kind: "local", status: "connected", hostKeyPrompt: null, notice: "" }
@@ -245,7 +245,7 @@ function FilesBlock(props: Omit<Parameters<typeof LayoutBranch>[0], "node"> & { 
     aria-label={`文件窗口 ${props.path}`}
   >
     <header className="terminal-block-header" onPointerDown={(event) => props.beginDrag(event, props.blockId)}>
-      <TerminalTargetPicker profiles={profiles} selectedProfileId={props.profileId} status={runtime.status} detail={detail} onSelect={(profileId) => void chooseTarget(profileId)} icon="files" localName="本机文件" localDetail="本地文件系统" ariaContext="文件连接"/>
+      <TerminalTargetPicker profiles={profiles} groups={profileGroups} recentProfileIds={document?.recentProfileIds ?? []} selectedProfileId={props.profileId} status={runtime.status} detail={detail} onSelect={(profileId) => void chooseTarget(profileId)} onManageConnections={props.onOpenConnectionManager} icon="files" localName="本机文件" localDetail="本地文件系统" ariaContext="文件连接"/>
       <div className="block-actions">
         <button aria-label="关闭文件窗口" title="关闭" onClick={() => props.onRequestClose(props.blockId)}><Icon name="close" size={13}/></button>
       </div>
@@ -256,7 +256,7 @@ function FilesBlock(props: Omit<Parameters<typeof LayoutBranch>[0], "node"> & { 
 }
 
 function NetworkBlock(props: Omit<Parameters<typeof LayoutBranch>[0], "node"> & { blockId: string; profileId: string | null }) {
-  const { dispatch, profiles, networkRuntimes, selectNetworkTarget, startNetworkBlockRule, stopNetworkBlockRule } = useWorkspace();
+  const { document, dispatch, profiles, profileGroups = [], networkRuntimes, selectNetworkTarget, startNetworkBlockRule, stopNetworkBlockRule } = useWorkspace();
   const profile = profiles.find((item) => item.id === props.profileId);
   const runtime = networkRuntimes[props.blockId];
   const active = props.workspace.activeBlockId === props.blockId;
@@ -299,7 +299,7 @@ function NetworkBlock(props: Omit<Parameters<typeof LayoutBranch>[0], "node"> & 
     aria-label={`网络窗口 ${profile?.name ?? "未选择连接"}`}
   >
     <header className="terminal-block-header" onPointerDown={(event) => props.beginDrag(event, props.blockId)}>
-      <TerminalTargetPicker profiles={profiles} selectedProfileId={props.profileId} status={status} detail={detail} onSelect={(profileId) => void chooseTarget(profileId)} icon="network" localName="选择连接" localDetail="Network Block 需要远程 SSH 连接" ariaContext="网络连接" allowLocal={false}/>
+      <TerminalTargetPicker profiles={profiles} groups={profileGroups} recentProfileIds={document?.recentProfileIds ?? []} selectedProfileId={props.profileId} status={status} detail={detail} onSelect={(profileId) => void chooseTarget(profileId)} onManageConnections={props.onOpenConnectionManager} icon="network" localName="选择连接" localDetail="Network Block 需要远程 SSH 连接" ariaContext="网络连接" allowLocal={false}/>
       <div className="block-actions"><button aria-label="关闭网络窗口" title="关闭" onClick={() => props.onRequestClose(props.blockId)}><Icon name="close" size={13}/></button></div>
     </header>
     <NetworkPane profileId={props.profileId} runtimeStates={runtime?.ruleStates} lockedRuleIds={lockedRuleIds} onStart={(rule) => void startRule(rule.id)} onStop={(rule) => void stopNetworkBlockRule(props.blockId, rule.id)}/>

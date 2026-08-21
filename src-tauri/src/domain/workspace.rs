@@ -3,10 +3,12 @@ use std::collections::HashSet;
 const MAX_NAME_CHARS: usize = 80;
 const MAX_TREE_DEPTH: usize = 16;
 const MAX_BLOCKS: usize = 64;
+const MAX_RECENT_PROFILE_IDS: usize = 6;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct WorkspaceDocument {
     pub active_workspace_id: String,
+    pub recent_profile_ids: Vec<String>,
     pub workspaces: Vec<Workspace>,
 }
 
@@ -58,8 +60,15 @@ pub enum WorkspaceValidationError {
 
 impl WorkspaceDocument {
     pub fn validate(&self) -> Result<(), WorkspaceValidationError> {
-        if self.workspaces.is_empty() {
+        if self.workspaces.is_empty() || self.recent_profile_ids.len() > MAX_RECENT_PROFILE_IDS {
             return Err(WorkspaceValidationError::Document);
+        }
+        let mut recent_profile_ids = HashSet::new();
+        for profile_id in &self.recent_profile_ids {
+            validate_id(profile_id)?;
+            if !recent_profile_ids.insert(profile_id.as_str()) {
+                return Err(WorkspaceValidationError::Document);
+            }
         }
         let mut workspace_ids = HashSet::new();
         let mut block_ids = HashSet::new();
@@ -199,6 +208,7 @@ mod tests {
     fn document() -> WorkspaceDocument {
         WorkspaceDocument {
             active_workspace_id: "workspace-1".into(),
+            recent_profile_ids: vec!["profile-1".into()],
             workspaces: vec![Workspace {
                 id: "workspace-1".into(),
                 name: "Production".into(),
@@ -248,6 +258,7 @@ mod tests {
 
         let only_files = WorkspaceDocument {
             active_workspace_id: "workspace-files".into(),
+            recent_profile_ids: Vec::new(),
             workspaces: vec![Workspace {
                 id: "workspace-files".into(),
                 name: "Files".into(),
@@ -260,5 +271,20 @@ mod tests {
             }],
         };
         assert!(only_files.validate().is_err());
+    }
+
+    #[test]
+    fn rejects_duplicate_or_excessive_recent_profiles() {
+        let mut duplicate = document();
+        duplicate.recent_profile_ids = vec!["profile-1".into(), "profile-1".into()];
+        assert!(duplicate.validate().is_err());
+
+        let mut excessive = document();
+        excessive.recent_profile_ids = (0..7).map(|index| format!("profile-{index}")).collect();
+        assert!(excessive.validate().is_err());
+
+        let mut bounded = document();
+        bounded.recent_profile_ids = (0..6).map(|index| format!("profile-{index}")).collect();
+        assert!(bounded.validate().is_ok());
     }
 }

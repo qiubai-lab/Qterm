@@ -3,6 +3,7 @@ import { createFilesNode, createId, createNetworkNode, createTerminalNode, creat
 
 export type WorkspaceAction =
   | { type: "hydrate"; document: WorkspaceDocument }
+  | { type: "recordRecentProfile"; profileId: string | null }
   | { type: "selectWorkspace"; workspaceId: string }
   | { type: "addWorkspace" }
   | { type: "renameWorkspace"; workspaceId: string; name: string }
@@ -23,6 +24,10 @@ export type WorkspaceAction =
 export function workspaceReducer(state: WorkspaceDocument, action: WorkspaceAction): WorkspaceDocument {
   switch (action.type) {
     case "hydrate": return action.document;
+    case "recordRecentProfile": {
+      if (!action.profileId) return state;
+      return { ...state, recentProfileIds: [action.profileId, ...state.recentProfileIds.filter((id) => id !== action.profileId)].slice(0, 6) };
+    }
     case "selectWorkspace": return state.workspaces.some((workspace) => workspace.id === action.workspaceId) ? { ...state, activeWorkspaceId: action.workspaceId } : state;
     case "addWorkspace": {
       const workspace = createWorkspace(`Workspace ${state.workspaces.length + 1}`);

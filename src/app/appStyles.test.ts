@@ -13,6 +13,43 @@ function declarations(selector: string): string {
 }
 
 describe("application layout styles", () => {
+  it("keeps a small visual gap between adjacent connection selections", () => {
+    expect(declarations(".connection-item+.connection-item")).toContain("margin-top:2px");
+  });
+
+  it("keeps the target picker outside block clipping with one bounded list scroller", () => {
+    expect(declarations(".terminal-target-menu")).toContain("position:fixed");
+    expect(declarations(".terminal-target-menu")).toContain("min-height:0");
+    expect(declarations(".terminal-target-menu")).toContain("overflow:hidden");
+    expect(declarations(".terminal-target-search")).toContain("flex:none");
+    expect(declarations(".terminal-target-search input")).toContain("margin:0");
+    expect(declarations(".terminal-target-search input")).toContain("box-shadow:none");
+    expect(declarations(".terminal-target-search input:focus,.terminal-target-search input:focus-visible")).toContain("box-shadow:none");
+    expect(declarations(".terminal-target-local")).toContain("flex:none");
+    expect(declarations(".terminal-target-list")).toContain("min-height:0");
+    expect(declarations(".terminal-target-list")).toContain("overflow:auto");
+    expect(declarations(".terminal-target-list")).toContain("scrollbar-gutter:stable");
+    expect(declarations(".terminal-target-manage")).toContain("flex:none");
+    expect(declarations(".terminal-target-submenu")).toContain("position:fixed");
+    expect(declarations(".terminal-target-submenu")).toContain("overflow:hidden");
+    expect(declarations(".terminal-target-submenu")).toContain("padding:4px 9px 4px 4px");
+    expect(declarations(".terminal-target-submenu-list")).toContain("height:100%");
+    expect(declarations(".terminal-target-submenu-list")).toContain("overflow-y:auto");
+    expect(declarations(".terminal-target-submenu-list")).toContain("scrollbar-width:none");
+    expect(declarations(".terminal-target-option+.terminal-target-option")).toContain("margin-top:2px");
+    expect(declarations(".terminal-target-group-entry")).toContain("minmax(0,1fr) auto");
+    expect(declarations(".terminal-target-group-meta")).toContain("align-items:center");
+    expect(declarations(".terminal-target-group-meta")).toContain("justify-content:flex-end");
+    expect(declarations(".terminal-target-group-meta small")).toContain("height:18px");
+    expect(declarations(".terminal-target-group-arrow")).toContain("place-items:center");
+    expect(declarations(".terminal-target-group-arrow::before")).toContain("rotate(45deg)");
+    expect(declarations(".terminal-target-scrollbar")).toContain("opacity:0");
+    expect(declarations('.terminal-target-submenu[data-scrollable="true"][data-scrollbar-visible="true"]>.terminal-target-scrollbar')).toContain("opacity:1");
+    expect(declarations(".terminal-target-scrollbar>span")).toContain("--terminal-target-scroll-thumb-offset");
+    expect(declarations('.terminal-target-submenu[data-placement="left"]')).toContain("transform-origin:right top");
+    expect(styles).toContain(".terminal-context-menu,.terminal-target-menu,.terminal-target-submenu{background:#171b1e}");
+  });
+
   it("keeps SSH Config import content in one bounded manager scroller", () => {
     expect(declarations(".ssh-config-import-dialog .dialog-content")).toContain("overflow:hidden");
     expect(declarations(".ssh-config-import-list")).toContain("min-height:0");

@@ -39,8 +39,9 @@ export interface Workspace {
 }
 
 export interface WorkspaceDocument {
-  schemaVersion: 5;
+  schemaVersion: 6;
   activeWorkspaceId: string;
+  recentProfileIds: string[];
   workspaces: Workspace[];
 }
 
@@ -67,5 +68,5 @@ export function createWorkspace(name = "Workspace 1"): Workspace {
 
 export function createWorkspaceDocument(): WorkspaceDocument {
   const workspace = createWorkspace();
-  return { schemaVersion: 5, activeWorkspaceId: workspace.id, workspaces: [workspace] };
+  return { schemaVersion: 6, activeWorkspaceId: workspace.id, recentProfileIds: [], workspaces: [workspace] };
 }
