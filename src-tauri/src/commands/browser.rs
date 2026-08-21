@@ -130,7 +130,7 @@ impl From<BrowserProxyError> for IpcError {
         match value {
             BrowserProxyError::UnsupportedPlatform => Self::new(
                 "browserProxyPlatformUnsupported",
-                "代理浏览器目前仅支持 Windows",
+                "代理浏览器目前仅支持 Windows、macOS 和 Linux",
                 false,
             ),
             BrowserProxyError::BrowserNotInstalled => {

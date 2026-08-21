@@ -1,6 +1,5 @@
 use std::{
     path::{Path, PathBuf},
-    process::Command,
     time::Duration,
 };
 
@@ -9,6 +8,13 @@ use tokio::{
     net::TcpStream,
     time::timeout,
 };
+
+#[cfg(target_os = "linux")]
+mod linux;
+#[cfg(target_os = "macos")]
+mod macos;
+#[cfg(target_os = "windows")]
+mod windows;
 
 const SOCKS_PROBE_TIMEOUT: Duration = Duration::from_millis(1500);
 
@@ -23,13 +29,6 @@ impl ProxyBrowser {
         match self {
             Self::Chrome => "Google Chrome",
             Self::Edge => "Microsoft Edge",
-        }
-    }
-
-    fn executable_name(self) -> &'static str {
-        match self {
-            Self::Chrome => "chrome.exe",
-            Self::Edge => "msedge.exe",
         }
     }
 
@@ -71,8 +70,8 @@ impl BrowserProxyLauncher {
             .into_iter()
             .map(|browser| ProxyBrowserAvailability {
                 browser,
-                installed: detect_browser(browser).is_some(),
-                supported: cfg!(target_os = "windows"),
+                installed: platform_browser_installed(browser),
+                supported: platform_supported(),
             })
             .collect()
     }
@@ -85,10 +84,12 @@ impl BrowserProxyLauncher {
         port: u16,
         proxy_local_addresses: bool,
     ) -> Result<(), BrowserProxyError> {
-        if !cfg!(target_os = "windows") {
+        if !platform_supported() {
             return Err(BrowserProxyError::UnsupportedPlatform);
         }
-        let executable = detect_browser(browser).ok_or(BrowserProxyError::BrowserNotInstalled)?;
+        if !platform_browser_installed(browser) {
+            return Err(BrowserProxyError::BrowserNotInstalled);
+        }
         probe_socks5(host, port).await?;
         let local_address_mode = if proxy_local_addresses {
             "proxy-local"
@@ -101,8 +102,8 @@ impl BrowserProxyLauncher {
             .join(browser.profile_folder())
             .join(safe_rule_folder(&profile_key));
         std::fs::create_dir_all(&profile).map_err(|_| BrowserProxyError::ProfileUnavailable)?;
-        spawn_browser(
-            &executable,
+        platform_launch_browser(
+            browser,
             &browser_arguments(host, port, &profile, proxy_local_addresses),
         )
     }
@@ -152,14 +153,6 @@ fn browser_arguments(
     arguments
 }
 
-fn spawn_browser(executable: &Path, arguments: &[String]) -> Result<(), BrowserProxyError> {
-    Command::new(executable)
-        .args(arguments)
-        .spawn()
-        .map(|_| ())
-        .map_err(|_| BrowserProxyError::LaunchFailed)
-}
-
 fn safe_rule_folder(rule_id: &str) -> String {
     let value: String = rule_id
         .chars()
@@ -188,104 +181,40 @@ fn bracket_ipv6(host: &str) -> String {
     }
 }
 
-#[cfg(target_os = "windows")]
-fn detect_browser(browser: ProxyBrowser) -> Option<PathBuf> {
-    registry_app_path(browser.executable_name())
-        .filter(|path| path.is_file())
-        .or_else(|| {
-            browser_candidates(browser)
-                .into_iter()
-                .find(|path| path.is_file())
-        })
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+fn platform_supported() -> bool {
+    true
 }
 
-#[cfg(not(target_os = "windows"))]
-fn detect_browser(_browser: ProxyBrowser) -> Option<PathBuf> {
-    None
+#[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
+fn platform_supported() -> bool {
+    false
 }
 
+#[cfg(target_os = "linux")]
+use linux::{
+    browser_installed as platform_browser_installed, launch_browser as platform_launch_browser,
+};
+#[cfg(target_os = "macos")]
+use macos::{
+    browser_installed as platform_browser_installed, launch_browser as platform_launch_browser,
+};
 #[cfg(target_os = "windows")]
-fn browser_candidates(browser: ProxyBrowser) -> Vec<PathBuf> {
-    let relative = match browser {
-        ProxyBrowser::Chrome => ["Google", "Chrome", "Application", "chrome.exe"],
-        ProxyBrowser::Edge => ["Microsoft", "Edge", "Application", "msedge.exe"],
-    };
-    ["LOCALAPPDATA", "PROGRAMFILES", "PROGRAMFILES(X86)"]
-        .into_iter()
-        .filter_map(std::env::var_os)
-        .map(PathBuf::from)
-        .map(|root| relative.iter().fold(root, |path, part| path.join(part)))
-        .collect()
+use windows::{
+    browser_installed as platform_browser_installed, launch_browser as platform_launch_browser,
+};
+
+#[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
+fn platform_browser_installed(_browser: ProxyBrowser) -> bool {
+    false
 }
 
-#[cfg(target_os = "windows")]
-fn registry_app_path(executable_name: &str) -> Option<PathBuf> {
-    use windows::{
-        Win32::{
-            Foundation::ERROR_SUCCESS,
-            System::Registry::{
-                HKEY, HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_READ, RegCloseKey, RegOpenKeyExW,
-            },
-        },
-        core::PCWSTR,
-    };
-
-    let subkey =
-        format!("Software\\Microsoft\\Windows\\CurrentVersion\\App Paths\\{executable_name}\0");
-    let wide: Vec<u16> = subkey.encode_utf16().collect();
-    for root in [HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE] {
-        let mut key = HKEY::default();
-        // SAFETY: `wide` is NUL-terminated and `key` remains valid until it is closed below.
-        let opened =
-            unsafe { RegOpenKeyExW(root, PCWSTR(wide.as_ptr()), None, KEY_READ, &mut key) };
-        if opened != ERROR_SUCCESS {
-            continue;
-        }
-        let value = read_default_registry_string(key);
-        // SAFETY: `key` was returned by RegOpenKeyExW and is closed exactly once here.
-        let _ = unsafe { RegCloseKey(key) };
-        if value.is_some() {
-            return value;
-        }
-    }
-    None
-}
-
-#[cfg(target_os = "windows")]
-fn read_default_registry_string(key: windows::Win32::System::Registry::HKEY) -> Option<PathBuf> {
-    use windows::{
-        Win32::Foundation::ERROR_SUCCESS, Win32::System::Registry::RegQueryValueExW, core::PCWSTR,
-    };
-
-    let mut byte_count = 0_u32;
-    // SAFETY: this first call requests only the required byte count for the default value.
-    let sized =
-        unsafe { RegQueryValueExW(key, PCWSTR::null(), None, None, None, Some(&mut byte_count)) };
-    if sized != ERROR_SUCCESS || byte_count < 2 {
-        return None;
-    }
-    let mut buffer = vec![0_u16; byte_count as usize / 2];
-    // SAFETY: `buffer` is sized from the preceding registry query and byte_count describes it.
-    let read = unsafe {
-        RegQueryValueExW(
-            key,
-            PCWSTR::null(),
-            None,
-            None,
-            Some(buffer.as_mut_ptr().cast()),
-            Some(&mut byte_count),
-        )
-    };
-    if read != ERROR_SUCCESS {
-        return None;
-    }
-    let end = buffer
-        .iter()
-        .position(|value| *value == 0)
-        .unwrap_or(buffer.len());
-    let value = String::from_utf16_lossy(&buffer[..end]);
-    let path = PathBuf::from(value.trim().trim_matches('"'));
-    (!path.as_os_str().is_empty()).then_some(path)
+#[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
+fn platform_launch_browser(
+    _browser: ProxyBrowser,
+    _arguments: &[String],
+) -> Result<(), BrowserProxyError> {
+    Err(BrowserProxyError::UnsupportedPlatform)
 }
 
 #[cfg(test)]
