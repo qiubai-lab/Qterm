@@ -1,23 +1,74 @@
-import { useId, useState } from "react";
+import { useId, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 import type { ConnectionRouteNodeProgress, ConnectionRouteNodeState, ConnectionRouteProgressState } from "../workspace/connectionProgress";
+import { calculateConnectionRouteTooltipPosition } from "./connectionRouteTooltipPosition";
 
 export function ConnectionRouteProgress({ progress, endpoint }: { progress: ConnectionRouteProgressState | null | undefined; endpoint?: string | null }) {
   const [hoveredNode, setHoveredNode] = useState<number | null>(null);
   const [focusedNode, setFocusedNode] = useState<number | null>(null);
+  const anchorRefs = useRef(new Map<number, HTMLSpanElement>());
+  const tooltipRef = useRef<HTMLDivElement>(null);
   const tooltipId = useId();
-  if (!progress) return null;
 
-  const validHoveredNode = hoveredNode !== null && hoveredNode < progress.nodes.length ? hoveredNode : null;
-  const validFocusedNode = focusedNode !== null && focusedNode < progress.nodes.length ? focusedNode : null;
+  const nodeCount = progress?.nodes.length ?? 0;
+  const validHoveredNode = hoveredNode !== null && hoveredNode < nodeCount ? hoveredNode : null;
+  const validFocusedNode = focusedNode !== null && focusedNode < nodeCount ? focusedNode : null;
   const inspectedNode = validFocusedNode ?? validHoveredNode;
 
-  return <div className={`connection-route-progress ${progress.phase}`}>
+  useLayoutEffect(() => {
+    if (inspectedNode === null) return;
+    const updatePosition = () => {
+      const anchor = anchorRefs.current.get(inspectedNode);
+      const tooltip = tooltipRef.current;
+      if (!anchor || !tooltip) return;
+      const next = calculateConnectionRouteTooltipPosition(
+        anchor.getBoundingClientRect(),
+        tooltip.getBoundingClientRect(),
+        { width: window.innerWidth, height: window.innerHeight },
+      );
+      tooltip.style.top = `${next.top}px`;
+      tooltip.style.left = `${next.left}px`;
+      tooltip.style.visibility = "visible";
+      tooltip.dataset.placement = next.placement;
+    };
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [inspectedNode, progress]);
+
+  if (!progress) return null;
+
+  const inspectedProgressNode = inspectedNode === null ? null : progress.nodes[inspectedNode] ?? null;
+  const tooltip = inspectedProgressNode ? <div
+    ref={tooltipRef}
+    id={tooltipId}
+    className={`connection-route-tooltip ${progress.phase}`}
+    role="tooltip"
+    data-placement="below"
+    style={{ visibility: "hidden" }}
+  >
+    <strong>{inspectedProgressNode.name}</strong>
+    <span className="connection-route-tooltip-detail">
+      <span>{nodeDetailLabel(inspectedProgressNode, progress)}</span>
+      <small>{inspectedProgressNode.endpoint ?? roleDetail(inspectedProgressNode.role)}</small>
+    </span>
+  </div> : null;
+
+  return <><div className={`connection-route-progress ${progress.phase}`}>
     <span className="connection-route-live-status" role="status" aria-live="polite">{progress.message}</span>
     <div className="connection-route-dots" role="group" aria-label={`${progress.completedNodes}/${progress.totalNodes} 个节点已连接`}>
       {progress.nodes.map((node) => <span
         key={node.index}
         className="connection-route-node-anchor"
+        ref={(element) => {
+          if (element) anchorRefs.current.set(node.index, element);
+          else anchorRefs.current.delete(node.index);
+        }}
         onPointerEnter={() => setHoveredNode(node.index)}
         onPointerLeave={() => setHoveredNode(null)}
       >
@@ -31,17 +82,10 @@ export function ConnectionRouteProgress({ progress, endpoint }: { progress: Conn
           onFocus={() => setFocusedNode(node.index)}
           onBlur={() => setFocusedNode(null)}
         ><span className="connection-route-node-mark" aria-hidden="true"/></span>
-        {inspectedNode === node.index && <div id={tooltipId} className="connection-route-tooltip" role="tooltip">
-          <strong>{node.name}</strong>
-          <span className="connection-route-tooltip-detail">
-            <span>{nodeDetailLabel(node, progress)}</span>
-            <small>{node.endpoint ?? roleDetail(node.role)}</small>
-          </span>
-        </div>}
       </span>)}
     </div>
     {endpoint && <small className="connection-route-endpoint">{endpoint}</small>}
-  </div>;
+  </div>{tooltip && createPortal(tooltip, document.body)}</>;
 }
 
 function nodeStateLabel(state: ConnectionRouteNodeState): string {

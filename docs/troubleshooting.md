@@ -9,8 +9,9 @@
 ## 私钥认证
 
 - 私钥必须通过“选择私钥”系统对话框重新选择。应用不会扫描 `~/.ssh`，仅保存路径并不等于下一次启动时已授权读取。
-- `privateKeyEncrypted` 表示需要口令；`invalidKeyPassphrase` 表示口令不正确；`unsupportedPrivateKey` 可能表示 RSA 或未验证算法。
-- 当前承诺 Ed25519；ECDSA P-256/P-384/P-521 已启用但仍需更多平台服务端兼容验证。RSA 暂不支持。
+- `privateKeyEncrypted` 表示需要口令；`invalidKeyPassphrase` 表示口令不正确；`unsupportedPrivateKey` 可能表示未验证的密钥或加密算法。
+- 当前支持 Ed25519、ECDSA P-256/P-384/P-521 与 RSA 导入。RSA 凭证显示“不安全”标签，因为当前依赖仍存在 RUSTSEC-2023-0071 时序风险；应优先迁移到 Ed25519/ECDSA。
+- RSA 认证只尝试 RSA-SHA2-512/256。只支持旧 SHA-1 `ssh-rsa` 签名的服务器会被拒绝，不会自动降级。
 
 ## 主机密钥
 

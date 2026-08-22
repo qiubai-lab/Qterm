@@ -92,6 +92,10 @@ impl<V: CredentialVault> CredentialService<V> {
     pub fn load(&self, id: &str) -> Result<CredentialMaterial, CredentialError> {
         self.vault.load(&CredentialId::parse(id.to_owned())?)
     }
+    pub fn rename(&self, id: &str, name: String) -> Result<CredentialSummary, CredentialError> {
+        let id = CredentialId::parse(id.to_owned())?;
+        self.vault.rename(&id, normalize_name(name)?)
+    }
     pub fn delete(&self, id: &str) -> Result<(), CredentialError> {
         self.vault.delete(&CredentialId::parse(id.to_owned())?)
     }

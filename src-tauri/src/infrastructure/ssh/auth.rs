@@ -258,18 +258,18 @@ async fn authenticate_with_ssh_agent<H: Handler>(
         return Err(AuthFailure::SshAgentEmpty);
     }
 
-    let mut rsa_hash = None;
+    let mut cached_rsa_hash = None;
     for identity in identities {
         let hash_alg = if identity.public_key().algorithm().is_rsa() {
-            match rsa_hash {
+            match cached_rsa_hash {
                 Some(result) => result?,
                 None => {
                     let result = handle
                         .best_supported_rsa_hash()
                         .await
                         .map_err(|_| AuthFailure::Connection)
-                        .and_then(agent_rsa_hash);
-                    rsa_hash = Some(result);
+                        .and_then(rsa_hash);
+                    cached_rsa_hash = Some(result);
                     result?
                 }
             }
@@ -312,9 +312,7 @@ async fn authenticate_with_ssh_agent<H: Handler>(
     Err(AuthFailure::SshAgentRejected)
 }
 
-fn agent_rsa_hash(
-    server_preference: Option<Option<HashAlg>>,
-) -> Result<Option<HashAlg>, AuthFailure> {
+fn rsa_hash(server_preference: Option<Option<HashAlg>>) -> Result<Option<HashAlg>, AuthFailure> {
     match server_preference {
         Some(Some(hash)) => Ok(Some(hash)),
         Some(None) => Err(AuthFailure::UnsupportedKey),
@@ -370,8 +368,17 @@ pub(crate) async fn authenticate_with_private_key<H: Handler>(
     username: String,
     key: LoadedPrivateKey,
 ) -> Result<Vec<AuthWarning>, AuthFailure> {
+    let hash_alg = if key.algorithm == PrivateKeyAlgorithm::Rsa {
+        handle
+            .best_supported_rsa_hash()
+            .await
+            .map_err(|_| AuthFailure::Connection)
+            .and_then(rsa_hash)?
+    } else {
+        None
+    };
     let result = handle
-        .authenticate_publickey(username, PrivateKeyWithHashAlg::new(key.key, None))
+        .authenticate_publickey(username, PrivateKeyWithHashAlg::new(key.key, hash_alg))
         .await
         .map_err(|_| AuthFailure::Connection)?;
     map_auth_result(result, MethodKind::PublicKey)?;
@@ -439,6 +446,7 @@ fn map_algorithm(algorithm: Algorithm) -> Result<PrivateKeyAlgorithm, AuthFailur
         Algorithm::Ecdsa {
             curve: EcdsaCurve::NistP521,
         } => Ok(PrivateKeyAlgorithm::EcdsaP521),
+        Algorithm::Rsa { .. } => Ok(PrivateKeyAlgorithm::Rsa),
         _ => Err(AuthFailure::UnsupportedKey),
     }
 }
@@ -464,14 +472,15 @@ mod tests {
     use std::fs;
 
     use russh::keys::ssh_key::{
-        Cipher, LineEnding, PrivateKey,
+        Algorithm, Cipher, LineEnding, PrivateKey,
         private::{Ed25519Keypair, KeypairData},
+        rand_core::UnwrapErr,
     };
     use tempfile::tempdir;
 
     use super::{
-        PrivateKeyContainer, agent_rsa_hash, generate_private_key_bytes, load_private_key,
-        load_private_key_bytes, map_auth_result, private_key_container,
+        PrivateKeyContainer, generate_private_key_bytes, load_private_key, load_private_key_bytes,
+        map_auth_result, private_key_container, rsa_hash,
     };
     #[cfg(unix)]
     use crate::domain::auth::AuthWarning;
@@ -607,6 +616,47 @@ mod tests {
                 PrivateKeyAlgorithm::Ed25519
             );
         }
+    }
+
+    #[test]
+    fn openssh_rsa_keys_load_and_derive_their_public_identity() {
+        let rsa = PrivateKey::random(
+            &mut UnwrapErr(getrandom::SysRng),
+            Algorithm::Rsa { hash: None },
+        )
+        .expect("generate RSA fixture");
+        let encoded = rsa.to_openssh(LineEnding::LF).expect("encode RSA fixture");
+
+        let loaded = load_private_key_bytes(encoded.as_bytes(), None).expect("load RSA key");
+
+        assert_eq!(loaded.algorithm(), PrivateKeyAlgorithm::Rsa);
+        assert!(
+            loaded
+                .openssh_public_key()
+                .expect("derive public key")
+                .starts_with("ssh-rsa ")
+        );
+        assert!(loaded.public_key_fingerprint().starts_with("SHA256:"));
+
+        let encrypted = rsa
+            .encrypt(&mut getrandom::SysRng, "correct passphrase")
+            .expect("encrypt RSA fixture")
+            .to_openssh(LineEnding::LF)
+            .expect("encode encrypted RSA fixture");
+        assert_eq!(
+            load_private_key_bytes(encrypted.as_bytes(), None)
+                .expect_err("encrypted RSA key requires a passphrase"),
+            AuthFailure::KeyEncrypted
+        );
+        assert_eq!(
+            load_private_key_bytes(
+                encrypted.as_bytes(),
+                Some(&SecretText::new("correct passphrase".to_owned()))
+            )
+            .expect("load encrypted RSA key")
+            .algorithm(),
+            PrivateKeyAlgorithm::Rsa
+        );
     }
 
     #[test]
@@ -766,12 +816,12 @@ Private-MAC: 52fd00d4ef47ebc506e4e709486c0c6bc0606e24fe2c6cb1b3d168f4da238a66
     }
 
     #[test]
-    fn agent_rsa_never_downgrades_to_legacy_sha1() {
-        assert_eq!(agent_rsa_hash(None), Ok(Some(russh::keys::HashAlg::Sha512)));
+    fn rsa_authentication_never_downgrades_to_legacy_sha1() {
+        assert_eq!(rsa_hash(None), Ok(Some(russh::keys::HashAlg::Sha512)));
         assert_eq!(
-            agent_rsa_hash(Some(Some(russh::keys::HashAlg::Sha256))),
+            rsa_hash(Some(Some(russh::keys::HashAlg::Sha256))),
             Ok(Some(russh::keys::HashAlg::Sha256))
         );
-        assert_eq!(agent_rsa_hash(Some(None)), Err(AuthFailure::UnsupportedKey));
+        assert_eq!(rsa_hash(Some(None)), Err(AuthFailure::UnsupportedKey));
     }
 }

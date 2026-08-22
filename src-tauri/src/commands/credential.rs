@@ -401,6 +401,13 @@ pub struct CreatePasswordDto {
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct RenameCredentialDto {
+    credential_id: String,
+    name: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct PrivateKeyPathDto {
     path: String,
 }
@@ -803,6 +810,18 @@ pub fn credential_create_password(
 }
 
 #[tauri::command]
+pub fn credential_rename(
+    input: RenameCredentialDto,
+    state: State<'_, CredentialState>,
+) -> Result<CredentialSummaryDto, IpcError> {
+    state
+        .lifecycle
+        .rename(&input.credential_id, input.name)
+        .map(CredentialSummaryDto::from)
+        .map_err(IpcError::from)
+}
+
+#[tauri::command]
 pub async fn credential_prepare_private_key(
     app: AppHandle,
     state: State<'_, CredentialState>,
@@ -902,6 +921,7 @@ fn private_key_algorithm_name(algorithm: crate::domain::auth::PrivateKeyAlgorith
         crate::domain::auth::PrivateKeyAlgorithm::EcdsaP256 => "ecdsa-p256",
         crate::domain::auth::PrivateKeyAlgorithm::EcdsaP384 => "ecdsa-p384",
         crate::domain::auth::PrivateKeyAlgorithm::EcdsaP521 => "ecdsa-p521",
+        crate::domain::auth::PrivateKeyAlgorithm::Rsa => "rsa",
     }
 }
 
@@ -977,11 +997,12 @@ mod tests {
     use super::{
         ClearVaultDto, CommitPrivateKeyDto, CreatePasswordDto, CredentialState,
         PendingRecoveryReset, PrepareGeneratedPrivateKeyDto, PrivateKeyDraftIdDto,
-        PrivateKeyPathDto, ResetMasterPasswordDto, read_recovery_file, recovery_file_name,
-        validate_clear_confirmation, wait_for_dialog_result, write_recovery_file,
+        PrivateKeyPathDto, RenameCredentialDto, ResetMasterPasswordDto, private_key_algorithm_name,
+        read_recovery_file, recovery_file_name, validate_clear_confirmation,
+        wait_for_dialog_result, write_recovery_file,
     };
     use crate::domain::{
-        auth::SecretText,
+        auth::{PrivateKeyAlgorithm, SecretText},
         credential::{CredentialError, GeneratedPrivateKeyAlgorithm, RecoveryKeyFile},
         settings::SecuritySettings,
     };
@@ -992,6 +1013,12 @@ mod tests {
     };
     use serde_json::json;
     use tempfile::tempdir;
+
+    #[test]
+    fn rsa_private_keys_use_stable_credential_metadata() {
+        assert_eq!(private_key_algorithm_name(PrivateKeyAlgorithm::Rsa), "rsa");
+    }
+
     #[test]
     fn secret_inputs_reject_unknown_fields() {
         assert!(
@@ -999,6 +1026,21 @@ mod tests {
                 json!({"name":"prod","password":"secret","privateKey":"forbidden"})
             )
             .is_err()
+        );
+        assert!(
+            serde_json::from_value::<RenameCredentialDto>(json!({
+                "credentialId": "credential-1",
+                "name": "renamed",
+                "password": "forbidden"
+            }))
+            .is_err()
+        );
+        assert!(
+            serde_json::from_value::<RenameCredentialDto>(json!({
+                "credentialId": "credential-1",
+                "name": "renamed"
+            }))
+            .is_ok()
         );
         assert!(
             serde_json::from_value::<PrivateKeyPathDto>(

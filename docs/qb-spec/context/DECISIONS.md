@@ -4,7 +4,13 @@
 
 Status: accepted
 
-凭证管理的私钥添加页提供两个等高全宽入口：系统文件选择器导入，以及 Rust 后端生成。SSH infrastructure 按容器识别 OpenSSH、PKCS#8 与 PuTTY PPK v2/v3，并只在加密容器需要时使用用户提供的口令；运行时不调用 `ssh-keygen`、OpenSSL、PuTTYgen 或 shell。生成 IPC 只接受凭证名称、`ed25519 | ecdsaP256 | ecdsaP384 | ecdsaP521` 算法和最多 80 字符的公钥注释，不接受私钥正文、种子或路径。生成使用系统 CSPRNG，并以 zeroizing 缓冲序列化 OpenSSH 私钥后直接交给既有 vault 加密保存；WebView 只接收非敏感凭证摘要和按凭证 ID 派生的公钥。RSA 继续因既有依赖安全公告而禁用，生成密钥不额外设置 key-level passphrase；DES、3DES、SHA-1 等弱加密不作为生成格式。
+凭证管理的私钥添加页提供两个等高全宽入口：系统文件选择器导入，以及 Rust 后端生成。SSH infrastructure 按容器识别 OpenSSH、PKCS#8 与 PuTTY PPK v2/v3，并只在加密容器需要时使用用户提供的口令；运行时不调用 `ssh-keygen`、OpenSSL、PuTTYgen 或 shell。生成 IPC 只接受凭证名称、`ed25519 | ecdsaP256 | ecdsaP384 | ecdsaP521` 算法和最多 80 字符的公钥注释，不接受私钥正文、种子或路径。生成使用系统 CSPRNG，并以 zeroizing 缓冲序列化 OpenSSH 私钥后直接交给既有 vault 加密保存；WebView 只接收非敏感凭证摘要和按凭证 ID 派生的公钥。RSA 只允许导入，不开放生成，并遵守下述已知风险例外；DES、3DES、SHA-1 等弱加密不作为生成格式。
+
+## 2026-08-22 — 接受 RSA 私钥依赖的已知时序风险例外
+
+Status: accepted by explicit user decision
+
+启用 `russh 0.62.6` 的 `rsa` feature，接受其固定传递依赖 `rsa 0.10.0-rc.18` 尚受 RUSTSEC-2023-0071 影响且没有已修复版本的风险。RSA 私钥可以导入、派生公钥并用于认证，但凭证管理列表和详情必须在 RSA 凭证名称后持续显示“不安全”标签；悬停或键盘聚焦时解释未修复的时序侧信道风险并建议 Ed25519/ECDSA。认证只协商 RSA-SHA2-512/256，绝不自动降级到 SHA-1 `ssh-rsa`。当上游提供已修复实现时应移除此风险例外并重新审计标签是否仍需保留。
 
 ## 2026-08-21 — 使用 Qterm profile 引用实现纯 Rust SSH 跳板路径
 
@@ -120,9 +126,9 @@ RSA 私钥认证优先协商 RSA-SHA2-512/256。服务器明确只支持旧 `ssh
 
 ## 2026-08-18 — 暂停启用 RSA 私钥
 
-Status: accepted
+Status: superseded by the 2026-08-22 explicit risk exception
 
-`russh 0.62.x` 的 RSA feature 固定依赖受 RUSTSEC-2023-0071 影响且暂无修复的 `rsa 0.10.0-rc.18`。当前构建关闭 RSA feature，RSA 私钥返回 unsupported-key；待上游升级到已修复依赖后再恢复，并继续遵守“不降级 SHA-1”决策。
+`russh 0.62.x` 的 RSA feature 固定依赖受 RUSTSEC-2023-0071 影响且暂无修复的 `rsa 0.10.0-rc.18`。该决策生效期间构建关闭 RSA feature，RSA 私钥返回 unsupported-key；2026-08-22 用户明确接受风险例外后被取代，“不降级 SHA-1”约束继续有效。
 
 ## 2026-08-18 — 主机密钥变化永不自动接受
 

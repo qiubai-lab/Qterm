@@ -111,6 +111,7 @@ pub enum PrivateKeyAlgorithm {
     EcdsaP256,
     EcdsaP384,
     EcdsaP521,
+    Rsa,
 }
 
 #[cfg(test)]

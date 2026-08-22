@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { createPortal } from "react-dom";
 
 import { getVaultStatus, listCredentials, type CredentialSummary, type VaultStatus } from "../../lib/tauri/credentials";
 import { clearUnsupportedProfileStorage, createProfile, createProfileGroup, deleteProfile, deleteProfileGroup, listJumpCandidates, listProfileGroups, updateProfile, updateProfileGroup, type ConnectionProfile, type JumpCandidate, type ProfileGroup, type ProfileInput } from "../../lib/tauri/profiles";
@@ -15,6 +16,7 @@ const empty: ProfileInput = { name: "", host: "", port: 22, username: "", authPr
 type EditorTab = "connection" | "authentication" | "jump";
 type TabMotion = "idle" | "forward" | "backward";
 type SaveState = "idle" | "saving" | "success";
+type SaveFeedback = { id: number; profileId: string };
 type ContextMenuState = {
   x: number;
   y: number;
@@ -66,7 +68,11 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
   const suppressClickRef = useRef(false);
   const initializedSelectionRef = useRef(false);
   const saveResetTimerRef = useRef<number | null>(null);
+  const saveFeedbackTimerRef = useRef<number | null>(null);
+  const saveFeedbackIdRef = useRef(0);
+  const profileElementsRef = useRef(new Map<string, HTMLDivElement>());
   const [saveState, setSaveState] = useState<SaveState>("idle");
+  const [saveFeedback, setSaveFeedback] = useState<SaveFeedback | null>(null);
   const [message, setMessage] = useState("");
   const [profileStorageUnsupported, setProfileStorageUnsupported] = useState(false);
   const [clearStorageRequested, setClearStorageRequested] = useState(false);
@@ -121,7 +127,24 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
   }, [contextMenu]);
   useEffect(() => () => {
     if (saveResetTimerRef.current !== null) window.clearTimeout(saveResetTimerRef.current);
+    if (saveFeedbackTimerRef.current !== null) window.clearTimeout(saveFeedbackTimerRef.current);
   }, []);
+
+  function showSaveFeedback(profileId: string) {
+    clearSaveFeedback();
+    const id = ++saveFeedbackIdRef.current;
+    setSaveFeedback({ id, profileId });
+    saveFeedbackTimerRef.current = window.setTimeout(() => {
+      setSaveFeedback((current) => current?.id === id ? null : current);
+      if (saveFeedbackIdRef.current === id) saveFeedbackTimerRef.current = null;
+    }, 2_600);
+  }
+
+  function clearSaveFeedback() {
+    if (saveFeedbackTimerRef.current !== null) window.clearTimeout(saveFeedbackTimerRef.current);
+    saveFeedbackTimerRef.current = null;
+    setSaveFeedback(null);
+  }
 
   function editProfile(profile: ConnectionProfile) {
     const changedProfile = profile.id !== selectedId;
@@ -133,6 +156,7 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
   }
 
   function chooseProfile(profile: ConnectionProfile) {
+    clearSaveFeedback();
     setSelectedIds(new Set([profile.id]));
     editProfile(profile);
   }
@@ -192,7 +216,7 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
   }
 
   function startNewProfile(groupId: string | null = null) {
-    setSelectedId(null); setSelectedIds(new Set()); setEditor({ ...empty, groupId }); setJumpRows([null]); setEditorTab("connection"); setTabMotion("idle"); setMessage(""); setSaveState("idle");
+    clearSaveFeedback(); setSelectedId(null); setSelectedIds(new Set()); setEditor({ ...empty, groupId }); setJumpRows([null]); setEditorTab("connection"); setTabMotion("idle"); setMessage(""); setSaveState("idle");
   }
 
   function selectEditorTab(next: EditorTab) {
@@ -247,13 +271,19 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
   async function save() {
     if (saveState === "saving") return;
     if (saveResetTimerRef.current !== null) window.clearTimeout(saveResetTimerRef.current);
-    setSaveState("saving"); setMessage("");
+    clearSaveFeedback(); setSaveState("saving"); setMessage("");
     try {
       const input = { ...editor, name: editor.name.trim() || editor.host.trim(), jumpProfileIds: jumpRows.filter((id): id is string => Boolean(id)) };
       setEditor(input);
       const profile = selectedId ? await updateProfile(selectedId, input) : await createProfile(input);
+      if (profile.groupId) {
+        setCollapsedGroupIds((current) => {
+          const next = new Set(current); next.delete(profile.groupId!); return next;
+        });
+      } else setUngroupedCollapsed(false);
       await refreshProfiles(); setSelectedId(profile.id); setSelectedIds(new Set([profile.id]));
       setSaveState("success");
+      showSaveFeedback(profile.id);
       saveResetTimerRef.current = window.setTimeout(() => { setSaveState("idle"); saveResetTimerRef.current = null; }, 1400);
     } catch (error) { setSaveState("idle"); setMessage(errorMessage(error)); }
   }
@@ -319,6 +349,7 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
   }
 
   function toggleGroup(groupId: string) {
+    clearSaveFeedback();
     setCollapsedGroupIds((current) => {
       const next = new Set(current);
       if (next.has(groupId)) next.delete(groupId); else next.add(groupId);
@@ -452,6 +483,7 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
     const isSelected = selectedIds.has(profile.id);
     const isDragging = pointerDrag?.active && pointerDrag.profiles.some((item) => item.id === profile.id);
     return <div
+      ref={(element) => { if (element) profileElementsRef.current.set(profile.id, element); else profileElementsRef.current.delete(profile.id); }}
       key={profile.id}
       role="button"
       tabIndex={0}
@@ -489,7 +521,7 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
             <section className="connection-group-section" data-profile-drop-group="">
               <header
                 className={`connection-group-heading${dropTarget === "ungrouped" ? " drop-target" : ""}`}
-              ><button className="connection-group-toggle" aria-expanded={!ungroupedCollapsed} title="单击折叠未分组连接" onClick={() => setUngroupedCollapsed((current) => !current)}><span className="connection-group-chevron" aria-hidden="true">›</span><strong>未分组</strong><small>{ungroupedProfiles.length}</small></button></header>
+              ><button className="connection-group-toggle" aria-expanded={!ungroupedCollapsed} title="单击折叠未分组连接" onClick={() => { clearSaveFeedback(); setUngroupedCollapsed((current) => !current); }}><span className="connection-group-chevron" aria-hidden="true">›</span><strong>未分组</strong><small>{ungroupedProfiles.length}</small></button></header>
               {!ungroupedCollapsed && <div className="connection-group-items">{ungroupedProfiles.map(profileItem)}{ungroupedProfiles.length === 0 && <p>暂无连接</p>}</div>}
             </section>
             {groups.map((group) => {
@@ -560,6 +592,10 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
         </div>
       </div>
     </DialogFrame>
+    {saveFeedback && <ConnectionSaveFeedbackBubble
+      feedback={saveFeedback}
+      getTarget={() => profileElementsRef.current.get(saveFeedback.profileId) ?? null}
+    />}
     {pointerDrag?.active && <div
       className="connection-drag-preview"
       aria-hidden="true"
@@ -643,6 +679,44 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
       />
     )}
   </>;
+}
+
+function ConnectionSaveFeedbackBubble({ feedback, getTarget }: { feedback: SaveFeedback; getTarget: () => HTMLElement | null }) {
+  const [position, setPosition] = useState<{ left: number; top: number } | null>(null);
+
+  useEffect(() => {
+    function updatePosition() {
+      const target = getTarget();
+      if (!target) { setPosition(null); return; }
+      const rect = target.getBoundingClientRect();
+      setPosition({
+        left: Math.min(rect.right + 8, window.innerWidth - 170),
+        top: Math.max(18, Math.min(rect.top + rect.height / 2, window.innerHeight - 18)),
+      });
+    }
+
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    document.addEventListener("scroll", updatePosition, true);
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      document.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [feedback.id, getTarget]);
+
+  if (!position) return null;
+  return createPortal(
+    <p
+      className="connection-save-feedback-bubble"
+      data-feedback-for={feedback.profileId}
+      role="status"
+      aria-atomic="true"
+      style={position}
+    >
+      连接配置已保存
+    </p>,
+    document.body,
+  );
 }
 
 function JumpProfilePicker({ index, currentProfileId, candidates, groups, loading, error, vaultUnlocked, onClose, onSelect }: {

@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { ConnectionRouteProgress } from "./ConnectionRouteProgress";
+import { calculateConnectionRouteTooltipPosition } from "./connectionRouteTooltipPosition";
 
 const connectingProgress = {
   totalNodes: 2,
@@ -29,12 +30,13 @@ describe("ConnectionRouteProgress", () => {
 
   it("shows exactly one node detail on hover or keyboard focus without pinning it", async () => {
     const user = userEvent.setup();
-    render(<ConnectionRouteProgress progress={connectingProgress}/>);
+    const { container } = render(<ConnectionRouteProgress progress={connectingProgress}/>);
     const gateway = screen.getByRole("img", { name: /Gateway：连接中/ });
     const target = screen.getByRole("img", { name: /Server：等待连接/ });
 
     await user.hover(gateway);
     const tooltip = screen.getByRole("tooltip");
+    expect(container).not.toContainElement(tooltip);
     const detail = tooltip.querySelector(".connection-route-tooltip-detail");
     expect(tooltip).toHaveTextContent("Gateway正在认证gateway.test:22");
     expect(detail?.children[0]).toHaveTextContent("正在认证");
@@ -47,6 +49,28 @@ describe("ConnectionRouteProgress", () => {
     await user.unhover(target);
     target.blur();
     await waitFor(() => expect(screen.queryByRole("tooltip")).not.toBeInTheDocument());
+  });
+
+  it("keeps the tooltip inside both horizontal viewport edges", () => {
+    const tooltip = { width: 160, height: 38 };
+    expect(calculateConnectionRouteTooltipPosition(
+      { top: 20, right: 38, bottom: 43, left: 20, width: 18 },
+      tooltip,
+      { width: 500, height: 300 },
+    )).toMatchObject({ left: 8, placement: "below" });
+    expect(calculateConnectionRouteTooltipPosition(
+      { top: 20, right: 492, bottom: 43, left: 474, width: 18 },
+      tooltip,
+      { width: 500, height: 300 },
+    )).toMatchObject({ left: 332, placement: "below" });
+  });
+
+  it("places the tooltip above its node when the lower viewport space is insufficient", () => {
+    expect(calculateConnectionRouteTooltipPosition(
+      { top: 250, right: 218, bottom: 273, left: 200, width: 18 },
+      { width: 160, height: 38 },
+      { width: 500, height: 280 },
+    )).toEqual({ left: 129, placement: "above", top: 208 });
   });
 
   it("updates the inspected node stage in the existing tooltip", async () => {

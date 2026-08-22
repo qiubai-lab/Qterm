@@ -200,6 +200,9 @@ impl<V: CredentialVault> CredentialLifecycle<V> {
     pub fn load(&self, id: &str) -> Result<CredentialMaterial, CredentialError> {
         self.service.load(id)
     }
+    pub fn rename(&self, id: &str, name: String) -> Result<CredentialSummary, CredentialError> {
+        self.service.rename(id, name)
+    }
     pub fn delete(&self, id: &str) -> Result<(), CredentialError> {
         self.service.delete(id)
     }
@@ -303,6 +306,13 @@ mod tests {
             Err(CredentialError::InvalidCredential)
         }
         fn load(&self, _: &CredentialId) -> Result<CredentialMaterial, CredentialError> {
+            Err(CredentialError::CredentialNotFound)
+        }
+        fn rename(
+            &self,
+            _: &CredentialId,
+            _: String,
+        ) -> Result<CredentialSummary, CredentialError> {
             Err(CredentialError::CredentialNotFound)
         }
         fn delete(&self, _: &CredentialId) -> Result<(), CredentialError> {

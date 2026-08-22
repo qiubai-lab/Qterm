@@ -72,7 +72,7 @@ Frontend -> Tauri Commands -> Application -> Domain / Ports <- Infrastructure
 - SSH Agent 私钥不得由应用读取或导出；Unix 仅通过 `SSH_AUTH_SOCK`，Windows 通过 OpenSSH Agent named pipe 或 Pageant 请求签名。
 - profile 只允许保存认证偏好和 `credentialId`。`secrets.vault` 使用 Argon2id KEK 与独立 256-bit recovery key 分别包装同一个随机 data key，并用 AES-256-GCM 逐条加密密码、私钥正文和可选口令；恢复文件只保存 vault identity、generation 与 recovery key，不保存主密码、data key 或凭证明文。主密码、KEK、recovery key 和 data key 禁止进入 WebView 或日志。
 - 密码和口令使用 secret wrapper，在成功、失败、取消和断开路径释放；不得通过 Debug/Display/Serialize 泄漏。
-- 私钥正文只存在于 Rust Core 的导入、生成、认证与公钥派生路径，不得进入前端、日志或应用配置文件。SSH infrastructure 按容器识别 OpenSSH、PKCS#8 与 PuTTY PPK v2/v3 加密私钥、在解密前限制 PPK Argon2 资源参数并归一稳定失败，不依赖外部本地工具。生成开放 Ed25519 与 ECDSA P-256/P-384/P-521，并在 Rust 内序列化后直接交给既有加密 vault；公钥派生复用同一私钥解析器，窄化 credential IPC 只接收凭证 ID 并只返回标准 OpenSSH 公钥文本。
+- 私钥正文只存在于 Rust Core 的导入、生成、认证与公钥派生路径，不得进入前端、日志或应用配置文件。SSH infrastructure 按容器识别 OpenSSH、PKCS#8 与 PuTTY PPK v2/v3 加密私钥、在解密前限制 PPK Argon2 资源参数并归一稳定失败，不依赖外部本地工具。导入支持 Ed25519、ECDSA P-256/P-384/P-521 与已接受 RUSTSEC-2023-0071 风险例外的 RSA；RSA 认证只使用 RSA-SHA2-512/256。生成只开放 Ed25519 与 ECDSA P-256/P-384/P-521，并在 Rust 内序列化后直接交给既有加密 vault；公钥派生复用同一私钥解析器，窄化 credential IPC 只接收凭证 ID 并只返回标准 OpenSSH 公钥文本。
 - host-key unknown 需要用户明确接受；changed 必须阻断。
 - 多跳 route 的 host-key、认证与隧道错误必须携带结构化节点元数据和阶段；未知密钥的待确认状态必须先在 Rust 注册，再向 WebView 发事件，避免即时确认竞态。非最终节点不得接受服务器发起的 remote-forward channel。
 - 敏感值仅允许进入一次性认证或窄化 vault IPC DTO；凭证摘要列表只返回 ID、名称、类型和算法元数据，并允许在 vault 锁定时读取，以保持 profile 引用可解释。读取密码、私钥正文及凭证库写操作仍由后端要求解锁；连接编辑器更改 profile 的凭证引用前由前端先完成解锁交互。前端只有在凭证管理中由用户明确点击“显示”后才可恢复当前选中的单条密码，私钥内容没有返回 IPC。任何敏感值都禁止进入日志和 panic message。

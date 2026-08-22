@@ -75,6 +75,8 @@ describe("application layout styles", () => {
   });
 
   it("keeps route node details in a compact two-line tooltip", () => {
+    expect(declarations(".connection-route-tooltip")).toContain("position:fixed");
+    expect(declarations(".connection-route-tooltip")).toContain("max-width:min(210px,calc(100vw - 16px))");
     expect(declarations(".connection-route-tooltip")).toContain("gap:1px");
     expect(declarations(".connection-route-tooltip")).toContain("padding:4px 7px");
     expect(declarations(".connection-route-tooltip-detail")).toContain("display:flex");
@@ -364,6 +366,35 @@ describe("application layout styles", () => {
     expect(declarations(".credential-private-key-dropzone.selected,.credential-private-key-generate.selected")).toContain("border-color:#4f8177");
     expect(declarations(".credential-private-key-validation")).toContain("flex:1");
     expect(declarations(".credential-private-key-footer .primary-button,.credential-private-key-footer .secondary-button")).toContain("flex:none");
+    expect(declarations(".credential-name-line")).toContain("min-width:0");
+    expect(declarations(".credential-name-line>strong")).toContain("text-overflow:ellipsis");
+    expect(declarations(".credential-editor-heading .credential-name-line")).toContain("height:25px");
+    expect(declarations(".credential-editor-heading .credential-name-line")).toContain("flex:none");
+    expect(declarations(".credential-editor-heading>div")).toContain("width:0");
+    expect(declarations(".credential-editor-heading>div")).toContain("flex:1");
+    expect(declarations(".credential-editor-heading>div")).toContain("grid-template-rows:25px minmax(13px,auto)");
+    expect(declarations(".credential-name-editor")).toContain("position:relative");
+    expect(declarations(".credential-name-editor")).toContain("flex:1");
+    expect(declarations(".credential-name-line.editing .credential-name-editor::before")).toContain("inset:0 -4px");
+    expect(declarations(".credential-name-line.editing .credential-name-editor::before")).toContain("border-radius:6px");
+    expect(declarations(".credential-name-line.editing .credential-name-editor::before")).toContain("pointer-events:none");
+    expect(declarations(".credential-name-line.editing .credential-name-editor:focus-within::before")).toContain("border-color:#527c73");
+    expect(declarations(".credential-name-editor>strong")).toContain("flex:1");
+    expect(declarations(".credential-name-editor input")).toContain("min-width:0");
+    expect(declarations(".credential-name-editor input")).toContain("height:20px");
+    expect(declarations(".credential-name-editor input")).toContain("border:0");
+    expect(declarations(".credential-name-editor input")).toContain("background:transparent");
+    expect(declarations(".credential-name-editor input")).toContain("box-shadow:none");
+    expect(declarations(".credential-name-editor input")).toContain("caret-color:var(--accent)");
+    expect(declarations(".credential-name-editor input::selection")).toContain("background:#315e56");
+    expect(declarations(".credential-name-editor input:focus,.credential-name-editor input:focus-visible")).toContain("outline:0");
+    expect(declarations(".credential-name-action")).toContain("flex:none");
+    expect(declarations(".credential-name-action.reserved")).toContain("visibility:hidden");
+    expect(declarations(".credential-security-tag")).toContain("border-radius:999px");
+    expect(declarations(".credential-security-tag")).toContain("flex:none");
+    expect(declarations(".credential-security-tooltip")).toContain("position:fixed");
+    expect(declarations(".credential-security-tooltip")).toContain("pointer-events:none");
+    expect(declarations('.credential-security-tooltip[data-placement="above"]')).toContain("--credential-security-tooltip-enter-y:-3px");
     expect(declarations(".credential-feedback-bubble")).toContain("position:fixed");
     expect(declarations(".credential-feedback-bubble")).toContain("pointer-events:none");
     expect(styles).not.toContain(".credential-message");
@@ -431,6 +462,9 @@ describe("application layout styles", () => {
     expect(declarations(".connection-save-button.saving:disabled,.connection-save-button.success:disabled")).toContain("background:var(--accent)");
     expect(declarations(".connection-save-button.saving:disabled,.connection-save-button.success:disabled")).toContain("color:#06201b");
     expect(declarations(".connection-save-button.success .connection-save-content>svg")).toContain("animation:connection-save-success-icon-in");
+    expect(declarations(".connection-save-feedback-bubble")).toContain("position:fixed");
+    expect(declarations(".connection-save-feedback-bubble")).toContain("pointer-events:none");
+    expect(declarations(".connection-save-feedback-bubble::before")).toContain("left:-5px");
     expect(styles).not.toContain(".connection-save-button.success { border-color:#4f9f8f");
     expect(styles).toMatch(/prefers-reduced-motion:reduce[\s\S]*\.connection-save-spinner\{animation:none!important\}/);
   });

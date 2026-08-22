@@ -437,6 +437,24 @@ impl CredentialVault for JsonCredentialVault {
         let payload = encode_key(key.expose(), passphrase.as_ref())?;
         self.save_material(id, name, KindRecord::PrivateKey, Some(algorithm), &payload)
     }
+    fn rename(
+        &self,
+        id: &CredentialId,
+        name: String,
+    ) -> Result<CredentialSummary, CredentialError> {
+        let runtime = self.runtime();
+        runtime.data_key.as_deref().ok_or(CredentialError::Locked)?;
+        let mut document = self.document()?;
+        let record = document
+            .credentials
+            .iter_mut()
+            .find(|item| item.id == id.as_str())
+            .ok_or(CredentialError::CredentialNotFound)?;
+        record.name = name;
+        let summary = record.clone().summary()?;
+        self.write(&document)?;
+        Ok(summary)
+    }
     fn load(&self, id: &CredentialId) -> Result<CredentialMaterial, CredentialError> {
         let runtime = self.runtime();
         let key = runtime.data_key.as_deref().ok_or(CredentialError::Locked)?;
@@ -934,6 +952,58 @@ mod tests {
             }
             _ => panic!("kind"),
         }
+    }
+
+    #[test]
+    fn rename_changes_only_name_metadata_and_requires_unlock() {
+        let dir = tempdir().expect("dir");
+        let path = dir.path().join("vault.json");
+        let vault = JsonCredentialVault::new_for_test(path.clone());
+        initialize(&vault, "correct-master-password");
+        vault
+            .save_password(
+                id("password-1"),
+                "Production".into(),
+                SecretText::new("server-secret".into()),
+            )
+            .expect("save");
+        let before: serde_json::Value =
+            serde_json::from_slice(&fs::read(&path).expect("read")).expect("json");
+
+        let renamed = vault
+            .rename(&id("password-1"), "Primary production".into())
+            .expect("rename");
+        assert_eq!(renamed.name, "Primary production");
+        assert_eq!(renamed.id, id("password-1"));
+        let after: serde_json::Value =
+            serde_json::from_slice(&fs::read(&path).expect("read")).expect("json");
+        assert_eq!(after["credentials"][0]["name"], "Primary production");
+        assert_eq!(
+            before["credentials"][0]["id"],
+            after["credentials"][0]["id"]
+        );
+        assert_eq!(
+            before["credentials"][0]["kind"],
+            after["credentials"][0]["kind"]
+        );
+        assert_eq!(
+            before["credentials"][0]["nonce"],
+            after["credentials"][0]["nonce"]
+        );
+        assert_eq!(
+            before["credentials"][0]["ciphertext"],
+            after["credentials"][0]["ciphertext"]
+        );
+        assert_eq!(
+            vault.rename(&id("missing"), "Missing".into()),
+            Err(CredentialError::CredentialNotFound)
+        );
+
+        vault.lock();
+        assert_eq!(
+            vault.rename(&id("password-1"), "Locked rename".into()),
+            Err(CredentialError::Locked)
+        );
     }
 
     #[test]

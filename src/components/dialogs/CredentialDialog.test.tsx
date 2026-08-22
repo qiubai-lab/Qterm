@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   preparePrivateKeyCredential: vi.fn(),
   prepareDroppedPrivateKeyCredential: vi.fn(),
   prepareGeneratedPrivateKeyCredential: vi.fn(),
+  renameCredential: vi.fn(),
   listCredentials: vi.fn(),
   onVaultStatusChanged: vi.fn(),
   revealCredentialPassword: vi.fn(),
@@ -39,6 +40,7 @@ beforeEach(() => {
   mocks.commitPrivateKeyCredential.mockResolvedValue({ id: "generated-key", name: "新生成私钥", kind: "privateKey", detail: "ecdsa-p256" });
   mocks.getCredentialPublicKey.mockResolvedValue("ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITestKey deploy@example");
   mocks.revealCredentialPassword.mockResolvedValue("server-secret");
+  mocks.renameCredential.mockResolvedValue({ id: "key-1", name: "生产部署私钥", kind: "privateKey", detail: "ed25519" });
   mocks.writeClipboardText.mockResolvedValue(undefined);
   mocks.onVaultStatusChanged.mockResolvedValue(() => undefined);
   mocks.clearVault.mockResolvedValue(undefined);
@@ -52,6 +54,91 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
 describe("CredentialDialog", () => {
+  it("renames a credential inline and supports keyboard save", async () => {
+    const user = userEvent.setup();
+    mocks.listCredentials.mockResolvedValue([
+      { id: "password-1", name: "生产密码", kind: "password", detail: null },
+      { id: "key-1", name: "部署私钥", kind: "privateKey", detail: "ed25519" },
+    ]);
+    render(<CredentialDialog onClose={vi.fn()}/>);
+
+    await user.click(await screen.findByRole("button", { name: /部署私钥私钥/ }));
+    await user.click(screen.getByRole("button", { name: "修改凭证名称" }));
+    const input = screen.getByRole("textbox", { name: "凭证名称" });
+    expect(input).toHaveFocus();
+    expect(input).toHaveValue("部署私钥");
+    expect(screen.queryByRole("button", { name: "保存凭证名称" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "取消修改名称" })).not.toBeInTheDocument();
+    await user.clear(input);
+    await user.type(input, "  生产部署私钥  {Enter}");
+
+    await waitFor(() => expect(mocks.renameCredential).toHaveBeenCalledWith("key-1", "  生产部署私钥  "));
+    expect(await screen.findByText("生产部署私钥", { selector: ".credential-editor-heading strong" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /生产部署私钥私钥/ })).toBeInTheDocument();
+  });
+
+  it("cancels inline rename with Escape and keeps an RSA warning visible while editing", async () => {
+    const user = userEvent.setup();
+    mocks.listCredentials.mockResolvedValue([
+      { id: "rsa-key", name: "旧服务器私钥", kind: "privateKey", detail: "rsa" },
+    ]);
+    render(<CredentialDialog onClose={vi.fn()}/>);
+
+    await user.click(await screen.findByRole("button", { name: /旧服务器私钥.*不安全.*私钥/ }));
+    await user.click(screen.getByRole("button", { name: "修改凭证名称" }));
+    const input = screen.getByRole("textbox", { name: "凭证名称" });
+    expect(input.closest(".credential-name-line")).toHaveTextContent("不安全");
+    await user.clear(input);
+    await user.type(input, "临时名称{Escape}");
+
+    expect(screen.queryByRole("textbox", { name: "凭证名称" })).not.toBeInTheDocument();
+    expect(screen.getByText("旧服务器私钥", { selector: ".credential-editor-heading strong" })).toBeInTheDocument();
+    expect(mocks.renameCredential).not.toHaveBeenCalled();
+  });
+
+  it("keeps rename input available when persistence fails", async () => {
+    const user = userEvent.setup();
+    mocks.renameCredential.mockRejectedValue(new Error("凭证库已锁定"));
+    render(<CredentialDialog onClose={vi.fn()}/>);
+    await user.click(await screen.findByRole("button", { name: /生产密码密码/ }));
+    await user.click(screen.getByRole("button", { name: "修改凭证名称" }));
+    const input = screen.getByRole("textbox", { name: "凭证名称" });
+    await user.clear(input);
+    await user.type(input, "新名称{Enter}");
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("凭证库已锁定");
+    expect(screen.getByRole("textbox", { name: "凭证名称" })).toHaveValue("新名称");
+  });
+
+  it("marks RSA credential names as unsafe in the list and detail heading", async () => {
+    const user = userEvent.setup();
+    mocks.listCredentials.mockResolvedValue([
+      { id: "rsa-key", name: "旧服务器私钥", kind: "privateKey", detail: "rsa" },
+      { id: "ed-key", name: "现代私钥", kind: "privateKey", detail: "ed25519" },
+    ]);
+    const { container } = render(<CredentialDialog onClose={vi.fn()}/>);
+
+    const rsaItem = await screen.findByRole("button", { name: /旧服务器私钥.*不安全.*私钥/ });
+    const listTag = rsaItem.querySelector(".credential-security-tag")!;
+    expect(listTag).toHaveTextContent("不安全");
+    expect(screen.getByRole("button", { name: /现代私钥.*私钥/ }).querySelector(".credential-security-tag")).toBeNull();
+
+    await user.hover(listTag);
+    const tooltip = screen.getByRole("tooltip");
+    expect(container).not.toContainElement(tooltip);
+    expect(tooltip).toHaveTextContent("RSA 签名依赖存在未修复的时序侧信道风险");
+    expect(tooltip).toHaveTextContent("建议改用 Ed25519 或 ECDSA");
+    await user.unhover(listTag);
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+
+    await user.click(rsaItem);
+    const heading = screen.getByText("旧服务器私钥", { selector: ".credential-editor-heading strong" }).closest("div")!;
+    const detailTag = heading.querySelector<HTMLElement>(".credential-security-tag")!;
+    expect(detailTag).toHaveTextContent("不安全");
+    detailTag.focus();
+    expect(screen.getByRole("tooltip")).toHaveTextContent("RSA 签名依赖存在未修复的时序侧信道风险");
+  });
+
   it("requires a process-local unlock before listing credentials", async () => {
     const user = userEvent.setup();
     mocks.getVaultStatus.mockResolvedValueOnce({ initialized: true, unlocked: false }).mockResolvedValueOnce({ initialized: true, unlocked: true });

@@ -4,7 +4,7 @@ const { invoke } = vi.hoisted(() => ({ invoke: vi.fn() }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn() }));
 
-import { cancelMasterPasswordReset, cancelPrivateKeyCredential, changeMasterPassword, clearVault, commitPrivateKeyCredential, createPasswordCredential, getCredentialPublicKey, prepareDroppedPrivateKeyCredential, prepareGeneratedPrivateKeyCredential, prepareMasterPasswordReset, preparePrivateKeyCredential, resetMasterPassword } from "./credentials";
+import { cancelMasterPasswordReset, cancelPrivateKeyCredential, changeMasterPassword, clearVault, commitPrivateKeyCredential, createPasswordCredential, getCredentialPublicKey, prepareDroppedPrivateKeyCredential, prepareGeneratedPrivateKeyCredential, prepareMasterPasswordReset, preparePrivateKeyCredential, renameCredential, resetMasterPassword } from "./credentials";
 
 describe("credential vault IPC client", () => {
   beforeEach(() => invoke.mockReset());
@@ -13,6 +13,12 @@ describe("credential vault IPC client", () => {
     invoke.mockResolvedValue(undefined);
     await createPasswordCredential("Production", "connection-secret");
     expect(invoke).toHaveBeenCalledWith("credential_create_password", { input: { name: "Production", password: "connection-secret" } });
+  });
+
+  it("renames a credential by stable id without sending credential material", async () => {
+    invoke.mockResolvedValue({ id: "key-1", name: "Production key", kind: "privateKey", detail: "ed25519" });
+    await renameCredential("key-1", "Production key");
+    expect(invoke).toHaveBeenCalledWith("credential_rename", { input: { credentialId: "key-1", name: "Production key" } });
   });
 
   it("prepares a selected private key without passing a path or key body from the frontend", async () => {

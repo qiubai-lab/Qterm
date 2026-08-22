@@ -395,7 +395,7 @@ describe("ConnectionDialog", () => {
     expect(mocks.listCredentials).toHaveBeenCalledTimes(2);
   });
 
-  it("keeps the active tab and presents save progress and success on the button", async () => {
+  it("keeps the active tab and anchors save success to the edited connection", async () => {
     let resolveUpdate!: (value: ConnectionProfile) => void;
     mocks.updateProfile.mockReturnValue(new Promise((resolve) => { resolveUpdate = resolve; }));
     const user = userEvent.setup();
@@ -411,7 +411,11 @@ describe("ConnectionDialog", () => {
     expect(successButton).toHaveAttribute("data-state", "success");
     expect(successButton.querySelector("svg")).toHaveAttribute("data-icon", "checkCircle");
     expect(authTab).toHaveAttribute("aria-selected", "true");
-    expect(screen.queryByText("连接配置已保存")).not.toBeInTheDocument();
+    const feedback = await screen.findByRole("status");
+    expect(feedback).toHaveClass("connection-save-feedback-bubble");
+    expect(feedback).toHaveAttribute("data-feedback-for", "profile-1");
+    expect(feedback).toHaveTextContent("连接配置已保存");
+    expect(screen.getByRole("button", { name: /K8S服务器/ })).toBeInTheDocument();
     expect(mocks.selectBlockTarget).not.toHaveBeenCalled();
     await waitFor(() => expect(screen.getByRole("button", { name: "保存配置" })).toHaveAttribute("data-state", "idle"), { timeout: 2000 });
   });
@@ -423,6 +427,7 @@ describe("ConnectionDialog", () => {
     await screen.findByDisplayValue("K8S服务器");
     await user.click(screen.getByRole("button", { name: "保存配置" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("保存失败，请重试");
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "保存配置" })).not.toBeDisabled();
   });
 
@@ -459,7 +464,11 @@ describe("ConnectionDialog", () => {
 
   it("uses the trimmed host as the name when a new profile has no name", async () => {
     const user = userEvent.setup();
-    mocks.createProfile.mockResolvedValue({ ...profile, id: "profile-new", name: "server.example", host: "server.example" });
+    const created = { ...profile, id: "profile-new", name: "server.example", host: "server.example", groupId: null };
+    mocks.createProfile.mockImplementation(async () => {
+      workspaceProfiles = [created];
+      return created;
+    });
     render(<ConnectionDialog onClose={vi.fn()}/>);
 
     await user.click(screen.getByRole("button", { name: "＋ 新建连接" }));
@@ -473,6 +482,9 @@ describe("ConnectionDialog", () => {
       host: "  server.example  ",
     })));
     expect(mocks.selectBlockTarget).not.toHaveBeenCalled();
+    const feedback = await screen.findByRole("status");
+    expect(feedback).toHaveAttribute("data-feedback-for", "profile-new");
+    expect(screen.getByRole("button", { name: /server\.example/ })).toBeInTheDocument();
   });
 
   it("requires confirmation before deleting a saved profile", async () => {

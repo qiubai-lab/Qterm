@@ -21,6 +21,7 @@ export const clearVault = (confirmation: string): Promise<void> => invoke("crede
 export const onVaultStatusChanged = (handler: (event: VaultStatusChanged) => void): Promise<UnlistenFn> => listen<VaultStatusChanged>("credential-vault-status-changed", (event) => handler(event.payload));
 export const listCredentials = (): Promise<CredentialSummary[]> => invoke("credential_list");
 export const createPasswordCredential = (name: string, password: string): Promise<CredentialSummary> => invoke("credential_create_password", { input: { name, password } });
+export const renameCredential = (credentialId: string, name: string): Promise<CredentialSummary> => invoke("credential_rename", { input: { credentialId, name } });
 export const preparePrivateKeyCredential = (): Promise<PrivateKeyDraft | null> => invoke("credential_prepare_private_key");
 export const prepareDroppedPrivateKeyCredential = (path: string): Promise<PrivateKeyDraft> => invoke("credential_prepare_private_key_path", { input: { path } });
 export const prepareGeneratedPrivateKeyCredential = (algorithm: GeneratedPrivateKeyAlgorithm, comment?: string): Promise<PrivateKeyDraft> => invoke("credential_prepare_generated_private_key", { input: { algorithm, comment: comment || null } });

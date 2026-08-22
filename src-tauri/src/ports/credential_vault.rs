@@ -47,6 +47,8 @@ pub trait CredentialVault: Send + Sync {
         passphrase: Option<SecretText>,
         algorithm: String,
     ) -> Result<CredentialSummary, CredentialError>;
+    fn rename(&self, id: &CredentialId, name: String)
+    -> Result<CredentialSummary, CredentialError>;
     fn load(&self, id: &CredentialId) -> Result<CredentialMaterial, CredentialError>;
     fn delete(&self, id: &CredentialId) -> Result<(), CredentialError>;
 }
