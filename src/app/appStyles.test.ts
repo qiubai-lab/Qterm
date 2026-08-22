@@ -6,6 +6,9 @@ const styles = readFileSync("src/app/app.css", "utf8");
 const tauriConfig = JSON.parse(readFileSync("src-tauri/tauri.conf.json", "utf8")) as {
   app: { windows: Array<{ theme?: string; transparent?: boolean; windowEffects?: { effects: string[]; state?: string; radius?: number } }> };
 };
+const macosTauriConfig = JSON.parse(readFileSync("src-tauri/tauri.macos.conf.json", "utf8")) as {
+  app: { windows: Array<{ decorations?: boolean; titleBarStyle?: string; trafficLightPosition?: { x: number; y: number } }> };
+};
 
 function declarations(selector: string): string {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -170,7 +173,11 @@ describe("application layout styles", () => {
     const brandPlate = declarations('.app-shell[data-platform="macos"] .app-brand::before');
     const brandIcon = declarations('.app-shell[data-platform="macos"] .app-brand svg');
     const brandLabel = declarations('.app-shell[data-platform="macos"] .app-brand span');
+    const macosWindow = macosTauriConfig.app.windows[0];
 
+    expect(macosWindow.decorations).toBe(true);
+    expect(macosWindow.titleBarStyle).toBe("Overlay");
+    expect(macosWindow.trafficLightPosition).toEqual({ x: 14, y: 18 });
     expect(brand).toContain("height:30px");
     expect(brand).not.toContain("transition:");
     expect(brandPlate).toContain("inset:0 0 0 -80px");
