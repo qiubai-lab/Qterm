@@ -4,51 +4,13 @@ use atomic_write_file::AtomicWriteFile;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    domain::settings::{DataDirectory, SecuritySettings, SettingsError},
-    ports::settings_repository::{DataDirectoryRepository, SettingsRepository},
+    domain::settings::{ConfigurationDirectory, SecuritySettings, SettingsError},
+    ports::settings_repository::{ConfigurationDirectoryRepository, SettingsRepository},
 };
 
 const SETTINGS_VERSION: u64 = 2;
-const DATA_DIRECTORY_VERSION: u64 = 1;
+const CONFIGURATION_LOCATION_VERSION: u64 = 1;
 const MAX_BYTES: u64 = 64 * 1024;
-
-pub struct JsonDataDirectoryRepository {
-    path: PathBuf,
-}
-
-impl JsonDataDirectoryRepository {
-    pub fn new(path: PathBuf) -> Self {
-        Self { path }
-    }
-
-    fn document(&self) -> Result<Option<DataDirectoryDocument>, SettingsError> {
-        read_document(&self.path, DATA_DIRECTORY_VERSION)
-    }
-}
-
-impl DataDirectoryRepository for JsonDataDirectoryRepository {
-    fn load(&self) -> Result<Option<DataDirectory>, SettingsError> {
-        self.document()?
-            .map(|document| {
-                DataDirectory::from_absolute_path(PathBuf::from(document.data_directory))
-            })
-            .transpose()
-    }
-
-    fn save(&self, directory: &DataDirectory) -> Result<(), SettingsError> {
-        if self.path.exists() {
-            self.load()?;
-        }
-        fs::create_dir_all(directory.path()).map_err(|_| SettingsError::StorageUnavailable)?;
-        write_document(
-            &self.path,
-            &DataDirectoryDocument {
-                schema_version: DATA_DIRECTORY_VERSION,
-                data_directory: directory.path().to_string_lossy().into_owned(),
-            },
-        )
-    }
-}
 
 pub struct JsonSettingsRepository {
     path: PathBuf,
@@ -97,6 +59,45 @@ impl SettingsRepository for JsonSettingsRepository {
             },
         };
         write_document(&self.path, &document)
+    }
+}
+
+pub struct JsonConfigurationDirectoryRepository {
+    path: PathBuf,
+}
+
+impl JsonConfigurationDirectoryRepository {
+    pub fn new(path: PathBuf) -> Self {
+        Self { path }
+    }
+}
+
+impl ConfigurationDirectoryRepository for JsonConfigurationDirectoryRepository {
+    fn load(&self) -> Result<Option<ConfigurationDirectory>, SettingsError> {
+        read_document::<ConfigurationLocationDocument>(&self.path, CONFIGURATION_LOCATION_VERSION)?
+            .map(|document| {
+                ConfigurationDirectory::from_absolute_path(PathBuf::from(
+                    document.configuration_directory,
+                ))
+            })
+            .transpose()
+    }
+
+    fn save(&self, directory: &ConfigurationDirectory) -> Result<(), SettingsError> {
+        if self.path.exists() {
+            self.load()?;
+        }
+        for partition in ["data", "device", "cache"] {
+            fs::create_dir_all(directory.path().join(partition))
+                .map_err(|_| SettingsError::StorageUnavailable)?;
+        }
+        write_document(
+            &self.path,
+            &ConfigurationLocationDocument {
+                schema_version: CONFIGURATION_LOCATION_VERSION,
+                configuration_directory: directory.path().to_string_lossy().into_owned(),
+            },
+        )
     }
 }
 
@@ -165,17 +166,17 @@ struct SecurityRecord {
 
 #[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-struct DataDirectoryDocument {
+struct ConfigurationLocationDocument {
     schema_version: u64,
-    data_directory: String,
+    configuration_directory: String,
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{JsonDataDirectoryRepository, JsonSettingsRepository};
+    use super::{JsonConfigurationDirectoryRepository, JsonSettingsRepository};
     use crate::{
-        domain::settings::{DataDirectory, SecuritySettings, SettingsError},
-        ports::settings_repository::{DataDirectoryRepository, SettingsRepository},
+        domain::settings::{ConfigurationDirectory, SecuritySettings, SettingsError},
+        ports::settings_repository::{ConfigurationDirectoryRepository, SettingsRepository},
     };
     use std::fs;
     use tempfile::tempdir;
@@ -228,29 +229,40 @@ mod tests {
     }
 
     #[test]
-    fn data_directory_is_initialized_and_round_trips() {
+    fn configuration_location_round_trips_and_creates_the_target() {
         let dir = tempdir().expect("dir");
-        let target = dir.path().join("portable").join("qterm");
-        let repository = JsonDataDirectoryRepository::new(dir.path().join("locator.json"));
-        let data_directory = DataDirectory::from_absolute_path(target.clone()).expect("directory");
-        repository.save(&data_directory).expect("save");
-        assert!(target.is_dir());
-        assert_eq!(repository.load().expect("load"), Some(data_directory));
+        let target = dir.path().join("portable-core");
+        let location =
+            ConfigurationDirectory::from_absolute_path(target.clone()).expect("location");
+        let repository =
+            JsonConfigurationDirectoryRepository::new(dir.path().join(".qterm-location.json"));
+
+        assert_eq!(repository.load().expect("load"), None);
+        repository.save(&location).expect("save");
+
+        assert_eq!(repository.load().expect("load"), Some(location));
+        assert!(target.join("data").is_dir());
+        assert!(target.join("device").is_dir());
+        assert!(target.join("cache").is_dir());
     }
 
     #[test]
-    fn corrupt_data_directory_locator_is_not_overwritten() {
+    fn corrupt_configuration_location_is_not_overwritten() {
         let dir = tempdir().expect("dir");
-        let path = dir.path().join("locator.json");
-        let bytes = br#"{"schemaVersion":1,"dataDirectory":"relative/path"}"#;
+        let path = dir.path().join(".qterm-location.json");
+        let bytes = br#"{"schemaVersion":1,"configurationDirectory":"relative/path"}"#;
         fs::write(&path, bytes).expect("fixture");
-        let repository = JsonDataDirectoryRepository::new(path.clone());
-        assert_eq!(repository.load(), Err(SettingsError::InvalidDataDirectory));
-        let target =
-            DataDirectory::from_absolute_path(dir.path().join("new-root")).expect("target");
+        let repository = JsonConfigurationDirectoryRepository::new(path.clone());
+        let location = ConfigurationDirectory::from_absolute_path(dir.path().join("configuration"))
+            .expect("path");
+
         assert_eq!(
-            repository.save(&target),
-            Err(SettingsError::InvalidDataDirectory)
+            repository.load(),
+            Err(SettingsError::InvalidConfigurationDirectory)
+        );
+        assert_eq!(
+            repository.save(&location),
+            Err(SettingsError::InvalidConfigurationDirectory)
         );
         assert_eq!(fs::read(path).expect("read"), bytes);
     }

@@ -39,8 +39,8 @@ use commands::session::{
     session_resize, session_write,
 };
 use commands::settings::{
-    SettingsState, settings_get, settings_select_data_directory, settings_update_data_directory,
-    settings_update_security,
+    SettingsState, settings_get, settings_select_configuration_directory,
+    settings_update_configuration_directory, settings_update_security,
 };
 use commands::transfer::{
     TransferState, transfer_cancel, transfer_download, transfer_select_download_directory,
@@ -48,18 +48,18 @@ use commands::transfer::{
     transfer_upload_dropped,
 };
 use commands::workspace::{WorkspaceState, workspace_load, workspace_save};
-use domain::settings::DataDirectory;
+use domain::settings::ConfigurationDirectory;
 use infrastructure::local::pty::LocalSessionManager;
 use infrastructure::persistence::json_credential_vault::JsonCredentialVault;
 use infrastructure::persistence::json_known_host_repository::JsonKnownHostRepository;
 use infrastructure::persistence::json_network_repository::JsonNetworkRepository;
 use infrastructure::persistence::json_profile_repository::JsonProfileRepository;
 use infrastructure::persistence::json_settings_repository::{
-    JsonDataDirectoryRepository, JsonSettingsRepository,
+    JsonConfigurationDirectoryRepository, JsonSettingsRepository,
 };
 use infrastructure::persistence::json_workspace_repository::JsonWorkspaceRepository;
 use infrastructure::ssh::client::SshSessionManager;
-use ports::settings_repository::DataDirectoryRepository;
+use ports::settings_repository::ConfigurationDirectoryRepository;
 use tauri::Manager;
 #[cfg(desktop)]
 use tauri_plugin_window_state::StateFlags;
@@ -71,6 +71,10 @@ fn persisted_window_state_flags() -> StateFlags {
 
 #[derive(Debug, PartialEq, Eq)]
 struct DataPaths {
+    root: std::path::PathBuf,
+    data: std::path::PathBuf,
+    device: std::path::PathBuf,
+    cache: std::path::PathBuf,
     profiles: std::path::PathBuf,
     credentials: std::path::PathBuf,
     network: std::path::PathBuf,
@@ -81,16 +85,30 @@ struct DataPaths {
 }
 
 impl DataPaths {
-    fn from_roots(portable_root: &std::path::Path, local_root: &std::path::Path) -> Self {
+    fn from_root(root: std::path::PathBuf) -> Self {
+        let data = root.join("data");
+        let device = root.join("device");
+        let cache = root.join("cache");
         Self {
-            profiles: portable_root.join("connections.json"),
-            credentials: portable_root.join("secrets.vault"),
-            network: portable_root.join("network-forwards.json"),
-            known_hosts: local_root.join("known-hosts.json"),
-            workspaces: local_root.join("workspaces.json"),
-            settings: local_root.join("settings.json"),
-            browser_profiles: local_root.join("browser-profiles"),
+            profiles: data.join("connections.json"),
+            credentials: data.join("secrets.vault"),
+            network: data.join("network-forwards.json"),
+            known_hosts: device.join("known-hosts.json"),
+            workspaces: device.join("workspaces.json"),
+            settings: device.join("settings.json"),
+            browser_profiles: cache.join("browser-profiles"),
+            root,
+            data,
+            device,
+            cache,
         }
+    }
+
+    fn initialize(&self) -> std::io::Result<()> {
+        for directory in [&self.data, &self.device, &self.cache] {
+            std::fs::create_dir_all(directory)?;
+        }
+        Ok(())
     }
 }
 
@@ -116,17 +134,22 @@ pub fn run() {
         })
         .setup(|app| {
             let home = app.path().home_dir()?;
-            let default_data_directory = DataDirectory::default_for(&home);
-            let data_directory_repository = JsonDataDirectoryRepository::new(
-                app.path().app_config_dir()?.join("storage-location.json"),
-            );
-            let active_data_directory = data_directory_repository
+            let default_configuration = ConfigurationDirectory::default_for(&home);
+            let configuration_location_path = home.join(".qterm-location.json");
+            let configuration_repository =
+                JsonConfigurationDirectoryRepository::new(configuration_location_path.clone());
+            let active_configuration = configuration_repository
                 .load()
                 .unwrap_or(None)
-                .unwrap_or_else(|| default_data_directory.clone());
-            std::fs::create_dir_all(active_data_directory.path())?;
-            let paths =
-                DataPaths::from_roots(active_data_directory.path(), &app.path().app_data_dir()?);
+                .unwrap_or_else(|| default_configuration.clone());
+            let paths = DataPaths::from_root(active_configuration.path().to_path_buf());
+            paths.initialize()?;
+            app.manage(SettingsState::new(
+                JsonSettingsRepository::new(paths.settings.clone()),
+                JsonConfigurationDirectoryRepository::new(configuration_location_path),
+                default_configuration,
+                active_configuration,
+            ));
             app.manage(ProfileState::new(JsonProfileRepository::new(
                 paths.profiles,
             )));
@@ -135,12 +158,6 @@ pub fn run() {
             )));
             app.manage(NetworkState::new(JsonNetworkRepository::new(paths.network)));
             app.manage(BrowserProxyState::new(paths.browser_profiles));
-            app.manage(SettingsState::new(
-                JsonSettingsRepository::new(paths.settings),
-                data_directory_repository,
-                default_data_directory,
-                active_data_directory,
-            ));
             app.manage(TransferState::new());
             app.manage(WorkspaceState::new(JsonWorkspaceRepository::new(
                 paths.workspaces,
@@ -195,9 +212,9 @@ pub fn run() {
             credential_reveal_password,
             credential_delete,
             settings_get,
+            settings_select_configuration_directory,
+            settings_update_configuration_directory,
             settings_update_security,
-            settings_update_data_directory,
-            settings_select_data_directory,
             session_connect,
             session_accept_host_key,
             session_reject_host_key,
@@ -237,21 +254,69 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::{DataPaths, persisted_window_state_flags};
+    use std::fs;
     use tauri_plugin_window_state::StateFlags;
+    use tempfile::tempdir;
 
     #[test]
-    fn connections_credentials_and_network_rules_follow_the_portable_root() {
-        let portable_root = std::path::Path::new("portable-root");
-        let local_root = std::path::Path::new("local-root");
-        let paths = DataPaths::from_roots(portable_root, local_root);
+    fn data_paths_are_partitioned_under_the_users_qterm_root() {
+        let home = std::path::Path::new("user-home");
+        let paths = DataPaths::from_root(home.join(".qterm"));
+        let root = home.join(".qterm");
+        let data = root.join("data");
+        let device = root.join("device");
+        let cache = root.join("cache");
 
-        assert_eq!(paths.profiles.parent(), Some(portable_root));
-        assert_eq!(paths.credentials.parent(), Some(portable_root));
-        assert_eq!(paths.network.parent(), Some(portable_root));
-        assert_eq!(paths.known_hosts.parent(), Some(local_root));
-        assert_eq!(paths.workspaces.parent(), Some(local_root));
-        assert_eq!(paths.settings.parent(), Some(local_root));
-        assert_eq!(paths.browser_profiles.parent(), Some(local_root));
+        assert_eq!(paths.root, root);
+        assert_eq!(paths.data, data);
+        assert_eq!(paths.device, device);
+        assert_eq!(paths.cache, cache);
+        assert_eq!(paths.profiles, data.join("connections.json"));
+        assert_eq!(paths.credentials, data.join("secrets.vault"));
+        assert_eq!(paths.network, data.join("network-forwards.json"));
+        assert_eq!(paths.known_hosts, device.join("known-hosts.json"));
+        assert_eq!(paths.workspaces, device.join("workspaces.json"));
+        assert_eq!(paths.settings, device.join("settings.json"));
+        assert_eq!(paths.browser_profiles, cache.join("browser-profiles"));
+    }
+
+    #[test]
+    fn initializes_partition_directories_without_touching_legacy_root_files() {
+        let home = tempdir().expect("home");
+        let legacy = home.path().join(".qterm").join("connections.json");
+        fs::create_dir_all(legacy.parent().expect("legacy parent")).expect("legacy root");
+        fs::write(&legacy, b"legacy-bytes").expect("legacy fixture");
+        let paths = DataPaths::from_root(home.path().join(".qterm"));
+
+        paths.initialize().expect("initialize partitions");
+
+        assert!(paths.data.is_dir());
+        assert!(paths.device.is_dir());
+        assert!(paths.cache.is_dir());
+        assert_eq!(
+            fs::read(legacy).expect("unchanged legacy file"),
+            b"legacy-bytes"
+        );
+        assert!(
+            !paths.profiles.exists(),
+            "legacy profiles must not be copied"
+        );
+    }
+
+    #[test]
+    fn custom_configuration_directory_moves_all_qterm_partitions_together() {
+        let custom = std::path::Path::new("custom-qterm");
+        let paths = DataPaths::from_root(custom.to_path_buf());
+
+        assert_eq!(paths.root, custom);
+        assert_eq!(paths.data, custom.join("data"));
+        assert_eq!(paths.profiles, custom.join("data/connections.json"));
+        assert_eq!(paths.credentials, custom.join("data/secrets.vault"));
+        assert_eq!(paths.network, custom.join("data/network-forwards.json"));
+        assert_eq!(paths.device, custom.join("device"));
+        assert_eq!(paths.known_hosts, custom.join("device/known-hosts.json"));
+        assert_eq!(paths.settings, custom.join("device/settings.json"));
+        assert_eq!(paths.cache, custom.join("cache"));
     }
 
     #[test]

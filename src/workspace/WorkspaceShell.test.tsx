@@ -55,7 +55,7 @@ beforeEach(() => {
   mocks.unlockVault.mockResolvedValue(undefined);
   mocks.onVaultStatusChanged.mockResolvedValue(() => undefined);
   mocks.getSettings.mockResolvedValue({
-    general: { dataDirectory: "", activeDataDirectory: "", restartRequired: false },
+    general: { rootDirectory: "", activeRootDirectory: "", dataDirectory: "", deviceDirectory: "", cacheDirectory: "", restartRequired: false },
     security: { credentialAutoLockAfterSeconds: 3600, terminalAutoLockAfterSeconds: null },
     warning: null,
   });
@@ -149,7 +149,7 @@ describe("WorkspaceShell utility rail", () => {
   it("locks the terminal and vault after the configured inactivity deadline", async () => {
     vi.useFakeTimers();
     mocks.getSettings.mockResolvedValue({
-      general: { dataDirectory: "", activeDataDirectory: "", restartRequired: false },
+      general: { rootDirectory: "", activeRootDirectory: "", dataDirectory: "", deviceDirectory: "", cacheDirectory: "", restartRequired: false },
       security: { credentialAutoLockAfterSeconds: 3600, terminalAutoLockAfterSeconds: 300 },
       warning: null,
     });
@@ -165,7 +165,7 @@ describe("WorkspaceShell utility rail", () => {
   it("renews terminal inactivity only for user input", async () => {
     vi.useFakeTimers();
     mocks.getSettings.mockResolvedValue({
-      general: { dataDirectory: "", activeDataDirectory: "", restartRequired: false },
+      general: { rootDirectory: "", activeRootDirectory: "", dataDirectory: "", deviceDirectory: "", cacheDirectory: "", restartRequired: false },
       security: { credentialAutoLockAfterSeconds: 3600, terminalAutoLockAfterSeconds: 300 },
       warning: null,
     });
@@ -190,7 +190,7 @@ describe("WorkspaceShell utility rail", () => {
     const startedAt = new Date("2026-08-20T00:00:00Z");
     vi.setSystemTime(startedAt);
     mocks.getSettings.mockResolvedValue({
-      general: { dataDirectory: "", activeDataDirectory: "", restartRequired: false },
+      general: { rootDirectory: "", activeRootDirectory: "", dataDirectory: "", deviceDirectory: "", cacheDirectory: "", restartRequired: false },
       security: { credentialAutoLockAfterSeconds: 3600, terminalAutoLockAfterSeconds: 300 },
       warning: null,
     });
@@ -208,7 +208,7 @@ describe("WorkspaceShell utility rail", () => {
     vi.useFakeTimers();
     mocks.lockVault.mockRejectedValue(new Error("vault lock failed"));
     mocks.getSettings.mockResolvedValue({
-      general: { dataDirectory: "", activeDataDirectory: "", restartRequired: false },
+      general: { rootDirectory: "", activeRootDirectory: "", dataDirectory: "", deviceDirectory: "", cacheDirectory: "", restartRequired: false },
       security: { credentialAutoLockAfterSeconds: 3600, terminalAutoLockAfterSeconds: 300 },
       warning: null,
     });

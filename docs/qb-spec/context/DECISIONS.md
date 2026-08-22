@@ -212,7 +212,7 @@ Status: accepted
 
 Status: accepted
 
-连接 profile 只保存可空 `credentialId`，多个连接可共享同一密码或私钥凭证。默认可迁移目录 `~/.qterm` 保存 `connections.json` 与 `secrets.vault`；known-hosts 和 Workspace 留在设备本地。主密码经 Argon2id 派生 KEK，KEK 只包装随机 data key，密码、私钥正文与可选私钥口令使用 data key 和 AES-256-GCM 逐条认证加密。应用每次启动保持锁定；名称、类型和算法摘要在锁定状态仍可读取并解释连接引用，但选择其他凭证、解密材料和执行写操作前必须解锁，SSH Agent 不需要解锁。私钥导入、连接解析及 OpenSSH 公钥派生均在 Rust 完成；公钥可经只接收 credential ID 的窄化 IPC 返回并复制，私钥正文与口令不进入 WebView。删除凭证先解除所有 profile 引用再删除密文，连接本身保留。
+连接 profile 只保存可空 `credentialId`，多个连接可共享同一密码或私钥凭证。当前配置根的 `data/` 保存 `connections.json` 与 `secrets.vault`；known-hosts 和 Workspace 位于同一根的 `device/`。主密码经 Argon2id 派生 KEK，KEK 只包装随机 data key，密码、私钥正文与可选私钥口令使用 data key 和 AES-256-GCM 逐条认证加密。应用每次启动保持锁定；名称、类型和算法摘要在锁定状态仍可读取并解释连接引用，但选择其他凭证、解密材料和执行写操作前必须解锁，SSH Agent 不需要解锁。私钥导入、连接解析及 OpenSSH 公钥派生均在 Rust 完成；公钥可经只接收 credential ID 的窄化 IPC 返回并复制，私钥正文与口令不进入 WebView。删除凭证先解除所有 profile 引用再删除密文，连接本身保留。
 
 ## 2026-08-19 — 手动认证只提供一次性密码、凭证引用与 SSH Agent
 
@@ -240,9 +240,15 @@ Status: superseded by “跨平台凭证有效期与终端空闲锁分离” (20
 
 ## 2026-08-20 — 可配置连接与凭证迁移目录
 
-Status: accepted
+Status: superseded by “默认 ~/.qterm 并允许重定位整个配置根” (2026-08-23)
 
 只有 `connections.json`、`secrets.vault` 与 `network-forwards.json` 跟随可配置的迁移目录，默认目录为 `~/.qterm`；应用 known-hosts、Workspace 与设备安全设置继续使用系统 app-data，不受该配置影响。固定系统 app-config 只保存 schema-versioned 的 `storage-location.json`，使组合根能在载入连接、凭证与网络规则前确定迁移目录。用户可输入绝对路径或通过系统目录选择器修改；空值、`~` 与 `~/.qterm` 均恢复默认。保存时初始化目标目录，但不复制、移动、覆盖或删除旧数据，路径在重启后生效，用户必须按界面提示手动迁移 `connections.json`、`secrets.vault` 与 `network-forwards.json`。损坏或不兼容的定位文件不被覆盖，启动回退到默认迁移目录并向设置 UI 暴露警告。
+
+## 2026-08-23 — 默认 ~/.qterm 并允许重定位整个配置根
+
+Status: accepted
+
+组合根不再读取系统 app-config `storage-location.json`。它先读取用户 home 下固定的 `~/.qterm-location.json`，缺失时使用默认 `~/.qterm`，再从选定根统一派生 `data/`、`device/` 与 `cache/`：三类核心文件进入 `data/`，known-host、Workspace 与安全设置进入 `device/`，可再生浏览器代理 profile 进入 `cache/`。UI 只允许修改整个配置根，不能分别重定位子目录。保存新根只创建目标分区并要求重启，不读取、复制、合并、覆盖或删除旧目录数据。用户明确接受放弃旧配置和现有严格 schema 策略；Tauri window-state 与 WebView 引擎缓存继续由框架管理，不纳入此布局。
 
 ## 2026-08-20 — 终端锁采用进程内遮罩并与凭证同时解锁
 
@@ -260,4 +266,4 @@ Status: accepted
 
 Status: accepted
 
-Network 是与 Terminal、Files 并列的一等 Workspace leaf。转发规则按 `profileId` 全局共享并保存到可迁移目录的独立 `network-forwards.json`，Workspace Network leaf 只保存 `blockId/profileId`；listener、活动转发、子 channel、session id 和认证材料不持久化。每个 Network Block 使用独立 SSH session，同一 Block 内的 Local、Remote 与 SOCKS5 规则共享该 session，不复用来源 Terminal/Files session。规则恢复后默认停止，不自动启动或无限重连。本地与 SOCKS5 listener、远程 listener 均默认 loopback；非 loopback 需要显式风险提示。用户在确认界面明确授权删除 profile 后，application use case 同步删除引用该 profile 的持久化规则并关闭相关 Network session，同时保留共享凭证；跨独立文件的第二步失败时尽力恢复 profile，不将该编排下放给 WebView。
+Network 是与 Terminal、Files 并列的一等 Workspace leaf。转发规则按 `profileId` 全局共享并保存到当前配置根的 `data/network-forwards.json`，Workspace Network leaf 只保存 `blockId/profileId`；listener、活动转发、子 channel、session id 和认证材料不持久化。每个 Network Block 使用独立 SSH session，同一 Block 内的 Local、Remote 与 SOCKS5 规则共享该 session，不复用来源 Terminal/Files session。规则恢复后默认停止，不自动启动或无限重连。本地与 SOCKS5 listener、远程 listener 均默认 loopback；非 loopback 需要显式风险提示。用户在确认界面明确授权删除 profile 后，application use case 同步删除引用该 profile 的持久化规则并关闭相关 Network session，同时保留共享凭证；跨独立文件的第二步失败时尽力恢复 profile，不将该编排下放给 WebView。

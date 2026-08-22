@@ -3,12 +3,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const { invoke } = vi.hoisted(() => ({ invoke: vi.fn() }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
 
-import { getSettings, selectDataDirectory, updateDataDirectory, updateSecuritySettings } from "./settings";
+import { getSettings, selectConfigurationDirectory, updateConfigurationDirectory, updateSecuritySettings } from "./settings";
 
 describe("settings IPC client", () => {
   beforeEach(() => invoke.mockReset());
 
-  it("loads and updates the general and security settings DTOs", async () => {
+  it("loads the read-only storage layout and updates security settings", async () => {
     invoke.mockResolvedValue(undefined);
     await getSettings();
     expect(invoke).toHaveBeenCalledWith("settings_get");
@@ -16,13 +16,14 @@ describe("settings IPC client", () => {
     expect(invoke).toHaveBeenLastCalledWith("settings_update_security", {
       input: { credentialAutoLockAfterSeconds: 900, terminalAutoLockAfterSeconds: 1800 },
     });
-    await updateDataDirectory({ path: "D:\\Qterm Data" });
-    expect(invoke).toHaveBeenLastCalledWith("settings_update_data_directory", {
-      input: { path: "D:\\Qterm Data" },
+    await updateConfigurationDirectory({ path: "D:\\Qterm" });
+    expect(invoke).toHaveBeenLastCalledWith("settings_update_configuration_directory", {
+      input: { path: "D:\\Qterm" },
     });
-    await selectDataDirectory("D:\\Qterm Data");
-    expect(invoke).toHaveBeenLastCalledWith("settings_select_data_directory", {
-      initialPath: "D:\\Qterm Data",
+    await selectConfigurationDirectory("D:\\Qterm");
+    expect(invoke).toHaveBeenLastCalledWith("settings_select_configuration_directory", {
+      initialPath: "D:\\Qterm",
     });
+    expect(invoke).toHaveBeenCalledTimes(4);
   });
 });

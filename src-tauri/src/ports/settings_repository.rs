@@ -1,8 +1,8 @@
-use crate::domain::settings::{DataDirectory, SecuritySettings, SettingsError};
+use crate::domain::settings::{ConfigurationDirectory, SecuritySettings, SettingsError};
 
-pub trait DataDirectoryRepository: Send + Sync {
-    fn load(&self) -> Result<Option<DataDirectory>, SettingsError>;
-    fn save(&self, directory: &DataDirectory) -> Result<(), SettingsError>;
+pub trait ConfigurationDirectoryRepository: Send + Sync {
+    fn load(&self) -> Result<Option<ConfigurationDirectory>, SettingsError>;
+    fn save(&self, directory: &ConfigurationDirectory) -> Result<(), SettingsError>;
 }
 
 pub trait SettingsRepository: Send + Sync {

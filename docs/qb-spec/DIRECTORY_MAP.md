@@ -21,14 +21,14 @@
 - `src/components/dialogs/ConnectionAuthDialog.tsx`：一次性密码、已有凭证与 SSH Agent 的人工连接入口；本次选择不回写 profile。
 - `src/components/dialogs/CredentialDialog.tsx`、`ChangeMasterPasswordDialog.tsx`：双栏凭证库管理、锁定门、密码/私钥操作、强清库确认和主密码迁移表单；不读取私钥正文或实现加密。
 - `src/components/dialogs/MasterPasswordDialog.tsx`：主密码初始化/解锁入口；不列出、解密或管理已保存凭据。
-- `src/components/dialogs/SettingsDialog.tsx`：设备安全设置页面与显式保存反馈；不拥有锁定计时或 Windows 会话监听。
+- `src/components/dialogs/SettingsDialog.tsx`：系统设置分类、保存编排与反馈；`ConfigurationDirectorySetting.tsx` 负责整个配置根的输入/选择/恢复默认，`ConfigurationPaths.tsx` 负责只读派生路径预览；这些组件不迁移数据、拥有锁定计时或监听系统会话。
 - `src/components/dialogs/ConnectionDialog.tsx`：连接、分组、凭证引用、显式跃点编辑和不兼容配置清除确认入口；展示后端候选与原因，不拥有 route 校验或文件删除授权。
 - `src/components/dialogs/SshConfigImportDialog.tsx`：SSH Config 文件选择、连接信息/凭证双 Tab 与批量导入界面；负责默认未分组、连接选择和逐项私钥授权，不接收设备路径或私钥正文。
 - `src/terminal/TerminalPanel.tsx`：每个 Block 的 xterm 生命周期、直接输出 writer、OSC 工作目录和 PTY 尺寸适配；不管理连接配置或布局树。
 - `src/files/FileBrowserPane.tsx`、`CodeEditor.tsx`、`MarkdownPreview.tsx`：内部文件窗口的目录导航、下载、瞬时预览编辑状态与按需编辑/渲染组件；不依赖 TerminalRuntime，不直接读取本地文件或实现 SFTP。
 - `src/lib/tauri/profiles.ts`：连接配置、有序跃点候选/route 要求、不兼容存储清除与 SSH Config 导入 IPC 客户端契约；不包含配置路径、私钥路径、强制删除参数或领域校验。
 - `src/lib/tauri/credentials.ts`：密码/私钥凭证库的窄 IPC 契约；不实现 KDF、加密或 JSON 访问。
-- `src/lib/tauri/settings.ts`：设备安全设置的窄 IPC 契约；不缓存或执行锁定策略。
+- `src/lib/tauri/settings.ts`：配置根选择、派生存储布局快照与设备安全设置的窄 IPC 契约；不开放分区路径写入、缓存或执行锁定策略。
 - `src/lib/tauri/sessions.ts`：以目标 profile ID 建连的 SSH 会话命令与带节点/阶段的有序状态 Channel 契约；不解析 route、主机密钥规则或协议状态机。
 - `src/lib/tauri/transfers.ts`：单文件 SFTP 选择、启动、进度和取消 IPC 契约；不直接访问本地或远程文件系统。
 - `src/lib/tauri/files.ts`：本地/远程目录、受限文件读取、带修订保存与 Files-only SSH connect IPC 契约；不执行文件系统或 SFTP 操作。
@@ -37,7 +37,7 @@
 - `src/lib/tauri/workspaces.ts`：版本化 Workspace 文档的 load/save IPC 契约；不包含运行时会话字段。
 - `src/lib/tauri/window.ts`：桌面平台判定与当前窗口控制适配；不拥有 Workspace 状态或窗口视觉样式。
 - `src-tauri/src/main.rs`：原生可执行入口，只委托给库组合根。
-- `src-tauri/src/lib.rs`：Tauri 组合根，注册 commands、装配 adapters，并将可迁移连接/凭证定位到 `~/.qterm`；设备状态仍使用 app-data。
+- `src-tauri/src/lib.rs`：Tauri 组合根，注册 commands、装配 adapters，先从 home locator 解析配置根，再派生并初始化 root/data/device/cache 后构造全部 repositories；不读取旧 AppData 位置或在 repository 内重复计算全局路径。
 - `src-tauri/src/domain/profile.rs`：连接配置、最多 4 个显式有序跃点、候选资格与引用完整性规则；不包含 IPC、凭证明文或 JSON 序列化模型。
 - `src-tauri/src/domain/auth.rs`：短期凭据包装、可执行认证请求与稳定认证失败；不表达 profile 的 `manual` 策略，也不依赖 `russh` 或 Tauri。
 - `src-tauri/src/domain/credential.rs`、`ports/credential_vault.rs`、`application/credential_service.rs`：vault 领域语义、外部存储端口与用例边界；不依赖具体密码学文件格式或 UI。

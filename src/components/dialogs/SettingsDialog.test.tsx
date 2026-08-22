@@ -6,27 +6,38 @@ import { SettingsDialog } from "./SettingsDialog";
 
 const mocks = vi.hoisted(() => ({
   getSettings: vi.fn(),
-  selectDataDirectory: vi.fn(),
-  updateDataDirectory: vi.fn(),
+  selectConfigurationDirectory: vi.fn(),
+  updateConfigurationDirectory: vi.fn(),
   updateSecuritySettings: vi.fn(),
 }));
 vi.mock("../../lib/tauri/settings", () => mocks);
 
 beforeEach(() => {
   mocks.getSettings.mockResolvedValue({
-    general: { dataDirectory: "C:\\Users\\demo\\.qterm", activeDataDirectory: "C:\\Users\\demo\\.qterm", restartRequired: false },
+    general: storageLayout(),
     security: { credentialAutoLockAfterSeconds: 3600, terminalAutoLockAfterSeconds: null }, warning: null,
   });
-  mocks.updateDataDirectory.mockImplementation(async ({ path }: { path: string }) => ({
-    general: { dataDirectory: path || "C:\\Users\\demo\\.qterm", activeDataDirectory: "C:\\Users\\demo\\.qterm", restartRequired: Boolean(path) },
+  mocks.updateConfigurationDirectory.mockImplementation(async ({ path }: { path: string }) => ({
+    general: { ...storageLayout(), rootDirectory: path, dataDirectory: `${path}\\data`, deviceDirectory: `${path}\\device`, cacheDirectory: `${path}\\cache`, restartRequired: true },
     security: { credentialAutoLockAfterSeconds: 3600, terminalAutoLockAfterSeconds: null }, warning: null,
   }));
   mocks.updateSecuritySettings.mockImplementation(async (security) => ({
-    general: { dataDirectory: "C:\\Users\\demo\\.qterm", activeDataDirectory: "C:\\Users\\demo\\.qterm", restartRequired: false },
+    general: storageLayout(),
     security, warning: null,
   }));
 });
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
+
+function storageLayout() {
+  return {
+    rootDirectory: "C:\\Users\\demo\\.qterm",
+    activeRootDirectory: "C:\\Users\\demo\\.qterm",
+    dataDirectory: "C:\\Users\\demo\\.qterm\\data",
+    deviceDirectory: "C:\\Users\\demo\\.qterm\\device",
+    cacheDirectory: "C:\\Users\\demo\\.qterm\\cache",
+    restartRequired: false,
+  };
+}
 
 describe("SettingsDialog", () => {
   it("keeps navigation separate from the independently scrolling settings panel", async () => {
@@ -42,34 +53,52 @@ describe("SettingsDialog", () => {
     expect(within(securityPanel).getByRole("button", { name: "保存设置" })).toBeInTheDocument();
   });
 
-  it("edits, selects, and restores the default data directory with migration guidance", async () => {
+  it("separates configuration directory controls from the derived path overview", async () => {
     const user = userEvent.setup();
-    mocks.selectDataDirectory.mockResolvedValue("D:\\Portable Qterm");
+    mocks.selectConfigurationDirectory.mockResolvedValue("D:\\Qterm");
     render(<SettingsDialog onClose={vi.fn()}/>);
 
-    const path = await screen.findByRole("textbox", { name: "数据存储位置" });
-    expect(path).toHaveValue("C:\\Users\\demo\\.qterm");
-    expect(screen.getByText(/不会自动迁移或覆盖 connections\.json、network-forwards\.json 与 secrets\.vault/)).toBeInTheDocument();
-    expect(screen.getByText(/known-hosts\.json 与 workspaces\.json 仍保存在系统默认位置/)).toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: "选择文件夹" }));
-    expect(mocks.selectDataDirectory).toHaveBeenCalledWith("C:\\Users\\demo\\.qterm");
-    expect(path).toHaveValue("D:\\Portable Qterm");
-
-    await user.click(screen.getByRole("button", { name: "恢复默认" }));
-    expect(path).toHaveValue("~/.qterm");
+    const directorySettings = await screen.findByRole("group", { name: "配置目录设置" });
+    const pathOverview = screen.getByRole("group", { name: "配置路径" });
+    const input = within(directorySettings).getByRole("textbox", { name: "Qterm 配置目录" });
+    expect(input).toHaveValue("C:\\Users\\demo\\.qterm");
+    expect(input).toHaveAttribute("readonly");
+    expect(within(pathOverview).getByText("C:\\Users\\demo\\.qterm\\data")).toBeInTheDocument();
+    expect(within(pathOverview).getByText("C:\\Users\\demo\\.qterm\\device")).toBeInTheDocument();
+    expect(within(pathOverview).getByText("C:\\Users\\demo\\.qterm\\cache")).toBeInTheDocument();
+    const chooseButton = within(directorySettings).getByRole("button", { name: "选择 Qterm 配置目录" });
+    const resetButton = within(directorySettings).getByRole("button", { name: "恢复默认 Qterm 配置目录" });
+    expect(chooseButton.querySelector('[data-icon="files"]')).not.toBeNull();
+    expect(resetButton.querySelector('[data-icon="refresh"]')).not.toBeNull();
+    await user.click(chooseButton);
+    expect(mocks.selectConfigurationDirectory).toHaveBeenCalledWith("C:\\Users\\demo\\.qterm");
+    expect(input).toHaveValue("D:\\Qterm");
+    expect(within(pathOverview).getByText("D:\\Qterm\\data")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "保存设置" }));
-    await waitFor(() => expect(mocks.updateDataDirectory).toHaveBeenCalledWith({ path: "~/.qterm" }));
+    await waitFor(() => expect(mocks.updateConfigurationDirectory).toHaveBeenCalledWith({ path: "D:\\Qterm" }));
+    const status = await screen.findByRole("status");
+    expect(status).toHaveTextContent("重启 Qterm 后生效");
+    expect(status.closest("footer")).not.toBeNull();
   });
 
-  it("shows restart guidance after saving a changed data directory", async () => {
+  it("restores the default root while derived paths remain read-only", async () => {
     const user = userEvent.setup();
+    mocks.selectConfigurationDirectory.mockResolvedValue("D:\\Custom");
     render(<SettingsDialog onClose={vi.fn()}/>);
-    const path = await screen.findByRole("textbox", { name: "数据存储位置" });
-    await user.clear(path);
-    await user.type(path, "D:\\Qterm Data");
-    await user.click(screen.getByRole("button", { name: "保存设置" }));
-    expect(await screen.findByRole("status")).toHaveTextContent("重启 Qterm 后生效");
+    const input = await screen.findByRole("textbox", { name: "Qterm 配置目录" });
+    await user.click(screen.getByRole("button", { name: "选择 Qterm 配置目录" }));
+    expect(input).toHaveValue("D:\\Custom");
+    await user.click(screen.getByRole("button", { name: "恢复默认 Qterm 配置目录" }));
+    expect(input).toHaveValue("~/.qterm");
+    expect(screen.queryByRole("textbox", { name: "核心数据目录" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: "设备数据目录" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: "缓存目录" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/当前加载/)).not.toBeInTheDocument();
+    const note = screen.getByRole("note");
+    expect(note).toHaveTextContent("不会迁移或覆盖旧文件");
+    expect(note.querySelector('[data-icon="help"]')).not.toBeNull();
+    expect(note.previousElementSibling).toHaveAttribute("aria-label", "配置目录设置");
+    expect(note.nextElementSibling).toHaveAttribute("aria-label", "配置路径");
   });
 
   it("shows the new defaults and persists both independent lock policies", async () => {
@@ -100,7 +129,7 @@ describe("SettingsDialog", () => {
 
   it("surfaces safe-default fallback warnings", async () => {
     mocks.getSettings.mockResolvedValue({
-      general: { dataDirectory: "C:\\Users\\demo\\.qterm", activeDataDirectory: "C:\\Users\\demo\\.qterm", restartRequired: false },
+      general: storageLayout(),
       security: { credentialAutoLockAfterSeconds: 3600, terminalAutoLockAfterSeconds: null }, warning: "corrupt",
     });
     render(<SettingsDialog onClose={vi.fn()}/>);

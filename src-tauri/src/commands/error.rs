@@ -46,9 +46,9 @@ impl From<SettingsError> for IpcError {
                 message: "自动锁定时长必须在 60 到 86400 秒之间",
                 retryable: false,
             },
-            SettingsError::InvalidDataDirectory => Self {
-                code: "invalidDataDirectory",
-                message: "数据存储位置必须是绝对路径、~ 或 ~/ 下的路径",
+            SettingsError::InvalidConfigurationDirectory => Self {
+                code: "invalidConfigurationDirectory",
+                message: "Qterm 配置目录必须是绝对路径",
                 retryable: false,
             },
             SettingsError::Corrupt => Self {

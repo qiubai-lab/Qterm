@@ -6,13 +6,12 @@ export interface SecuritySettings {
 }
 
 export interface GeneralSettings {
+  rootDirectory: string;
+  activeRootDirectory: string;
   dataDirectory: string;
-  activeDataDirectory: string;
+  deviceDirectory: string;
+  cacheDirectory: string;
   restartRequired: boolean;
-}
-
-export interface DataDirectorySettings {
-  path: string;
 }
 
 export interface SettingsSnapshot {
@@ -23,11 +22,11 @@ export interface SettingsSnapshot {
 
 export const getSettings = (): Promise<SettingsSnapshot> => invoke("settings_get");
 
+export const selectConfigurationDirectory = (initialPath: string): Promise<string | null> =>
+  invoke("settings_select_configuration_directory", { initialPath });
+
+export const updateConfigurationDirectory = (input: { path: string }): Promise<SettingsSnapshot> =>
+  invoke("settings_update_configuration_directory", { input });
+
 export const updateSecuritySettings = (security: SecuritySettings): Promise<SettingsSnapshot> =>
   invoke("settings_update_security", { input: security });
-
-export const updateDataDirectory = (input: DataDirectorySettings): Promise<SettingsSnapshot> =>
-  invoke("settings_update_data_directory", { input });
-
-export const selectDataDirectory = (initialPath?: string): Promise<string | null> =>
-  invoke("settings_select_data_directory", { initialPath });
