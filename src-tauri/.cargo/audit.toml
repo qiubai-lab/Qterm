@@ -1,0 +1,6 @@
+# Qterm explicitly accepts the unresolved timing-side-channel risk from the
+# transitive `rsa 0.10.0-rc.18` dependency required for imported RSA SSH keys.
+# See docs/qb-spec/context/DECISIONS.md and docs/security-model.md. Keep this
+# exception limited to RUSTSEC-2023-0071 and remove it when upstream ships a fix.
+[advisories]
+ignore = ["RUSTSEC-2023-0071"]
