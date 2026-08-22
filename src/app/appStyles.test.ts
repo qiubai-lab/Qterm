@@ -165,6 +165,28 @@ describe("application layout styles", () => {
     expect(styles).toMatch(/prefers-contrast:more[\s\S]*\.terminal-block,\.terminal-surface,\.file-browser,\.network-pane\{background:#050708\}/);
   });
 
+  it("places the macOS traffic lights and brand on one tab-height glass plaque", () => {
+    const brand = declarations('.app-shell[data-platform="macos"] .app-brand');
+    const brandPlate = declarations('.app-shell[data-platform="macos"] .app-brand::before');
+    const brandIcon = declarations('.app-shell[data-platform="macos"] .app-brand svg');
+    const brandLabel = declarations('.app-shell[data-platform="macos"] .app-brand span');
+
+    expect(brand).toContain("height:30px");
+    expect(brand).not.toContain("transition:");
+    expect(brandPlate).toContain("inset:0 0 0 -80px");
+    expect(brandPlate).toContain("border-radius:7px");
+    expect(brandPlate).toContain("backdrop-filter:blur(8px) saturate(115%)");
+    expect(brandPlate).toContain('content:""');
+    expect(brand).toContain("gap:6px");
+    expect(brandIcon).toContain("width:14px");
+    expect(brandIcon).toContain("color-mix(in srgb,var(--accent) 56%,var(--muted))");
+    expect(brandLabel).toContain("font-size:12px");
+    expect(brandLabel).toContain("font-weight:600");
+    expect(brandLabel).toContain("color:#aeb4bc");
+    expect(styles).toMatch(/prefers-reduced-transparency:reduce[\s\S]*\.app-shell\[data-platform="macos"\] \.app-brand::before\{background:#15171a/);
+    expect(styles).toMatch(/prefers-contrast:more[\s\S]*\.app-shell\[data-platform="macos"\] \.app-brand::before\{border-color:#626872/);
+  });
+
   it("fills tall terminal blocks with one continuous terminal surface", () => {
     const terminalSurface = declarations(".terminal-surface");
     const xtermSurface = declarations(".terminal-surface>.xterm");
