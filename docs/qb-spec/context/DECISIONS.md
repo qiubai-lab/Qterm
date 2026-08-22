@@ -1,10 +1,10 @@
 # Decisions
 
-## 2026-08-21 — 凭证库只在 Rust 内生成 Ed25519 与 ECDSA P-256 私钥
+## 2026-08-22 — 凭证库在 Rust 内兼容现代加密私钥并生成 Ed25519 与 ECDSA 私钥
 
 Status: accepted
 
-凭证管理的私钥添加页提供两个等高全宽入口：系统文件选择器导入，以及 Rust 后端生成。生成 IPC 只接受凭证名称、`ed25519 | ecdsaP256` 算法和最多 80 字符的公钥注释；不接受私钥正文、种子或路径。SSH infrastructure 使用系统 CSPRNG 生成并以 zeroizing 缓冲序列化 OpenSSH 私钥，随后复用既有凭证 vault 加密保存；WebView 只接收非敏感凭证摘要和按凭证 ID 派生的公钥。RSA 继续因既有依赖安全公告而禁用，生成密钥不额外设置 key-level passphrase。
+凭证管理的私钥添加页提供两个等高全宽入口：系统文件选择器导入，以及 Rust 后端生成。SSH infrastructure 按容器识别 OpenSSH、PKCS#8 与 PuTTY PPK v2/v3，并只在加密容器需要时使用用户提供的口令；运行时不调用 `ssh-keygen`、OpenSSL、PuTTYgen 或 shell。生成 IPC 只接受凭证名称、`ed25519 | ecdsaP256 | ecdsaP384 | ecdsaP521` 算法和最多 80 字符的公钥注释，不接受私钥正文、种子或路径。生成使用系统 CSPRNG，并以 zeroizing 缓冲序列化 OpenSSH 私钥后直接交给既有 vault 加密保存；WebView 只接收非敏感凭证摘要和按凭证 ID 派生的公钥。RSA 继续因既有依赖安全公告而禁用，生成密钥不额外设置 key-level passphrase；DES、3DES、SHA-1 等弱加密不作为生成格式。
 
 ## 2026-08-21 — 使用 Qterm profile 引用实现纯 Rust SSH 跳板路径
 

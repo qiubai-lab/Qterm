@@ -207,6 +207,8 @@ describe("CredentialDialog", () => {
 
     const generateDialog = screen.getByRole("dialog", { name: "生成新私钥" });
     expect(within(generateDialog).getByLabelText("密钥类型")).toHaveValue("ed25519");
+    expect(within(generateDialog).getByRole("option", { name: "ECDSA P-384" })).toBeInTheDocument();
+    expect(within(generateDialog).getByRole("option", { name: "ECDSA P-521" })).toBeInTheDocument();
     await user.selectOptions(within(generateDialog).getByLabelText("密钥类型"), "ecdsaP256");
     await user.type(within(generateDialog).getByLabelText("公钥注释（可选）"), "deploy@example");
     await user.click(within(generateDialog).getByRole("button", { name: "生成私钥" }));

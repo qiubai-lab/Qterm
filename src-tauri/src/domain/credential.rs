@@ -58,6 +58,8 @@ pub enum CredentialKind {
 pub enum GeneratedPrivateKeyAlgorithm {
     Ed25519,
     EcdsaP256,
+    EcdsaP384,
+    EcdsaP521,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

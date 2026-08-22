@@ -35,8 +35,10 @@ describe("credential vault IPC client", () => {
 
   it("generates private keys through a closed algorithm DTO without returning key material", async () => {
     invoke.mockResolvedValue({ id: "key-2", name: "Generated", kind: "privateKey", detail: "ecdsa-p256" });
-    await prepareGeneratedPrivateKeyCredential("ecdsaP256", "deploy@example");
-    expect(invoke).toHaveBeenCalledWith("credential_prepare_generated_private_key", { input: { algorithm: "ecdsaP256", comment: "deploy@example" } });
+    await prepareGeneratedPrivateKeyCredential("ecdsaP384", "deploy@example");
+    await prepareGeneratedPrivateKeyCredential("ecdsaP521", "deploy@example");
+    expect(invoke).toHaveBeenNthCalledWith(1, "credential_prepare_generated_private_key", { input: { algorithm: "ecdsaP384", comment: "deploy@example" } });
+    expect(invoke).toHaveBeenNthCalledWith(2, "credential_prepare_generated_private_key", { input: { algorithm: "ecdsaP521", comment: "deploy@example" } });
   });
 
   it("requires the destructive confirmation phrase when clearing", async () => {

@@ -152,6 +152,8 @@ impl CredentialState {
         let label = match algorithm {
             GeneratedPrivateKeyAlgorithm::Ed25519 => "Ed25519",
             GeneratedPrivateKeyAlgorithm::EcdsaP256 => "ECDSA P-256",
+            GeneratedPrivateKeyAlgorithm::EcdsaP384 => "ECDSA P-384",
+            GeneratedPrivateKeyAlgorithm::EcdsaP521 => "ECDSA P-521",
         };
         Ok(self.remember_private_key(
             PendingPrivateKeySource::Generated,
@@ -408,6 +410,8 @@ pub struct PrivateKeyPathDto {
 enum GeneratePrivateKeyAlgorithmDto {
     Ed25519,
     EcdsaP256,
+    EcdsaP384,
+    EcdsaP521,
 }
 
 impl From<GeneratePrivateKeyAlgorithmDto> for GeneratedPrivateKeyAlgorithm {
@@ -415,6 +419,8 @@ impl From<GeneratePrivateKeyAlgorithmDto> for GeneratedPrivateKeyAlgorithm {
         match value {
             GeneratePrivateKeyAlgorithmDto::Ed25519 => Self::Ed25519,
             GeneratePrivateKeyAlgorithmDto::EcdsaP256 => Self::EcdsaP256,
+            GeneratePrivateKeyAlgorithmDto::EcdsaP384 => Self::EcdsaP384,
+            GeneratePrivateKeyAlgorithmDto::EcdsaP521 => Self::EcdsaP521,
         }
     }
 }
@@ -1006,6 +1012,20 @@ mod tests {
                 "comment": null
             }))
             .is_err()
+        );
+        assert!(
+            serde_json::from_value::<PrepareGeneratedPrivateKeyDto>(json!({
+                "algorithm": "ecdsaP384",
+                "comment": null
+            }))
+            .is_ok()
+        );
+        assert!(
+            serde_json::from_value::<PrepareGeneratedPrivateKeyDto>(json!({
+                "algorithm": "ecdsaP521",
+                "comment": null
+            }))
+            .is_ok()
         );
         assert!(
             serde_json::from_value::<PrepareGeneratedPrivateKeyDto>(json!({
