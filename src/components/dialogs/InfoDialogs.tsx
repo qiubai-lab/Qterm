@@ -12,7 +12,7 @@ import { DialogFrame } from "./DialogFrame";
 import "./aboutUpdate.css";
 
 const PROJECT_URL = "https://github.com/qiubai-lab/Qterm";
-const HOMEBREW_UPDATE_COMMAND = "brew upgrade --cask qterm";
+const HOMEBREW_UPDATE_COMMAND = "brew update && brew upgrade --cask qterm";
 
 type UpdateState =
   | { status: "checking" }

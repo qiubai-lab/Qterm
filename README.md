@@ -35,6 +35,7 @@ brew install --cask qterm
 后续升级与卸载：
 
 ```bash
+brew update                        # 先更新第三方 tap（tap 不走官方 API，不会自动同步）
 brew upgrade --cask qterm          # 升级到新版本
 
 brew uninstall --cask qterm        # 卸载（保留配置与数据）

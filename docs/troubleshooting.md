@@ -1,5 +1,19 @@
 # Troubleshooting
 
+## Homebrew 升级提示"已是最新"
+
+`brew upgrade --cask qterm` 提示 `the latest version is already installed`，但 tap 中已有新版本时，通常是本地 tap 克隆没有同步：第三方 tap 不走 Homebrew 官方 API，只能靠 `brew update` 做 git pull。先执行 `brew update` 再升级即可：
+
+```bash
+brew update && brew upgrade --cask qterm
+```
+
+若仍无效，确认未设置 `HOMEBREW_NO_AUTO_UPDATE`，或手动同步 tap：
+
+```bash
+git -C "$(brew --repository qiubai-lab/tap)" pull
+```
+
 ## 无法连接
 
 - 确认主机、端口和用户名正确，且网络允许访问 SSH 端口。

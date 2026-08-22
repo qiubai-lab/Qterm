@@ -45,7 +45,7 @@ describe("HelpDialog", () => {
     await user.click(screen.getByRole("button", { name: "检测更新" }));
 
     expect(screen.getByRole("dialog", { name: "检测更新" })).toBeInTheDocument();
-    expect(screen.getByText("brew upgrade --cask qterm")).toBeInTheDocument();
+    expect(screen.getByText("brew update && brew upgrade --cask qterm")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "重新检测" })).not.toBeInTheDocument();
     expect(mocks.checkForUpdate).toHaveBeenCalledOnce();
 
@@ -88,7 +88,7 @@ describe("HelpDialog", () => {
     await user.click(screen.getByRole("button", { name: "检测更新" }));
     await user.click(screen.getByRole("button", { name: "复制 Homebrew 更新命令" }));
 
-    expect(mocks.writeClipboardText).toHaveBeenCalledWith("brew upgrade --cask qterm");
+    expect(mocks.writeClipboardText).toHaveBeenCalledWith("brew update && brew upgrade --cask qterm");
     expect(screen.getByRole("button", { name: "已复制 Homebrew 更新命令" })).toBeInTheDocument();
     expect(screen.queryByText("此窗口不会自动执行命令。")).not.toBeInTheDocument();
   });
