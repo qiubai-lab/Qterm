@@ -1,5 +1,11 @@
 # Decisions
 
+## 2026-08-22 — 窗口标题栏按平台遵循原生习惯
+
+Status: accepted
+
+macOS 主窗口使用原生 decorations 与 Overlay title bar，保留系统红黄绿交通灯、全屏和标题栏交互；应用内 40px 顶栏为交通灯保留固定安全区，并不重复渲染最小化、最大化或关闭按钮。Windows 与 Linux 继续使用应用内无边框标题栏和右侧窗口控制。平台窗口创建差异只通过 Tauri platform-specific config 表达，前端平台识别与窗口命令集中在 window adapter，不进入 Workspace 状态、领域模型或持久化。
+
 ## 2026-08-22 — 凭证库在 Rust 内兼容现代加密私钥并生成 Ed25519 与 ECDSA 私钥
 
 Status: accepted
@@ -192,7 +198,7 @@ Windows 使用无原生 decorations 的窗口，由应用顶部 Workspace 栏提
 
 ## 2026-08-18 — 全平台统一使用应用内无边框标题栏
 
-Status: accepted
+Status: superseded by “窗口标题栏按平台遵循原生习惯”
 
 Windows、macOS 和 Linux 的通用 Tauri 配置均关闭原生 decorations，统一由应用顶部栏提供窗口拖动。标题栏左侧固定显示终端图标与 `Qterm` 品牌，中间为 Workspace navigation，右侧固定显示关闭、最小化、最大化/还原按钮。窗口能力集中在前端 Tauri adapter；Shell 只判断指针是否命中非交互标题栏区域，不让平台分支进入 Workspace 状态、领域模型或持久化。
 

@@ -1,0 +1,28 @@
+{
+  "app": {
+    "windows": [
+      {
+        "title": "Qterm",
+        "width": 1040,
+        "height": 720,
+        "minWidth": 720,
+        "minHeight": 520,
+        "resizable": true,
+        "decorations": true,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "trafficLightPosition": {
+          "x": 14,
+          "y": 22
+        },
+        "theme": "Dark",
+        "transparent": true,
+        "windowEffects": {
+          "effects": ["hudWindow", "mica", "acrylic", "blur"],
+          "state": "followsWindowActiveState",
+          "radius": 12
+        }
+      }
+    ]
+  }
+}

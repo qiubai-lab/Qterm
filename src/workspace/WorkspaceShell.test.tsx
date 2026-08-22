@@ -41,7 +41,7 @@ vi.mock("../components/dialogs/MasterPasswordDialog", () => ({ MasterPasswordDia
 vi.mock("../lib/tauri/credentials", () => ({ getVaultStatus: mocks.getVaultStatus, lockVault: mocks.lockVault, unlockVault: mocks.unlockVault, onVaultStatusChanged: mocks.onVaultStatusChanged }));
 vi.mock("../lib/tauri/profiles", () => ({ getProfileRouteRequirements: mocks.getProfileRouteRequirements }));
 vi.mock("../lib/tauri/settings", () => ({ getSettings: mocks.getSettings }));
-vi.mock("../lib/tauri/window", () => ({ closeCurrentWindow: mocks.closeCurrentWindow, minimizeCurrentWindow: mocks.minimizeCurrentWindow, startDraggingCurrentWindow: vi.fn(), toggleMaximizeCurrentWindow: mocks.toggleMaximizeCurrentWindow }));
+vi.mock("../lib/tauri/window", () => ({ closeCurrentWindow: mocks.closeCurrentWindow, currentDesktopPlatform: () => "windows", minimizeCurrentWindow: mocks.minimizeCurrentWindow, startDraggingCurrentWindow: vi.fn(), toggleMaximizeCurrentWindow: mocks.toggleMaximizeCurrentWindow }));
 
 import { WorkspaceShell } from "./WorkspaceShell";
 

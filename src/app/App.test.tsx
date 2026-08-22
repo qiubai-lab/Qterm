@@ -1,9 +1,10 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../terminal/TerminalPanel", () => ({ TerminalPanel: () => <div aria-label="SSH 终端"/> }));
 vi.mock("../lib/tauri/window", () => ({
+  currentDesktopPlatform: vi.fn(() => "windows"),
   minimizeCurrentWindow: vi.fn(),
   toggleMaximizeCurrentWindow: vi.fn(),
   closeCurrentWindow: vi.fn(),
@@ -11,7 +12,11 @@ vi.mock("../lib/tauri/window", () => ({
 }));
 
 import App from "./App";
-import { closeCurrentWindow, minimizeCurrentWindow, startDraggingCurrentWindow, toggleMaximizeCurrentWindow } from "../lib/tauri/window";
+import { closeCurrentWindow, currentDesktopPlatform, minimizeCurrentWindow, startDraggingCurrentWindow, toggleMaximizeCurrentWindow } from "../lib/tauri/window";
+
+beforeEach(() => {
+  vi.mocked(currentDesktopPlatform).mockReturnValue("windows");
+});
 
 afterEach(() => {
   cleanup();
@@ -39,6 +44,19 @@ describe("application shell", () => {
     expect(closeCurrentWindow).toHaveBeenCalledOnce();
     expect(minimizeCurrentWindow).toHaveBeenCalledOnce();
     expect(toggleMaximizeCurrentWindow).toHaveBeenCalledOnce();
+  });
+
+  it("uses the macOS native titlebar controls without duplicating window buttons", () => {
+    vi.mocked(currentDesktopPlatform).mockReturnValue("macos");
+    render(<App/>);
+
+    const shell = screen.getByRole("main");
+    const brand = screen.getByLabelText("Qterm");
+    const workspaceNavigation = screen.getByRole("navigation", { name: "工作区" });
+    expect(shell).toHaveAttribute("data-platform", "macos");
+    expect(screen.queryByLabelText("窗口控制")).not.toBeInTheDocument();
+    expect(brand.nextElementSibling).toBe(workspaceNavigation);
+    expect(workspaceNavigation.nextElementSibling).toBeNull();
   });
 
   it("starts window dragging only from non-interactive titlebar space", () => {

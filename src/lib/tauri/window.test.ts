@@ -3,15 +3,21 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@tauri-apps/api/window", () => ({ getCurrentWindow: vi.fn() }));
 
-import { closeCurrentWindow, minimizeCurrentWindow, startDraggingCurrentWindow, toggleMaximizeCurrentWindow } from "./window";
+import { closeCurrentWindow, currentDesktopPlatform, minimizeCurrentWindow, startDraggingCurrentWindow, toggleMaximizeCurrentWindow } from "./window";
 
 afterEach(() => {
+  vi.restoreAllMocks();
   vi.clearAllMocks();
   vi.unstubAllGlobals();
   delete (window as Window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
 });
 
 describe("Tauri window adapter", () => {
+  it("detects macOS for native titlebar behavior", () => {
+    vi.spyOn(window.navigator, "platform", "get").mockReturnValue("MacIntel");
+    expect(currentDesktopPlatform()).toBe("macos");
+  });
+
   it("does not call native window APIs in browser mode", async () => {
     await minimizeCurrentWindow();
     await toggleMaximizeCurrentWindow();

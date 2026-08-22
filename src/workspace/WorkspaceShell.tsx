@@ -12,7 +12,7 @@ import { TerminalLockChoiceDialog, TerminalLockScreen } from "../components/dial
 import { getVaultStatus, lockVault, onVaultStatusChanged, type VaultStatus } from "../lib/tauri/credentials";
 import { getProfileRouteRequirements, type ConnectionProfile } from "../lib/tauri/profiles";
 import { getSettings, type SecuritySettings } from "../lib/tauri/settings";
-import { closeCurrentWindow, minimizeCurrentWindow, startDraggingCurrentWindow, toggleMaximizeCurrentWindow } from "../lib/tauri/window";
+import { closeCurrentWindow, currentDesktopPlatform, minimizeCurrentWindow, startDraggingCurrentWindow, toggleMaximizeCurrentWindow } from "../lib/tauri/window";
 import { WorkspaceCanvas, type ConnectionOwner } from "./LayoutView";
 import { resolveConfiguredAuth } from "./configuredAuth";
 import { openFileWindowAction } from "./fileWindow";
@@ -25,6 +25,8 @@ type WorkspaceTransitionDirection = "forward" | "backward";
 interface CloseRequest { title: string; detail: string; ids: string[]; execute: () => void }
 
 export function WorkspaceShell() {
+  const desktopPlatform = currentDesktopPlatform();
+  const usesNativeWindowControls = desktopPlatform === "macos";
   const { document, activeWorkspace, dispatch, runtimes, fileRuntimes, networkRuntimes, connectBlock, connectFileBlock, connectNetworkBlock, isConnectionTargetCurrent, connectedCount, closeSessions, blocksForWorkspace, acceptBlockHostKey, rejectBlockHostKey, acceptFileHostKey, rejectFileHostKey, acceptNetworkHostKey, rejectNetworkHostKey, storageNotice, dismissStorageNotice } = useWorkspace();
   const [tool, setTool] = useState<Tool | null>(null);
   const [renaming, setRenaming] = useState<{ id: string; value: string } | null>(null);
@@ -378,7 +380,7 @@ export function WorkspaceShell() {
           ? "请先初始化凭证库"
         : "锁定终端";
 
-  return <main className="app-shell">
+  return <main className="app-shell" data-platform={desktopPlatform}>
     <header className="app-chrome" onPointerDown={beginWindowDrag}>
       <div className="app-brand" aria-label="Qterm">
         <Icon name="terminal" size={15}/><span>Qterm</span>
@@ -396,11 +398,11 @@ export function WorkspaceShell() {
         </div>)}
         <button className="new-workspace-tab" aria-label="新建工作区" title="新建 Workspace (⌘T)" onClick={() => dispatch({ type: "addWorkspace" })}><Icon name="plus" size={14}/></button>
       </nav>
-      <div className="window-controls" aria-label="窗口控制">
+      {!usesNativeWindowControls && <div className="window-controls" aria-label="窗口控制">
         <button aria-label="最小化窗口" title="最小化" onClick={() => void minimizeCurrentWindow()}><Icon name="windowMinimize" size={14}/></button>
         <button aria-label="最大化或还原窗口" title="最大化或还原" onClick={() => void toggleMaximizeCurrentWindow()}><Icon name="windowMaximize" size={12}/></button>
         <button className="window-close" aria-label="关闭窗口" title="关闭" onClick={() => void closeCurrentWindow()}><Icon name="close" size={14}/></button>
-      </div>
+      </div>}
     </header>
 
     <section className="workspace-stage">

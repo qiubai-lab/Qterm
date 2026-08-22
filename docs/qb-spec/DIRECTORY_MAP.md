@@ -56,7 +56,7 @@
 - `src-tauri/src/infrastructure/ssh/forwarding.rs`：本地 listener、SOCKS5 CONNECT、Remote target 路由、有界转发任务与 TCP/SSH 双向数据泵；第三方 channel 类型不得离开 infrastructure。
 - `src-tauri/src/ports/profile_repository.rs`：应用层拥有的连接配置 repository 契约；不规定文件格式。
 - `src-tauri/src/infrastructure/ssh/client.rs`：按有序 route 建立首跳 TCP 与后续 `direct-tcpip`/`connect_stream` 会话，逐节点执行 host-key/认证并清理上游 handle；不解析 profile 图或向 WebView 暴露 russh 类型。
-- `src-tauri/tauri.conf.json`：全平台统一无边框桌面窗口、构建和打包配置；不承载 Workspace 或 SSH 规则。
+- `src-tauri/tauri.conf.json`、`tauri.macos.conf.json`：通用无边框桌面窗口与 macOS 原生 Overlay 标题栏的分层配置，以及构建和打包入口；不承载 Workspace 或 SSH 规则。
 - `src-tauri/capabilities/default.json`：主窗口最小 Tauri 权限清单。
 - `package.json`、`src-tauri/Cargo.toml`：前端与 Rust 的直接依赖及质量命令入口。
 - `.github/workflows/build-desktop.yml`：macOS ARM64、Windows x64 与 Linux x64 的版本标签/手动构建和 workflow artifact 上传入口；不发布 Release 或执行部署。
