@@ -74,7 +74,7 @@
 .connection-group-chevron { color: var(--icon); }
 .connection-group-toggle:hover .connection-group-chevron { color: var(--icon-hover); }
 .connection-group-items > p { color: var(--text-disabled); }
-.connection-context-menu { border-color: var(--border); background: color-mix(in srgb, var(--raised) 96%, transparent); box-shadow: 0 14px 38px var(--shadow-strong); }
+.connection-context-menu { border:1px solid var(--floating-border); background: var(--floating-material); box-shadow: 0 14px 38px var(--shadow-strong); }
 .connection-context-menu button { color: var(--text); }
 .connection-context-menu button:hover,
 .connection-context-menu button:focus-visible { color: var(--text-strong); background: var(--hover); }

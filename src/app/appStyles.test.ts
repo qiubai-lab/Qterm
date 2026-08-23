@@ -63,7 +63,7 @@ describe("application layout styles", () => {
     expect(declarations('.terminal-target-submenu[data-scrollable="true"][data-scrollbar-visible="true"]>.terminal-target-scrollbar')).toContain("opacity:1");
     expect(declarations(".terminal-target-scrollbar>span")).toContain("--terminal-target-scroll-thumb-offset");
     expect(declarations('.terminal-target-submenu[data-placement="left"]')).toContain("transform-origin:right top");
-    expect(styles).toContain(".network-context-menu,.terminal-context-menu,.terminal-target-menu,.terminal-target-submenu,.dialog-frame{background:var(--raised)}");
+    expect(styles).toContain(".connection-context-menu,.file-context-menu,.network-context-menu,.terminal-context-menu,.terminal-target-menu,.terminal-target-submenu,.dialog-frame{background:var(--raised)}");
   });
 
   it("collapses the connected endpoint before persistent route status", () => {
@@ -148,19 +148,22 @@ describe("application layout styles", () => {
 
     expect(root).toContain("--workbench-panel:rgba(5,7,8,.92)");
     expect(appShell).toContain("border-radius:var(--shell-radius)");
-    expect(appShell).toContain("background:transparent");
+    expect(appShell).toContain("background:var(--shell-material)");
     expect(appShell).not.toContain("border:");
     expect(appShell).not.toContain("isolation:isolate");
     expect(windowsShell).toContain("border-radius:0");
     expect(windowsShell).toContain("box-shadow:none");
     expect(chrome).not.toContain("backdrop-filter:");
     expect(utilityRail).not.toContain("backdrop-filter:");
-    expect(workspaceCanvas).toContain("background:rgba(5,7,9,.18)");
+    expect(chrome).toContain("background:var(--chrome-material)");
+    expect(utilityRail).toContain("background:var(--rail-material)");
+    expect(workspaceCanvas).toContain("background:var(--workspace-material)");
     expect(terminalBlock).toContain("background:var(--workbench-panel)");
     expect(terminalHeader).toContain("background:var(--block-header-background)");
     expect(activeTerminalHeader).toContain("background:var(--block-header-active-background)");
     expect(terminalHeader).not.toContain("backdrop-filter:");
     expect(dialog).toContain("backdrop-filter:blur(30px)");
+    expect(dialog).toContain("background:var(--floating-material)");
     expect(window.theme).toBe("Dark");
     expect(window.transparent).toBe(true);
     expect(window.shadow).toBe(true);
@@ -168,7 +171,7 @@ describe("application layout styles", () => {
       effects: ["hudWindow", "mica", "acrylic", "blur"],
     });
     expect(lightOverrides).toMatch(/:root\[data-theme="light"\] body,\s*:root\[data-theme="light"\] #root\s*\{[^}]*background:transparent/);
-    expect(lightOverrides).toMatch(/:root\[data-theme="light"\] \.app-shell\s*\{[^}]*background:var\(--canvas\)/);
+    expect(lightOverrides).not.toMatch(/:root\[data-theme="light"\] \.app-shell\s*\{/);
     expect(styles).toMatch(/prefers-reduced-transparency:reduce[\s\S]*\.app-shell,\.workspace-canvas\{background:var\(--canvas\)\}/);
     expect(styles).toMatch(/prefers-reduced-transparency:reduce[\s\S]*\.terminal-block,\.terminal-surface,\.file-browser,\.network-pane\{background:var\(--surface\)\}/);
     expect(styles).toMatch(/prefers-contrast:more[\s\S]*\.app-shell\{background:var\(--canvas\);box-shadow:inset 0 0 0 1px var\(--border\)\}/);

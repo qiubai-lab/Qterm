@@ -77,3 +77,4 @@
 .network-access-browser-grid>button[data-state="launching"]:disabled .network-access-browser-icon{border-color:color-mix(in srgb,var(--accent) 42%,var(--border));color:var(--accent);background:var(--raised)}
 .network-access-browser-grid>button[data-state="waiting"]:disabled{border-color:var(--border);color:var(--muted);background:var(--panel-bg);opacity:1}
 .network-access-browser-grid>button[data-state="waiting"]:disabled .network-access-browser-icon{border-color:var(--border);color:var(--icon);background:var(--control-bg)}
+.network-context-menu{border:1px solid var(--floating-border);background:var(--floating-material);box-shadow:0 14px 38px var(--shadow-strong)}

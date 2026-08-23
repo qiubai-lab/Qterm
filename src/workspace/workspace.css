@@ -7,14 +7,14 @@
 @keyframes workspace-stage-forward{from{opacity:.5;transform:translate3d(8px,0,0)}to{opacity:1;transform:none}}
 @keyframes workspace-stage-backward{from{opacity:.5;transform:translate3d(-8px,0,0)}to{opacity:1;transform:none}}
 @keyframes workspace-stage-fade{from{opacity:.55}to{opacity:1}}
-.utility-rail { display:flex; z-index:8; min-height:0; flex-direction:column; align-items:center; padding:6px 3px; border-left:1px solid #ffffff14; background:linear-gradient(90deg,rgba(11,13,16,.34),rgba(24,26,30,.46)); box-shadow:inset 1px 0 0 #ffffff08,-7px 0 18px #0002; }
+.utility-rail { display:flex; z-index:8; min-height:0; flex-direction:column; align-items:center; padding:6px 3px; border-left:1px solid #ffffff14; background:var(--rail-material); box-shadow:inset 1px 0 0 #ffffff08,-7px 0 18px #0002; }
 .rail-button { display:grid; width:54px; height:47px; grid-template-rows:18px auto; gap:3px; place-items:center; align-content:center; margin:1px 0; padding:4px 2px; border:1px solid transparent; border-radius:7px; color:var(--icon); background:transparent; transition:color .12s ease,background-color .12s ease,border-color .12s ease; }
 .rail-button:hover { color:var(--icon-hover); background:var(--hover); }.rail-button.active{border-color:color-mix(in srgb,var(--accent) 42%,var(--border));color:var(--accent);background:var(--accent-bg)}
 .rail-button:disabled{cursor:not-allowed;color:var(--text-disabled);background:transparent}.rail-button:disabled:hover{color:var(--text-disabled);background:transparent}
 .rail-button-label { color:var(--muted); font-size:8px; line-height:1; white-space:nowrap; transition:color .12s ease; }
 .rail-button:hover .rail-button-label { color:var(--text); }.rail-button.active .rail-button-label{color:var(--accent)}.rail-button:disabled .rail-button-label{color:var(--text-disabled)}.rail-spacer{flex:1}
 
-.workspace-canvas { --workspace-block-radius:9px; position:absolute; inset:0; padding:5px; background:rgba(5,7,9,.18); overflow:hidden; }
+.workspace-canvas { --workspace-block-radius:9px; position:absolute; inset:0; padding:5px; background:var(--workspace-material); overflow:hidden; }
 .split { display:flex; width:100%; height:100%; min-width:0; min-height:0; }
 .split-horizontal { flex-direction:row; }.split-vertical{flex-direction:column}
 .split-child { min-width:0; min-height:0; flex-grow:0; flex-shrink:1; }

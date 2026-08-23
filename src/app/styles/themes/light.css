@@ -7,6 +7,13 @@
   --surface:#fbfcfb;
   --raised:#ffffff;
   --hover:#e9eeeb;
+  --shell-material:rgba(243,245,244,.62);
+  --chrome-material:linear-gradient(180deg,rgba(252,254,253,.78),rgba(230,236,233,.7));
+  --rail-material:linear-gradient(90deg,rgba(235,240,237,.72),rgba(249,251,250,.78));
+  --workspace-material:rgba(235,241,238,.34);
+  --floating-material:linear-gradient(145deg,rgba(255,255,255,.94),rgba(245,248,246,.88));
+  --floating-border:rgba(132,148,141,.42);
+  --floating-shadow:inset 0 1px 0 rgba(255,255,255,.92),0 24px 80px rgba(37,50,46,.28);
   --border:#c9d0cd;
   --subtle:#dde2df;
   --text:#2b332f;
@@ -47,7 +54,7 @@
   --shadow-soft:#25322e20;
   --shadow-strong:#25322e42;
   --selection-bg:#b1d8ce;
-  --workbench-panel:rgba(250,252,251,.94);
+  --workbench-panel:rgba(250,252,251,.9);
   --terminal-background:#00000000;
   --terminal-foreground:#2b332f;
   --terminal-cursor:#137461;

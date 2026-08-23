@@ -34,3 +34,4 @@
 .connection-route-endpoint{min-width:0;max-width:170px;flex:0 100 auto;overflow:hidden;color:#6f7680;text-overflow:ellipsis;white-space:nowrap;font:9px "SFMono-Regular",Consolas,monospace}
 @keyframes connection-route-tooltip-in{from{opacity:0;transform:translateY(var(--connection-route-tooltip-enter-y)) scale(.98)}to{opacity:1;transform:none}}@keyframes connection-route-pulse{0%,100%{box-shadow:0 0 0 2px #d5aa4117}50%{box-shadow:0 0 0 4px #d5aa412d}}
 @container terminal-block (max-width:390px){.terminal-target>small{display:none}}
+.terminal-context-menu{border:1px solid var(--floating-border);background:var(--floating-material);box-shadow:0 14px 38px var(--shadow-strong)}

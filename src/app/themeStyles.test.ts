@@ -40,6 +40,7 @@ describe("application theme contract", () => {
   it("defines shared semantic tokens for CSS and imperative renderers", () => {
     for (const token of [
       "--chrome", "--canvas", "--surface", "--raised", "--text", "--muted", "--accent", "--danger", "--focus",
+      "--shell-material", "--chrome-material", "--rail-material", "--workspace-material", "--floating-material", "--floating-border", "--floating-shadow",
       "--text-strong", "--text-disabled", "--icon", "--icon-hover", "--control-hover",
       "--chrome-action-hover", "--chrome-action-pressed", "--chrome-action-border",
       "--block-border", "--block-border-active", "--block-header-background", "--block-header-active-background",
@@ -125,10 +126,35 @@ describe("application theme contract", () => {
     expect(shell).toMatch(/\.window-controls \.window-close:hover[^}]+background:#c42b1c[^}]+box-shadow:none/);
   });
 
+  it("owns one translucent material hierarchy across Dark and Light presets", () => {
+    for (const preset of [theme, lightTheme]) {
+      expect(tokenValue(preset, "--shell-material")).not.toMatch(/^#[0-9a-f]+$/i);
+      expect(tokenValue(preset, "--chrome-material")).toMatch(/rgba\(/);
+      expect(tokenValue(preset, "--rail-material")).toMatch(/rgba\(/);
+      expect(tokenValue(preset, "--workspace-material")).toMatch(/rgba\(/);
+      expect(tokenValue(preset, "--floating-material")).toMatch(/rgba\(/);
+    }
+    expect(shell).toMatch(/\.app-shell[^}]+background:var\(--shell-material\)/);
+    expect(shell).toMatch(/\.app-chrome[^}]+background:var\(--chrome-material\)/);
+    expect(styles).toMatch(/\.utility-rail[^}]+background:var\(--rail-material\)/);
+    expect(styles).toMatch(/\.workspace-canvas[^}]+background:var\(--workspace-material\)/);
+    expect(dialogFrame).toMatch(/\.dialog-frame[^}]+border:1px solid var\(--floating-border\)[^}]+background:var\(--floating-material\)[^}]+box-shadow:var\(--floating-shadow\)/);
+    for (const floatingSurface of [terminalSurface, fileBrowser, network, connectionDialog]) {
+      expect(floatingSurface).toMatch(/\.\w+(?:-\w+)*-context-menu[^}]+border:\s*1px solid var\(--floating-border\)[^}]+background:\s*var\(--floating-material\)/);
+    }
+    expect(terminalChrome).toMatch(/\.terminal-target-menu[^}]+border:1px solid var\(--floating-border\)[^}]+background:var\(--floating-material\)/);
+    expect(terminalChrome).toMatch(/\.terminal-target-submenu[^}]+border:1px solid var\(--floating-border\)[^}]+background:var\(--floating-material\)/);
+    expect(lightOverrides).not.toMatch(/\.app-shell\s*\{[^}]*background:var\(--canvas\)/);
+    expect(lightOverrides).not.toMatch(/\.dialog-frame[^}]*background:var\(--raised\)/);
+    expect(lightOverrides).not.toMatch(/:is\(\.file-context-menu,\.connection-context-menu,\.profile-context-menu\) \{[^}]*background:/);
+  });
+
   it("keeps accessibility fallbacks theme-neutral", () => {
     expect(accessibilityOverrides).toContain("prefers-reduced-transparency:reduce");
     expect(accessibilityOverrides).toContain("background:var(--block-header-background)");
     expect(accessibilityOverrides).toContain("background:var(--surface)");
+    expect(accessibilityOverrides).toMatch(/prefers-reduced-transparency:reduce[\s\S]*\.connection-context-menu,[^}]+background:var\(--raised\)/);
+    expect(accessibilityOverrides).toMatch(/prefers-contrast:more[\s\S]*\.connection-context-menu,[^}]+background:var\(--raised\)/);
     expect(accessibilityOverrides).not.toContain("#050708");
   });
 
@@ -145,8 +171,8 @@ describe("application theme contract", () => {
     expect(settingsDialog).toMatch(/\.settings-section-heading h3[^}]+color:var\(--text\)/);
     expect(aboutUpdate).toMatch(/\.update-check-status[^}]+background:var\(--panel-bg\)/);
     expect(aboutUpdate).toMatch(/\.update-check-status strong[^}]+color:var\(--text\)/);
-    expect(terminalChrome).toMatch(/\.terminal-target-menu[^}]+border:1px solid var\(--border\)/);
-    expect(terminalChrome).toMatch(/\.terminal-target-menu[^}]+background:color-mix\(in srgb,var\(--raised\) 96%,transparent\)/);
+    expect(terminalChrome).toMatch(/\.terminal-target-menu[^}]+border:1px solid var\(--floating-border\)/);
+    expect(terminalChrome).toMatch(/\.terminal-target-menu[^}]+background:var\(--floating-material\)/);
     expect(terminalChrome).toMatch(/\.terminal-target-option[^}]+color:var\(--muted\)/);
     expect(dialogFrame).not.toContain(".icon-button");
   });

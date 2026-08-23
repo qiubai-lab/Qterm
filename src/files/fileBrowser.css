@@ -42,3 +42,4 @@
 .markdown-blocked-image{color:var(--warning)}
 .file-preview-toolbar .file-save-button[aria-busy="true"]:disabled{border-color:color-mix(in srgb,var(--accent) 55%,var(--border));color:var(--accent-contrast);background:var(--accent);opacity:1}
 .file-browser-navigation button[aria-busy="true"]:disabled{color:var(--text);background:var(--hover);opacity:1}
+.file-context-menu{border:1px solid var(--floating-border);background:var(--floating-material);box-shadow:0 14px 38px var(--shadow-strong)}

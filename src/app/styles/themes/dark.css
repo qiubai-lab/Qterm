@@ -26,6 +26,13 @@
   --editor-selection:#244b44;
   --editor-preview-background:#070809;
   --chrome:#151619; --canvas:#090a0c; --surface:#111316; --raised:#191b1f; --hover:#22252a;
+  --shell-material:transparent;
+  --chrome-material:linear-gradient(180deg,rgba(25,27,31,.48),rgba(13,15,18,.36));
+  --rail-material:linear-gradient(90deg,rgba(11,13,16,.34),rgba(24,26,30,.46));
+  --workspace-material:rgba(5,7,9,.18);
+  --floating-material:linear-gradient(145deg,rgba(34,37,42,.9),rgba(19,21,25,.86));
+  --floating-border:#ffffff28;
+  --floating-shadow:inset 0 1px 0 #ffffff18,0 30px 110px #000e;
   --border:#30343a; --subtle:#23262b; --text:#f1f3f5; --muted:#9da3ad; --dim:#747b86;
   --text-strong:#f5faf8; --text-disabled:#62686d; --icon:#858c96; --icon-hover:#ffffff; --control-hover:#2b2e34;
   --chrome-action-hover:#343b43; --chrome-action-pressed:#434b54; --chrome-action-border:#59636d;
