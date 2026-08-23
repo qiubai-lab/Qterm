@@ -640,6 +640,12 @@ describe("application layout styles", () => {
     expect(declarations('.credential-security-tooltip[data-placement="above"]')).toContain("--credential-security-tooltip-enter-y:-3px");
     expect(declarations(".credential-feedback-bubble")).toContain("position:fixed");
     expect(declarations(".credential-feedback-bubble")).toContain("pointer-events:none");
+    expect(declarations(".credential-feedback-bubble")).toContain("var(--navigation-accent)");
+    expect(declarations(".credential-feedback-bubble::before")).toContain("var(--navigation-accent)");
+    expect(declarations(".credential-feedback-bubble.error")).toContain("var(--danger)");
+    expect(declarations(".credential-item:hover")).toContain("background:var(--navigation-accent-bg)");
+    expect(styles).toContain(".credential-dialog .ui-button--secondary:hover:not(:disabled)");
+    expect(styles).toContain("color:var(--navigation-accent);background:var(--navigation-accent-bg)");
     expect(styles).not.toContain(".credential-message");
   });
 
@@ -655,6 +661,7 @@ describe("application layout styles", () => {
     expect(declarations(".auth-method-content")).toContain("overflow:auto");
     expect(declarations(".auth-security-hint")).not.toContain("background:");
     expect(declarations(".auth-method-indicator")).toContain("transition:transform 260ms");
+    expect(declarations(".segmented.auth-method-picker button.selected")).toContain("box-shadow:none");
     expect(declarations('.auth-method-picker[data-active="credential"] .auth-method-indicator')).toContain("translateX(100%)");
     expect(declarations('.auth-method-picker[data-active="sshAgent"] .auth-method-indicator')).toContain("translateX(200%)");
     expect(declarations(".auth-method-panel.auth-forward")).toContain("animation:auth-content-forward");
@@ -720,6 +727,8 @@ describe("application layout styles", () => {
     expect(declarations(".terminal-lock-scrim")).toContain("position:absolute");
     expect(declarations(".terminal-lock-scrim")).toContain("inset:0");
     expect(declarations(".terminal-lock-options")).toContain("display:grid");
+    expect(lastDeclarations(".terminal-lock-options>button:hover:not(:disabled),.terminal-lock-options>button:focus-visible")).toContain("background:var(--navigation-accent-bg)");
+    expect(styles).toContain("color:var(--navigation-accent);background:var(--navigation-accent-bg)");
     expect(declarations(".terminal-lock-dialog")).toContain("background:#151917fa");
     expect(declarations(".dialog-action-status")).toContain("height:30px");
     expect(declarations(".dialog-action-status")).toContain("white-space:nowrap");

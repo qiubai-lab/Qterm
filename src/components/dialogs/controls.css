@@ -7,7 +7,8 @@
 
 /* Terminal security surfaces share theme roles while retaining feature-specific layout. */
 .terminal-lock-options>button{border-color:var(--border);color:var(--text);background:var(--panel-bg)}
-.terminal-lock-options>button:hover:not(:disabled),.terminal-lock-options>button:focus-visible{border-color:color-mix(in srgb,var(--accent) 42%,var(--border));color:var(--text-strong);background:var(--hover)}
+.terminal-lock-options>button:hover:not(:disabled),.terminal-lock-options>button:focus-visible{border-color:color-mix(in srgb,var(--navigation-accent) 54%,var(--border));color:var(--text-strong);background:var(--navigation-accent-bg)}
+.terminal-lock-options>button:hover:not(:disabled) .terminal-lock-option-icon,.terminal-lock-options>button:focus-visible .terminal-lock-option-icon{border-color:color-mix(in srgb,var(--navigation-accent) 54%,var(--border));color:var(--navigation-accent);background:var(--navigation-accent-bg)}
 .terminal-lock-options>button:disabled{color:var(--text-disabled);background:var(--surface)}
 .terminal-lock-options small{color:var(--dim)}
 .terminal-lock-option-icon,.terminal-lock-identity>span{border-color:color-mix(in srgb,var(--accent) 32%,var(--border));color:var(--accent);background:var(--accent-bg)}

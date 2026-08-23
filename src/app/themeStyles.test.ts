@@ -88,6 +88,9 @@ describe("application theme contract", () => {
     expect(tokenValue(cyberpunkTheme, "--selection-marker")).toBe("#fcee0a");
     expect(tokenValue(cyberpunkTheme, "--selection-surface")).toContain("252,238,10");
     expect(tokenValue(cyberpunkTheme, "--workspace-tab-active-text")).toBe("var(--text-strong)");
+    expect(tokenValue(cyberpunkTheme, "--brand-plate-background")).toBe(tokenValue(theme, "--brand-plate-background"));
+    expect(tokenValue(cyberpunkTheme, "--brand-plate-border")).toBe(tokenValue(theme, "--brand-plate-border"));
+    expect(tokenValue(cyberpunkTheme, "--brand-plate-shadow")).toBe(tokenValue(theme, "--brand-plate-shadow"));
     expect(tokenValue(cyberpunkTheme, "--floating-border")).toContain("0,221,235");
     expect(tokenValue(cyberpunkTheme, "--chrome-material")).not.toContain("gradient");
     expect(tokenValue(cyberpunkTheme, "--rail-material")).not.toContain("gradient");
