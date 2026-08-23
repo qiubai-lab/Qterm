@@ -6,7 +6,7 @@ use tauri_plugin_dialog::DialogExt;
 
 use crate::{
     application::settings_service::{SettingsService, SettingsSnapshot, SettingsWarning},
-    commands::error::IpcError,
+    commands::{error::IpcError, native_dialog},
     domain::settings::{
         AppTheme, AppearanceSettings, ConfigurationDirectory, SecuritySettings, UpdateSettings,
     },
@@ -131,7 +131,7 @@ pub fn settings_get(state: State<'_, SettingsState>) -> SettingsSnapshotDto {
 }
 
 #[tauri::command]
-pub fn settings_select_configuration_directory(
+pub async fn settings_select_configuration_directory(
     initial_path: Option<String>,
     app: AppHandle,
 ) -> Option<String> {
@@ -142,8 +142,8 @@ pub fn settings_select_configuration_directory(
     {
         picker = picker.set_directory(path);
     }
-    picker
-        .blocking_pick_folder()
+    native_dialog::pick_folder(picker)
+        .await
         .and_then(|selection| selection.into_path().ok())
         .map(|path| display_path(&path))
 }

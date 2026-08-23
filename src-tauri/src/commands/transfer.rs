@@ -10,7 +10,7 @@ use tauri_plugin_dialog::DialogExt;
 
 use crate::{
     application::error::{ApplicationError, ApplicationErrorCode},
-    commands::{error::IpcError, session::SessionState},
+    commands::{error::IpcError, native_dialog, session::SessionState},
     domain::{transfer::RemotePath, transfer::TransferEvent},
     infrastructure::ssh::client::{SessionControlError, TransferRequest},
 };
@@ -107,7 +107,7 @@ pub struct DroppedUploadDto {
 }
 
 #[tauri::command]
-pub fn transfer_select_download_directory(
+pub async fn transfer_select_download_directory(
     name: String,
     app: AppHandle,
     state: State<'_, TransferState>,
@@ -117,11 +117,8 @@ pub fn transfer_select_download_directory(
             crate::domain::transfer::TransferValidationError,
         ));
     }
-    let selected = app
-        .dialog()
-        .file()
-        .set_title("选择文件夹保存位置")
-        .blocking_pick_folder()
+    let selected = native_dialog::pick_folder(app.dialog().file().set_title("选择文件夹保存位置"))
+        .await
         .and_then(|folder| folder.into_path().ok())
         .map(|folder| folder.join(name));
     state.approve_download(selected.clone());
@@ -150,22 +147,19 @@ pub enum TransferEventDto {
 }
 
 #[tauri::command]
-pub fn transfer_select_upload_file(
+pub async fn transfer_select_upload_file(
     app: AppHandle,
     state: State<'_, TransferState>,
 ) -> Result<Option<String>, IpcError> {
-    let selected = app
-        .dialog()
-        .file()
-        .set_title("选择要上传的文件")
-        .blocking_pick_file()
+    let selected = native_dialog::pick_file(app.dialog().file().set_title("选择要上传的文件"))
+        .await
         .and_then(|file| file.into_path().ok());
     TransferState::remember(&state.upload_path, selected.clone());
     Ok(selected.and_then(|path| path.to_str().map(str::to_owned)))
 }
 
 #[tauri::command]
-pub fn transfer_select_download_path(
+pub async fn transfer_select_download_path(
     name: Option<String>,
     app: AppHandle,
     state: State<'_, TransferState>,
@@ -179,8 +173,8 @@ pub fn transfer_select_download_path(
     if let Some(name) = name {
         dialog = dialog.set_file_name(name);
     }
-    let selected = dialog
-        .blocking_save_file()
+    let selected = native_dialog::save_file(dialog)
+        .await
         .and_then(|file| file.into_path().ok());
     state.approve_download(selected.clone());
     Ok(selected.and_then(|path| path.to_str().map(str::to_owned)))

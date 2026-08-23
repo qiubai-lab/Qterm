@@ -232,6 +232,12 @@ Under `prefers-reduced-motion: reduce`, remove spatial movement and use a short 
 - Avoid inline styles for stable design rules.
 - Do not add a dependency for tabs, dialogs, motion, forms, or icons when the existing React/CSS primitives cover the behavior.
 
+### Native file dialogs
+
+- Call file, folder, and save panels through `src-tauri/src/commands/native_dialog.rs` and await the result from an asynchronous Tauri command.
+- Do not use `blocking_pick_file`, `blocking_pick_folder`, or `blocking_save_file` in command modules. A synchronous command blocks Tauri's event thread while the macOS panel needs that same thread to handle selection and cancellation, causing an application deadlock.
+- After changing native dialog code, run `rg 'blocking_(pick|save)' src-tauri/src/commands`; it must return no matches. Keep the Rust regression test in `commands/native_dialog.rs` passing.
+
 Canonical implementation references inside Terminal-Demo:
 
 - `src/app/app.css`: tokens, manager layouts, tabs, motion, accessibility media queries.
@@ -273,4 +279,5 @@ Canonical implementation references inside Terminal-Demo:
 - Add Testing Library coverage for state transitions and nested modal behavior.
 - Add style assertions for layout contracts that previously regressed, especially `flex: 1`, `min-height: 0`, scrolling ownership, persistent action visibility, and reduced motion.
 - Run focused tests during development.
+- Run the native-dialog regression test after changing any file/folder picker command.
 - Run `pnpm check` before completion for meaningful frontend changes.

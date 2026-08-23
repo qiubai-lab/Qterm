@@ -25,7 +25,8 @@ Read [references/qterm-ui-spec.md](references/qterm-ui-spec.md) completely befor
 5. Implement all observable states: empty, loading or busy, selected, disabled, error, success, locked, and confirmation where applicable.
 6. Add motion only when it explains a spatial or state transition. Animate `transform` and `opacity`, keep transitions short, and provide reduced-motion behavior.
 7. Preserve semantics and keyboard behavior: labels, roles, selected/expanded state, focus-visible treatment, focus restoration, and topmost-dialog Escape handling. Required form labels use the shared red `RequiredFieldLabel` star before the label text, never a textual “（必填）” suffix; pair it with native `required` semantics where supported.
-8. Add or update adjacent behavior tests and style assertions. Run focused checks, then `pnpm check` for meaningful frontend changes.
+8. Route native file and folder dialogs through `src-tauri/src/commands/native_dialog.rs`. Never call `blocking_pick_*` or `blocking_save_*` from a Tauri command: synchronous commands run on the event thread and can deadlock macOS `NSOpenPanel`. Keep the invoking command asynchronous, await the callback bridge, and audit with `rg 'blocking_(pick|save)' src-tauri/src/commands`.
+9. Add or update adjacent behavior tests and style assertions. Run focused checks, then `pnpm check` for meaningful frontend changes.
 
 ## Design decisions
 
@@ -57,6 +58,7 @@ Before reporting completion, confirm:
 - Primary, secondary, selected, disabled, error, empty, and destructive states remain legible.
 - Core icons/actions are visible without hover.
 - Keyboard focus and nested dialogs behave correctly.
+- Native file dialogs use the non-blocking command bridge; selecting and cancelling remain responsive on macOS.
 - Reduced motion and constrained window sizes remain usable.
 - Conditional validation and operation feedback uses a preallocated slot and never changes dialog dimensions when it appears or disappears.
 - Tests and `pnpm check` pass, or any blocked verification is reported explicitly.

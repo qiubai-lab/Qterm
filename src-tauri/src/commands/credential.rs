@@ -19,7 +19,7 @@ use crate::{
         CredentialWorkflowState, PendingPrivateKeySource, PendingPrivateKeySummary,
         PendingRecoveryReset,
     },
-    commands::{error::IpcError, profile::ProfileState, settings::SettingsState},
+    commands::{error::IpcError, native_dialog, profile::ProfileState, settings::SettingsState},
     domain::{
         auth::{AuthRequest, SecretBytes, SecretText},
         credential::{
@@ -760,11 +760,8 @@ pub async fn credential_prepare_private_key(
     app: AppHandle,
     state: State<'_, CredentialState>,
 ) -> Result<Option<PrivateKeyDraftDto>, IpcError> {
-    let Some(path) = app
-        .dialog()
-        .file()
-        .set_title("导入 SSH 私钥")
-        .blocking_pick_file()
+    let Some(path) = native_dialog::pick_file(app.dialog().file().set_title("导入 SSH 私钥"))
+        .await
         .and_then(|file| file.into_path().ok())
     else {
         return Ok(None);

@@ -5,6 +5,7 @@ pub mod credential;
 pub mod error;
 pub mod files;
 pub mod local_session;
+pub mod native_dialog;
 pub mod network;
 pub mod profile;
 pub mod session;

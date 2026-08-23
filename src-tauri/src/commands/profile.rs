@@ -16,7 +16,7 @@ use crate::{
             imported_profile_input,
         },
     },
-    commands::{credential::CredentialState, error::IpcError},
+    commands::{credential::CredentialState, error::IpcError, native_dialog},
     commands::{network::NetworkState, session::SessionState},
     domain::profile::{AuthPreference, ConnectionProfile, JumpRouteError, ProfileGroup},
     infrastructure::{
@@ -387,8 +387,8 @@ pub async fn profile_import_ssh_config_preview(
     if ssh_directory.is_dir() {
         picker = picker.set_directory(&ssh_directory);
     }
-    let Some(path) = picker
-        .blocking_pick_file()
+    let Some(path) = native_dialog::pick_file(picker)
+        .await
         .and_then(|selection| selection.into_path().ok())
     else {
         return Ok(None);
