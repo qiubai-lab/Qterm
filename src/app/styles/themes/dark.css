@@ -28,6 +28,9 @@
   --chrome:#151619; --canvas:#090a0c; --surface:#111316; --raised:#191b1f; --hover:#22252a;
   --shell-material:transparent;
   --chrome-material:linear-gradient(180deg,rgba(25,27,31,.48),rgba(13,15,18,.36));
+  --brand-plate-background:linear-gradient(180deg,rgba(255,255,255,.055),rgba(255,255,255,.015)),rgba(5,7,9,.34);
+  --brand-plate-border:#ffffff14;
+  --brand-plate-shadow:inset 0 1px 0 rgba(255,255,255,.045),0 2px 6px rgba(0,0,0,.16);
   --rail-material:linear-gradient(90deg,rgba(11,13,16,.34),rgba(24,26,30,.46));
   --workspace-material:rgba(5,7,9,.18);
   --floating-material:linear-gradient(145deg,rgba(34,37,42,.9),rgba(19,21,25,.86));
@@ -41,6 +44,7 @@
   --block-active-surface-shadow:inset 0 0 0 1px var(--block-active-inset),0 0 14px var(--block-active-shadow);
   --block-active-indicator-shadow:0 0 0 1px var(--block-active-ring),inset 0 0 0 1px var(--block-active-inset),0 0 18px var(--block-active-shadow);
   --block-header-background:linear-gradient(180deg,rgba(30,33,37,.2),rgba(15,17,20,.12));
+  --file-browser-chrome-background:linear-gradient(180deg,rgba(18,20,23,.94),rgba(11,13,15,.91));
   --block-header-active-background:linear-gradient(90deg,rgba(25,51,46,.34) 0%,rgba(21,26,26,.2) 52%,rgba(17,19,22,.14) 100%);
   --block-header-border:#ffffff12; --block-header-active-border:#75e6cf42;
   --scrollbar-track:#050607; --scrollbar-thumb:#438b7d;

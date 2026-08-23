@@ -9,6 +9,9 @@
   --hover:#e9eeeb;
   --shell-material:rgba(243,245,244,.62);
   --chrome-material:linear-gradient(180deg,rgba(252,254,253,.78),rgba(230,236,233,.7));
+  --brand-plate-background:linear-gradient(180deg,rgba(255,255,255,.58),rgba(225,232,228,.38));
+  --brand-plate-border:rgba(92,110,102,.22);
+  --brand-plate-shadow:inset 0 1px 0 rgba(255,255,255,.78),0 2px 6px rgba(37,50,46,.12);
   --rail-material:linear-gradient(90deg,rgba(235,240,237,.72),rgba(249,251,250,.78));
   --workspace-material:rgba(235,241,238,.34);
   --floating-material:linear-gradient(145deg,rgba(255,255,255,.94),rgba(245,248,246,.88));
@@ -35,6 +38,7 @@
   --block-active-surface-shadow:inset 0 0 0 1px var(--block-active-inset);
   --block-active-indicator-shadow:0 0 0 1px var(--block-active-ring),inset 0 0 0 1px var(--block-active-inset);
   --block-header-background:#f2f5f3;
+  --file-browser-chrome-background:var(--block-header-background);
   --block-header-active-background:#d4e9e2;
   --block-header-border:#d4dcd8;
   --block-header-active-border:#58a08f;

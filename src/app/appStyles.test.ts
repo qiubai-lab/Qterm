@@ -197,6 +197,9 @@ describe("application layout styles", () => {
     expect(brand).not.toContain("transition:");
     expect(brandPlate).toContain("inset:0 0 0 -80px");
     expect(brandPlate).toContain("border-radius:7px");
+    expect(brandPlate).toContain("border:1px solid var(--brand-plate-border)");
+    expect(brandPlate).toContain("background:var(--brand-plate-background)");
+    expect(brandPlate).toContain("box-shadow:var(--brand-plate-shadow)");
     expect(brandPlate).toContain("backdrop-filter:blur(8px) saturate(115%)");
     expect(brandPlate).toContain('content:""');
     expect(brand).toContain("gap:6px");
@@ -235,9 +238,9 @@ describe("application layout styles", () => {
     expect(declarations(".network-block")).not.toContain("background:");
     expect(declarations(".file-browser-navigation")).toContain("height:34px");
     expect(declarations(".network-toolbar")).toContain("height:34px");
-    expect(declarations(".file-browser-navigation")).toContain("background:var(--block-header-background)");
+    expect(declarations(".file-browser-navigation")).toContain("background:var(--file-browser-chrome-background)");
     expect(declarations(".network-toolbar")).toContain("background:var(--block-header-background)");
-    expect(declarations(".file-browser-columns")).toContain("background:var(--block-header-background)");
+    expect(declarations(".file-browser-columns")).toContain("background:var(--file-browser-chrome-background)");
     expect(declarations(".file-browser-columns")).toContain("backdrop-filter:blur(8px)");
     expect(declarations(".file-browser-statusbar")).toContain("background:var(--panel-bg)");
     expect(declarations(".network-create-button")).toContain("width:25px");

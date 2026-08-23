@@ -41,6 +41,7 @@ describe("application theme contract", () => {
     for (const token of [
       "--chrome", "--canvas", "--surface", "--raised", "--text", "--muted", "--accent", "--danger", "--focus",
       "--shell-material", "--chrome-material", "--rail-material", "--workspace-material", "--floating-material", "--floating-border", "--floating-shadow",
+      "--brand-plate-background", "--brand-plate-border", "--brand-plate-shadow", "--file-browser-chrome-background",
       "--text-strong", "--text-disabled", "--icon", "--icon-hover", "--control-hover",
       "--chrome-action-hover", "--chrome-action-pressed", "--chrome-action-border",
       "--block-border", "--block-border-active", "--block-header-background", "--block-header-active-background",
