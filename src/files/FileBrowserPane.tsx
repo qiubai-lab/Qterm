@@ -26,6 +26,12 @@ const LOCAL_ROOTS_LOCATION = "\0local-roots";
 const CodeEditor = lazy(() => import("./CodeEditor").then((module) => ({ default: module.CodeEditor })));
 const MarkdownPreview = lazy(() => import("./MarkdownPreview").then((module) => ({ default: module.MarkdownPreview })));
 
+function FileLoadingState({ label }: { label: string }) {
+  return <div className="file-loading-state" role="status" aria-live="polite">
+    <span className="file-loading-popover"><span className="file-loading-spinner" aria-hidden="true"/><span>{label}</span></span>
+  </div>;
+}
+
 export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initialPath: string; runtime: FileRuntime; onPathChange: (path: string) => void }) {
   const [path, setPath] = useState(initialPath);
   const [listing, setListing] = useState<DirectoryListing | null>(null);
@@ -479,10 +485,10 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
       </header>
       {preview.error && <div className="file-preview-message error" role="alert">{preview.error}</div>}
       <main className="file-preview-content">
-        {preview.loading && <div className="file-browser-state">正在读取文件…</div>}
+        {preview.loading && <FileLoadingState label="正在读取文件…"/>}
         {!preview.loading && preview.kind === "image" && preview.imageUrl && <div className="file-image-preview"><img src={preview.imageUrl} alt={preview.entry.name}/></div>}
-        {!preview.loading && preview.mode === "preview" && preview.kind === "markdown" && <Suspense fallback={<div className="file-browser-state">正在加载预览…</div>}><MarkdownPreview content={preview.content}/></Suspense>}
-        {!preview.loading && preview.kind !== "image" && (preview.mode === "edit" || preview.kind !== "markdown") && <Suspense fallback={<div className="file-browser-state">正在加载文件…</div>}><CodeEditor value={preview.content} language={preview.kind} readOnly={preview.mode === "preview"} onChange={(content) => setPreview((current) => current ? { ...current, content } : current)} onSave={() => void savePreview()}/></Suspense>}
+        {!preview.loading && preview.mode === "preview" && preview.kind === "markdown" && <Suspense fallback={<FileLoadingState label="正在加载预览…"/>}><MarkdownPreview content={preview.content}/></Suspense>}
+        {!preview.loading && preview.kind !== "image" && (preview.mode === "edit" || preview.kind !== "markdown") && <Suspense fallback={<FileLoadingState label="正在加载文件…"/>}><CodeEditor value={preview.content} language={preview.kind} readOnly={preview.mode === "preview"} onChange={(content) => setPreview((current) => current ? { ...current, content } : current)} onSave={() => void savePreview()}/></Suspense>}
       </main>
     </div>;
   }
@@ -513,11 +519,11 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
         <span className="file-browser-column-label file-permission-column">权限</span>
         <FileSortHeader label="修改时间" sortKey="modifiedAt" sort={sort} onChange={cycleSort}/>
       </div>
-      {showLocalRoots && loading && <div className="file-browser-state">正在读取本机位置…</div>}
+      {showLocalRoots && loading && <FileLoadingState label="正在读取本机位置…"/>}
       {showLocalRoots && !loading && error && localRoots.length === 0 && <div className="file-browser-state error"><Icon name="files" size={22}/><span>{error}</span><button onClick={() => void openLocalRoots()}>重试</button></div>}
       {showLocalRoots && !loading && !error && localRoots.length === 0 && <div className="file-browser-state">没有可用的本机位置</div>}
       {showLocalRoots && !loading && localRoots.length > 0 && <FileList entries={displayedRootEntries} range={virtualRange} ariaLabel="本机根目录" selectedPaths={selectedPaths} onSelect={(entry) => selectEntry(entry, false)} onOpen={(entry) => void navigateTo(entry.path, true)} onContextMenu={(event) => event.preventDefault()} onContextMenuKey={() => undefined}/>}
-      {!showLocalRoots && loading && !listing && <div className="file-browser-state">正在读取文件夹…</div>}
+      {!showLocalRoots && loading && !listing && <FileLoadingState label="正在读取文件夹…"/>}
       {!showLocalRoots && !connectionError && error && !listing && <div className="file-browser-state error"><Icon name="files" size={22}/><span>{error}</span><button onClick={() => void load(path)}>重试</button></div>}
       {!showLocalRoots && !error && listing?.entries.length === 0 && <div className="file-browser-state">此文件夹为空</div>}
       {!showLocalRoots && listing && <FileList entries={displayedEntries} range={virtualRange} ariaLabel={`文件夹 ${listing.path}`} selectedPaths={selectedPaths} onSelect={selectEntry} onOpen={(entry) => entry.isDirectory ? void navigateTo(entry.path) : void openFile(entry, "preview")} onContextMenu={openContextMenu} onContextMenuKey={openContextMenuFromKeyboard}/>}

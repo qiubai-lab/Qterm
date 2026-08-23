@@ -418,6 +418,27 @@ describe("FileBrowserPane", () => {
     expect(readTextFile).toHaveBeenCalledTimes(1);
   });
 
+  it("centers file read progress in one accessible themed loading popover", async () => {
+    listLocalDirectory.mockResolvedValue({ path: "C:/work", entries: [{ name: "README.md", path: "C:/work/README.md", isDirectory: false, isSymlink: false, size: 7, modifiedAt: null }] });
+    let finishRead!: (value: { content: string; revision: string; modifiedAt: null; size: number }) => void;
+    readTextFile.mockReturnValue(new Promise((resolve) => { finishRead = resolve; }));
+    const view = render(<FileBrowserPane initialPath="C:/work" runtime={localRuntime} onPathChange={vi.fn()}/>);
+    const ui = within(view.container);
+    const file = await ui.findByRole("listitem", { name: /README\.md/ });
+    fireEvent.click(file);
+    fireEvent.click(file);
+
+    const message = await ui.findByText("正在读取文件…");
+    const state = message.closest(".file-loading-state");
+    expect(state).toHaveAttribute("role", "status");
+    expect(state).toHaveAttribute("aria-live", "polite");
+    expect(state?.querySelector(".file-loading-popover")).not.toBeNull();
+    expect(state?.querySelector(".file-loading-spinner")).toHaveAttribute("aria-hidden", "true");
+
+    await act(async () => { finishRead({ content: "# Hello", revision: "r1", modifiedAt: null, size: 7 }); });
+    expect(await ui.findByRole("heading", { name: "Hello" })).toBeInTheDocument();
+  });
+
   it("adds and removes file selections with the platform modifier while ordinary clicks restore one active item", async () => {
     const first = { name: "alpha.txt", path: "C:/work/alpha.txt", isDirectory: false, isSymlink: false, size: 5, modifiedAt: null };
     const second = { name: "beta.txt", path: "C:/work/beta.txt", isDirectory: false, isSymlink: false, size: 6, modifiedAt: null };

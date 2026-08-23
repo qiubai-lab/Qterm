@@ -687,6 +687,22 @@ describe("application layout styles", () => {
     expect(styles).toContain(".connection-context-menu,.file-context-menu,.network-context-menu,.terminal-context-menu{animation:none}");
   });
 
+  it("centers file loading feedback in one themed compact popover", () => {
+    expect(declarations(".file-loading-state")).toContain("display:grid");
+    expect(declarations(".file-loading-state")).toContain("min-width:0");
+    expect(declarations(".file-loading-state")).toContain("min-height:0");
+    expect(declarations(".file-loading-state")).toContain("flex:1");
+    expect(declarations(".file-loading-state")).toContain("place-items:center");
+    expect(declarations(".file-loading-popover")).toContain("border:1px solid var(--floating-border)");
+    expect(declarations(".file-loading-popover")).toContain("color:var(--text)");
+    expect(declarations(".file-loading-popover")).toContain("background:var(--floating-material)");
+    expect(declarations(".file-loading-popover")).toContain("box-shadow:var(--shadow-soft)");
+    expect(declarations(".file-loading-spinner")).toContain("animation:file-loading-spin 700ms linear infinite");
+    expect(styles).toContain("@keyframes file-loading-spin{to{transform:rotate(360deg)}}");
+    expect(styles).toMatch(/prefers-reduced-motion:reduce[\s\S]*\.file-loading-spinner\{animation:none\}/);
+    expect(styles).toMatch(/prefers-reduced-transparency:reduce[\s\S]*\.file-loading-popover\{background:var\(--raised\);backdrop-filter:none/);
+  });
+
   it("shares terminal typography with the file code editor without replacing editor rendering states", () => {
     const root = declarations(":root");
     const editor = declarations(".file-code-editor .cm-editor");
