@@ -9,6 +9,7 @@ import { DialogFrame } from "../components/dialogs/DialogFrame";
 import { useWorkspace } from "../workspace/WorkspaceProvider";
 import { parseOsc7Cwd } from "./osc7";
 import { createResizeScheduler, type ResizeScheduler } from "./resizeScheduler";
+import { bindTerminalTheme, readTerminalTheme } from "./terminalTheme";
 
 interface TerminalView {
   terminal: Terminal;
@@ -22,6 +23,7 @@ interface TerminalView {
   write: (data: string) => void;
   resize: { send: (columns: number, rows: number) => Promise<void> };
   resizeScheduler: ResizeScheduler;
+  themeBinding: { dispose: () => void };
   disposeTimer: number | null;
 }
 
@@ -35,25 +37,6 @@ const FALLBACK_TERMINAL_FONT_FAMILY = "SFMono-Regular, Menlo, Monaco, Consolas, 
 const FALLBACK_TERMINAL_FONT_SIZE = 13;
 const FALLBACK_TERMINAL_LINE_HEIGHT = 1.22;
 const LONG_PASTE_THRESHOLD = 1000;
-
-function terminalTheme() {
-  return {
-    background: "#00000000",
-    foreground: "#f1f3f5",
-    cursor: "#74e6d1",
-    selectionBackground: "#2a5550",
-    black: "#15171a",
-    brightBlack: "#707780",
-    green: "#74e6a5",
-    brightGreen: "#9bf5bd",
-    red: "#ff7770",
-    brightRed: "#ff9b96",
-    overviewRulerBorder: "#00000000",
-    scrollbarSliderBackground: "#75e6cf80",
-    scrollbarSliderHoverBackground: "#75e6cfa6",
-    scrollbarSliderActiveBackground: "#75e6cfbf",
-  };
-}
 
 export function TerminalPanel({ blockId, sessionKey, visible, local }: { blockId: string; sessionKey: string; visible: boolean; local: boolean }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -351,7 +334,7 @@ function acquireTerminalView(sessionKey: string, container: HTMLElement, windows
     if (existing.disposeTimer !== null) window.clearTimeout(existing.disposeTimer);
     existing.disposeTimer = null;
     if (windowsPty) existing.terminal.options.windowsPty = windowsPty;
-    existing.terminal.options.theme = terminalTheme();
+    existing.terminal.options.theme = readTerminalTheme();
     container.append(existing.element);
     return existing;
   }
@@ -364,7 +347,7 @@ function acquireTerminalView(sessionKey: string, container: HTMLElement, windows
     ...(windowsPty ? { windowsPty } : {}),
     allowTransparency: true,
     overviewRuler: { width: 3 },
-    theme: terminalTheme(),
+    theme: readTerminalTheme(),
   });
   const fit = new FitAddon();
   terminal.loadAddon(fit);
@@ -376,6 +359,7 @@ function acquireTerminalView(sessionKey: string, container: HTMLElement, windows
   }
   const resize: TerminalView["resize"] = { send: async () => undefined };
   const resizeScheduler = createResizeScheduler((columns, rows) => resize.send(columns, rows), resizeDelayMs);
+  const themeBinding = bindTerminalTheme((theme) => { terminal.options.theme = theme; });
   const view: TerminalView = {
     terminal,
     fit,
@@ -388,6 +372,7 @@ function acquireTerminalView(sessionKey: string, container: HTMLElement, windows
     write: () => undefined,
     resize,
     resizeScheduler,
+    themeBinding,
     disposeTimer: null,
   };
   terminal.attachCustomKeyEventHandler((event) => view.onKey(event));
@@ -420,6 +405,7 @@ function scheduleTerminalViewDisposal(sessionKey: string, view: TerminalView) {
     view.input.dispose();
     view.cwdHandler.dispose();
     view.resizeScheduler.dispose();
+    view.themeBinding.dispose();
     view.terminal.dispose();
     terminalViews.delete(sessionKey);
     view.disposeTimer = null;

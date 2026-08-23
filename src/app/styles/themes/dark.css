@@ -1,0 +1,33 @@
+:root {
+  color:#f1f3f5; background:transparent; font-family:Inter,ui-sans-serif,system-ui,-apple-system,"SF Pro Text","Segoe UI",sans-serif;
+  font-synthesis:none; text-rendering:optimizeLegibility; color-scheme:dark;
+  --terminal-font-family:"SFMono-Regular",Menlo,Monaco,Consolas,monospace;
+  --terminal-font-size:13px;
+  --terminal-line-height:1.22;
+  --terminal-background:#00000000;
+  --terminal-foreground:#f1f3f5;
+  --terminal-cursor:#74e6d1;
+  --terminal-selection:#2a5550;
+  --terminal-ansi-black:#15171a;
+  --terminal-ansi-bright-black:#707780;
+  --terminal-ansi-green:#74e6a5;
+  --terminal-ansi-bright-green:#9bf5bd;
+  --terminal-ansi-red:#ff7770;
+  --terminal-ansi-bright-red:#ff9b96;
+  --terminal-scrollbar:#75e6cf80;
+  --terminal-scrollbar-hover:#75e6cfa6;
+  --terminal-scrollbar-active:#75e6cfbf;
+  --editor-background:#090b0c;
+  --editor-foreground:#d5d9dd;
+  --editor-gutter-background:#0d0f11;
+  --editor-gutter-foreground:#59616b;
+  --editor-border:#25292e;
+  --editor-active-line:#15191c;
+  --editor-selection:#244b44;
+  --editor-preview-background:#070809;
+  --chrome:#151619; --canvas:#090a0c; --surface:#111316; --raised:#191b1f; --hover:#22252a;
+  --border:#30343a; --subtle:#23262b; --text:#f1f3f5; --muted:#9da3ad; --dim:#747b86;
+  --accent:#75e6cf; --accent-bg:#153b35; --danger:#ff7b77; --focus:#5fb3ff;
+  --workbench-panel:rgba(5,7,8,.92);
+  --workspace-tab-width:128px; --shell-radius:12px;
+}

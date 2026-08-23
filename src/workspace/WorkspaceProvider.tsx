@@ -2,49 +2,36 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState, type Dispatch, type ReactNode } from "react";
 
 import { connectFileSession } from "../lib/tauri/files";
-import { connectNetworkSession, startNetworkRule, stopNetworkRule, type NetworkRuleRuntimeState } from "../lib/tauri/network";
+import { connectNetworkSession, startNetworkRule, stopNetworkRule } from "../lib/tauri/network";
 import { closeLocalSession, connectLocalSession, getLocalTerminalCapabilities, resizeLocalSession, writeLocalSession, type LocalSessionEvent, type LocalTerminalCapabilities } from "../lib/tauri/localSessions";
 import { listProfileGroups, listProfiles, type ConnectionProfile, type ProfileGroup } from "../lib/tauri/profiles";
-import { acceptHostKey, closeSession, connectSession, rejectHostKey, resizeSession, writeSession, type SessionAuth, type SessionEvent, type SessionNode, type SessionState } from "../lib/tauri/sessions";
+import { acceptHostKey, closeSession, connectSession, rejectHostKey, resizeSession, writeSession, type SessionAuth, type SessionEvent } from "../lib/tauri/sessions";
 import { loadWorkspaces, saveWorkspaces } from "../lib/tauri/workspaces";
-import { completeConnectionProgress, connectionProgressFromRouteEvent, failConnectionProgress, initialConnectionProgress, type ConnectionRouteProgressState } from "./connectionProgress";
+import { completeConnectionProgress, connectionProgressFromRouteEvent, failConnectionProgress, initialConnectionProgress } from "./connectionProgress";
 import { blockIds, findLeaf } from "./layout";
 import { createWorkspaceDocument, type Workspace, type WorkspaceDocument } from "./model";
 import { workspaceReducer, type WorkspaceAction } from "./reducer";
+import {
+  MAX_PENDING_TERMINAL_OUTPUT,
+  connectionIntentAllows,
+  connectionIntentKey,
+  consumeFailureHandler,
+  defaultFileRuntime,
+  defaultNetworkRuntime,
+  defaultRuntime,
+  deleteFailureHandlers,
+  epochKey,
+  isTauriRuntime,
+  nodeLabel,
+  routeFailureNotice,
+  terminalFailureKey,
+  workspaceErrorMessage,
+  type FileRuntime,
+  type NetworkRuntime,
+  type TerminalRuntime,
+} from "./workspaceRuntime";
 
-export interface HostKeyPrompt {
-  node: SessionNode;
-  algorithm: string;
-  fingerprint: string;
-}
-
-export interface TerminalRuntime {
-  sessionId: string | null;
-  kind: "local" | "ssh" | null;
-  status: SessionState;
-  hostKeyPrompt: HostKeyPrompt | null;
-  notice: string;
-  connectionProgress: ConnectionRouteProgressState | null;
-  cwd: string | null;
-}
-
-export interface FileRuntime {
-  sessionId: string | null;
-  kind: "local" | "sftp";
-  status: SessionState;
-  hostKeyPrompt: HostKeyPrompt | null;
-  notice: string;
-  connectionProgress: ConnectionRouteProgressState | null;
-}
-
-export interface NetworkRuntime {
-  sessionId: string | null;
-  status: SessionState;
-  hostKeyPrompt: HostKeyPrompt | null;
-  notice: string;
-  connectionProgress: ConnectionRouteProgressState | null;
-  ruleStates: Record<string, NetworkRuleRuntimeState>;
-}
+export type { FileRuntime, HostKeyPrompt, NetworkRuntime, TerminalRuntime } from "./workspaceRuntime";
 
 interface WorkspaceContextValue {
   hydrated: boolean;
@@ -88,15 +75,7 @@ interface WorkspaceContextValue {
   dismissStorageNotice: () => void;
 }
 
-const defaultRuntime: TerminalRuntime = { sessionId: null, kind: null, status: "closed", hostKeyPrompt: null, notice: "", connectionProgress: null, cwd: null };
-const defaultFileRuntime: FileRuntime = { sessionId: null, kind: "local", status: "connected", hostKeyPrompt: null, notice: "", connectionProgress: null };
-const defaultNetworkRuntime: NetworkRuntime = { sessionId: null, status: "closed", hostKeyPrompt: null, notice: "", connectionProgress: null, ruleStates: {} };
-const MAX_PENDING_TERMINAL_OUTPUT = 256 * 1024;
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
-
-function isTauriRuntime(): boolean {
-  return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
-}
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [document, dispatch] = useReducer(workspaceReducer, undefined, createWorkspaceDocument);
@@ -152,7 +131,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       },
       (error: unknown) => {
         if (!active) return;
-        setStorageNotice(`无法读取本地工作区：${errorMessage(error)}`);
+        setStorageNotice(`无法读取本地工作区：${workspaceErrorMessage(error)}`);
         setHydrated(true);
       },
     );
@@ -162,7 +141,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!hydrated || !isTauriRuntime()) return;
     const timer = window.setTimeout(() => {
-      void saveWorkspaces(document).catch((error: unknown) => setStorageNotice(`无法保存工作区：${errorMessage(error)}`));
+      void saveWorkspaces(document).catch((error: unknown) => setStorageNotice(`无法保存工作区：${workspaceErrorMessage(error)}`));
     }, 180);
     return () => window.clearTimeout(timer);
   }, [document, hydrated]);
@@ -197,7 +176,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     void getLocalTerminalCapabilities().then(
       (capabilities) => { if (active) setLocalTerminalCapabilities(capabilities); },
       (error: unknown) => {
-        if (active) setStorageNotice((current) => current || `无法读取本地终端能力：${errorMessage(error)}`);
+        if (active) setStorageNotice((current) => current || `无法读取本地终端能力：${workspaceErrorMessage(error)}`);
       },
     );
     return () => { active = false; };
@@ -402,7 +381,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         activeLocalSessions.current.delete(blockId);
         if (startedSessionId) await closeLocalSession(startedSessionId).catch(() => undefined);
         pendingLocalInput.current.delete(blockId);
-        updateRuntime(blockId, () => ({ ...defaultRuntime, kind: "local", status: "failed", notice: errorMessage(error) }));
+        updateRuntime(blockId, () => ({ ...defaultRuntime, kind: "local", status: "failed", notice: workspaceErrorMessage(error) }));
       }
     } finally {
       if (startingLocal.current.get(blockId) === epoch) startingLocal.current.delete(blockId);
@@ -434,7 +413,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       }
     } catch (error) {
       if (isCurrentEpoch(blockId, epoch)) {
-        updateRuntime(blockId, () => ({ ...defaultRuntime, kind: "ssh", status: "failed", notice: errorMessage(error) }));
+        updateRuntime(blockId, () => ({ ...defaultRuntime, kind: "ssh", status: "failed", notice: workspaceErrorMessage(error) }));
         consumeFailureHandler(connectionFailureHandlers.current, failureKey);
       }
     }
@@ -492,7 +471,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         updateFileRuntime(blockId, (runtime) => ({ ...runtime, sessionId, kind: "sftp" }));
       }
     } catch (error) {
-      if (isCurrentEpoch(blockId, epoch)) updateFileRuntime(blockId, () => ({ ...defaultFileRuntime, kind: "sftp", status: "failed", notice: errorMessage(error) }));
+      if (isCurrentEpoch(blockId, epoch)) updateFileRuntime(blockId, () => ({ ...defaultFileRuntime, kind: "sftp", status: "failed", notice: workspaceErrorMessage(error) }));
       consumeFailureHandler(connectionFailureHandlers.current, `files:${blockId}`);
     }
   }, [closeCurrentFileSession, isCurrentEpoch, nextEpoch, onFileSessionEvent, updateFileRuntime]);
@@ -520,7 +499,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       if (!isCurrentEpoch(blockId, epoch)) await closeSession(sessionId).catch(() => undefined);
       else updateNetworkRuntime(blockId, (runtime) => ({ ...runtime, sessionId }));
     } catch (error) {
-      if (isCurrentEpoch(blockId, epoch)) updateNetworkRuntime(blockId, () => ({ ...defaultNetworkRuntime, status: "failed", notice: errorMessage(error) }));
+      if (isCurrentEpoch(blockId, epoch)) updateNetworkRuntime(blockId, () => ({ ...defaultNetworkRuntime, status: "failed", notice: workspaceErrorMessage(error) }));
       consumeFailureHandler(connectionFailureHandlers.current, `network:${blockId}`);
     }
   }, [closeCurrentNetworkSession, isCurrentEpoch, nextEpoch, onNetworkSessionEvent, updateNetworkRuntime]);
@@ -533,7 +512,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       await startNetworkRule(runtime.sessionId, ruleId);
       updateNetworkRuntime(blockId, (current) => ({ ...current, ruleStates: { ...current.ruleStates, [ruleId]: "running" } }));
     } catch (error) {
-      updateNetworkRuntime(blockId, (current) => ({ ...current, notice: errorMessage(error), ruleStates: { ...current.ruleStates, [ruleId]: "failed" } }));
+      updateNetworkRuntime(blockId, (current) => ({ ...current, notice: workspaceErrorMessage(error), ruleStates: { ...current.ruleStates, [ruleId]: "failed" } }));
       throw error;
     }
   }, [updateNetworkRuntime]);
@@ -546,7 +525,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       await stopNetworkRule(runtime.sessionId, ruleId);
       updateNetworkRuntime(blockId, (current) => ({ ...current, ruleStates: { ...current.ruleStates, [ruleId]: "stopped" } }));
     } catch (error) {
-      updateNetworkRuntime(blockId, (current) => ({ ...current, notice: errorMessage(error), ruleStates: { ...current.ruleStates, [ruleId]: "failed" } }));
+      updateNetworkRuntime(blockId, (current) => ({ ...current, notice: workspaceErrorMessage(error), ruleStates: { ...current.ruleStates, [ruleId]: "failed" } }));
       throw error;
     }
   }, [updateNetworkRuntime]);
@@ -684,48 +663,4 @@ export function useWorkspace(): WorkspaceContextValue {
   const context = useContext(WorkspaceContext);
   if (!context) throw new Error("WorkspaceProvider is missing");
   return context;
-}
-
-function errorMessage(error: unknown): string {
-  if (typeof error === "string") return error;
-  if (typeof error === "object" && error && "message" in error && typeof error.message === "string") return error.message;
-  return error instanceof Error ? error.message : "操作失败";
-}
-
-function epochKey(blockId: string, epoch: number): string {
-  return `${blockId}:${epoch}`;
-}
-
-function consumeFailureHandler(handlers: Map<string, () => void>, key: string) {
-  const handler = handlers.get(key);
-  if (!handler) return;
-  handlers.delete(key);
-  handler();
-}
-
-function terminalFailureKey(blockId: string, epoch: number): string {
-  return `terminal:${blockId}:${epoch}`;
-}
-
-function deleteFailureHandlers(handlers: Map<string, () => void>, prefix: string) {
-  for (const key of handlers.keys()) {
-    if (key.startsWith(prefix)) handlers.delete(key);
-  }
-}
-
-function connectionIntentKey(owner: "terminal" | "files" | "network", blockId: string): string {
-  return `${owner}:${blockId}`;
-}
-
-function connectionIntentAllows(intents: Map<string, string | null>, owner: "terminal" | "files" | "network", blockId: string, profileId: string | null): boolean {
-  const key = connectionIntentKey(owner, blockId);
-  return !intents.has(key) || intents.get(key) === profileId;
-}
-
-function nodeLabel(node: Extract<SessionEvent, { type: "routeProgress" }>['node']): string {
-  return `${node.role === "jump" ? "跳板" : "目标"}“${node.name}”（${node.host}:${node.port}）`;
-}
-
-function routeFailureNotice(event: Extract<SessionEvent, { type: "failed" }>): string {
-  return event.node ? `${nodeLabel(event.node)}：${event.message}` : event.message;
 }

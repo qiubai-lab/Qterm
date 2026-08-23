@@ -26,6 +26,13 @@ Frontend -> Tauri Commands -> Application -> Domain / Ports <- Infrastructure
 
 `src-tauri/src/lib.rs` 是组合根。Infrastructure 实现 ports；domain 和 application 不依赖 Tauri、russh、xterm.js 或具体存储格式。
 
+## Frontend Styling and Theme Boundary
+
+- `src/app/app.css` 是唯一顶层样式 manifest，只按固定顺序导入 application foundations、当前 theme 与 feature-local CSS；Workspace、Terminal、Files、Network 和 dialogs 各自拥有带前缀的规则。
+- `document.documentElement[data-theme]` 是唯一 theme DOM owner，当前默认且唯一实现为 `dark`。`src/app/styles/themes/dark.css` 定义共享 surface/text/border/status、terminal ANSI 与 editor semantic tokens；第二主题、选择 UI、持久化和系统模式解析属于后续能力。
+- xterm 通过 `src/terminal/terminalTheme.ts` 从 CSS semantic tokens 生成 palette，并以 registry 刷新全部存活实例；CodeMirror 由 Files feature CSS 消费 editor tokens。原生窗口主题只能通过 `src/lib/tauri/window.ts` 的窄 adapter 协调。
+- `WorkspaceProvider` 保持唯一 Context 门面与异步编排权威；runtime 默认值、epoch/failure key、connection intent 和 route notice 等无 React 规则由 `workspaceRuntime.ts` 拥有，不建立第二份运行时状态。
+
 ## Model Separation
 
 - Domain model 表达 profile、authentication request、trust decision、session 和 transfer 状态。
@@ -43,6 +50,7 @@ Frontend -> Tauri Commands -> Application -> Domain / Ports <- Infrastructure
 - 不兼容连接配置的破坏性清理由 application 协调 profile 与 network repository：profile repository 在删除瞬间再次确认 `connections.json` 确为 unsupported schema，随后清除 `connections.json` 与 `network-forwards.json` 并关闭 Network session。command 不接受路径或 force 参数；凭证和 Workspace 不参与清除。
 - profile 删除由 application use case 协调 ProfileService 与 NetworkService：先校验两侧存储可读，再删除 profile 并按 profile 在单次 Network repository 写入中批量删除规则；第二步失败时尽力恢复 profile。成功后 command 只负责关闭对应 Network session 并返回删除摘要。React 不逐条编排跨 repository 删除，credential 永远不在该流程中删除。
 - SSH Config 导入先由前端紧凑说明窗取得用户明确意图，再由 command 通过默认定位 `~/.ssh` 的系统选择器取得授权文件，并只向 WebView 返回一次性预览令牌与文件名；config 路径留在 Rust 内存。infrastructure 适配器负责所选入口的有界读取、相对 Include 展开和 Match 隔离，解析器模型不得跨越 infrastructure 边界。WebView 只以预览令牌、候选别名、私钥索引和可选口令提交选择，不能接收或提交 groupId、配置路径、私钥路径或私钥正文；command 固定把导入 profile 的 groupId 设为 null。提交重新解析授权文件；批量导入先校验全部候选，再原子写入 profile，失败时回滚本批次新建凭证。私钥复用比较解析后的公钥身份，不比较凭证显示名称。
+- SSH Config 的 opaque preview ID 替换/过期、重复候选判断、唯一命名和 profile input 映射由 application `SshConfigImportSession` 拥有；恢复重置与私钥草稿 pending 生命周期由 application `CredentialWorkflowState` 拥有。commands 继续负责系统对话框、DTO、错误映射、实际凭证/profile 协调与失败回滚。
 
 ## Workspace UI Model
 

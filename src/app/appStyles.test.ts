@@ -1,8 +1,10 @@
+import { describe, expect, it } from "vitest";
+import { readCssBundle } from "../test/css";
+
 // @ts-expect-error Vitest runs in Node; the frontend type config intentionally omits Node declarations.
 import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
 
-const styles = readFileSync("src/app/app.css", "utf8");
+const styles = readCssBundle("src/app/app.css");
 const tauriConfig = JSON.parse(readFileSync("src-tauri/tauri.conf.json", "utf8")) as {
   app: { windows: Array<{ theme?: string; transparent?: boolean; windowEffects?: { effects: string[]; state?: string; radius?: number } }> };
 };
@@ -578,8 +580,8 @@ describe("application layout styles", () => {
     expect(editor).toContain("font-family:var(--terminal-font-family)");
     expect(editor).toContain("font-size:var(--terminal-font-size)");
     expect(editor).toContain("line-height:var(--terminal-line-height)");
-    expect(declarations(".file-code-editor .cm-activeLine,.file-code-editor .cm-activeLineGutter")).toContain("background:#15191c");
-    expect(declarations(".file-code-editor .cm-selectionBackground")).toContain("background:#244b44!important");
+    expect(declarations(".file-code-editor .cm-activeLine,.file-code-editor .cm-activeLineGutter")).toContain("background:var(--editor-active-line)");
+    expect(declarations(".file-code-editor .cm-selectionBackground")).toContain("background:var(--editor-selection)!important");
   });
 
   it("keeps path editing inline and anchors refresh to the far edge", () => {

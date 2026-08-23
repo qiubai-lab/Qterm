@@ -1,0 +1,37 @@
+.terminal-surface,.file-browser,.network-pane { background:transparent; }
+.terminal-surface { min-width:0; min-height:0; flex:1; overflow:hidden; }
+.terminal-surface>.xterm { width:100%; height:100%; padding:4px 3px 2px 7px; }
+.terminal-surface .xterm-viewport { color:transparent; background-color:transparent; transition:color 180ms cubic-bezier(.23,1,.32,1); }
+.terminal-surface:hover .xterm-viewport,.terminal-surface:has(.xterm-helper-textarea:focus-visible) .xterm-viewport { color:#438b7d; }
+.terminal-surface .xterm-viewport::-webkit-scrollbar { width:3px; }
+.terminal-surface .xterm-viewport::-webkit-scrollbar-track { background:#050607; }
+.terminal-surface .xterm-viewport::-webkit-scrollbar-thumb { border-radius:999px; background:currentColor; }
+@supports not selector(::-webkit-scrollbar) { .terminal-surface .xterm-viewport { scrollbar-color:currentColor #050607; scrollbar-width:thin; } }
+.terminal-surface .xterm-scrollable-element>.scrollbar { transition:opacity 140ms cubic-bezier(.23,1,.32,1)!important; }
+.terminal-surface .xterm-scrollable-element>.invisible.fade { transition-duration:260ms!important; }
+.terminal-surface .xterm-scrollable-element>.scrollbar.vertical>.slider { border-radius:999px; }
+.terminal-surface .xterm-decoration-overview-ruler { opacity:0; pointer-events:none; }
+.terminal-context-menu{position:fixed;z-index:120;width:192px;padding:4px;border:1px solid #3a4046;border-radius:7px;background:#171b1eef;box-shadow:0 14px 38px #000b;backdrop-filter:blur(16px) saturate(112%);-webkit-backdrop-filter:blur(16px) saturate(112%);transform-origin:top left;animation:terminal-menu-in 130ms cubic-bezier(.16,1,.3,1)}.terminal-context-menu[data-placement="above"]{transform-origin:bottom left}.terminal-context-menu button{display:flex;width:100%;height:27px;gap:12px;align-items:center;justify-content:space-between;padding:0 8px;border:0;border-radius:5px;color:#c5cbd1;background:transparent;font-size:9px;text-align:left}.terminal-context-menu button:hover:not(:disabled),.terminal-context-menu button:focus-visible{color:#fff;background:#30353a;outline:none}.terminal-context-menu button:disabled{cursor:not-allowed;color:#62686d}.terminal-context-menu kbd{flex:none;color:#737b84;background:transparent;font:8px "SFMono-Regular",Consolas,monospace}.terminal-context-menu button:hover:not(:disabled) kbd,.terminal-context-menu button:focus-visible kbd{color:#aeb6be}.terminal-context-menu-separator{height:1px;margin:4px 6px;background:#30343a}@keyframes terminal-menu-in{from{opacity:0;transform:translateY(-3px) scale(.97)}to{opacity:1;transform:none}}
+.block-notice { position:absolute; right:8px; bottom:8px; z-index:5; max-width:min(420px,calc(100% - 16px)); padding:7px 9px; border:1px solid #5d4333; border-radius:6px; color:#f2d6b5; background:#271b13eF; box-shadow:0 6px 24px #0009; font-size:10px; }
+.connection-route-progress{display:contents;color:#d9be78}
+.connection-route-progress.connected{color:#9fe4d5}
+.connection-route-progress.failed{color:var(--danger)}
+.connection-route-live-status{position:absolute;width:1px;height:1px;overflow:hidden;margin:-1px;padding:0;border:0;clip:rect(0 0 0 0);white-space:nowrap}
+.connection-route-dots{display:flex;height:23px;flex:none;align-items:center}
+.connection-route-node-anchor{position:relative;display:block;width:18px;height:23px;flex:none}
+.connection-route-node-anchor:not(:last-child)::after{position:absolute;top:11px;left:12px;width:12px;height:1px;background:#6e613d;content:""}
+.connection-route-node-anchor:has(.connection-route-node[data-state="complete"]):not(:last-child)::after{background:#4e8f82}
+.connection-route-node-anchor:has(.connection-route-node[data-state="failed"]):not(:last-child)::after{background:#8b4947}
+.connection-route-node{position:relative;z-index:1;display:grid;width:18px;height:23px;place-items:center;padding:0;border:0;border-radius:4px;color:#74683f;background:transparent;cursor:default}
+.connection-route-node:hover{background:#292a25}
+.connection-route-node:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
+.connection-route-node-mark{display:block;width:7px;height:7px;border:1px solid #9d874c;border-radius:50%;background:#51482f;box-shadow:0 0 0 2px #d5aa410d}
+.connection-route-node[data-state="complete"] .connection-route-node-mark{border-color:#86dbc9;background:#57bca7;box-shadow:0 0 0 2px #75d4c021}
+.connection-route-node[data-state="active"] .connection-route-node-mark{border-color:#e0b957;background:#ba8d2d;animation:connection-route-pulse 1.15s ease-in-out infinite}
+.connection-route-node[data-state="failed"] .connection-route-node-mark{border-color:#ff9a96;background:var(--danger);box-shadow:0 0 0 2px #ff7b7721}
+.connection-route-tooltip{--connection-route-tooltip-enter-y:3px;position:fixed;z-index:120;display:grid;width:max-content;max-width:min(210px,calc(100vw - 16px));gap:1px;padding:4px 7px;border:1px solid #6d603c;border-radius:5px;color:#d8c894;background:#171918f2;box-shadow:0 8px 24px #000a;pointer-events:none;animation:connection-route-tooltip-in 150ms cubic-bezier(.2,.8,.2,1)}
+.connection-route-tooltip[data-placement="above"]{--connection-route-tooltip-enter-y:-3px}
+.connection-route-tooltip strong,.connection-route-tooltip-detail>span,.connection-route-tooltip-detail>small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.connection-route-tooltip strong{color:#f0e7ce;font-size:9px;line-height:1.15}.connection-route-tooltip-detail{display:flex;min-width:0;align-items:baseline;gap:5px}.connection-route-tooltip-detail>span{flex:none;font-size:9px;font-weight:600;line-height:1.15}.connection-route-tooltip-detail>small{min-width:0;color:#8e938e;font:8px/1.15 "SFMono-Regular",Consolas,monospace}.connection-route-tooltip.connected{border-color:#477b71;color:#a6ddcf}.connection-route-tooltip.connected strong{color:#dff7f1}
+.connection-route-endpoint{min-width:0;max-width:170px;flex:0 100 auto;overflow:hidden;color:#6f7680;text-overflow:ellipsis;white-space:nowrap;font:9px "SFMono-Regular",Consolas,monospace}
+@keyframes connection-route-tooltip-in{from{opacity:0;transform:translateY(var(--connection-route-tooltip-enter-y)) scale(.98)}to{opacity:1;transform:none}}@keyframes connection-route-pulse{0%,100%{box-shadow:0 0 0 2px #d5aa4117}50%{box-shadow:0 0 0 4px #d5aa412d}}
+@container terminal-block (max-width:390px){.terminal-target>small{display:none}}

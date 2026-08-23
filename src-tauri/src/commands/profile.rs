@@ -1,8 +1,4 @@
-use std::{
-    collections::{HashMap, HashSet},
-    path::PathBuf,
-    sync::Mutex,
-};
+use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
@@ -14,6 +10,10 @@ use crate::{
         profile_service::{
             JumpCandidate, ProfileGroupInput, ProfileInput, ProfileService,
             clear_unsupported_portable_config, delete_profile_with_network_rules,
+        },
+        ssh_config_import::{
+            SshConfigImportSession, allocate_import_name, candidate_already_imported,
+            imported_profile_input,
         },
     },
     commands::{credential::CredentialState, error::IpcError},
@@ -30,20 +30,14 @@ use crate::{
 
 pub struct ProfileState {
     service: ProfileService<JsonProfileRepository>,
-    pending_ssh_config: Mutex<Option<PendingSshConfigImport>>,
-}
-
-struct PendingSshConfigImport {
-    preview_id: String,
-    path: PathBuf,
-    home: PathBuf,
+    pending_ssh_config: SshConfigImportSession,
 }
 
 impl ProfileState {
     pub fn new(repository: JsonProfileRepository) -> Self {
         Self {
             service: ProfileService::new(repository),
-            pending_ssh_config: Mutex::new(None),
+            pending_ssh_config: SshConfigImportSession::default(),
         }
     }
 
@@ -81,40 +75,21 @@ impl ProfileState {
         self.service.create_many(inputs).map_err(IpcError::from)
     }
 
-    fn remember_ssh_config(&self, path: PathBuf, home: PathBuf) -> String {
-        let preview_id = uuid::Uuid::new_v4().to_string();
-        *self
-            .pending_ssh_config
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(PendingSshConfigImport {
-            preview_id: preview_id.clone(),
-            path,
-            home,
-        });
-        preview_id
+    fn remember_ssh_config(&self, path: std::path::PathBuf, home: std::path::PathBuf) -> String {
+        self.pending_ssh_config.remember(path, home)
     }
 
-    fn ssh_config_source(&self, preview_id: &str) -> Result<(PathBuf, PathBuf), IpcError> {
+    fn ssh_config_source(
+        &self,
+        preview_id: &str,
+    ) -> Result<(std::path::PathBuf, std::path::PathBuf), IpcError> {
         self.pending_ssh_config
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .as_ref()
-            .filter(|pending| pending.preview_id == preview_id)
-            .map(|pending| (pending.path.clone(), pending.home.clone()))
+            .source(preview_id)
             .ok_or_else(expired_import_preview)
     }
 
     fn complete_ssh_config(&self, preview_id: &str) {
-        let mut pending = self
-            .pending_ssh_config
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        if pending
-            .as_ref()
-            .is_some_and(|value| value.preview_id == preview_id)
-        {
-            pending.take();
-        }
+        self.pending_ssh_config.complete(preview_id);
     }
 }
 
@@ -563,27 +538,6 @@ fn select_import_candidates(
     Ok(selected)
 }
 
-fn imported_profile_input(
-    candidate: SshConfigCandidate,
-    profile_name: String,
-    credential_id: Option<String>,
-) -> ProfileInput {
-    ProfileInput {
-        name: profile_name,
-        host: candidate.host,
-        port: u32::from(candidate.port),
-        username: candidate.username,
-        auth_preference: if credential_id.is_some() {
-            AuthPreference::PrivateKey
-        } else {
-            AuthPreference::Manual
-        },
-        credential_id,
-        group_id: None,
-        jump_profile_ids: Vec::new(),
-    }
-}
-
 fn preview_candidate_dtos(
     existing: &[ConnectionProfile],
     candidates: Vec<SshConfigCandidate>,
@@ -632,42 +586,6 @@ fn preview_candidate_dtos(
             }
         })
         .collect()
-}
-
-fn candidate_already_imported(
-    existing: &[ConnectionProfile],
-    candidate: &SshConfigCandidate,
-) -> bool {
-    existing.iter().any(|profile| {
-        profile.name().eq_ignore_ascii_case(candidate.alias.trim())
-            && profile.host().eq_ignore_ascii_case(&candidate.host)
-            && profile.port() == candidate.port
-            && profile.username() == candidate.username
-    })
-}
-
-fn allocate_import_name(base: &str, used_names: &mut HashSet<String>) -> String {
-    const MAX_PROFILE_NAME_CHARS: usize = 80;
-
-    let base = base.trim();
-    let base = base
-        .chars()
-        .take(MAX_PROFILE_NAME_CHARS)
-        .collect::<String>();
-    if used_names.insert(base.to_lowercase()) {
-        return base;
-    }
-
-    for sequence in 1_u64.. {
-        let suffix = format!(" {sequence}");
-        let prefix_length = MAX_PROFILE_NAME_CHARS.saturating_sub(suffix.chars().count());
-        let prefix = base.chars().take(prefix_length).collect::<String>();
-        let candidate = format!("{prefix}{suffix}");
-        if used_names.insert(candidate.to_lowercase()) {
-            return candidate;
-        }
-    }
-    unreachable!("the numeric import-name suffix space is unbounded")
 }
 
 fn rollback_credentials(credentials: &CredentialState, credential_ids: &[String]) {

@@ -7,30 +7,20 @@ import { DialogFrame } from "../components/dialogs/DialogFrame";
 import { copyFile, createEntry, deleteEntry, listLocalDirectory, listLocalRoots, listRemoteDirectory, readBinaryFile, readTextFile, renameEntry, writeTextFile, type DirectoryListing, type FileEntry, type LocalRoot } from "../lib/tauri/files";
 import { cancelTransfer, downloadDirectory, downloadFile, selectDownloadDirectory, selectDownloadPath, uploadDroppedEntries, type TransferEvent } from "../lib/tauri/transfers";
 import type { FileRuntime } from "../workspace/WorkspaceProvider";
-import type { EditorLanguage } from "./CodeEditor";
+import { FileList, FileSortHeader } from "./FileList";
+import { FILE_LIST_PADDING, FILE_ROW_HEIGHT, FILE_VIRTUAL_FALLBACK_ROWS, FILE_VIRTUAL_OVERSCAN, copyName, fileErrorMessage, fileListAnchor, fileVirtualRange, fitContextMenu, formatSize, imageMime, previewKindFor, sortEntries, type PreviewKind, type SortKey, type SortState, type VirtualRange } from "./fileBrowserModel";
 import { displayLocalPath, isWindowsDriveRoot, parentPath } from "./path";
 
-type PreviewKind = EditorLanguage | "image";
 type FileViewMode = "preview" | "edit";
 type PreviewState = { entry: FileEntry; kind: PreviewKind; mode: FileViewMode; loading: boolean; error: string; content: string; original: string; revision: string; imageUrl: string };
 type TransferState = { transferId: string; status: "starting" | "running" | "completed" | "cancelled" | "failed"; transferred: number; total: number; message: string; direction: "download" | "upload" };
 type NameOperation = { kind: "copy" | "rename" | "createFile" | "createDirectory"; entry: FileEntry | null; value: string; error: string; busy: boolean };
 type DeleteOperation = { entries: FileEntry[]; error: string; busy: boolean };
-type SortKey = "name" | "size" | "modifiedAt";
-type SortDirection = "ascending" | "descending";
-type SortState = { key: SortKey; direction: SortDirection } | null;
 type ContextMenuState = { entry: FileEntry; anchorX: number; anchorY: number; x: number; y: number; placement: "above" | "below" };
 type DirectoryLocation = { scrollTop: number; selectedPath: string | null; anchorPath: string | null; anchorOffset: number };
 type PendingDirectoryLocation = { key: string; location: DirectoryLocation };
-type VirtualRange = { start: number; end: number };
 
 const LOCAL_ROOTS_LOCATION = "\0local-roots";
-const FILE_LIST_PADDING = 3;
-const FILE_ROW_HEIGHT = 27;
-const FILE_HEADER_HEIGHT = 25;
-const FILE_VIRTUALIZATION_THRESHOLD = 200;
-const FILE_VIRTUAL_OVERSCAN = 8;
-const FILE_VIRTUAL_FALLBACK_ROWS = 20;
 
 const CodeEditor = lazy(() => import("./CodeEditor").then((module) => ({ default: module.CodeEditor })));
 const MarkdownPreview = lazy(() => import("./MarkdownPreview").then((module) => ({ default: module.MarkdownPreview })));
@@ -147,7 +137,7 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
       return true;
     } catch (reason) {
       if (request.current === currentRequest) {
-        setError(errorMessage(reason));
+        setError(fileErrorMessage(reason));
         if (returnToRootsOnError) { setShowLocalRoots(true); showLocalRootsRef.current = true; }
       }
       return false;
@@ -173,7 +163,7 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
       setLocalRoots(roots);
       return true;
     } catch (reason) {
-      if (request.current === currentRequest) setError(errorMessage(reason));
+      if (request.current === currentRequest) setError(fileErrorMessage(reason));
       return false;
     } finally {
       if (request.current === currentRequest) setLoading(false);
@@ -259,7 +249,7 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
         updateTransfer(transferEvent, "upload");
         if (transferEvent.type === "completed") void load(path);
       }).then((transferId) => setTransfer((current) => current ? { ...current, transferId } : current)).catch((reason) => {
-        setTransfer({ transferId: "", status: "failed", transferred: 0, total: 0, message: errorMessage(reason), direction: "upload" });
+        setTransfer({ transferId: "", status: "failed", transferred: 0, total: 0, message: fileErrorMessage(reason), direction: "upload" });
       });
     }).then((stop) => { if (disposed) stop(); else unlisten = stop; }).catch(() => setDropActive(false));
     return () => { disposed = true; unlisten?.(); setDropActive(false); };
@@ -284,7 +274,7 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
         setPreview((current) => current?.entry.path === entry.path ? { ...current, loading: false, content: document.content, original: document.content, revision: document.revision } : current);
       }
     } catch (reason) {
-      if (previewRequest.current === currentRequest) setPreview((current) => current?.entry.path === entry.path ? { ...current, loading: false, error: errorMessage(reason) } : current);
+      if (previewRequest.current === currentRequest) setPreview((current) => current?.entry.path === entry.path ? { ...current, loading: false, error: fileErrorMessage(reason) } : current);
     }
   }
 
@@ -307,7 +297,7 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
       const saved = await writeTextFile(kind === "sftp" ? sessionId : null, preview.entry.path, preview.content, preview.revision);
       setPreview((current) => current?.entry.path === preview.entry.path ? { ...current, original: saved.content, content: saved.content, revision: saved.revision } : current);
     } catch (reason) {
-      setPreview((current) => current ? { ...current, error: errorMessage(reason) } : current);
+      setPreview((current) => current ? { ...current, error: fileErrorMessage(reason) } : current);
     } finally { setSaving(false); }
   }
 
@@ -367,7 +357,7 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
         : await downloadFile(sessionId, entry.path, localPath, (event) => updateTransfer(event, "download"));
       setTransfer((current) => current ? { ...current, transferId } : current);
     } catch (reason) {
-      setTransfer({ transferId: "", status: "failed", transferred: 0, total: 0, message: errorMessage(reason), direction: "download" });
+      setTransfer({ transferId: "", status: "failed", transferred: 0, total: 0, message: fileErrorMessage(reason), direction: "download" });
     }
   }
 
@@ -411,7 +401,7 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
       setOperationMessage(nameOperation.kind === "copy" ? "文件复制完成" : nameOperation.kind === "rename" ? "改名完成" : nameOperation.kind === "createFile" ? "文件创建完成" : "文件夹创建完成");
       await load(path);
     } catch (reason) {
-      setNameOperation((current) => current ? { ...current, busy: false, error: errorMessage(reason) } : current);
+      setNameOperation((current) => current ? { ...current, busy: false, error: fileErrorMessage(reason) } : current);
     }
   }
 
@@ -435,7 +425,7 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
       setDeleteOperation({
         entries: failedEntries,
         busy: false,
-        error: `${deletedCount > 0 ? `已删除 ${deletedCount} 个项目，` : ""}${failedEntries.length} 个项目删除失败：${firstFailure?.status === "rejected" ? errorMessage(firstFailure.reason) : "文件操作失败"}`,
+        error: `${deletedCount > 0 ? `已删除 ${deletedCount} 个项目，` : ""}${failedEntries.length} 个项目删除失败：${firstFailure?.status === "rejected" ? fileErrorMessage(firstFailure.reason) : "文件操作失败"}`,
       });
       return;
     }
@@ -568,142 +558,4 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
       <footer className="dialog-actions end"><button className="secondary-button" disabled={deleteOperation.busy} onClick={() => setDeleteOperation(null)}>取消</button><button className="danger-button filled" data-dialog-autofocus disabled={deleteOperation.busy} onClick={() => void confirmDelete()}>{deleteOperation.busy ? "删除中…" : "确认删除"}</button></footer>
     </DialogFrame>}
   </div>;
-}
-
-function FileSortHeader({ label, sortKey, sort, onChange }: { label: string; sortKey: SortKey; sort: SortState; onChange: (key: SortKey) => void }) {
-  const direction = sort?.key === sortKey ? sort.direction : null;
-  const action = direction === "ascending" ? "已升序，点击降序排列" : direction === "descending" ? "已降序，点击恢复默认排序" : "默认顺序，点击升序排列";
-  return <button className="file-browser-sort-button" aria-label={`${label}，${action}`} aria-pressed={Boolean(direction)} data-sort-direction={direction ?? undefined} title={`${label}：${action}`} onClick={() => onChange(sortKey)}>
-    <span>{label}</span><span className="file-sort-indicator" aria-hidden="true">{direction === "ascending" ? "↑" : direction === "descending" ? "↓" : "↕"}</span>
-  </button>;
-}
-
-function FileList({ entries, range, ariaLabel, selectedPaths, onSelect, onOpen, onContextMenu, onContextMenuKey }: {
-  entries: FileEntry[];
-  range: VirtualRange;
-  ariaLabel: string;
-  selectedPaths: Set<string>;
-  onSelect: (entry: FileEntry, additive: boolean) => void;
-  onOpen: (entry: FileEntry) => void;
-  onContextMenu: (event: MouseEvent<HTMLButtonElement>, entry: FileEntry) => void;
-  onContextMenuKey: (event: KeyboardEvent<HTMLButtonElement>, entry: FileEntry) => void;
-}) {
-  const virtualized = entries.length > FILE_VIRTUALIZATION_THRESHOLD;
-  const start = virtualized ? Math.min(range.start, entries.length) : 0;
-  const end = virtualized ? Math.min(Math.max(range.end, start), entries.length) : entries.length;
-  const visibleEntries = entries.slice(start, end);
-  return <div className={`file-list${virtualized ? " file-list-virtual" : ""}`} role="list" aria-label={ariaLabel} style={virtualized ? { height: entries.length * FILE_ROW_HEIGHT + FILE_LIST_PADDING * 2 } : undefined}>
-    {visibleEntries.map((entry, visibleIndex) => {
-      const index = start + visibleIndex;
-      return <FileRow key={entry.path} entry={entry} selected={selectedPaths.has(entry.path)} selectionCount={selectedPaths.size} onSelect={(additive) => onSelect(entry, additive)} onOpen={() => onOpen(entry)} onContextMenu={(event) => onContextMenu(event, entry)} onContextMenuKey={(event) => onContextMenuKey(event, entry)} position={virtualized ? index : null} setSize={virtualized ? entries.length : undefined}/>;
-    })}
-  </div>;
-}
-
-function FileRow({ entry, selected, selectionCount, onSelect, onOpen, onContextMenu, onContextMenuKey, position, setSize }: { entry: FileEntry; selected: boolean; selectionCount: number; onSelect: (additive: boolean) => void; onOpen: () => void; onContextMenu: (event: MouseEvent<HTMLButtonElement>) => void; onContextMenuKey: (event: KeyboardEvent<HTMLButtonElement>) => void; position: number | null; setSize?: number }) {
-  return <button className="file-row" data-entry-kind={entry.isDirectory ? "directory" : "file"} data-entry-path={entry.path} data-selected={selected || undefined} role="listitem" aria-selected={selected} aria-posinset={position === null ? undefined : position + 1} aria-setsize={setSize} style={position === null ? undefined : { transform: `translateY(${FILE_LIST_PADDING + position * FILE_ROW_HEIGHT}px)` }} title={entry.path} onClick={(event) => {
-    const additive = event.metaKey || event.ctrlKey;
-    if (!additive && !entry.isDirectory && selected && selectionCount === 1) onOpen(); else onSelect(additive);
-  }} onDoubleClick={() => { if (entry.isDirectory) onOpen(); }} onContextMenu={onContextMenu} onKeyDown={(event) => {
-    onContextMenuKey(event);
-    const additive = event.metaKey || event.ctrlKey;
-    if (event.key === "Enter") { event.preventDefault(); if (additive) onSelect(true); else onOpen(); }
-    if (event.key === " ") { event.preventDefault(); onSelect(additive); }
-  }}>
-    <span className="file-name"><Icon name={entry.isDirectory ? "files" : "file"} size={14}/><span>{entry.name}</span>{entry.isSymlink && <small>链接</small>}</span>
-    <span>{entry.isDirectory ? "—" : formatSize(entry.size)}</span><span className="file-permission file-permission-column">{formatPermissions(entry.permissionMode)}</span><span>{entry.modifiedAt ? new Date(entry.modifiedAt * 1000).toLocaleString() : "—"}</span>
-  </button>;
-}
-
-function fileVirtualRange(scrollTop: number, clientHeight: number, entryCount: number): VirtualRange {
-  if (entryCount <= FILE_VIRTUALIZATION_THRESHOLD) return { start: 0, end: entryCount };
-  const visibleStart = Math.min(entryCount - 1, Math.max(0, Math.floor((scrollTop - FILE_LIST_PADDING) / FILE_ROW_HEIGHT)));
-  const viewportRows = clientHeight > FILE_HEADER_HEIGHT
-    ? Math.ceil((clientHeight - FILE_HEADER_HEIGHT) / FILE_ROW_HEIGHT)
-    : FILE_VIRTUAL_FALLBACK_ROWS;
-  return {
-    start: Math.max(0, visibleStart - FILE_VIRTUAL_OVERSCAN),
-    end: Math.min(entryCount, visibleStart + viewportRows + FILE_VIRTUAL_OVERSCAN + 1),
-  };
-}
-
-function fileListAnchor(scrollTop: number, entries: FileEntry[]): { path: string; offset: number } | null {
-  if (entries.length === 0) return null;
-  const index = Math.min(entries.length - 1, Math.max(0, Math.floor((scrollTop - FILE_LIST_PADDING) / FILE_ROW_HEIGHT)));
-  return { path: entries[index].path, offset: FILE_LIST_PADDING + index * FILE_ROW_HEIGHT - scrollTop };
-}
-
-function previewKindFor(name: string): PreviewKind {
-  const extension = name.toLowerCase().split(".").pop() ?? "";
-  if (["jpg", "jpeg", "png", "gif", "webp"].includes(extension)) return "image";
-  if (["md", "markdown", "mdown"].includes(extension)) return "markdown";
-  if (extension === "json") return "json";
-  if (["yaml", "yml"].includes(extension)) return "yaml";
-  return "text";
-}
-
-function imageMime(name: string): string {
-  const extension = name.toLowerCase().split(".").pop();
-  return extension === "jpg" || extension === "jpeg" ? "image/jpeg" : `image/${extension ?? "png"}`;
-}
-
-const fileNameCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
-
-function sortEntries(entries: FileEntry[], sort: SortState): FileEntry[] {
-  if (!sort) return entries;
-  const factor = sort.direction === "ascending" ? 1 : -1;
-  return entries.map((entry, index) => ({ entry, index })).sort((left, right) => {
-    if (left.entry.isDirectory !== right.entry.isDirectory) return left.entry.isDirectory ? -1 : 1;
-    if (sort.key === "modifiedAt") {
-      if (left.entry.modifiedAt === null && right.entry.modifiedAt !== null) return 1;
-      if (left.entry.modifiedAt !== null && right.entry.modifiedAt === null) return -1;
-    }
-    const comparison = sort.key === "name"
-      ? fileNameCollator.compare(left.entry.name, right.entry.name)
-      : sort.key === "size"
-        ? left.entry.size - right.entry.size
-        : (left.entry.modifiedAt ?? 0) - (right.entry.modifiedAt ?? 0);
-    return comparison === 0 ? left.index - right.index : comparison * factor;
-  }).map(({ entry }) => entry);
-}
-
-function formatPermissions(mode: number | null | undefined): string {
-  if (mode == null) return "—";
-  const value = mode & 0o7777;
-  const execute = (bit: number, special: number, active: string, inactive: string) => value & special ? value & bit ? active : inactive : value & bit ? "x" : "-";
-  return [
-    value & 0o400 ? "r" : "-", value & 0o200 ? "w" : "-", execute(0o100, 0o4000, "s", "S"),
-    value & 0o040 ? "r" : "-", value & 0o020 ? "w" : "-", execute(0o010, 0o2000, "s", "S"),
-    value & 0o004 ? "r" : "-", value & 0o002 ? "w" : "-", execute(0o001, 0o1000, "t", "T"),
-  ].join("");
-}
-
-function fitContextMenu(anchorX: number, anchorY: number, menuWidth: number, menuHeight: number, viewportWidth: number, viewportHeight: number) {
-  const gap = 6;
-  const maxLeft = Math.max(gap, viewportWidth - menuWidth - gap);
-  const maxTop = Math.max(gap, viewportHeight - menuHeight - gap);
-  const placement = anchorY + menuHeight + gap > viewportHeight ? "above" : "below";
-  const preferredTop = placement === "above" ? anchorY - menuHeight : anchorY;
-  return {
-    x: Math.min(Math.max(anchorX, gap), maxLeft),
-    y: Math.min(Math.max(preferredTop, gap), maxTop),
-    placement,
-  } as const;
-}
-
-function copyName(name: string): string {
-  const dot = name.lastIndexOf(".");
-  return dot > 0 ? `${name.slice(0, dot)} - 副本${name.slice(dot)}` : `${name} - 副本`;
-}
-
-function formatSize(size: number): string {
-  if (size < 1024) return `${size} B`;
-  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
-  if (size < 1024 * 1024 * 1024) return `${(size / 1024 / 1024).toFixed(1)} MB`;
-  return `${(size / 1024 / 1024 / 1024).toFixed(1)} GB`;
-}
-
-function errorMessage(error: unknown): string {
-  if (typeof error === "object" && error && "message" in error && typeof error.message === "string") return error.message;
-  return error instanceof Error ? error.message : "文件操作失败";
 }

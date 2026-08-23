@@ -9,11 +9,13 @@
 
 ## Important Files
 
-- `src/main.tsx`：React 入口，只负责挂载应用根组件。
+- `src/main.tsx`：React 入口，设置默认 `data-theme="dark"` 并挂载应用根组件；不持有 feature theme state。
+- `src/app/app.css`、`src/app/styles/`：固定顺序样式 manifest、application foundations 与 semantic dark theme；不拥有 feature-specific component state。
 - `src/app/App.tsx`：前端组合入口，只装配 Workspace provider 与 shell；不直接调用底层 SSH 库。
 - `src/workspace/WorkspaceShell.tsx`：顶部 Workspace 标签、工具轨、Terminal/Files/Network 认证路由、route 凭证库解锁、关闭编排和快捷键入口；不解析跳板图、布局树或 SSH 协议。
 - `src/workspace/model.ts`、`layout.ts`、`reducer.ts`：可持久化工作区契约、纯布局树变换与低频结构状态；不持有 session、xterm 或凭据。
 - `src/workspace/WorkspaceProvider.tsx`：Workspace 持久化与按 `blockId` 隔离的 Terminal/File/Network runtime 编排边界，并展示结构化 route 节点事件；Files 与 Network 远程 session 独立于终端，且不持久化活动转发状态。
+- `src/workspace/workspaceRuntime.ts`：Workspace runtime 类型、默认值、epoch/failure key、connection intent 与 route notice 纯规则；不持有 React state 或可变全局单例。
 - `src/workspace/connectionProgress.ts`、`src/components/ConnectionRouteProgress.tsx`：三类 SSH Block 共用的 route 事件展示状态映射与悬浮进度组件；不管理 session、认证、失败详情或持久化。
 - `src/workspace/fileWindow.ts`：终端快捷方式和右侧工具轨共用的文件窗口打开策略；不创建 session 或读取文件系统。
 - `src/workspace/networkWindow.ts`：远程终端快捷方式和右侧工具轨共用的 Network Block 打开策略；不创建 session 或启动规则。
@@ -23,9 +25,10 @@
 - `src/components/dialogs/MasterPasswordDialog.tsx`：主密码初始化/解锁入口；不列出、解密或管理已保存凭据。
 - `src/components/dialogs/SettingsDialog.tsx`：系统设置分类、保存编排与反馈；`ConfigurationDirectorySetting.tsx` 负责整个配置根的输入/选择/恢复默认，`ConfigurationPaths.tsx` 负责只读派生路径预览；这些组件不迁移数据、拥有锁定计时或监听系统会话。
 - `src/components/dialogs/ConnectionDialog.tsx`：连接、分组、凭证引用、显式跃点编辑和不兼容配置清除确认入口；展示后端候选与原因，不拥有 route 校验或文件删除授权。
+- `src/components/dialogs/connection/`、`credential/`：Connection jump/反馈展示、纯 profile 模型与 Credential 浮层/安全提示局部模块；父 dialog 继续拥有 draft、选择和 nested dialog 生命周期。
 - `src/components/dialogs/SshConfigImportDialog.tsx`：SSH Config 文件选择、连接信息/凭证双 Tab 与批量导入界面；负责默认未分组、连接选择和逐项私钥授权，不接收设备路径或私钥正文。
-- `src/terminal/TerminalPanel.tsx`：每个 Block 的 xterm 生命周期、直接输出 writer、OSC 工作目录和 PTY 尺寸适配；不管理连接配置或布局树。
-- `src/files/FileBrowserPane.tsx`、`CodeEditor.tsx`、`MarkdownPreview.tsx`：内部文件窗口的目录导航、下载、瞬时预览编辑状态与按需编辑/渲染组件；不依赖 TerminalRuntime，不直接读取本地文件或实现 SFTP。
+- `src/terminal/TerminalPanel.tsx`、`terminalTheme.ts`：每个 Block 的 xterm 生命周期、直接输出 writer、OSC 工作目录、PTY 尺寸适配与 semantic token palette registry；不管理连接配置、布局树或 theme selection。
+- `src/files/FileBrowserPane.tsx`、`FileList.tsx`、`fileBrowserModel.ts`、`CodeEditor.tsx`、`MarkdownPreview.tsx`：内部文件窗口的目录导航、虚拟列表/排序纯规则、下载、瞬时预览编辑状态与按需编辑/渲染组件；不依赖 TerminalRuntime，不直接读取本地文件或实现 SFTP。
 - `src/lib/tauri/profiles.ts`：连接配置、有序跃点候选/route 要求、不兼容存储清除与 SSH Config 导入 IPC 客户端契约；不包含配置路径、私钥路径、强制删除参数或领域校验。
 - `src/lib/tauri/credentials.ts`：密码/私钥凭证库的窄 IPC 契约；不实现 KDF、加密或 JSON 访问。
 - `src/lib/tauri/settings.ts`：配置根选择、派生存储布局快照与设备安全设置的窄 IPC 契约；不开放分区路径写入、缓存或执行锁定策略。
@@ -43,6 +46,8 @@
 - `src-tauri/src/domain/credential.rs`、`ports/credential_vault.rs`、`application/credential_service.rs`：vault 领域语义、外部存储端口与用例边界；不依赖具体密码学文件格式或 UI。
 - `src-tauri/src/domain/settings.rs`、`ports/settings_repository.rs`、`application/settings_service.rs`：安全设置默认值、范围、存储端口与用例；不依赖 JSON、Tauri 或 Windows API。
 - `src-tauri/src/application/credential_lifecycle.rs`：统一拥有凭证解锁时间、deadline generation、锁定原因与 data-key 生命周期编排；不依赖 Tokio timer、Tauri event 或 Win32 类型。
+- `src-tauri/src/application/credential_workflow.rs`：恢复重置与私钥草稿的 opaque pending 状态、替换、完成和取消语义；secret bytes 保持 zeroizing 且不进入 DTO。
+- `src-tauri/src/application/ssh_config_import.rs`：SSH Config preview 生命周期、候选重复判断、唯一命名与无分组 profile input 映射；不依赖 Tauri 对话框或 command DTO。
 - `src-tauri/src/domain/session.rs`：主机密钥比较、route 节点/阶段事件和多跳会话状态迁移；不执行网络连接或文件读写。
 - `src-tauri/src/domain/transfer.rs`：远程路径边界和稳定传输事件；不依赖 SFTP、Tauri 或本地文件 API。
 - `src-tauri/src/domain/files.rs`：稳定目录列表、文件条目与排序/数量边界；不依赖文件系统、SFTP 或 Tauri。
@@ -55,7 +60,7 @@
 - `src-tauri/src/infrastructure/persistence/json_network_repository.rs`：`network-forwards.json` schema v1 的严格、无敏感字段、原子持久化适配器。
 - `src-tauri/src/infrastructure/ssh/forwarding.rs`：本地 listener、SOCKS5 CONNECT、Remote target 路由、有界转发任务与 TCP/SSH 双向数据泵；第三方 channel 类型不得离开 infrastructure。
 - `src-tauri/src/ports/profile_repository.rs`：应用层拥有的连接配置 repository 契约；不规定文件格式。
-- `src-tauri/src/infrastructure/ssh/client.rs`：按有序 route 建立首跳 TCP 与后续 `direct-tcpip`/`connect_stream` 会话，逐节点执行 host-key/认证并清理上游 handle；不解析 profile 图或向 WebView 暴露 russh 类型。
+- `src-tauri/src/infrastructure/ssh/client.rs`、`client/{handler,session,network,transfer}.rs`：稳定 `SshSessionManager` façade 与内部 route/host-key handler、session runner、forward runtime、SFTP/transfer 实现；第三方 russh/SFTP 类型只在该 infrastructure 子树内，测试位于 `client/tests.rs`。
 - `src-tauri/tauri.conf.json`、`tauri.macos.conf.json`：通用无边框桌面窗口与 macOS 原生 Overlay 标题栏的分层配置，以及构建和打包入口；不承载 Workspace 或 SSH 规则。
 - `src-tauri/capabilities/default.json`：主窗口最小 Tauri 权限清单。
 - `package.json`、`src-tauri/Cargo.toml`：前端与 Rust 的直接依赖及质量命令入口。

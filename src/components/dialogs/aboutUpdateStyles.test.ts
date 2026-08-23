@@ -1,9 +1,10 @@
 // @ts-expect-error Vitest runs in Node; the frontend type config intentionally omits Node declarations.
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { readCssBundle } from "../../test/css";
 
 const styles = readFileSync("src/components/dialogs/aboutUpdate.css", "utf8");
-const globalStyles = readFileSync("src/app/app.css", "utf8");
+const globalStyles = readCssBundle("src/app/app.css");
 
 function declarations(selector: string): string {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

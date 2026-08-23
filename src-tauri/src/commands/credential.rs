@@ -2,7 +2,6 @@ use std::{
     fs::{self, File, OpenOptions},
     io::{Read, Write},
     path::{Path, PathBuf},
-    sync::Mutex,
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -15,6 +14,10 @@ use zeroize::Zeroizing;
 use crate::{
     application::credential_lifecycle::{
         CredentialLifecycle, LockReason, LockSchedule, Reschedule,
+    },
+    application::credential_workflow::{
+        CredentialWorkflowState, PendingPrivateKeySource, PendingPrivateKeySummary,
+        PendingRecoveryReset,
     },
     commands::{error::IpcError, profile::ProfileState, settings::SettingsState},
     domain::{
@@ -35,8 +38,7 @@ const MAX_RECOVERY_FILE_BYTES: u64 = 4 * 1024;
 
 pub struct CredentialState {
     lifecycle: CredentialLifecycle<JsonCredentialVault>,
-    pending_recovery_reset: Mutex<Option<PendingRecoveryReset>>,
-    pending_private_key: Mutex<Option<PendingPrivateKey>>,
+    workflow: CredentialWorkflowState,
 }
 
 pub(crate) struct PrivateKeyImportOutcome {
@@ -44,57 +46,24 @@ pub(crate) struct PrivateKeyImportOutcome {
     pub created: bool,
 }
 
-struct PendingRecoveryReset {
-    current: RecoveryKeyFile,
-    replacement: RecoveryKeyFile,
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum PendingPrivateKeySource {
-    File,
-    Generated,
-}
-
-struct PendingPrivateKey {
-    id: String,
-    source: PendingPrivateKeySource,
-    label: String,
-    detail: String,
-    bytes: Zeroizing<Vec<u8>>,
-}
-
-struct PendingPrivateKeySummary {
-    id: String,
-    source: PendingPrivateKeySource,
-    label: String,
-    detail: String,
-}
-
 impl CredentialState {
     pub fn new(vault: JsonCredentialVault) -> Self {
         Self {
             lifecycle: CredentialLifecycle::new(vault),
-            pending_recovery_reset: Mutex::new(None),
-            pending_private_key: Mutex::new(None),
+            workflow: CredentialWorkflowState::default(),
         }
     }
 
     fn remember_pending_recovery_reset(&self, pending: PendingRecoveryReset) {
-        *self
-            .pending_recovery_reset
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(pending);
+        self.workflow.remember_recovery_reset(pending);
     }
 
     fn take_pending_recovery_reset(&self) -> Option<PendingRecoveryReset> {
-        self.pending_recovery_reset
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .take()
+        self.workflow.take_recovery_reset()
     }
 
     fn clear_pending_recovery_reset(&self) {
-        let _ = self.take_pending_recovery_reset();
+        self.workflow.clear_recovery_reset();
     }
 
     fn remember_private_key(
@@ -104,24 +73,8 @@ impl CredentialState {
         detail: String,
         bytes: Zeroizing<Vec<u8>>,
     ) -> PendingPrivateKeySummary {
-        let pending = PendingPrivateKey {
-            id: uuid::Uuid::new_v4().to_string(),
-            source,
-            label,
-            detail,
-            bytes,
-        };
-        let summary = PendingPrivateKeySummary {
-            id: pending.id.clone(),
-            source,
-            label: pending.label.clone(),
-            detail: pending.detail.clone(),
-        };
-        *self
-            .pending_private_key
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(pending);
-        summary
+        self.workflow
+            .remember_private_key(source, label, detail, bytes)
     }
 
     fn prepare_private_key_path(&self, path: &Path) -> Result<PendingPrivateKeySummary, IpcError> {
@@ -169,17 +122,10 @@ impl CredentialState {
         name: String,
         passphrase: Option<String>,
     ) -> Result<CredentialSummary, IpcError> {
-        let (source, bytes) = {
-            let pending = self
-                .pending_private_key
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner());
-            let draft = pending
-                .as_ref()
-                .filter(|draft| draft.id == draft_id)
-                .ok_or_else(|| IpcError::from(CredentialError::InvalidCredential))?;
-            (draft.source, draft.bytes.clone())
-        };
+        let (source, bytes) = self
+            .workflow
+            .private_key(draft_id)
+            .ok_or_else(|| IpcError::from(CredentialError::InvalidCredential))?;
         let summary = self.import_private_key_bytes(
             name,
             bytes,
@@ -189,24 +135,12 @@ impl CredentialState {
                 None
             },
         )?;
-        let mut pending = self
-            .pending_private_key
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        if pending.as_ref().is_some_and(|draft| draft.id == draft_id) {
-            pending.take();
-        }
+        self.workflow.complete_private_key(draft_id);
         Ok(summary)
     }
 
     fn cancel_private_key(&self, draft_id: &str) {
-        let mut pending = self
-            .pending_private_key
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        if pending.as_ref().is_some_and(|draft| draft.id == draft_id) {
-            pending.take();
-        }
+        self.workflow.complete_private_key(draft_id);
     }
     pub(crate) fn resolve_auth(&self, credential_id: &str) -> Result<AuthRequest, IpcError> {
         match self.lifecycle.load(credential_id).map_err(IpcError::from)? {

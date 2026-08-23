@@ -1,0 +1,2 @@
+.drop-zone { position:absolute; z-index:10; border:2px solid #68e2ca; border-radius:5px; background:#5cdac224; pointer-events:none; }.drop-left{inset:2px 50% 2px 2px}.drop-right{inset:2px 2px 2px 50%}.drop-top{inset:2px 2px 50%}.drop-bottom{inset:50% 2px 2px}.drop-center{inset:12%}
+.drag-ghost { position:fixed; z-index:100; top:0; left:0; display:flex; gap:6px; align-items:center; padding:6px 9px; border:1px solid #4b8c80; border-radius:6px; color:#eafffa; background:#183e37eF; box-shadow:0 10px 30px #000b; font-size:10px; pointer-events:none; will-change:transform; }
