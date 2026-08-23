@@ -471,7 +471,7 @@ describe("ConnectionDialog", () => {
     });
     render(<ConnectionDialog onClose={vi.fn()}/>);
 
-    await user.click(screen.getByRole("button", { name: "＋ 新建连接" }));
+    await user.click(screen.getByRole("button", { name: "新建连接" }));
     await user.type(screen.getByLabelText("名称"), "   ");
     await user.type(screen.getByLabelText("主机"), "  server.example  ");
     await user.type(screen.getByLabelText("用户名"), "root");
@@ -525,7 +525,7 @@ describe("ConnectionDialog", () => {
     mocks.createProfileGroup.mockResolvedValue({ id: "group-2", name: "Staging" });
     render(<ConnectionDialog onClose={vi.fn()}/>);
 
-    await user.click(await screen.findByRole("button", { name: "＋ 新建分组" }));
+    await user.click(await screen.findByRole("button", { name: "新建分组" }));
     const createDialog = screen.getByRole("dialog", { name: "新建分组" });
     await user.type(within(createDialog).getByLabelText("分组名称"), "Staging");
     await user.click(within(createDialog).getByRole("button", { name: "创建分组" }));

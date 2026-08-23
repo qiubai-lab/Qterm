@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const { invoke } = vi.hoisted(() => ({ invoke: vi.fn() }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
 
-import { getSettings, selectConfigurationDirectory, updateConfigurationDirectory, updateSecuritySettings } from "./settings";
+import { getSettings, selectConfigurationDirectory, updateAppearanceSettings, updateConfigurationDirectory, updateSecuritySettings } from "./settings";
 
 describe("settings IPC client", () => {
   beforeEach(() => invoke.mockReset());
@@ -24,6 +24,8 @@ describe("settings IPC client", () => {
     expect(invoke).toHaveBeenLastCalledWith("settings_select_configuration_directory", {
       initialPath: "D:\\Qterm",
     });
-    expect(invoke).toHaveBeenCalledTimes(4);
+    await updateAppearanceSettings({ theme: "light" });
+    expect(invoke).toHaveBeenLastCalledWith("settings_update_appearance", { input: { theme: "light" } });
+    expect(invoke).toHaveBeenCalledTimes(5);
   });
 });

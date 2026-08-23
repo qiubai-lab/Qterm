@@ -5,6 +5,12 @@ export interface SecuritySettings {
   terminalAutoLockAfterSeconds: number | null;
 }
 
+export type AppTheme = "dark" | "light";
+
+export interface AppearanceSettings {
+  theme: AppTheme;
+}
+
 export interface GeneralSettings {
   rootDirectory: string;
   activeRootDirectory: string;
@@ -17,6 +23,7 @@ export interface GeneralSettings {
 export interface SettingsSnapshot {
   general: GeneralSettings;
   security: SecuritySettings;
+  appearance: AppearanceSettings;
   warning: "corrupt" | "unsupportedVersion" | "storageUnavailable" | null;
 }
 
@@ -30,3 +37,6 @@ export const updateConfigurationDirectory = (input: { path: string }): Promise<S
 
 export const updateSecuritySettings = (security: SecuritySettings): Promise<SettingsSnapshot> =>
   invoke("settings_update_security", { input: security });
+
+export const updateAppearanceSettings = (appearance: AppearanceSettings): Promise<SettingsSnapshot> =>
+  invoke("settings_update_appearance", { input: appearance });

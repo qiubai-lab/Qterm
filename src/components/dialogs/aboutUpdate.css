@@ -259,6 +259,73 @@
   transform: rotate(24deg);
 }
 
+/* Theme-facing surfaces stay on shared roles so future presets inherit them. */
+.about-update-action {
+  border-color: var(--border);
+  color: var(--text);
+  background: var(--control-bg);
+}
+
+.about-update-action:hover {
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--border));
+  color: var(--text-strong);
+  background: var(--hover);
+}
+
+.update-check-status {
+  border-color: var(--border);
+  background:var(--panel-bg);
+}
+
+.update-check-status-icon {
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--border));
+  color: var(--accent);
+  background: var(--accent-bg);
+}
+
+.update-check-status strong,
+.update-check-homebrew strong {
+  color:var(--text);
+}
+
+.update-check-status p,
+.update-check-homebrew p {
+  color: var(--muted);
+}
+
+.update-check-status small {
+  color: var(--dim);
+}
+
+.update-check-homebrew {
+  background: var(--panel-bg);
+}
+
+.update-check-command {
+  border-color: var(--border);
+  background: var(--control-bg);
+}
+
+.update-check-command code {
+  color: var(--text);
+}
+
+.update-check-copy,
+.update-check-release,
+.update-check-recheck {
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
+  color: var(--accent);
+  background: var(--accent-bg);
+}
+
+.update-check-copy:hover,
+.update-check-release:hover,
+.update-check-recheck:hover {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  color: var(--text-strong);
+  background: var(--hover);
+}
+
 @keyframes about-update-spin {
   to { transform: rotate(360deg); }
 }

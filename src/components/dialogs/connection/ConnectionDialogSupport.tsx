@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 
 import type { ConnectionProfile, JumpCandidate, ProfileGroup } from "../../../lib/tauri/profiles";
+import { Button } from "../../Button";
 import { Icon } from "../../Icon";
 import { DialogActionStatus, DialogFrame } from "../DialogFrame";
 
@@ -89,7 +90,7 @@ export function JumpProfilePicker({ index, currentProfileId, candidates, groups,
         </section>)}
         {!loading && candidates.length === 0 && !error && <div className="jump-picker-empty"><Icon name="connections" size={22}/><strong>没有其他连接</strong><p>创建并保存连接后即可将其选作跃点。</p></div>}
       </div>
-      <footer className="dialog-actions dialog-actions-with-status jump-picker-actions"><DialogActionStatus message={error}/><div><button type="button" className="secondary-button" onClick={onClose}>取消</button></div></footer>
+      <footer className="dialog-actions dialog-actions-with-status jump-picker-actions"><DialogActionStatus message={error}/><div><Button onClick={onClose}>取消</Button></div></footer>
     </div>
   </DialogFrame>;
 }

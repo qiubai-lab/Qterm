@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { cancelTransfer, downloadFile, selectDownloadPath, selectUploadFile, uploadFile, type TransferEvent } from "../../lib/tauri/transfers";
 import { useWorkspace } from "../../workspace/WorkspaceProvider";
 import { findLeaf } from "../../workspace/layout";
+import { Button } from "../Button";
 import { DialogFrame } from "./DialogFrame";
 
 export function TransferDialog({ onClose }: { onClose: () => void }) {
@@ -57,6 +58,6 @@ export function TransferDialog({ onClose }: { onClose: () => void }) {
     <label>远程路径<input value={remotePath} onChange={(input) => setRemotePath(input.target.value)} placeholder="/home/user/file.txt"/></label>
     <button className="path-button" disabled={!sessionId} onClick={() => void selectPath()}>选择{mode === "upload" ? "本地文件" : "保存位置"}<small>{localPath || "使用系统文件选择器"}</small></button>
     {event && <div className="transfer-progress"><div><span>{event.type}</span><span>{progress}%</span></div><progress max="100" value={progress}/></div>}
-    <footer className="dialog-actions end">{transferId && sessionId ? <button className="danger-button" onClick={() => void cancelTransfer(sessionId, transferId)}>取消传输</button> : <button className="primary-button" disabled={!sessionId || !localPath || !remotePath} onClick={() => void start()}>开始{mode === "upload" ? "上传" : "下载"}</button>}</footer>
+    <footer className="dialog-actions end">{transferId && sessionId ? <Button variant="danger" onClick={() => void cancelTransfer(sessionId, transferId)}>取消传输</Button> : <Button variant="primary" disabled={!sessionId || !localPath || !remotePath} onClick={() => void start()}>开始{mode === "upload" ? "上传" : "下载"}</Button>}</footer>
   </DialogFrame>;
 }

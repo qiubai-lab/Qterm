@@ -1,13 +1,17 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   getSettings,
   selectConfigurationDirectory,
+  updateAppearanceSettings,
   updateConfigurationDirectory,
   updateSecuritySettings,
+  type AppearanceSettings,
   type GeneralSettings,
   type SecuritySettings,
 } from "../../lib/tauri/settings";
+import { useAppTheme } from "../../app/theme/AppThemeProvider";
+import { Button } from "../Button";
 import { Icon } from "../Icon";
 import { ConfigurationDirectorySetting } from "./ConfigurationDirectorySetting";
 import { ConfigurationPaths } from "./ConfigurationPaths";
@@ -15,17 +19,29 @@ import { DialogFrame } from "./DialogFrame";
 
 const credentialDurations = [300, 900, 1800, 3600, 7200, 14400, 28800, 86400];
 const terminalIdleDurations = [300, 900, 1800, 3600, 7200];
-type SettingsCategory = "general" | "security";
+type SettingsCategory = "general" | "appearance" | "security";
 
 export function SettingsDialog({ onClose, onSecuritySettingsChanged }: { onClose: () => void; onSecuritySettingsChanged?: (settings: SecuritySettings) => void }) {
+  const { persistedTheme, previewTheme, commitTheme, restoreTheme } = useAppTheme();
   const [category, setCategory] = useState<SettingsCategory>("general");
   const [general, setGeneral] = useState<GeneralSettings | null>(null);
   const [configurationDirectory, setConfigurationDirectory] = useState("");
   const [security, setSecurity] = useState<SecuritySettings | null>(null);
+  const [appearance, setAppearance] = useState<AppearanceSettings | null>(null);
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
   const savedTimer = useRef<number | null>(null);
+
+  const applySnapshot = useCallback((snapshot: { general: GeneralSettings; security: SecuritySettings; appearance: AppearanceSettings }, preserveDirectoryDraft = false, preserveAppearanceDraft = false) => {
+    setGeneral(snapshot.general);
+    if (!preserveDirectoryDraft) setConfigurationDirectory(snapshot.general.rootDirectory);
+    setSecurity(snapshot.security);
+    if (!preserveAppearanceDraft) {
+      setAppearance(snapshot.appearance);
+      commitTheme(snapshot.appearance.theme);
+    }
+  }, [commitTheme]);
 
   useEffect(() => {
     void getSettings().then((snapshot) => {
@@ -33,26 +49,28 @@ export function SettingsDialog({ onClose, onSecuritySettingsChanged }: { onClose
       if (snapshot.warning) setError("设置文件异常，当前已采用安全默认值且不会覆盖原文件。");
     }).catch((reason) => setError(errorMessage(reason)));
     return () => { if (savedTimer.current !== null) window.clearTimeout(savedTimer.current); };
-  }, []);
-
-  function applySnapshot(snapshot: { general: GeneralSettings; security: SecuritySettings }, preserveDirectoryDraft = false) {
-    setGeneral(snapshot.general);
-    if (!preserveDirectoryDraft) setConfigurationDirectory(snapshot.general.rootDirectory);
-    setSecurity(snapshot.security);
-  }
+  }, [applySnapshot]);
 
   async function save() {
-    if (!security || !general || busy) return;
+    if (!security || !general || !appearance || busy) return;
     setBusy(true); setSaved(false); setError("");
     try {
       const snapshot = category === "general"
         ? await updateConfigurationDirectory({ path: configurationDirectory })
-        : await updateSecuritySettings(security);
-      applySnapshot(snapshot, category === "security");
+        : category === "security"
+          ? await updateSecuritySettings(security)
+          : await updateAppearanceSettings(appearance);
+      applySnapshot(snapshot, category === "security" || category === "appearance", category !== "appearance");
       if (category === "security") onSecuritySettingsChanged?.(snapshot.security);
       setSaved(true);
       savedTimer.current = window.setTimeout(() => setSaved(false), 1400);
-    } catch (reason) { setError(errorMessage(reason)); }
+    } catch (reason) {
+      if (category === "appearance") {
+        restoreTheme();
+        setAppearance({ theme: persistedTheme });
+      }
+      setError(errorMessage(reason));
+    }
     finally { setBusy(false); }
   }
 
@@ -64,11 +82,22 @@ export function SettingsDialog({ onClose, onSecuritySettingsChanged }: { onClose
     } catch (reason) { setError(errorMessage(reason)); }
   }
 
-  return <DialogFrame title="系统设置" subtitle="通用偏好与安全策略" className="settings-dialog" onClose={busy ? () => undefined : onClose}>
+  function close() {
+    restoreTheme();
+    onClose();
+  }
+
+  function chooseTheme(theme: AppearanceSettings["theme"]) {
+    setAppearance({ theme });
+    previewTheme(theme);
+  }
+
+  return <DialogFrame title="系统设置" subtitle="通用偏好、外观与安全策略" className="settings-dialog" onClose={busy ? () => undefined : close}>
     <div className="settings-layout">
       <nav className="settings-sidebar" aria-label="设置分类">
         <span className="settings-sidebar-label">设置</span>
         <SettingsNavItem category="general" current={category} icon="settings" title="通用" subtitle="数据与存储" onSelect={setCategory}/>
+        <SettingsNavItem category="appearance" current={category} icon="eye" title="外观" subtitle="界面主题" onSelect={setCategory}/>
         <SettingsNavItem category="security" current={category} icon="lock" title="安全" subtitle="凭证与终端锁定" onSelect={setCategory}/>
       </nav>
       <section className="settings-content" aria-labelledby={`${category}-settings-title`}>
@@ -85,6 +114,13 @@ export function SettingsDialog({ onClose, onSecuritySettingsChanged }: { onClose
               <div className="settings-storage-note" role="note"><Icon name="help" size={12}/><span>切换目录不会迁移或覆盖旧文件</span></div>
               <ConfigurationPaths rootDirectory={configurationDirectory || "~/.qterm"}/>
             </div> : <p className="dialog-note">正在读取设置…</p>}
+          </div> : category === "appearance" ? <div className="settings-appearance-view">
+            <div className="settings-section-heading"><h3 id="appearance-settings-title">外观</h3><p>选择 Qterm 的内置界面主题。</p></div>
+            {appearance ? <fieldset className="settings-theme-picker" role="radiogroup" aria-label="界面主题">
+              <legend>主题预设</legend>
+              <ThemeOption theme="dark" current={appearance.theme} title="深色" description="当前默认的深色工作台" onSelect={chooseTheme}/>
+              <ThemeOption theme="light" current={appearance.theme} title="亮色" description="适合明亮环境的浅色工作台" onSelect={chooseTheme}/>
+            </fieldset> : <p className="dialog-note">正在读取设置…</p>}
           </div> : <>
             <div className="settings-section-heading"><h3 id="security-settings-title">安全</h3><p>管理凭证库有效期与终端空闲锁定策略。</p></div>
             {security ? <div className="settings-rows">
@@ -98,7 +134,7 @@ export function SettingsDialog({ onClose, onSecuritySettingsChanged }: { onClose
             {error ? <p className="inline-message settings-message" role="alert">{error}</p>
               : general?.restartRequired ? <p className="inline-message settings-message" role="status">Qterm 配置目录已保存，重启 Qterm 后生效。</p> : null}
           </div>
-          <button className={`primary-button save-state-button${saved ? " saved" : ""}`} disabled={!security || !general || busy} onClick={() => void save()}>{busy ? "保存中…" : saved ? "✓ 已保存" : "保存设置"}</button>
+          <Button variant="primary" className={`save-state-button${saved ? " saved" : ""}`} loading={busy} disabled={!security || !general || !appearance} onClick={() => void save()}>{busy ? "保存中…" : saved ? "✓ 已保存" : "保存设置"}</Button>
         </footer>
       </section>
     </div>
@@ -108,7 +144,7 @@ export function SettingsDialog({ onClose, onSecuritySettingsChanged }: { onClose
 function SettingsNavItem({ category, current, icon, title, subtitle, onSelect }: {
   category: SettingsCategory;
   current: SettingsCategory;
-  icon: "settings" | "lock";
+  icon: "settings" | "eye" | "lock";
   title: string;
   subtitle: string;
   onSelect: (category: SettingsCategory) => void;
@@ -118,6 +154,22 @@ function SettingsNavItem({ category, current, icon, title, subtitle, onSelect }:
     <span className="settings-nav-icon"><Icon name={icon} size={14}/></span>
     <span><strong>{title}</strong><small>{subtitle}</small></span>
   </button>;
+}
+
+function ThemeOption({ theme, current, title, description, onSelect }: {
+  theme: AppearanceSettings["theme"];
+  current: AppearanceSettings["theme"];
+  title: string;
+  description: string;
+  onSelect: (theme: AppearanceSettings["theme"]) => void;
+}) {
+  const selected = theme === current;
+  return <label className="settings-theme-option" data-selected={selected || undefined}>
+    <input type="radio" name="app-theme" value={theme} checked={selected} onChange={() => onSelect(theme)}/>
+    <span className={`settings-theme-preview ${theme}`} aria-hidden="true"><span/><span/><span/></span>
+    <span className="settings-theme-copy"><strong>{title}</strong><small>{description}</small></span>
+    <span className="settings-theme-check" aria-hidden="true">{selected ? "✓" : ""}</span>
+  </label>;
 }
 
 function SettingsSwitch({ label, checked, onChange }: { label: string; checked: boolean; onChange: (checked: boolean) => void }) {

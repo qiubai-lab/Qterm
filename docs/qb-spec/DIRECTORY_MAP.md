@@ -9,14 +9,16 @@
 
 ## Important Files
 
-- `src/main.tsx`：React 入口，设置默认 `data-theme="dark"` 并挂载应用根组件；不持有 feature theme state。
-- `src/app/app.css`、`src/app/styles/`：固定顺序样式 manifest、application foundations 与 semantic dark theme；不拥有 feature-specific component state。
-- `src/app/App.tsx`：前端组合入口，只装配 Workspace provider 与 shell；不直接调用底层 SSH 库。
+- `src/main.tsx`：React 入口，同步设置默认 `data-theme="dark"`，在首次渲染前引导已保存主题并挂载应用根组件；不持有 feature theme state。
+- `src/app/app.css`、`src/app/styles/themes/{dark,light}.css`：固定顺序样式 manifest 与两套预设 semantic token；Dark 保持缺省，Light compatibility override 只承接尚未语义化的旧 feature 颜色。
+- `src/app/theme/AppThemeProvider.tsx`：应用级主题唯一状态 owner，负责 bootstrap、preview/commit/restore，以及 DOM、xterm 和原生窗口同步；不进入 Workspace persistence，也不允许任意主题值。
+- `src/app/App.tsx`：前端组合入口，只装配 App theme、Workspace provider 与 shell；不直接调用底层 SSH 库。
 - `src/workspace/WorkspaceShell.tsx`：顶部 Workspace 标签、工具轨、Terminal/Files/Network 认证路由、route 凭证库解锁、关闭编排和快捷键入口；不解析跳板图、布局树或 SSH 协议。
 - `src/workspace/model.ts`、`layout.ts`、`reducer.ts`：可持久化工作区契约、纯布局树变换与低频结构状态；不持有 session、xterm 或凭据。
 - `src/workspace/WorkspaceProvider.tsx`：Workspace 持久化与按 `blockId` 隔离的 Terminal/File/Network runtime 编排边界，并展示结构化 route 节点事件；Files 与 Network 远程 session 独立于终端，且不持久化活动转发状态。
 - `src/workspace/workspaceRuntime.ts`：Workspace runtime 类型、默认值、epoch/failure key、connection intent 与 route notice 纯规则；不持有 React state 或可变全局单例。
 - `src/workspace/connectionProgress.ts`、`src/components/ConnectionRouteProgress.tsx`：三类 SSH Block 共用的 route 事件展示状态映射与悬浮进度组件；不管理 session、认证、失败详情或持久化。
+- `src/components/Button.tsx`、`button.css`：共享文本按钮、图标按钮与非交互状态标签的语义、尺寸、主题和可访问契约；不拥有 feature 事件、tabs、菜单项、列表行或选择卡片行为。
 - `src/workspace/fileWindow.ts`：终端快捷方式和右侧工具轨共用的文件窗口打开策略；不创建 session 或读取文件系统。
 - `src/workspace/networkWindow.ts`：远程终端快捷方式和右侧工具轨共用的 Network Block 打开策略；不创建 session 或启动规则。
 - `src/network/NetworkPane.tsx`、`NetworkRuleDialog.tsx`、`NetworkAccessDialog.tsx`：按 profile 共享的 Local/Remote/SOCKS5 规则列表、编辑、暴露警告、访问地址复制和 Block 局部启停交互；实验浏览器区只请求受限 IPC，不传输隧道字节、启动任意进程或保存认证材料。
@@ -58,6 +60,7 @@
 - `src-tauri/src/commands/browser.rs`：Chrome/Edge 白名单 DTO、SOCKS5 规则类型复核与浏览器 adapter 调用；不接受可执行路径、命令参数或实现平台探测。
 - `src-tauri/src/infrastructure/browser/`：共享 SOCKS5 greeting、固定 Chromium 参数和机器本地隔离 Profile，并以 Windows、macOS、Linux adapter 受限探测和无 Shell 启动 Chrome/Edge；不修改系统代理、支持沙箱化 Linux 浏览器、复用日常 Profile 或管理浏览器退出。
 - `src-tauri/src/infrastructure/persistence/json_network_repository.rs`：`network-forwards.json` schema v1 的严格、无敏感字段、原子持久化适配器。
+- `src-tauri/src/ports/settings_repository.rs`、`src-tauri/src/infrastructure/persistence/json_appearance_settings_repository.rs`：设备外观 port 与独立 `device/appearance.json` schema v1 适配器；只保存 Dark/Light，不覆盖损坏或未来文件，也不修改 security settings。
 - `src-tauri/src/infrastructure/ssh/forwarding.rs`：本地 listener、SOCKS5 CONNECT、Remote target 路由、有界转发任务与 TCP/SSH 双向数据泵；第三方 channel 类型不得离开 infrastructure。
 - `src-tauri/src/ports/profile_repository.rs`：应用层拥有的连接配置 repository 契约；不规定文件格式。
 - `src-tauri/src/infrastructure/ssh/client.rs`、`client/{handler,session,network,transfer}.rs`：稳定 `SshSessionManager` façade 与内部 route/host-key handler、session runner、forward runtime、SFTP/transfer 实现；第三方 russh/SFTP 类型只在该 infrastructure 子树内，测试位于 `client/tests.rs`。
@@ -68,11 +71,12 @@
 
 ## Module Responsibilities
 
-- `src/app/`：负责顶层布局与 feature 组合；不承载认证、连接或传输规则。
+- `src/app/`：负责顶层布局、feature 组合与应用级预设主题生命周期；不承载认证、连接或传输规则。
 - `src/workspace/`：负责工作区结构模型、布局树变换、顶部 Workspace 导航和 block runtime 编排；不读取本地文件或实现 SSH/SFTP。
 - `src/terminal/`：负责 xterm 实例及终端 I/O 适配；不持久化 buffer 或拥有 Workspace 生命周期。
 - `src/files/`：负责内部文件窗口展示、导航、下载反馈与瞬时预览编辑状态；不直接访问本地文件系统或 SSH infrastructure。
 - `src/network/`：负责网络规则配置 UI、共享刷新、运行状态展示、安全暴露提示和可复制访问地址派生；不实现 SSH/SOCKS5 协议、浏览器进程启动或持久化。
+- `src/components/`：负责跨 feature 的小型展示与交互原语；不吸收 feature 状态、业务编排或领域规则。
 - `src/components/dialogs/`：负责连接、传输、设置、帮助与确认弹窗；不定义领域规则或直接操作 Rust infrastructure。
 - `src/test/`：负责前端测试运行环境；不放置生产代码。
 - `src/lib/tauri/`：负责类型安全的前端 IPC 调用；不持有领域规则或直接访问文件系统。

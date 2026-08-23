@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, type ReactNode } from "react";
 
+import { IconButton } from "../Button";
 import { Icon } from "../Icon";
 
 const dialogStack: symbol[] = [];
@@ -39,7 +40,7 @@ export function DialogFrame({ title, subtitle, onClose, children, headerActions,
   }, [modal]);
   return <div className={`dialog-scrim${blocking ? " dialog-scrim-blocking" : ""}${scrimClassName ? ` ${scrimClassName}` : ""}`} onPointerDown={(event) => { if (dismissible && event.target === event.currentTarget) onClose(); }}>
     <section ref={frameRef} tabIndex={-1} className={`dialog-frame${wide ? " dialog-wide" : ""}${compact ? " dialog-compact" : ""}${className ? ` ${className}` : ""}`} role="dialog" aria-modal={modal || undefined} aria-labelledby={titleId}>
-      <header className="dialog-header"><div className="dialog-header-copy"><h2 id={titleId}>{title}</h2>{subtitle && <p>{subtitle}</p>}</div><div className="dialog-header-actions">{headerActions}{dismissible && <button className="icon-button" aria-label="关闭" onClick={onClose}><Icon name="close"/></button>}</div></header>
+      <header className="dialog-header"><div className="dialog-header-copy"><h2 id={titleId}>{title}</h2>{subtitle && <p>{subtitle}</p>}</div><div className="dialog-header-actions">{headerActions}{dismissible && <IconButton label="关闭" onClick={onClose}><Icon name="close"/></IconButton>}</div></header>
       <div className="dialog-content">{children}</div>
     </section>
   </div>;

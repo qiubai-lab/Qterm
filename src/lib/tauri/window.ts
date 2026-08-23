@@ -1,4 +1,5 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import type { AppTheme } from "./settings";
 
 export type DesktopPlatform = "macos" | "windows" | "linux";
 
@@ -25,6 +26,10 @@ export async function closeCurrentWindow(): Promise<void> {
 
 export async function startDraggingCurrentWindow(): Promise<void> {
   if (isTauriRuntime()) await getCurrentWindow().startDragging();
+}
+
+export async function setNativeWindowTheme(theme: AppTheme): Promise<void> {
+  if (isTauriRuntime()) await getCurrentWindow().setTheme(theme);
 }
 
 function isTauriRuntime(): boolean {

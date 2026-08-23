@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { getVaultStatus, type VaultStatus } from "../../lib/tauri/credentials";
 import { importSshConfig, previewSshConfigImport, type SshConfigCandidate, type SshConfigImportResult, type SshConfigPreview } from "../../lib/tauri/profiles";
+import { Button } from "../Button";
 import { Icon } from "../Icon";
 import { DialogActionStatus, DialogFrame } from "./DialogFrame";
 import { MasterPasswordDialog, type MasterPasswordMode } from "./MasterPasswordDialog";
@@ -103,7 +104,7 @@ export function SshConfigImportDialog({ onClose, onImported }: { onClose: () => 
         <span className="ssh-config-import-prompt-icon"><Icon name="file" size={22}/></span>
         <div><strong>选择现有 SSH Config</strong><p>你可以选择系统中的 <code>~/.ssh/config</code>，Qterm 将先预览连接信息，不会执行配置中的命令。</p></div>
       </div>
-      <footer className="dialog-actions dialog-actions-with-status ssh-config-import-prompt-actions"><DialogActionStatus message={message}/><div><button type="button" className="secondary-button" disabled={selecting} onClick={onClose}>取消</button><button type="button" data-dialog-autofocus className="primary-button" disabled={selecting} onClick={() => void chooseConfig()}>{selecting ? "正在选择…" : "选择配置"}</button></div></footer>
+      <footer className="dialog-actions dialog-actions-with-status ssh-config-import-prompt-actions"><DialogActionStatus message={message}/><div><Button disabled={selecting} onClick={onClose}>取消</Button><Button variant="primary" data-dialog-autofocus loading={selecting} onClick={() => void chooseConfig()}>{selecting ? "正在选择…" : "选择配置"}</Button></div></footer>
     </DialogFrame>;
   }
 
@@ -111,9 +112,9 @@ export function SshConfigImportDialog({ onClose, onImported }: { onClose: () => 
     <span className="ssh-config-import-source-label" aria-label={`当前配置文件：${preview.sourceName}`} title={preview.sourceName}>
       <Icon name="file" size={11}/><span>{preview.sourceName}</span>
     </span>
-    <button type="button" className="secondary-button ssh-config-import-reselect" disabled={busy || selecting} onClick={() => void chooseConfig()}>
+    <Button size="compact" className="ssh-config-import-reselect" disabled={busy || selecting} onClick={() => void chooseConfig()}>
       <Icon name="refresh" size={11}/><span>{selecting ? "正在选择…" : "重新选择"}</span>
-    </button>
+    </Button>
   </>;
 
   return <>
@@ -160,7 +161,7 @@ export function SshConfigImportDialog({ onClose, onImported }: { onClose: () => 
           </div>
         </section>}
 
-        <footer className="dialog-actions dialog-actions-with-status ssh-config-import-actions"><DialogActionStatus message={message}/><div><button className="secondary-button" disabled={busy || selecting} onClick={onClose}>取消</button><button className="primary-button" disabled={busy || selecting || selectedCandidates.length === 0 || !preview} onClick={() => void submit()}>{busy ? "正在导入…" : `导入 ${selectedCandidates.length} 项`}</button></div></footer>
+        <footer className="dialog-actions dialog-actions-with-status ssh-config-import-actions"><DialogActionStatus message={message}/><div><Button disabled={busy || selecting} onClick={onClose}>取消</Button><Button variant="primary" loading={busy} disabled={selecting || selectedCandidates.length === 0 || !preview} onClick={() => void submit()}>{busy ? "正在导入…" : `导入 ${selectedCandidates.length} 项`}</Button></div></footer>
       </div>
     </DialogFrame>
     {masterMode && <MasterPasswordDialog mode={masterMode} onClose={() => setMasterMode(null)} onSuccess={masterSucceeded}/>} 

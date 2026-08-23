@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 
 import { unlockVault } from "../../lib/tauri/credentials";
+import { Button } from "../Button";
 import { Icon } from "../Icon";
 import { DialogActionStatus, DialogFrame } from "./DialogFrame";
 
@@ -44,7 +45,7 @@ export function TerminalLockScreen({ onUnlocked }: { onUnlocked: () => void | Pr
     <form className="terminal-unlock-form" onSubmit={submit}>
       <div className="terminal-lock-identity"><span><Icon name="lock" size={21}/></span><div><strong>终端区域操作已暂停</strong><p>顶部工作区与窗口控制仍可使用；终端和文件会话继续在后台运行。</p></div></div>
       <label>主密码<input data-dialog-autofocus type="password" autoComplete="current-password" value={masterPassword} disabled={submitting} onChange={(event) => setMasterPassword(event.target.value)}/></label>
-      <footer className="dialog-actions dialog-actions-with-status"><DialogActionStatus message={message}/><button type="submit" className="primary-button" disabled={submitting}>{submitting ? "正在验证…" : "解锁终端和凭证"}</button></footer>
+      <footer className="dialog-actions dialog-actions-with-status"><DialogActionStatus message={message}/><Button type="submit" variant="primary" loading={submitting}>{submitting ? "正在验证…" : "解锁终端和凭证"}</Button></footer>
     </form>
   </DialogFrame>;
 }

@@ -61,7 +61,7 @@ describe("application layout styles", () => {
     expect(declarations('.terminal-target-submenu[data-scrollable="true"][data-scrollbar-visible="true"]>.terminal-target-scrollbar')).toContain("opacity:1");
     expect(declarations(".terminal-target-scrollbar>span")).toContain("--terminal-target-scroll-thumb-offset");
     expect(declarations('.terminal-target-submenu[data-placement="left"]')).toContain("transform-origin:right top");
-    expect(styles).toContain(".terminal-context-menu,.terminal-target-menu,.terminal-target-submenu{background:#171b1e}");
+    expect(styles).toContain(".network-context-menu,.terminal-context-menu,.terminal-target-menu,.terminal-target-submenu,.dialog-frame{background:var(--raised)}");
   });
 
   it("collapses the connected endpoint before persistent route status", () => {
@@ -102,8 +102,8 @@ describe("application layout styles", () => {
     expect(declarations(".ssh-config-import-dialog .ssh-config-import-source-label")).toContain("height:26px");
     expect(declarations(".ssh-config-import-dialog .ssh-config-import-source-label")).toContain("background:#15191c");
     expect(declarations(".ssh-config-import-source-label>span")).toContain("text-overflow:ellipsis");
-    expect(declarations(".secondary-button.ssh-config-import-reselect")).toContain("height:26px");
-    expect(declarations(".ssh-config-import-dialog .icon-button")).toContain("height:26px");
+    expect(declarations(".ui-button.ssh-config-import-reselect")).toContain("height:26px");
+    expect(declarations(".ssh-config-import-dialog .ui-icon-button")).toContain("height:26px");
     expect(declarations(".ssh-config-import-dialog .ssh-config-import-choice")).toContain("min-height:40px");
     expect(declarations(".ssh-config-import-choice,.ssh-config-key-option>label")).toContain("margin:0");
     expect(declarations(".ssh-config-import-choice>input")).toContain("accent-color:var(--accent)");
@@ -111,7 +111,7 @@ describe("application layout styles", () => {
     expect(declarations(".ssh-config-import-dialog .ssh-config-import-item.selected")).toContain("background:#181d1c");
     expect(declarations(".ssh-config-import-dialog .ssh-config-import-item.selected")).toContain("box-shadow:none");
     expect(declarations(".ssh-config-import-actions")).toContain("flex:none");
-    expect(declarations(".connection-import-button")).toContain("display:flex");
+    expect(declarations(".connection-import-button")).toContain("white-space:nowrap");
   });
 
   it("slides one shared selection surface between workspace tabs", () => {
@@ -152,9 +152,8 @@ describe("application layout styles", () => {
     expect(utilityRail).not.toContain("backdrop-filter:");
     expect(workspaceCanvas).toContain("background:rgba(5,7,9,.18)");
     expect(terminalBlock).toContain("background:var(--workbench-panel)");
-    expect(terminalHeader).toContain("rgba(30,33,37,.2)");
-    expect(terminalHeader).toContain("rgba(15,17,20,.12)");
-    expect(activeTerminalHeader).toContain("rgba(25,51,46,.34)");
+    expect(terminalHeader).toContain("background:var(--block-header-background)");
+    expect(activeTerminalHeader).toContain("background:var(--block-header-active-background)");
     expect(terminalHeader).not.toContain("backdrop-filter:");
     expect(dialog).toContain("backdrop-filter:blur(30px)");
     expect(window.theme).toBe("Dark");
@@ -164,10 +163,10 @@ describe("application layout styles", () => {
       state: "followsWindowActiveState",
       radius: 12,
     });
-    expect(styles).toMatch(/prefers-reduced-transparency:reduce[\s\S]*\.app-shell\{background:#090a0c\}/);
-    expect(styles).toMatch(/prefers-reduced-transparency:reduce[\s\S]*\.terminal-block,\.terminal-surface,\.file-browser,\.network-pane\{background:#050708\}/);
-    expect(styles).toMatch(/prefers-contrast:more[\s\S]*\.app-shell\{background:#090a0cf5;box-shadow:inset 0 0 0 1px #737a84\}/);
-    expect(styles).toMatch(/prefers-contrast:more[\s\S]*\.terminal-block,\.terminal-surface,\.file-browser,\.network-pane\{background:#050708\}/);
+    expect(styles).toMatch(/prefers-reduced-transparency:reduce[\s\S]*\.app-shell,\.workspace-canvas\{background:var\(--canvas\)\}/);
+    expect(styles).toMatch(/prefers-reduced-transparency:reduce[\s\S]*\.terminal-block,\.terminal-surface,\.file-browser,\.network-pane\{background:var\(--surface\)\}/);
+    expect(styles).toMatch(/prefers-contrast:more[\s\S]*\.app-shell\{background:var\(--canvas\);box-shadow:inset 0 0 0 1px var\(--border\)\}/);
+    expect(styles).toMatch(/prefers-contrast:more[\s\S]*\.terminal-block,\.terminal-surface,\.file-browser,\.network-pane\{background:var\(--surface\)\}/);
   });
 
   it("places the macOS traffic lights and brand on one tab-height glass plaque", () => {
@@ -191,9 +190,9 @@ describe("application layout styles", () => {
     expect(brandIcon).toContain("color-mix(in srgb,var(--accent) 56%,var(--muted))");
     expect(brandLabel).toContain("font-size:12px");
     expect(brandLabel).toContain("font-weight:600");
-    expect(brandLabel).toContain("color:#aeb4bc");
-    expect(styles).toMatch(/prefers-reduced-transparency:reduce[\s\S]*\.app-shell\[data-platform="macos"\] \.app-brand::before\{background:#15171a/);
-    expect(styles).toMatch(/prefers-contrast:more[\s\S]*\.app-shell\[data-platform="macos"\] \.app-brand::before\{border-color:#626872/);
+    expect(brandLabel).toContain("color:var(--muted)");
+    expect(styles).toMatch(/prefers-reduced-transparency:reduce[\s\S]*\.app-chrome,\.app-shell\[data-platform="macos"\] \.app-brand::before,\.utility-rail\{background:var\(--chrome\)\}/);
+    expect(styles).toMatch(/prefers-contrast:more[\s\S]*\.app-shell\[data-platform="macos"\] \.app-brand::before\{border-color:var\(--border\)/);
   });
 
   it("fills tall terminal blocks with one continuous terminal surface", () => {
@@ -222,11 +221,11 @@ describe("application layout styles", () => {
     expect(declarations(".network-block")).not.toContain("background:");
     expect(declarations(".file-browser-navigation")).toContain("height:34px");
     expect(declarations(".network-toolbar")).toContain("height:34px");
-    expect(declarations(".file-browser-navigation")).toContain("background:rgba(11,14,16,.22)");
-    expect(declarations(".network-toolbar")).toContain("background:rgba(11,14,16,.22)");
-    expect(declarations(".file-browser-columns")).toContain("background:rgba(8,10,11,.28)");
+    expect(declarations(".file-browser-navigation")).toContain("background:var(--block-header-background)");
+    expect(declarations(".network-toolbar")).toContain("background:var(--block-header-background)");
+    expect(declarations(".file-browser-columns")).toContain("background:var(--block-header-background)");
     expect(declarations(".file-browser-columns")).toContain("backdrop-filter:blur(8px)");
-    expect(declarations(".file-browser-statusbar")).toContain("background:rgba(13,17,17,.32)");
+    expect(declarations(".file-browser-statusbar")).toContain("background:var(--panel-bg)");
     expect(declarations(".network-create-button")).toContain("width:25px");
     expect(declarations(".network-create-button")).toContain("height:25px");
     expect(declarations(".network-create-button")).toContain("border:0");
@@ -303,7 +302,7 @@ describe("application layout styles", () => {
     expect(declarations(".network-access-footer>.network-access-footer-status")).toContain("white-space:nowrap");
     expect(styles).toMatch(/prefers-reduced-motion:reduce[\s\S]*\.network-rule-flow-connector::after\{animation:none!important/);
     expect(styles).toMatch(/max-width:620px[\s\S]*\.network-type-options\{grid-template-columns:1fr\}/);
-    expect(styles).toMatch(/prefers-reduced-transparency:reduce[\s\S]*\.terminal-block,.terminal-surface,.file-browser,.network-pane\{background:#050708\}/);
+    expect(styles).toMatch(/prefers-reduced-transparency:reduce[\s\S]*\.terminal-block,.terminal-surface,.file-browser,.network-pane\{background:var\(--surface\)\}/);
   });
 
   it("keeps canvas and split gutters compact", () => {
@@ -320,9 +319,9 @@ describe("application layout styles", () => {
     const indicator = declarations(".active-block-indicator");
     const movingIndicator = declarations(".active-block-indicator.ready");
 
-    expect(activeBlock).toContain("border-color:#5cae9e");
+    expect(activeBlock).toContain("border-color:var(--block-border-active)");
     expect(activeBlock).toContain("box-shadow:");
-    expect(activeHeader).toContain("background:linear-gradient");
+    expect(activeHeader).toContain("background:var(--block-header-active-background)");
     expect(indicator).toContain("pointer-events:none");
     expect(movingIndicator).toContain("transition:transform 300ms");
     expect(styles).toContain("@media (prefers-reduced-motion:reduce)");
@@ -396,7 +395,7 @@ describe("application layout styles", () => {
     expect(declarations(".credential-private-key-dropzone,.credential-private-key-generate")).toContain("justify-content:center");
     expect(declarations(".credential-private-key-dropzone.selected,.credential-private-key-generate.selected")).toContain("border-color:#4f8177");
     expect(declarations(".credential-private-key-validation")).toContain("flex:1");
-    expect(declarations(".credential-private-key-footer .primary-button,.credential-private-key-footer .secondary-button")).toContain("flex:none");
+    expect(declarations(".credential-private-key-footer .ui-button")).toContain("flex:none");
     expect(declarations(".credential-name-line")).toContain("min-width:0");
     expect(declarations(".credential-name-line>strong")).toContain("text-overflow:ellipsis");
     expect(declarations(".credential-editor-heading .credential-name-line")).toContain("height:25px");
@@ -461,7 +460,7 @@ describe("application layout styles", () => {
     expect(declarations(".connection-item-address")).toContain("text-overflow:ellipsis");
     expect(declarations(".connection-item-auth")).toContain("flex:none");
     expect(declarations(".connection-item.selected")).not.toContain("inset 2px 0");
-    expect(declarations(".vault-status-button")).toContain("min-height:26px");
+    expect(declarations(".ui-status-badge")).toContain("min-height:26px");
     expect(declarations(".password-input-shell")).toContain("position:relative");
     expect(declarations(".password-visibility-button")).toContain("position:absolute");
     expect(declarations(".password-visibility-button")).toContain("width:24px");
@@ -512,7 +511,7 @@ describe("application layout styles", () => {
     expect(declarations(".dialog-action-status")).toContain("height:30px");
     expect(declarations(".dialog-action-status")).toContain("white-space:nowrap");
     expect(declarations(".dialog-action-status")).toContain("text-overflow:ellipsis");
-    expect(styles).toContain(".dialog-scrim-blocking{background:#020304ff}");
+    expect(styles).toContain(".dialog-scrim-blocking{background:var(--canvas)}");
   });
 
   it("keeps settings navigation fixed, scrolls only configuration content, and renders a real switch thumb", () => {
@@ -526,7 +525,7 @@ describe("application layout styles", () => {
     expect(declarations(".settings-general-stack")).toContain("display:grid");
     expect(declarations(".settings-directory-control")).toContain("grid-template-columns:minmax(0,1fr) auto");
     expect(declarations(".settings-directory-actions")).toContain("display:flex");
-    expect(declarations(".settings-directory-actions .secondary-button")).toContain("height:32px");
+    expect(declarations(".settings-directory-actions .ui-button")).toContain("height:32px");
     expect(styles).toContain(".settings-directory-control input{height:32px;margin:0}");
     expect(declarations(".settings-general-view")).toContain("height:100%");
     expect(declarations(".settings-general-view")).toContain("min-height:0");
@@ -622,9 +621,9 @@ describe("application layout styles", () => {
     expect(declarations(".file-list>.file-row")).toContain("font-family:var(--terminal-font-family)");
     expect(declarations(".file-list>.file-row")).toContain("font-size:11px");
     expect(declarations(".file-list>.file-row")).toContain("font-weight:500");
-    expect(declarations(".file-name")).toContain("color:#e2e7ea");
+    expect(declarations(".file-name")).toContain("color:var(--text)");
     expect(declarations(".file-name")).toContain("font-weight:600");
-    expect(declarations(".file-row>span:not(:first-child)")).toContain("color:#949da4");
+    expect(declarations(".file-row>span:not(:first-child)")).toContain("color:var(--dim)");
   });
 
   it("fills folder icons while keeping ordinary file icons outlined", () => {

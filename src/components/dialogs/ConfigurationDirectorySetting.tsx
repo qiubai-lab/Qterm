@@ -1,3 +1,4 @@
+import { Button } from "../Button";
 import { Icon } from "../Icon";
 
 export function ConfigurationDirectorySetting({
@@ -27,8 +28,8 @@ export function ConfigurationDirectorySetting({
           spellCheck={false}
         />
         <div className="settings-directory-actions" role="group" aria-label="配置目录操作">
-          <button type="button" className="secondary-button" disabled={disabled} aria-label="选择 Qterm 配置目录" onClick={onChoose}><Icon name="files" size={12}/>选择目录</button>
-          <button type="button" className="secondary-button" disabled={disabled} aria-label="恢复默认 Qterm 配置目录" onClick={onReset}><Icon name="refresh" size={12}/>恢复默认</button>
+          <Button disabled={disabled} aria-label="选择 Qterm 配置目录" onClick={onChoose}><Icon name="files" size={12}/>选择目录</Button>
+          <Button disabled={disabled} aria-label="恢复默认 Qterm 配置目录" onClick={onReset}><Icon name="refresh" size={12}/>恢复默认</Button>
         </div>
       </div>
     </div>

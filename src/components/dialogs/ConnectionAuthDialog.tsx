@@ -3,6 +3,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { getVaultStatus, listCredentials, type CredentialSummary, type VaultStatus } from "../../lib/tauri/credentials";
 import type { ConnectionProfile } from "../../lib/tauri/profiles";
 import type { SessionAuth } from "../../lib/tauri/sessions";
+import { Button } from "../Button";
 import { DialogFrame } from "./DialogFrame";
 import { RequiredFieldLabel } from "../RequiredFieldLabel";
 import { MasterPasswordDialog } from "./MasterPasswordDialog";
@@ -89,7 +90,7 @@ export function ConnectionAuthDialog({ profile, onConnect, onClose }: { profile:
               </select>
             </label> : <div className="credential-unlock-card" data-dialog-autofocus tabIndex={-1}>
               <div><strong>{vaultStatus.initialized ? "凭证库已锁定" : vaultStatus.legacy ? "检测到旧版凭证库" : "凭证库尚未初始化"}</strong><p>{vaultStatus.initialized ? "解锁后可选择已有密码或私钥凭证。" : vaultStatus.legacy ? "请先在凭证管理中清除旧版数据并重新初始化。" : "请先从凭证管理创建凭证，或改用密码与 SSH Agent。"}</p></div>
-              {vaultStatus.initialized && <button type="button" className="secondary-button" onClick={() => setUnlocking(true)}>解锁凭证库</button>}
+              {vaultStatus.initialized && <Button onClick={() => setUnlocking(true)}>解锁凭证库</Button>}
             </div>}
             {vaultStatus.unlocked && credentials.length === 0 && <p className="dialog-note">凭证库中暂无可用凭证。</p>}
           </>}
@@ -102,8 +103,8 @@ export function ConnectionAuthDialog({ profile, onConnect, onClose }: { profile:
 
         <footer className="dialog-actions dialog-actions-with-status auth-dialog-actions">
           <p className={`auth-dialog-action-note${message ? " error" : ""}`} role={message ? "alert" : undefined} aria-live="polite" title={message || undefined}>{message || "本次选择仅用于当前连接，不会修改连接配置。"}</p>
-          <div><button type="button" className="secondary-button" disabled={submitting} onClick={onClose}>取消</button>
-          <button type="submit" className="primary-button" disabled={submitting || !canSubmit(method, password, credentialId, vaultStatus)}>{submitting ? "正在连接…" : "连接"}</button></div>
+          <div><Button disabled={submitting} onClick={onClose}>取消</Button>
+          <Button type="submit" variant="primary" loading={submitting} disabled={!canSubmit(method, password, credentialId, vaultStatus)}>{submitting ? "正在连接…" : "连接"}</Button></div>
         </footer>
       </form>
     </DialogFrame>

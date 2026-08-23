@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 
 import { changeMasterPassword } from "../../lib/tauri/credentials";
+import { Button } from "../Button";
 import { RequiredFieldLabel } from "../RequiredFieldLabel";
 import { DialogFrame } from "./DialogFrame";
 
@@ -32,7 +33,7 @@ export function ChangeMasterPasswordDialog({ onClose, onSuccess }: { onClose: ()
       <label><RequiredFieldLabel>确认新主密码</RequiredFieldLabel><input required type="password" autoComplete="new-password" value={confirmation} disabled={busy} onChange={(event) => setConfirmation(event.target.value)}/></label>
       <p className="callout">修改时会迁移主密钥保护，不会重新生成凭证，也不会改变连接引用。</p>
       {message && <p className="inline-message" role="alert">{message}</p>}
-      <footer className="dialog-actions end"><button type="button" className="secondary-button" disabled={busy} onClick={onClose}>取消</button><button type="submit" className="primary-button" disabled={busy || !oldPassword || !newPassword || !confirmation}>{busy ? "迁移中…" : "确认修改"}</button></footer>
+      <footer className="dialog-actions end"><Button disabled={busy} onClick={onClose}>取消</Button><Button type="submit" variant="primary" loading={busy} disabled={!oldPassword || !newPassword || !confirmation}>{busy ? "迁移中…" : "确认修改"}</Button></footer>
     </form>
   </DialogFrame>;
 }

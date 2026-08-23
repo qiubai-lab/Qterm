@@ -27,7 +27,16 @@
   --editor-preview-background:#070809;
   --chrome:#151619; --canvas:#090a0c; --surface:#111316; --raised:#191b1f; --hover:#22252a;
   --border:#30343a; --subtle:#23262b; --text:#f1f3f5; --muted:#9da3ad; --dim:#747b86;
+  --text-strong:#f5faf8; --text-disabled:#62686d; --icon:#858c96; --icon-hover:#ffffff; --control-hover:#2b2e34;
+  --block-border:#ffffff17; --block-border-active:#5cae9e;
+  --block-header-background:linear-gradient(180deg,rgba(30,33,37,.2),rgba(15,17,20,.12));
+  --block-header-active-background:linear-gradient(90deg,rgba(25,51,46,.34) 0%,rgba(21,26,26,.2) 52%,rgba(17,19,22,.14) 100%);
+  --block-header-border:#ffffff12; --block-header-active-border:#75e6cf42;
+  --scrollbar-track:#050607; --scrollbar-thumb:#438b7d;
   --accent:#75e6cf; --accent-bg:#153b35; --danger:#ff7b77; --focus:#5fb3ff;
+  --accent-contrast:#08201b; --danger-bg:#2a1918; --warning:#c4a96e; --warning-bg:#211c13;
+  --control-bg:#101315; --panel-bg:#14171a; --overlay-bg:rgba(10,12,14,.78);
+  --shadow-soft:#0005; --shadow-strong:#000b; --selection-bg:#244b44;
   --workbench-panel:rgba(5,7,8,.92);
   --workspace-tab-width:128px; --shell-radius:12px;
 }

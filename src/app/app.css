@@ -1,4 +1,6 @@
 @import "./styles/themes/dark.css";
+@import "./styles/themes/light.css";
+@import "../components/button.css";
 @import "../components/dialogs/credentialDialog.css";
 @import "./styles/foundations.css";
 @import "./styles/shell.css";
@@ -17,3 +19,4 @@
 @import "../components/dialogs/infoDialogs.css";
 @import "./styles/notices.css";
 @import "./styles/lateOverrides.css";
+@import "./styles/themes/lightOverrides.css";

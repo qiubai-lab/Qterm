@@ -4,6 +4,18 @@ pub const MIN_AUTO_LOCK_SECONDS: u32 = 60;
 pub const MAX_AUTO_LOCK_SECONDS: u32 = 86_400;
 pub const DEFAULT_CREDENTIAL_AUTO_LOCK_SECONDS: u32 = 3_600;
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum AppTheme {
+    #[default]
+    Dark,
+    Light,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct AppearanceSettings {
+    pub theme: AppTheme,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SecuritySettings {
     pub credential_auto_lock_after_seconds: Option<u32>,
@@ -86,12 +98,13 @@ pub enum SettingsError {
 #[cfg(test)]
 mod tests {
     use super::{
-        ConfigurationDirectory, DEFAULT_CREDENTIAL_AUTO_LOCK_SECONDS, MAX_AUTO_LOCK_SECONDS,
-        MIN_AUTO_LOCK_SECONDS, SecuritySettings, SettingsError,
+        AppTheme, AppearanceSettings, ConfigurationDirectory, DEFAULT_CREDENTIAL_AUTO_LOCK_SECONDS,
+        MAX_AUTO_LOCK_SECONDS, MIN_AUTO_LOCK_SECONDS, SecuritySettings, SettingsError,
     };
 
     #[test]
     fn defaults_are_secure() {
+        assert_eq!(AppearanceSettings::default().theme, AppTheme::Dark);
         assert_eq!(
             SecuritySettings::default(),
             SecuritySettings {

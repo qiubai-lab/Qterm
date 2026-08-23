@@ -3,27 +3,35 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SettingsDialog } from "./SettingsDialog";
+import { AppThemeProvider } from "../../app/theme/AppThemeProvider";
 
 const mocks = vi.hoisted(() => ({
   getSettings: vi.fn(),
   selectConfigurationDirectory: vi.fn(),
   updateConfigurationDirectory: vi.fn(),
   updateSecuritySettings: vi.fn(),
+  updateAppearanceSettings: vi.fn(),
 }));
 vi.mock("../../lib/tauri/settings", () => mocks);
 
 beforeEach(() => {
   mocks.getSettings.mockResolvedValue({
     general: storageLayout(),
-    security: { credentialAutoLockAfterSeconds: 3600, terminalAutoLockAfterSeconds: null }, warning: null,
+    security: { credentialAutoLockAfterSeconds: 3600, terminalAutoLockAfterSeconds: null }, appearance: { theme: "dark" }, warning: null,
   });
   mocks.updateConfigurationDirectory.mockImplementation(async ({ path }: { path: string }) => ({
     general: { ...storageLayout(), rootDirectory: path, dataDirectory: `${path}\\data`, deviceDirectory: `${path}\\device`, cacheDirectory: `${path}\\cache`, restartRequired: true },
-    security: { credentialAutoLockAfterSeconds: 3600, terminalAutoLockAfterSeconds: null }, warning: null,
+    security: { credentialAutoLockAfterSeconds: 3600, terminalAutoLockAfterSeconds: null }, appearance: { theme: "dark" }, warning: null,
   }));
   mocks.updateSecuritySettings.mockImplementation(async (security) => ({
     general: storageLayout(),
-    security, warning: null,
+    security, appearance: { theme: "dark" }, warning: null,
+  }));
+  mocks.updateAppearanceSettings.mockImplementation(async (appearance) => ({
+    general: storageLayout(),
+    security: { credentialAutoLockAfterSeconds: 3600, terminalAutoLockAfterSeconds: null },
+    appearance,
+    warning: null,
   }));
 });
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
@@ -39,9 +47,13 @@ function storageLayout() {
   };
 }
 
+function renderSettings(onClose = vi.fn()) {
+  return render(<AppThemeProvider><SettingsDialog onClose={onClose}/></AppThemeProvider>);
+}
+
 describe("SettingsDialog", () => {
   it("keeps navigation separate from the independently scrolling settings panel", async () => {
-    render(<SettingsDialog onClose={vi.fn()}/>);
+    renderSettings();
     const navigation = screen.getByRole("navigation", { name: "设置分类" });
     expect(within(navigation).getByRole("button", { name: /通用/ })).toHaveAttribute("aria-current", "page");
     expect(within(navigation).getByRole("button", { name: /安全/ })).not.toHaveAttribute("aria-current");
@@ -56,7 +68,7 @@ describe("SettingsDialog", () => {
   it("separates configuration directory controls from the derived path overview", async () => {
     const user = userEvent.setup();
     mocks.selectConfigurationDirectory.mockResolvedValue("D:\\Qterm");
-    render(<SettingsDialog onClose={vi.fn()}/>);
+    renderSettings();
 
     const directorySettings = await screen.findByRole("group", { name: "配置目录设置" });
     const pathOverview = screen.getByRole("group", { name: "配置路径" });
@@ -84,7 +96,7 @@ describe("SettingsDialog", () => {
   it("restores the default root while derived paths remain read-only", async () => {
     const user = userEvent.setup();
     mocks.selectConfigurationDirectory.mockResolvedValue("D:\\Custom");
-    render(<SettingsDialog onClose={vi.fn()}/>);
+    renderSettings();
     const input = await screen.findByRole("textbox", { name: "Qterm 配置目录" });
     await user.click(screen.getByRole("button", { name: "选择 Qterm 配置目录" }));
     expect(input).toHaveValue("D:\\Custom");
@@ -103,7 +115,7 @@ describe("SettingsDialog", () => {
 
   it("shows the new defaults and persists both independent lock policies", async () => {
     const user = userEvent.setup();
-    render(<SettingsDialog onClose={vi.fn()}/>);
+    renderSettings();
     await user.click(await screen.findByRole("button", { name: /安全/ }));
     expect(await screen.findByRole("switch", { name: "启用凭证库有效期" })).toBeChecked();
     expect(screen.getByRole("switch", { name: "启用无操作后锁定终端" })).not.toBeChecked();
@@ -118,7 +130,7 @@ describe("SettingsDialog", () => {
   });
 
   it("places the timeout select before the right-aligned switch", async () => {
-    render(<SettingsDialog onClose={vi.fn()}/>);
+    renderSettings();
     await userEvent.click(await screen.findByRole("button", { name: /安全/ }));
     const controls = await screen.findByRole("group", { name: "凭证库有效期控制" });
     const select = within(controls).getByRole("combobox", { name: "凭证库有效期" });
@@ -127,12 +139,49 @@ describe("SettingsDialog", () => {
     expect(controls.lastElementChild).toContainElement(toggle);
   });
 
+  it("previews a preset and restores the persisted theme when closed", async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    renderSettings(onClose);
+    await user.click(await screen.findByRole("button", { name: /外观/ }));
+    const light = screen.getByRole("radio", { name: /亮色/ });
+    expect(screen.getByRole("radio", { name: /深色/ })).toBeChecked();
+    await user.click(light);
+    expect(light).toBeChecked();
+    expect(document.documentElement).toHaveAttribute("data-theme", "light");
+    await user.click(screen.getByRole("button", { name: "关闭" }));
+    expect(document.documentElement).toHaveAttribute("data-theme", "dark");
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it("persists the previewed preset and keeps it after closing", async () => {
+    const user = userEvent.setup();
+    renderSettings();
+    await user.click(await screen.findByRole("button", { name: /外观/ }));
+    await user.click(screen.getByRole("radio", { name: /亮色/ }));
+    await user.click(screen.getByRole("button", { name: "保存设置" }));
+    await waitFor(() => expect(mocks.updateAppearanceSettings).toHaveBeenCalledWith({ theme: "light" }));
+    await user.click(screen.getByRole("button", { name: "关闭" }));
+    expect(document.documentElement).toHaveAttribute("data-theme", "light");
+  });
+
+  it("restores the persisted preset when appearance saving fails", async () => {
+    const user = userEvent.setup();
+    mocks.updateAppearanceSettings.mockRejectedValueOnce(new Error("save failed"));
+    renderSettings();
+    await user.click(await screen.findByRole("button", { name: /外观/ }));
+    await user.click(screen.getByRole("radio", { name: /亮色/ }));
+    await user.click(screen.getByRole("button", { name: "保存设置" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("save failed");
+    expect(document.documentElement).toHaveAttribute("data-theme", "dark");
+  });
+
   it("surfaces safe-default fallback warnings", async () => {
     mocks.getSettings.mockResolvedValue({
       general: storageLayout(),
-      security: { credentialAutoLockAfterSeconds: 3600, terminalAutoLockAfterSeconds: null }, warning: "corrupt",
+      security: { credentialAutoLockAfterSeconds: 3600, terminalAutoLockAfterSeconds: null }, appearance: { theme: "dark" }, warning: "corrupt",
     });
-    render(<SettingsDialog onClose={vi.fn()}/>);
+    renderSettings();
     expect(await screen.findByRole("alert")).toHaveTextContent("不会覆盖原文件");
   });
 });

@@ -10,5 +10,4 @@
 .dialog-header { display:flex; flex:none; align-items:center; justify-content:space-between; gap:16px; padding:17px 18px 14px; border-bottom:1px solid var(--border); }
 .dialog-header-copy{min-width:0}.dialog-header-actions{display:flex;flex:none;gap:6px;align-items:center}
 .dialog-header h2 { margin:0; color:var(--text); font-size:15px; letter-spacing:-.01em; }.dialog-header p{margin:4px 0 0;color:var(--dim);font-size:10px}
-.icon-button { display:grid; width:28px; height:28px; place-items:center; padding:0; border:0; border-radius:6px; color:var(--muted); background:transparent; }.icon-button:hover{color:#fff;background:var(--hover)}
 .dialog-content { min-height:0; padding:18px; overflow:auto; }

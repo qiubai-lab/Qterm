@@ -267,3 +267,9 @@ Status: accepted
 Status: accepted
 
 Network 是与 Terminal、Files 并列的一等 Workspace leaf。转发规则按 `profileId` 全局共享并保存到当前配置根的 `data/network-forwards.json`，Workspace Network leaf 只保存 `blockId/profileId`；listener、活动转发、子 channel、session id 和认证材料不持久化。每个 Network Block 使用独立 SSH session，同一 Block 内的 Local、Remote 与 SOCKS5 规则共享该 session，不复用来源 Terminal/Files session。规则恢复后默认停止，不自动启动或无限重连。本地与 SOCKS5 listener、远程 listener 均默认 loopback；非 loopback 需要显式风险提示。用户在确认界面明确授权删除 profile 后，application use case 同步删除引用该 profile 的持久化规则并关闭相关 Network session，同时保留共享凭证；跨独立文件的第二步失败时尽力恢复 profile，不将该编排下放给 WebView。
+
+## 2026-08-23 — 主题是独立设备偏好并只提供内置预设
+
+Status: accepted
+
+Qterm 只提供 `dark` 与 `light` 两个封闭预设，Dark 保持缺省且不跟随系统。`AppThemeProvider` 是运行期唯一主题状态 owner，负责设置页 preview/commit/restore，并同步根 DOM、缓存 xterm 和原生窗口；Workspace model 不保存主题。持久化使用当前配置根下独立的 `device/appearance.json` schema v1，不与 security `settings.json` 共用 record，缺失或失败回退 Dark，损坏与未来文件保留不覆盖。Dark/Light 共享 semantic token contract；文字层级、图标、Block chrome 与 scrollbar 等跨主题组件角色由 feature CSS 直接消费，常规 Light 小字角色在基础 surface 上至少保持 4.5:1；遗留原始颜色仅允许由 Light root-scoped 兼容层承接，并以 raw-color budget 阻止新增债务。

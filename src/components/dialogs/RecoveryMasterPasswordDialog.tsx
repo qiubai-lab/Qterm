@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 
 import { cancelMasterPasswordReset, prepareMasterPasswordReset, resetMasterPassword } from "../../lib/tauri/credentials";
+import { Button } from "../Button";
 import { RequiredFieldLabel } from "../RequiredFieldLabel";
 import { DialogActionStatus, DialogFrame } from "./DialogFrame";
 
@@ -79,7 +80,7 @@ export function RecoveryMasterPasswordDialog({ onClose, onSuccess }: { onClose: 
     return <DialogFrame title="验证恢复密钥" subtitle="先加载属于当前凭证库的恢复密钥" compact onClose={busy ? () => undefined : closeFlow}>
       <div className="recovery-save-confirmation">
         <p className="callout">选择恢复密钥文件后将立即校验文件格式、凭证库归属与有效性。校验通过后才能设置新的主密码。</p>
-        <footer className="dialog-actions dialog-actions-with-status"><DialogActionStatus message={message}/><div><button type="button" className="secondary-button" disabled={busy} onClick={closeFlow}>取消</button><button type="button" data-dialog-autofocus className="primary-button" disabled={busy} onClick={() => void selectExistingRecovery()}>{busy ? "正在验证…" : "选择恢复密钥文件"}</button></div></footer>
+        <footer className="dialog-actions dialog-actions-with-status"><DialogActionStatus message={message}/><div><Button disabled={busy} onClick={closeFlow}>取消</Button><Button variant="primary" data-dialog-autofocus loading={busy} onClick={() => void selectExistingRecovery()}>{busy ? "正在验证…" : "选择恢复密钥文件"}</Button></div></footer>
       </div>
     </DialogFrame>;
   }
@@ -90,7 +91,7 @@ export function RecoveryMasterPasswordDialog({ onClose, onSuccess }: { onClose: 
         <label><RequiredFieldLabel>新主密码</RequiredFieldLabel><input data-dialog-autofocus required type="password" autoComplete="new-password" value={newPassword} disabled={busy} onChange={(event) => setNewPassword(event.target.value)}/></label>
         <label><RequiredFieldLabel>确认新主密码</RequiredFieldLabel><input required type="password" autoComplete="new-password" value={confirmation} disabled={busy} onChange={(event) => setConfirmation(event.target.value)}/></label>
         <p className="callout">新主密码至少需要 12 个字符。下一步将先提示你保存替代恢复密钥，保存成功后旧密钥才会失效。</p>
-        <footer className="dialog-actions dialog-actions-with-status"><DialogActionStatus message={message}/><div><button type="button" className="secondary-button" disabled={busy} onClick={returnToKeySelection}>返回</button><button type="submit" className="primary-button" disabled={busy || !newPassword || !confirmation}>继续</button></div></footer>
+        <footer className="dialog-actions dialog-actions-with-status"><DialogActionStatus message={message}/><div><Button disabled={busy} onClick={returnToKeySelection}>返回</Button><Button type="submit" variant="primary" loading={busy} disabled={!newPassword || !confirmation}>继续</Button></div></footer>
       </form>
     </DialogFrame>;
   }
@@ -98,7 +99,7 @@ export function RecoveryMasterPasswordDialog({ onClose, onSuccess }: { onClose: 
   return <DialogFrame title="保存新恢复密钥" subtitle="保存成功后才会重置主密码" compact onClose={busy ? () => undefined : () => { setMessage(""); setPhase("newPassword"); }}>
     <div className="recovery-save-confirmation">
       <p className="callout">点击保存后再选择新密钥的本地位置；新文件写入成功后，新主密码才会生效且旧恢复密钥将失效。</p>
-      <footer className="dialog-actions dialog-actions-with-status"><DialogActionStatus message={message}/><div><button type="button" className="secondary-button" disabled={busy} onClick={() => { setMessage(""); setPhase("newPassword"); }}>返回</button><button type="button" data-dialog-autofocus className="primary-button" disabled={busy} onClick={() => void saveNewRecovery()}>{busy ? "正在保存…" : "保存新密钥到本地"}</button></div></footer>
+      <footer className="dialog-actions dialog-actions-with-status"><DialogActionStatus message={message}/><div><Button disabled={busy} onClick={() => { setMessage(""); setPhase("newPassword"); }}>返回</Button><Button variant="primary" data-dialog-autofocus loading={busy} onClick={() => void saveNewRecovery()}>{busy ? "正在保存…" : "保存新密钥到本地"}</Button></div></footer>
     </div>
   </DialogFrame>;
 }

@@ -40,7 +40,7 @@ use commands::session::{
 };
 use commands::settings::{
     SettingsState, settings_get, settings_select_configuration_directory,
-    settings_update_configuration_directory, settings_update_security,
+    settings_update_appearance, settings_update_configuration_directory, settings_update_security,
 };
 use commands::transfer::{
     TransferState, transfer_cancel, transfer_download, transfer_select_download_directory,
@@ -50,6 +50,7 @@ use commands::transfer::{
 use commands::workspace::{WorkspaceState, workspace_load, workspace_save};
 use domain::settings::ConfigurationDirectory;
 use infrastructure::local::pty::LocalSessionManager;
+use infrastructure::persistence::json_appearance_settings_repository::JsonAppearanceSettingsRepository;
 use infrastructure::persistence::json_credential_vault::JsonCredentialVault;
 use infrastructure::persistence::json_known_host_repository::JsonKnownHostRepository;
 use infrastructure::persistence::json_network_repository::JsonNetworkRepository;
@@ -81,6 +82,7 @@ struct DataPaths {
     known_hosts: std::path::PathBuf,
     workspaces: std::path::PathBuf,
     settings: std::path::PathBuf,
+    appearance: std::path::PathBuf,
     browser_profiles: std::path::PathBuf,
 }
 
@@ -96,6 +98,7 @@ impl DataPaths {
             known_hosts: device.join("known-hosts.json"),
             workspaces: device.join("workspaces.json"),
             settings: device.join("settings.json"),
+            appearance: device.join("appearance.json"),
             browser_profiles: cache.join("browser-profiles"),
             root,
             data,
@@ -149,6 +152,7 @@ pub fn run() {
                 JsonConfigurationDirectoryRepository::new(configuration_location_path),
                 default_configuration,
                 active_configuration,
+                JsonAppearanceSettingsRepository::new(paths.appearance.clone()),
             ));
             app.manage(ProfileState::new(JsonProfileRepository::new(
                 paths.profiles,
@@ -215,6 +219,7 @@ pub fn run() {
             settings_select_configuration_directory,
             settings_update_configuration_directory,
             settings_update_security,
+            settings_update_appearance,
             session_connect,
             session_accept_host_key,
             session_reject_host_key,
@@ -277,6 +282,7 @@ mod tests {
         assert_eq!(paths.known_hosts, device.join("known-hosts.json"));
         assert_eq!(paths.workspaces, device.join("workspaces.json"));
         assert_eq!(paths.settings, device.join("settings.json"));
+        assert_eq!(paths.appearance, device.join("appearance.json"));
         assert_eq!(paths.browser_profiles, cache.join("browser-profiles"));
     }
 
@@ -316,6 +322,7 @@ mod tests {
         assert_eq!(paths.device, custom.join("device"));
         assert_eq!(paths.known_hosts, custom.join("device/known-hosts.json"));
         assert_eq!(paths.settings, custom.join("device/settings.json"));
+        assert_eq!(paths.appearance, custom.join("device/appearance.json"));
         assert_eq!(paths.cache, custom.join("cache"));
     }
 

@@ -7,14 +7,19 @@ use tauri_plugin_dialog::DialogExt;
 use crate::{
     application::settings_service::{SettingsService, SettingsSnapshot, SettingsWarning},
     commands::error::IpcError,
-    domain::settings::{ConfigurationDirectory, SecuritySettings},
+    domain::settings::{AppTheme, AppearanceSettings, ConfigurationDirectory, SecuritySettings},
+    infrastructure::persistence::json_appearance_settings_repository::JsonAppearanceSettingsRepository,
     infrastructure::persistence::json_settings_repository::{
         JsonConfigurationDirectoryRepository, JsonSettingsRepository,
     },
 };
 
 pub struct SettingsState {
-    service: SettingsService<JsonSettingsRepository, JsonConfigurationDirectoryRepository>,
+    service: SettingsService<
+        JsonSettingsRepository,
+        JsonConfigurationDirectoryRepository,
+        JsonAppearanceSettingsRepository,
+    >,
 }
 
 impl SettingsState {
@@ -23,6 +28,7 @@ impl SettingsState {
         configuration_repository: JsonConfigurationDirectoryRepository,
         default_configuration_directory: ConfigurationDirectory,
         active_configuration_directory: ConfigurationDirectory,
+        appearance_repository: JsonAppearanceSettingsRepository,
     ) -> Self {
         Self {
             service: SettingsService::new(
@@ -30,6 +36,7 @@ impl SettingsState {
                 configuration_repository,
                 default_configuration_directory,
                 active_configuration_directory,
+                appearance_repository,
             ),
         }
     }
@@ -46,6 +53,19 @@ pub struct SecuritySettingsDto {
     terminal_auto_lock_after_seconds: Option<u32>,
 }
 
+#[derive(Clone, Copy, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct AppearanceSettingsDto {
+    theme: AppThemeDto,
+}
+
+#[derive(Clone, Copy, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+enum AppThemeDto {
+    Dark,
+    Light,
+}
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct ConfigurationDirectorySettingsDto {
@@ -57,6 +77,7 @@ pub struct ConfigurationDirectorySettingsDto {
 pub struct SettingsSnapshotDto {
     general: GeneralSettingsOutputDto,
     security: SecuritySettingsOutputDto,
+    appearance: AppearanceSettingsOutputDto,
     warning: Option<&'static str>,
 }
 
@@ -76,6 +97,12 @@ struct GeneralSettingsOutputDto {
 struct SecuritySettingsOutputDto {
     credential_auto_lock_after_seconds: Option<u32>,
     terminal_auto_lock_after_seconds: Option<u32>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AppearanceSettingsOutputDto {
+    theme: AppThemeDto,
 }
 
 #[tauri::command]
@@ -134,6 +161,20 @@ pub fn settings_update_security(
     Ok(SettingsSnapshotDto::new(snapshot))
 }
 
+#[tauri::command]
+pub fn settings_update_appearance(
+    input: AppearanceSettingsDto,
+    state: State<'_, SettingsState>,
+) -> Result<SettingsSnapshotDto, IpcError> {
+    let snapshot = state
+        .service
+        .update_appearance(AppearanceSettings {
+            theme: input.theme.into(),
+        })
+        .map_err(IpcError::from)?;
+    Ok(SettingsSnapshotDto::new(snapshot))
+}
+
 impl SettingsSnapshotDto {
     fn new(value: SettingsSnapshot) -> Self {
         let root = value.configuration_directory.path();
@@ -153,11 +194,32 @@ impl SettingsSnapshotDto {
                     .credential_auto_lock_after_seconds,
                 terminal_auto_lock_after_seconds: value.security.terminal_auto_lock_after_seconds,
             },
+            appearance: AppearanceSettingsOutputDto {
+                theme: value.appearance.theme.into(),
+            },
             warning: value.warning.map(|warning| match warning {
                 SettingsWarning::Corrupt => "corrupt",
                 SettingsWarning::UnsupportedVersion => "unsupportedVersion",
                 SettingsWarning::StorageUnavailable => "storageUnavailable",
             }),
+        }
+    }
+}
+
+impl From<AppThemeDto> for AppTheme {
+    fn from(value: AppThemeDto) -> Self {
+        match value {
+            AppThemeDto::Dark => Self::Dark,
+            AppThemeDto::Light => Self::Light,
+        }
+    }
+}
+
+impl From<AppTheme> for AppThemeDto {
+    fn from(value: AppTheme) -> Self {
+        match value {
+            AppTheme::Dark => Self::Dark,
+            AppTheme::Light => Self::Light,
         }
     }
 }
@@ -168,10 +230,14 @@ fn display_path(path: &std::path::Path) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{ConfigurationDirectorySettingsDto, SecuritySettingsDto, SettingsSnapshotDto};
+    use super::{
+        AppearanceSettingsDto, ConfigurationDirectorySettingsDto, SecuritySettingsDto,
+        SettingsSnapshotDto,
+    };
     use crate::{
         application::settings_service::SettingsService,
         domain::settings::ConfigurationDirectory,
+        infrastructure::persistence::json_appearance_settings_repository::JsonAppearanceSettingsRepository,
         infrastructure::persistence::json_settings_repository::{
             JsonConfigurationDirectoryRepository, JsonSettingsRepository,
         },
@@ -181,6 +247,18 @@ mod tests {
 
     #[test]
     fn settings_input_rejects_unknown_and_sensitive_fields() {
+        assert!(
+            serde_json::from_value::<AppearanceSettingsDto>(json!({ "theme": "dark" })).is_ok()
+        );
+        assert!(
+            serde_json::from_value::<AppearanceSettingsDto>(json!({ "theme": "system" })).is_err()
+        );
+        assert!(
+            serde_json::from_value::<AppearanceSettingsDto>(
+                json!({ "theme": "light", "accent": "custom" })
+            )
+            .is_err()
+        );
         assert!(
             serde_json::from_value::<SecuritySettingsDto>(json!({
                 "credentialAutoLockAfterSeconds": 3600,
@@ -211,6 +289,7 @@ mod tests {
             ),
             default_root,
             active_root,
+            JsonAppearanceSettingsRepository::new(root.join("device/appearance.json")),
         );
 
         let value = serde_json::to_value(SettingsSnapshotDto::new(service.snapshot()))
@@ -256,6 +335,7 @@ mod tests {
             json!(display(&custom_root.path().join("device")))
         );
         assert_eq!(updated["general"]["restartRequired"], true);
+        assert_eq!(updated["appearance"]["theme"], "dark");
     }
 
     fn display(path: &std::path::Path) -> String {
