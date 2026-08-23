@@ -78,7 +78,7 @@ export function ConnectionAuthDialog({ profile, onConnect, onClose }: { profile:
         <div key={method} className={`auth-method-content auth-method-panel${motionDirection ? ` auth-${motionDirection}` : " auth-idle"}`} data-method={method}>
           {method === "password" && <>
             <p className="auth-security-hint">密码只保留到本次连接请求完成，不写入连接或凭证库。</p>
-            <label><RequiredFieldLabel>密码</RequiredFieldLabel><input data-dialog-autofocus type="password" autoComplete="current-password" required value={password} disabled={submitting} onChange={(event) => setPassword(event.target.value)} placeholder="仅用于本次连接"/></label>
+            <label className="auth-password-field"><RequiredFieldLabel>密码</RequiredFieldLabel><input data-dialog-autofocus type="password" autoComplete="current-password" required value={password} disabled={submitting} onChange={(event) => setPassword(event.target.value)} placeholder="仅用于本次连接"/></label>
           </>}
 
           {method === "credential" && <>

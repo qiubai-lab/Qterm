@@ -31,6 +31,7 @@ describe("ConnectionAuthDialog", () => {
 
     const input = screen.getByLabelText("密码");
     expect(input).toHaveFocus();
+    expect(input.closest("label")).toHaveClass("auth-password-field");
     await user.type(input, "temporary-secret");
     await user.click(screen.getByRole("button", { name: "连接" }));
 

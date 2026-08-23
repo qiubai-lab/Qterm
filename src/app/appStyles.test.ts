@@ -660,6 +660,12 @@ describe("application layout styles", () => {
     expect(declarations(".auth-dialog-action-note")).toContain("text-overflow:ellipsis");
     expect(declarations(".auth-method-content")).toContain("overflow:auto");
     expect(declarations(".auth-security-hint")).not.toContain("background:");
+    expect(declarations(".auth-password-field input")).toContain("caret-color:var(--focus)");
+    const passwordFocus = declarations(".auth-password-field input:focus,.auth-password-field input:focus-visible");
+    expect(passwordFocus).toContain("outline:2px solid var(--focus)");
+    expect(passwordFocus).toContain("outline-offset:-2px");
+    expect(passwordFocus).toContain("box-shadow:none");
+    expect(passwordFocus).toContain("background:color-mix(in srgb,var(--control-bg) 92%,var(--focus))");
     expect(declarations(".auth-method-indicator")).toContain("transition:transform 260ms");
     expect(declarations(".segmented.auth-method-picker button.selected")).toContain("box-shadow:none");
     expect(declarations('.auth-method-picker[data-active="credential"] .auth-method-indicator')).toContain("translateX(100%)");
