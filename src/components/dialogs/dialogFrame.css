@@ -6,7 +6,7 @@
 .dialog-frame.dialog-wide { width:min(790px,calc(100vw - 48px)); }
 .dialog-frame.dialog-compact { width:min(390px,calc(100vw - 40px)); }
 .dialog-frame.connection-auth-dialog { width:min(470px,calc(100vw - 40px)); height:min(390px,calc(100vh - 40px)); }
-@keyframes dialog-in{from{opacity:0;transform:translateY(8px) scale(.985)}to{opacity:1;transform:none}}
+@keyframes dialog-in{from{opacity:0}to{opacity:1}}
 .dialog-header { display:flex; flex:none; align-items:center; justify-content:space-between; gap:16px; padding:17px 18px 14px; border-bottom:1px solid var(--border); }
 .dialog-header-copy{min-width:0}.dialog-header-actions{display:flex;flex:none;gap:6px;align-items:center}
 .dialog-header h2 { margin:0; color:var(--text); font-size:15px; letter-spacing:-.01em; }.dialog-header p{margin:4px 0 0;color:var(--dim);font-size:10px}

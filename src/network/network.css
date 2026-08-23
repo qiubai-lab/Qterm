@@ -78,3 +78,6 @@
 .network-access-browser-grid>button[data-state="waiting"]:disabled{border-color:var(--border);color:var(--muted);background:var(--panel-bg);opacity:1}
 .network-access-browser-grid>button[data-state="waiting"]:disabled .network-access-browser-icon{border-color:var(--border);color:var(--icon);background:var(--control-bg)}
 .network-context-menu{border:1px solid var(--floating-border);background:var(--floating-material);box-shadow:0 14px 38px var(--shadow-strong)}
+.network-access-option-switch{position:relative;display:block;box-sizing:border-box;width:34px;height:20px;padding:0;line-height:0}
+.network-access-option-switch>span{position:absolute;top:2px;left:2px;display:block;width:14px;height:14px;margin:0;transform:translateX(0);translate:none;transition:transform 180ms cubic-bezier(.2,.8,.2,1),background-color 140ms ease}
+.network-access-option-switch[aria-checked="true"]>span{transform:translateX(14px);translate:none}

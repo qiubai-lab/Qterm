@@ -19,6 +19,12 @@ function declarations(selector: string): string {
   return styles.match(new RegExp(`(?:^|}|,)\\s*${escaped}\\s*\\{([^}]*)\\}`))?.[1] ?? "";
 }
 
+function lastDeclarations(selector: string): string {
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const matches = [...styles.matchAll(new RegExp(`(?:^|}|,)\\s*${escaped}\\s*\\{([^}]*)\\}`, "g"))];
+  return matches[matches.length - 1]?.[1] ?? "";
+}
+
 describe("application layout styles", () => {
   it("uses one restrained danger marker for required field labels", () => {
     expect(declarations(".required-field-label")).toContain("display:inline-flex");
@@ -82,12 +88,21 @@ describe("application layout styles", () => {
   });
 
   it("keeps route node details in a compact two-line tooltip", () => {
-    expect(declarations(".connection-route-tooltip")).toContain("position:fixed");
-    expect(declarations(".connection-route-tooltip")).toContain("max-width:min(210px,calc(100vw - 16px))");
-    expect(declarations(".connection-route-tooltip")).toContain("gap:1px");
-    expect(declarations(".connection-route-tooltip")).toContain("padding:4px 7px");
+    const tooltip = declarations(".connection-route-tooltip");
+    expect(tooltip).toContain("position:fixed");
+    expect(tooltip).toContain("max-width:min(210px,calc(100vw - 16px))");
+    expect(tooltip).toContain("gap:1px");
+    expect(tooltip).toContain("padding:4px 7px");
+    expect(tooltip).toContain("border:1px solid color-mix(in srgb,var(--warning) 48%,var(--floating-border))");
+    expect(tooltip).toContain("color:var(--warning)");
+    expect(tooltip).toContain("background:var(--floating-material)");
+    expect(tooltip).toContain("box-shadow:0 8px 24px var(--shadow-strong)");
+    expect(declarations(".connection-route-tooltip strong")).toContain("color:var(--text)");
+    expect(lastDeclarations(".connection-route-tooltip-detail>small")).toContain("color:var(--dim)");
+    expect(declarations(".connection-route-tooltip.connected")).toContain("color:var(--accent)");
     expect(declarations(".connection-route-tooltip-detail")).toContain("display:flex");
     expect(declarations(".connection-route-tooltip-detail")).toContain("align-items:baseline");
+    expect(styles).toMatch(/prefers-reduced-transparency:reduce[\s\S]*\.connection-route-tooltip\{background:var\(--raised\);backdrop-filter:none/);
   });
 
   it("keeps SSH Config import content in one bounded manager scroller", () => {
@@ -299,12 +314,15 @@ describe("application layout styles", () => {
     expect(declarations(".network-access-field>div")).toContain("grid-template-columns:minmax(0,1fr) 30px");
     expect(declarations(".network-access-browser-grid")).toContain("grid-template-columns:1fr 1fr");
     expect(declarations(".network-access-proxy-option")).toContain("min-height:58px");
-    expect(declarations(".network-access-option-switch")).toContain("grid-template-columns:14px 14px");
-    expect(declarations(".network-access-option-switch")).toContain("grid-template-rows:14px");
-    expect(declarations(".network-access-option-switch>span")).toContain("grid-column:1");
-    expect(declarations(".network-access-option-switch>span")).toContain("transition:translate 180ms");
-    expect(declarations('.network-access-option-switch[aria-checked="true"]>span')).toContain("translate:14px 0");
-    expect(declarations('.network-access-option-switch[aria-checked="true"]>span')).not.toContain("transform");
+    expect(lastDeclarations(".network-access-option-switch")).toContain("position:relative");
+    expect(lastDeclarations(".network-access-option-switch")).toContain("display:block");
+    expect(lastDeclarations(".network-access-option-switch")).toContain("padding:0");
+    expect(lastDeclarations(".network-access-option-switch")).toContain("line-height:0");
+    expect(lastDeclarations(".network-access-option-switch>span")).toContain("position:absolute");
+    expect(lastDeclarations(".network-access-option-switch>span")).toContain("top:2px");
+    expect(lastDeclarations(".network-access-option-switch>span")).toContain("left:2px");
+    expect(lastDeclarations(".network-access-option-switch>span")).toContain("transition:transform 180ms");
+    expect(lastDeclarations('.network-access-option-switch[aria-checked="true"]>span')).toContain("transform:translateX(14px)");
     expect(declarations(".network-access-option-switch:focus-visible")).toContain("outline:2px solid var(--focus)");
     expect(declarations('.network-access-browser-grid>button[data-state="unavailable"]')).toContain("opacity:.68");
     expect(declarations('.network-access-browser-grid>button[data-state="waiting"]:disabled')).toContain("border-color:#3b514b");
@@ -320,6 +338,19 @@ describe("application layout styles", () => {
     expect(styles).toMatch(/prefers-reduced-motion:reduce[\s\S]*\.network-rule-flow-connector::after\{animation:none!important/);
     expect(styles).toMatch(/max-width:620px[\s\S]*\.network-type-options\{grid-template-columns:1fr\}/);
     expect(styles).toMatch(/prefers-reduced-transparency:reduce[\s\S]*\.terminal-block,.terminal-surface,.file-browser,.network-pane\{background:var\(--surface\)\}/);
+  });
+
+  it("keeps precision controls on stable pixels during dialog entry", () => {
+    expect(styles).toContain("@keyframes dialog-in{from{opacity:0}to{opacity:1}}");
+    expect(styles).not.toMatch(/@keyframes dialog-in\{[^}]*transform:/);
+    expect(lastDeclarations(".settings-nav-item")).toContain("grid-template-columns:28px minmax(0,1fr)");
+    expect(lastDeclarations(".settings-nav-item:active")).toContain("transform:none");
+    expect(lastDeclarations(".settings-nav-icon")).toContain("position:relative");
+    expect(lastDeclarations(".settings-nav-icon")).toContain("width:28px");
+    expect(lastDeclarations(".settings-nav-icon")).toContain("height:28px");
+    expect(declarations(".settings-nav-icon>svg")).toContain("position:absolute");
+    expect(declarations(".settings-nav-icon>svg")).toContain("inset:0");
+    expect(declarations(".settings-nav-icon>svg")).toContain("margin:auto");
   });
 
   it("keeps canvas and split gutters compact", () => {
