@@ -27,6 +27,20 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+function mockWorkspaceTabRect(element: HTMLElement, left: number) {
+  vi.spyOn(element, "getBoundingClientRect").mockReturnValue({
+    bottom: 35,
+    height: 30,
+    left,
+    right: left + 128,
+    top: 5,
+    width: 128,
+    x: left,
+    y: 5,
+    toJSON: () => ({}),
+  });
+}
+
 describe("application shell", () => {
   it("places Qterm branding left, workspace tabs center, and window controls right", async () => {
     const user = userEvent.setup();
@@ -179,6 +193,84 @@ describe("application shell", () => {
     expect(stages[0]).toHaveAttribute("aria-hidden", "true");
     expect(stages[1]).toHaveAttribute("aria-hidden", "false");
     expect(stages[1]).toHaveClass("workspace-transition-forward");
+  });
+
+  it("starts workspace tab dragging only after clear horizontal intent and shows live drop feedback", async () => {
+    const user = userEvent.setup();
+    render(<App/>);
+
+    const workspaceNavigation = screen.getByRole("navigation", { name: "工作区" });
+    await user.click(within(workspaceNavigation).getByRole("button", { name: "新建工作区" }));
+    await user.click(within(workspaceNavigation).getByRole("button", { name: "新建工作区" }));
+    const workspace1 = within(workspaceNavigation).getByRole("button", { name: "Workspace 1" });
+    const workspace2 = within(workspaceNavigation).getByRole("button", { name: "Workspace 2" });
+    const workspace3 = within(workspaceNavigation).getByRole("button", { name: "Workspace 3" });
+    const workspace1Tab = workspace1.closest<HTMLElement>(".workspace-tab")!;
+    const workspace2Tab = workspace2.closest<HTMLElement>(".workspace-tab")!;
+    const workspace3Tab = workspace3.closest<HTMLElement>(".workspace-tab")!;
+    mockWorkspaceTabRect(workspace1Tab, 0);
+    mockWorkspaceTabRect(workspace2Tab, 131);
+    mockWorkspaceTabRect(workspace3Tab, 262);
+
+    fireEvent.pointerDown(workspace1, { button: 0, pointerId: 11, clientX: 20, clientY: 20 });
+    fireEvent.pointerMove(window, { pointerId: 11, clientX: 28, clientY: 21, buttons: 1 });
+    expect(workspace1Tab).not.toHaveClass("dragging");
+    fireEvent.pointerMove(window, { pointerId: 11, clientX: 25, clientY: 33, buttons: 1 });
+    expect(workspace1Tab).not.toHaveClass("dragging");
+    fireEvent.pointerCancel(window, { pointerId: 11 });
+
+    fireEvent.pointerDown(workspace1, { button: 0, pointerId: 12, clientX: 20, clientY: 20 });
+    fireEvent.pointerMove(window, { pointerId: 12, clientX: 34, clientY: 22, buttons: 1 });
+    expect(workspace1Tab).toHaveClass("dragging");
+    expect(workspace1Tab.style.getPropertyValue("--workspace-tab-drag-x")).toBe("14px");
+    expect(workspaceNavigation.querySelector("[data-drop-shift]")).toBeNull();
+
+    fireEvent.pointerMove(window, { pointerId: 12, clientX: 220, clientY: 22, buttons: 1 });
+    expect(workspace1Tab.style.getPropertyValue("--workspace-tab-drag-x")).toBe("200px");
+    expect(workspace2Tab).toHaveAttribute("data-drop-shift", "left");
+    expect(workspace3Tab).toHaveAttribute("data-drop-shift", "left");
+    expect(workspace3Tab).toHaveClass("drop-target");
+    expect(workspace2Tab).not.toHaveClass("drop-target");
+
+    fireEvent.pointerCancel(window, { pointerId: 12 });
+    expect(workspace1Tab).not.toHaveClass("dragging");
+    expect(workspace1Tab.style.getPropertyValue("--workspace-tab-drag-x")).toBe("");
+    expect(workspace2Tab).not.toHaveAttribute("data-drop-shift");
+    expect(workspace3Tab).not.toHaveAttribute("data-drop-shift");
+    expect(workspace3Tab).toHaveClass("selected");
+  });
+
+  it("reorders and selects a non-active workspace on drop without entering rename from generated clicks", async () => {
+    const user = userEvent.setup();
+    render(<App/>);
+
+    const workspaceNavigation = screen.getByRole("navigation", { name: "工作区" });
+    await user.click(within(workspaceNavigation).getByRole("button", { name: "新建工作区" }));
+    const workspace1 = within(workspaceNavigation).getByRole("button", { name: "Workspace 1" });
+    const workspace2 = within(workspaceNavigation).getByRole("button", { name: "Workspace 2" });
+    const workspace1Tab = workspace1.closest<HTMLElement>(".workspace-tab")!;
+    const workspace2Tab = workspace2.closest<HTMLElement>(".workspace-tab")!;
+    const workspace1Stage = screen.getAllByLabelText("SSH 终端")[0].closest<HTMLElement>(".workspace-canvas-stage")!;
+    const workspace2Stage = screen.getAllByLabelText("SSH 终端")[1].closest<HTMLElement>(".workspace-canvas-stage")!;
+    mockWorkspaceTabRect(workspace1Tab, 0);
+    mockWorkspaceTabRect(workspace2Tab, 131);
+
+    fireEvent.pointerDown(workspace1, { button: 0, pointerId: 13, clientX: 20, clientY: 20 });
+    fireEvent.pointerMove(window, { pointerId: 13, clientX: 90, clientY: 21, buttons: 1 });
+    fireEvent.pointerUp(window, { pointerId: 13, clientX: 90, clientY: 21 });
+    expect(workspaceNavigation).toHaveClass("drop-settling");
+    fireEvent.click(workspace1);
+    fireEvent.doubleClick(workspace1);
+
+    expect(Array.from(workspaceNavigation.querySelectorAll(".workspace-tab-select span"), (label) => label.textContent)).toEqual(["Workspace 2", "Workspace 1"]);
+    expect(workspace1Tab).toHaveClass("selected");
+    expect(workspace2Tab).not.toHaveClass("selected");
+    expect(workspace1Stage).toHaveAttribute("aria-hidden", "false");
+    expect(workspace1Stage).toHaveClass("workspace-transition-forward");
+    expect(workspace2Stage).toHaveAttribute("aria-hidden", "true");
+    expect(within(workspaceNavigation).queryByRole("textbox", { name: "重命名 Workspace 1" })).not.toBeInTheDocument();
+    expect(workspaceNavigation.querySelector(".workspace-tab.dragging")).toBeNull();
+    expect(workspaceNavigation.querySelector("[data-drop-shift]")).toBeNull();
   });
 
   it("edits a workspace name inside its existing tab", async () => {

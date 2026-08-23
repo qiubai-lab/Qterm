@@ -199,6 +199,24 @@ describe("application layout styles", () => {
     expect(styles).toMatch(/prefers-reduced-motion:reduce[\s\S]*\.workspace-tab-selection\.ready\{transition:none\}/);
   });
 
+  it("keeps dragged workspace tabs attached to the pointer while the drop target makes room", () => {
+    expect(declarations(".workspace-tab")).toContain("transition:transform 140ms cubic-bezier(.2,.8,.2,1)");
+    expect(declarations(".workspace-tab.dragging")).toContain("transform:translate3d(var(--workspace-tab-drag-x),-1px,0) scale(1.01)");
+    expect(declarations(".workspace-tab.dragging")).toContain("border-color:var(--border)");
+    expect(declarations(".workspace-tab.dragging")).toContain("background:var(--raised)");
+    expect(declarations(".workspace-tab.dragging")).toContain("pointer-events:none");
+    expect(declarations(".workspace-tab.dragging :focus-visible")).toContain("outline:none");
+    expect(declarations('.workspace-tab[data-drop-shift="left"]')).toContain("transform:translate3d(calc((var(--workspace-tab-width) + 3px) * -1),0,0)");
+    expect(declarations('.workspace-tab[data-drop-shift="right"]')).toContain("transform:translate3d(calc(var(--workspace-tab-width) + 3px),0,0)");
+    expect(declarations(".workspace-tab.drop-target::after")).toContain("border:1px solid var(--workspace-tab-active-border)");
+    expect(declarations('.workspace-tab.drop-target[data-drop-shift="left"]::after')).toContain("left:calc(100% + 3px)");
+    expect(declarations('.workspace-tab.drop-target[data-drop-shift="right"]::after')).toContain("right:calc(100% + 3px)");
+    expect(declarations(".workspace-tab-strip.dragging .workspace-tab-selection")).toContain("opacity:0");
+    expect(declarations(".workspace-tab-strip.drop-settling .workspace-tab")).toContain("transition:none");
+    expect(styles).toMatch(/prefers-reduced-motion:reduce[\s\S]*\.workspace-tab:not\(\.dragging\)\{transition-property:opacity,color,background-color,border-color!important\}/);
+    expect(styles).not.toMatch(/prefers-reduced-motion:reduce[\s\S]*\.workspace-tab\[data-drop-shift\]\{transform:none\}/);
+  });
+
   it("slides workspace content in the tab direction with a reduced-motion fade", () => {
     expect(declarations(".workspace-canvas-stage.visible.workspace-transition-forward")).toContain("animation:workspace-stage-forward 220ms cubic-bezier(.2,.8,.2,1)");
     expect(declarations(".workspace-canvas-stage.visible.workspace-transition-backward")).toContain("animation:workspace-stage-backward 220ms cubic-bezier(.2,.8,.2,1)");

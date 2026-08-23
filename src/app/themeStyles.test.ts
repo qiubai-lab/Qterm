@@ -228,6 +228,11 @@ describe("application theme contract", () => {
     expect(credentialDialog).toMatch(/\.credential-editor-pane[^}]+background:var\(--raised\)/);
     expect(credentialDialog).toMatch(/\.credential-editor-heading strong[^}]+color:var\(--text\)/);
     expect(connectionDialog).toMatch(/\.connection-sidebar[^}]+background:var\(--panel-bg\)/);
+    expect(connectionDialog).toMatch(/\.connection-group-heading:hover[^}]+background:\s*var\(--hover\)/);
+    expect(connectionDialog).toMatch(/\.connection-group-chevron[^}]+color:inherit[^}]+opacity:\.72/);
+    expect(connectionDialog).toMatch(/\.connection-group-toggle:hover \.connection-group-chevron[^}]+color:inherit[^}]+opacity:1/);
+    expect(connectionDialog).not.toMatch(/\.connection-group-toggle:hover \.connection-group-chevron[^}]+var\(--icon-hover\)/);
+    expect(connectionDialog).toMatch(/\.connection-item:hover[^}]+background:var\(--hover\)/);
     expect(connectionDialog).toMatch(/\.connection-item\.selected[^}]+background:var\(--selection-surface\)/);
     expect(connectionDialog).toMatch(/\.connection-item-name[^}]+color:var\(--muted\)/);
     expect(connectionDialog).toMatch(/\.connection-item:hover \.connection-item-name[^}]+color:var\(--text\)/);
