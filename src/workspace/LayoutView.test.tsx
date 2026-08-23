@@ -138,6 +138,19 @@ describe("WorkspaceCanvas terminal actions", () => {
     expect(screen.getByRole("button", { name: "关闭文件窗口" })).toBeInTheDocument();
   });
 
+  it("shows a files connection failure once in the shared lower-right block notice", () => {
+    fileRuntimes = {
+      "files-1": { sessionId: null, kind: "sftp", status: "failed", hostKeyPrompt: null, notice: "认证被远程主机拒绝", connectionProgress: null },
+    };
+    const view = render(<WorkspaceCanvas workspace={{ ...workspace, activeBlockId: "files-1", layout: { type: "files", blockId: "files-1", profileId: "password-profile", path: "." } }} visible onRequestClose={vi.fn()} onRequestAuthConnection={vi.fn()}/>);
+
+    const alert = within(view.container).getByRole("alert");
+    expect(alert).toHaveClass("block-notice");
+    expect(alert).toHaveAttribute("aria-live", "assertive");
+    expect(alert).toHaveTextContent("认证被远程主机拒绝");
+    expect(view.container.querySelectorAll(".block-notice")).toHaveLength(1);
+  });
+
   it("uses the shared connection route widget in terminal, files, and network blocks", () => {
     const progress = {
       totalNodes: 2, completedNodes: 0, activeNode: 0, phase: "connecting" as const, message: "正在连接节点 1",

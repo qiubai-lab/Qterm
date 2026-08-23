@@ -5,11 +5,13 @@ import { readCssBundle } from "../test/css";
 import { readFileSync } from "node:fs";
 
 const styles = readCssBundle("src/app/app.css");
+const lightOverrides = readFileSync("src/app/styles/themes/lightOverrides.css", "utf8");
+const workspaceShellSource = readFileSync("src/workspace/WorkspaceShell.tsx", "utf8");
 const tauriConfig = JSON.parse(readFileSync("src-tauri/tauri.conf.json", "utf8")) as {
-  app: { windows: Array<{ theme?: string; transparent?: boolean; windowEffects?: { effects: string[]; state?: string; radius?: number } }> };
+  app: { windows: Array<{ theme?: string; transparent?: boolean; shadow?: boolean; windowEffects?: { effects: string[]; state?: string; radius?: number } }> };
 };
 const macosTauriConfig = JSON.parse(readFileSync("src-tauri/tauri.macos.conf.json", "utf8")) as {
-  app: { windows: Array<{ decorations?: boolean; titleBarStyle?: string; trafficLightPosition?: { x: number; y: number } }> };
+  app: { windows: Array<{ decorations?: boolean; titleBarStyle?: string; trafficLightPosition?: { x: number; y: number }; windowEffects?: { effects: string[]; state?: string; radius?: number } }> };
 };
 
 function declarations(selector: string): string {
@@ -134,6 +136,7 @@ describe("application layout styles", () => {
   it("uses native window material behind a lightly tinted, rounded webview shell", () => {
     const root = declarations(":root");
     const appShell = declarations(".app-shell");
+    const windowsShell = declarations('.app-shell[data-platform="windows"]');
     const chrome = declarations(".app-chrome");
     const utilityRail = declarations(".utility-rail");
     const workspaceCanvas = declarations(".workspace-canvas");
@@ -148,6 +151,8 @@ describe("application layout styles", () => {
     expect(appShell).toContain("background:transparent");
     expect(appShell).not.toContain("border:");
     expect(appShell).not.toContain("isolation:isolate");
+    expect(windowsShell).toContain("border-radius:0");
+    expect(windowsShell).toContain("box-shadow:none");
     expect(chrome).not.toContain("backdrop-filter:");
     expect(utilityRail).not.toContain("backdrop-filter:");
     expect(workspaceCanvas).toContain("background:rgba(5,7,9,.18)");
@@ -158,11 +163,12 @@ describe("application layout styles", () => {
     expect(dialog).toContain("backdrop-filter:blur(30px)");
     expect(window.theme).toBe("Dark");
     expect(window.transparent).toBe(true);
+    expect(window.shadow).toBe(true);
     expect(window.windowEffects).toEqual({
       effects: ["hudWindow", "mica", "acrylic", "blur"],
-      state: "followsWindowActiveState",
-      radius: 12,
     });
+    expect(lightOverrides).toMatch(/:root\[data-theme="light"\] body,\s*:root\[data-theme="light"\] #root\s*\{[^}]*background:transparent/);
+    expect(lightOverrides).toMatch(/:root\[data-theme="light"\] \.app-shell\s*\{[^}]*background:var\(--canvas\)/);
     expect(styles).toMatch(/prefers-reduced-transparency:reduce[\s\S]*\.app-shell,\.workspace-canvas\{background:var\(--canvas\)\}/);
     expect(styles).toMatch(/prefers-reduced-transparency:reduce[\s\S]*\.terminal-block,\.terminal-surface,\.file-browser,\.network-pane\{background:var\(--surface\)\}/);
     expect(styles).toMatch(/prefers-contrast:more[\s\S]*\.app-shell\{background:var\(--canvas\);box-shadow:inset 0 0 0 1px var\(--border\)\}/);
@@ -179,6 +185,11 @@ describe("application layout styles", () => {
     expect(macosWindow.decorations).toBe(true);
     expect(macosWindow.titleBarStyle).toBe("Overlay");
     expect(macosWindow.trafficLightPosition).toEqual({ x: 14, y: 18 });
+    expect(macosWindow.windowEffects).toEqual({
+      effects: ["hudWindow", "mica", "acrylic", "blur"],
+      state: "followsWindowActiveState",
+      radius: 12,
+    });
     expect(brand).toContain("height:30px");
     expect(brand).not.toContain("transition:");
     expect(brandPlate).toContain("inset:0 0 0 -80px");
@@ -314,18 +325,83 @@ describe("application layout styles", () => {
   });
 
   it("makes active blocks obvious and moves one non-interactive focus indicator", () => {
+    const canvas = declarations(".workspace-canvas");
+    const block = declarations(".terminal-block");
     const activeBlock = declarations(".terminal-block.active");
     const activeHeader = declarations(".terminal-block.active>.terminal-block-header");
     const indicator = declarations(".active-block-indicator");
     const movingIndicator = declarations(".active-block-indicator.ready");
 
+    expect(canvas).toContain("--workspace-block-radius:9px");
+    expect(block).toContain("border-radius:var(--workspace-block-radius)");
     expect(activeBlock).toContain("border-color:var(--block-border-active)");
-    expect(activeBlock).toContain("box-shadow:");
+    expect(activeBlock).toContain("box-shadow:var(--block-active-surface-shadow)");
     expect(activeHeader).toContain("background:var(--block-header-active-background)");
     expect(indicator).toContain("pointer-events:none");
+    expect(indicator).toContain("border-radius:var(--workspace-block-radius)");
+    expect(indicator).toContain("border:1px solid var(--block-border-active)");
+    expect(indicator).toContain("box-shadow:var(--block-active-indicator-shadow)");
     expect(movingIndicator).toContain("transition:transform 300ms");
     expect(styles).toContain("@media (prefers-reduced-motion:reduce)");
     expect(styles).toContain(".active-block-indicator.ready{transition:none}");
+  });
+
+  it("keeps the selected workspace tab above one theme-owned moving surface", () => {
+    const selection = declarations(".workspace-tab-selection");
+    expect(selection).toContain("border:1px solid var(--workspace-tab-active-border)");
+    expect(selection).toContain("background:var(--workspace-tab-active-background)");
+    expect(selection).toContain("box-shadow:var(--workspace-tab-active-shadow)");
+    expect(declarations(".workspace-tab.selected .workspace-tab-select svg")).toContain("color:var(--accent)");
+    expect(declarations(".workspace-tab:hover:not(.selected)")).toContain("border-color:var(--workspace-tab-hover-border)");
+    expect(declarations(".workspace-tab:hover:not(.selected)")).toContain("background:var(--workspace-tab-hover-background)");
+    expect(lightOverrides).not.toMatch(/\.workspace-tab:hover:not\(\.selected\)/);
+    expect(lightOverrides).not.toMatch(/\.workspace-tab\.selected/);
+    expect(lightOverrides).not.toContain(".workspace-tab.active");
+    expect(lightOverrides).not.toContain(".workspace-tab[data-active]");
+  });
+
+  it("uses shared theme-aware compact icon buttons for workspace close and create actions", () => {
+    const iconButton = declarations(".icon-button");
+    const quietHover = declarations(".icon-button:hover:not(:disabled)");
+
+    expect(workspaceShellSource).toContain('className="workspace-tab-close"');
+    expect(workspaceShellSource).toContain('className="new-workspace-tab"');
+    expect(workspaceShellSource.match(/<IconButton/g)).toHaveLength(2);
+    expect(iconButton).toContain("color:var(--icon)");
+    expect(iconButton).toContain("background:transparent");
+    expect(quietHover).toContain("color:var(--icon-hover)");
+    expect(quietHover).toContain("background:var(--control-hover)");
+    expect(declarations(".ui-icon-button:active:not(:disabled)")).toContain("transform:scale(.97)");
+    expect(styles).toMatch(/\.ui-button:focus-visible,\s*\.ui-icon-button:focus-visible,[^{]+\{\s*outline:2px solid var\(--focus\)/);
+    expect(declarations(".workspace-tab-close")).toContain("position:absolute");
+    expect(declarations(".workspace-tab-close")).toContain("top:1px");
+    expect(declarations(".new-workspace-tab")).toContain("margin-left:2px");
+    expect(declarations(".workspace-tab-close.ui-icon-button:hover:not(:disabled),.new-workspace-tab.ui-icon-button:hover:not(:disabled)")).toContain("background:var(--chrome-action-hover)");
+    expect(declarations(".workspace-tab-close.ui-icon-button:active:not(:disabled),.new-workspace-tab.ui-icon-button:active:not(:disabled)")).toContain("background:var(--chrome-action-pressed)");
+    expect(declarations(".window-controls button:not(.window-close):hover")).toContain("background:var(--chrome-action-hover)");
+    expect(declarations(".window-controls button:not(.window-close):active")).toContain("background:var(--chrome-action-pressed)");
+    expect(lightOverrides).not.toMatch(/workspace-tab-close|new-workspace-tab/);
+  });
+
+  it("keeps theme selection theme-owned without painting an unselected status marker", () => {
+    const option = declarations(".settings-theme-option");
+    const selected = declarations(".settings-theme-option[data-selected]");
+
+    expect(option).toContain("background:var(--surface)");
+    expect(selected).toContain("border-color:var(--accent)");
+    expect(selected).toContain("color:var(--text)");
+    expect(selected).toContain("background:var(--accent-bg)");
+    expect(lightOverrides).not.toContain(".settings-theme-option");
+  });
+
+  it("anchors workbench failures without covering the block header", () => {
+    const notice = declarations(".block-notice");
+    expect(notice).toContain("position:absolute");
+    expect(notice).toContain("right:8px");
+    expect(notice).toContain("bottom:8px");
+    expect(notice).toContain("color:var(--danger)");
+    expect(notice).toContain("var(--danger-bg)");
+    expect(notice).toContain("var(--shadow-strong)");
   });
 
   it("keeps terminal and files block actions visible without hover", () => {
@@ -337,7 +413,10 @@ describe("application layout styles", () => {
     expect(declarations(".workspace-stage-content")).toContain("grid-template-columns:minmax(0,1fr) 62px");
     expect(declarations(".rail-button")).toContain("grid-template-rows:18px auto");
     expect(declarations(".rail-button-label")).toContain("font-size:8px");
-    expect(declarations(".rail-button-label")).toContain("color:#737a84");
+    expect(declarations(".rail-button")).toContain("color:var(--icon)");
+    expect(declarations(".rail-button-label")).toContain("color:var(--muted)");
+    expect(declarations(".rail-button.active")).toContain("color:var(--accent)");
+    expect(declarations(".rail-button.active")).toContain("background:var(--accent-bg)");
   });
 
   it("uses a sliding segmented connection tab with directional, reduced-motion-aware content transitions", () => {

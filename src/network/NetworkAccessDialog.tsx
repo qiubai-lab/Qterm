@@ -2,6 +2,7 @@ import { writeText as writeClipboardText } from "@tauri-apps/plugin-clipboard-ma
 import { useEffect, useState } from "react";
 
 import { Icon } from "../components/Icon";
+import { IconButton, StatusBadge } from "../components/Button";
 import { DialogFrame } from "../components/dialogs/DialogFrame";
 import { listProxyBrowsers, launchProxyBrowser, type ProxyBrowserAvailability, type ProxyBrowserId } from "../lib/tauri/browserProxy";
 import type { NetworkRule, NetworkRuleRuntimeState } from "../lib/tauri/network";
@@ -77,7 +78,7 @@ export function NetworkAccessDialog({ rule, profileHost, runtimeState, activeEls
     className="network-access-dialog"
     title={`访问 ${rule.name}`}
     subtitle={rule.type === "socks5" ? "复制代理地址或启动独立代理浏览器" : "复制转发端点，或手动选择地址"}
-    headerActions={rule.type === "socks5" ? <span className="network-access-experimental">实验性</span> : undefined}
+    headerActions={rule.type === "socks5" ? <StatusBadge tone="warning" presentation="tag" size="compact">实验性</StatusBadge> : undefined}
     onClose={onClose}
   >
     <div className="network-access-content network-access-content-compact">
@@ -87,7 +88,7 @@ export function NetworkAccessDialog({ rule, profileHost, runtimeState, activeEls
           <label htmlFor={`network-access-${rule.id}-${field.label}`}>{field.label}</label>
           <div>
             <input id={`network-access-${rule.id}-${field.label}`} readOnly value={field.value} onFocus={(event) => event.currentTarget.select()}/>
-            <button type="button" className="icon-button" aria-label={`复制${field.label}`} title={`复制${field.label}`} onClick={() => void copy(field)}><Icon name="copy" size={13}/></button>
+            <IconButton label={`复制${field.label}`} variant="secondary" className="network-access-copy-button" title={`复制${field.label}`} onClick={() => void copy(field)}><Icon name="copy" size={13}/></IconButton>
           </div>
         </div>)}
         {access.warning && <p className="network-access-warning"><Icon name="network" size={13}/><span>{access.warning}</span></p>}

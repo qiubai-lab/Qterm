@@ -3,6 +3,7 @@ import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { writeText as writeClipboardText } from "@tauri-apps/plugin-clipboard-manager";
 
 import { Icon } from "../components/Icon";
+import { Button, StatusBadge } from "../components/Button";
 import { DialogFrame } from "../components/dialogs/DialogFrame";
 import { copyFile, createEntry, deleteEntry, listLocalDirectory, listLocalRoots, listRemoteDirectory, readBinaryFile, readTextFile, renameEntry, writeTextFile, type DirectoryListing, type FileEntry, type LocalRoot } from "../lib/tauri/files";
 import { cancelTransfer, downloadDirectory, downloadFile, selectDownloadDirectory, selectDownloadPath, uploadDroppedEntries, type TransferEvent } from "../lib/tauri/transfers";
@@ -470,11 +471,11 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
       <header className="file-preview-toolbar">
         <button aria-label="返回文件夹" title="返回文件夹" onClick={closePreview}><Icon name="back" size={14}/></button>
         <div className="file-preview-identity"><strong>{preview.entry.name}{dirty && <span className="file-dirty-indicator" aria-label="有未保存的修改">*</span>}</strong><small title={kind === "local" ? displayLocalPath(preview.entry.path) : preview.entry.path}>{kind === "local" ? displayLocalPath(preview.entry.path) : preview.entry.path}</small></div>
-        {preview.mode === "edit" && <span className="file-experimental-badge">实验功能</span>}
+        {preview.mode === "edit" && <StatusBadge tone="warning" presentation="tag" size="compact">实验功能</StatusBadge>}
         <span className="file-view-mode">{preview.mode === "preview" ? "预览" : "编辑"}</span>
         {preview.mode === "preview" && <button className="file-edit-button" disabled={preview.kind === "image"} title={preview.kind === "image" ? "此文件类型不支持编辑" : "编辑文件（实验功能）"} onClick={() => setPreview((current) => current && current.kind !== "image" ? { ...current, mode: "edit" } : current)}><Icon name="edit" size={11}/><span>编辑</span></button>}
         {preview.mode === "edit" && <button className="file-cancel-button" onClick={leavePreview}><Icon name="close" size={10}/><span>取消</span></button>}
-        {preview.mode === "edit" && <button className="file-save-button" aria-label={saving ? "正在保存" : dirty ? "保存" : "已保存"} title={saving ? "正在保存" : dirty ? "保存文件" : "文件已保存"} disabled={!dirty || saving || preview.loading} onClick={() => void savePreview()}><Icon name={dirty || saving ? "save" : "check"} size={11}/><span>保存</span></button>}
+        {preview.mode === "edit" && <button className="file-save-button" aria-label={saving ? "正在保存" : dirty ? "保存" : "已保存"} aria-busy={saving || undefined} title={saving ? "正在保存" : dirty ? "保存文件" : "文件已保存"} disabled={!dirty || saving || preview.loading} onClick={() => void savePreview()}><Icon name={dirty || saving ? "save" : "check"} size={11}/><span>保存</span></button>}
       </header>
       {preview.error && <div className="file-preview-message error" role="alert">{preview.error}</div>}
       <main className="file-preview-content">
@@ -502,9 +503,8 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
       </div>
       <button aria-label="创建文件" title="创建文件" disabled={showLocalRoots || loading || (kind === "sftp" && status !== "connected")} onClick={() => requestCreate("createFile")}><Icon name="filePlus" size={14}/></button>
       <button aria-label="创建文件夹" title="创建文件夹" disabled={showLocalRoots || loading || (kind === "sftp" && status !== "connected")} onClick={() => requestCreate("createDirectory")}><Icon name="folderPlus" size={14}/></button>
-      <button aria-label={showLocalRoots ? "刷新本机位置" : "刷新文件夹"} title="刷新" disabled={loading} onClick={() => showLocalRoots ? void openLocalRoots() : void load(path)}><Icon name="refresh" size={14}/></button>
+      <button aria-label={showLocalRoots ? "刷新本机位置" : "刷新文件夹"} aria-busy={loading || undefined} title="刷新" disabled={loading} onClick={() => showLocalRoots ? void openLocalRoots() : void load(path)}><Icon name="refresh" size={14}/></button>
     </nav>
-    {connectionError && <div className="file-browser-inline-error" role="alert">{connectionError}</div>}
     {!connectionError && error && (listing || (showLocalRoots && localRoots.length > 0)) && <div className="file-browser-inline-error" role="alert">{error}</div>}
     <div className="file-browser-content" ref={listScroll} onPointerEnter={() => setEditingPath(false)} onScroll={(event) => { setEditingPath(false); updateVirtualRange(event.currentTarget, activeEntries.length); }}>
       <div className="file-browser-columns" aria-label="文件排序">
@@ -525,7 +525,7 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
     </div>
     {contextMenu && <div ref={menuRef} className="file-context-menu" data-placement={contextMenu.placement} role="menu" aria-label={contextEntries.length > 1 ? `${contextEntries.length} 个已选项目菜单` : `${contextMenu.entry.name} 文件菜单`} style={{ left: contextMenu.x, top: contextMenu.y }} onContextMenu={(event) => event.preventDefault()}>
       {contextEntries.length === 1 && !contextMenu.entry.isDirectory && !contextMenu.entry.isSymlink && <button role="menuitem" onClick={() => { setContextMenu(null); void openFile(contextMenu.entry, "preview"); }}>预览</button>}
-      {contextEntries.length === 1 && !contextMenu.entry.isDirectory && !contextMenu.entry.isSymlink && previewKindFor(contextMenu.entry.name) !== "image" && <button role="menuitem" className="file-context-edit" onClick={() => { setContextMenu(null); void openFile(contextMenu.entry, "edit"); }}><span>编辑</span><small>实验</small></button>}
+      {contextEntries.length === 1 && !contextMenu.entry.isDirectory && !contextMenu.entry.isSymlink && previewKindFor(contextMenu.entry.name) !== "image" && <button role="menuitem" className="file-context-edit" onClick={() => { setContextMenu(null); void openFile(contextMenu.entry, "edit"); }}><span>编辑</span><StatusBadge tone="warning" presentation="tag" size="compact">实验</StatusBadge></button>}
       {contextEntries.length === 1 && kind === "sftp" && !contextMenu.entry.isSymlink && <button role="menuitem" onClick={() => void startDownload(contextMenu.entry)}>下载到本地…</button>}
       {contextEntries.length === 1 && <button role="menuitem" onClick={() => void copyPath(contextMenu.entry)}>复制路径</button>}
       {contextEntries.length === 1 && <div className="file-context-menu-separator" role="separator"/>}
@@ -549,13 +549,13 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
       <form className="file-name-operation" onSubmit={(event) => void submitNameOperation(event)}>
         <label>{nameOperation.kind === "copy" ? "副本名称" : nameOperation.kind === "rename" ? "新名称" : nameOperation.kind === "createFile" ? "文件名称" : "文件夹名称"}<input data-dialog-autofocus aria-label={nameOperation.kind === "copy" ? "副本名称" : nameOperation.kind === "rename" ? "新名称" : nameOperation.kind === "createFile" ? "文件名称" : "文件夹名称"} value={nameOperation.value} onChange={(event) => setNameOperation({ ...nameOperation, value: event.target.value, error: "" })}/></label>
         {nameOperation.error && <p className="inline-message error" role="alert">{nameOperation.error}</p>}
-        <footer className="dialog-actions end"><button type="button" className="secondary-button" disabled={nameOperation.busy} onClick={() => setNameOperation(null)}>取消</button><button className="primary-button" disabled={nameOperation.busy || !nameOperation.value.trim() || (nameOperation.kind === "rename" && nameOperation.value === nameOperation.entry?.name)}>{nameOperation.busy ? "处理中…" : nameOperation.kind === "copy" ? "创建副本" : nameOperation.kind === "rename" ? "保存名称" : nameOperation.kind === "createFile" ? "创建文件" : "创建文件夹"}</button></footer>
+        <footer className="dialog-actions end"><Button disabled={nameOperation.busy} onClick={() => setNameOperation(null)}>取消</Button><Button type="submit" variant="primary" loading={nameOperation.busy} disabled={!nameOperation.value.trim() || (nameOperation.kind === "rename" && nameOperation.value === nameOperation.entry?.name)}>{nameOperation.busy ? "处理中…" : nameOperation.kind === "copy" ? "创建副本" : nameOperation.kind === "rename" ? "保存名称" : nameOperation.kind === "createFile" ? "创建文件" : "创建文件夹"}</Button></footer>
       </form>
     </DialogFrame>}
     {deleteOperation && <DialogFrame title={deleteOperation.entries.length > 1 ? `删除 ${deleteOperation.entries.length} 个项目？` : `删除${deleteOperation.entries[0].isDirectory ? "文件夹" : deleteOperation.entries[0].isSymlink ? "链接" : "文件"}？`} subtitle={deleteOperation.entries.length > 1 ? deleteOperation.entries.map((entry) => entry.name).join("、") : deleteOperation.entries[0].name} compact onClose={deleteOperation.busy ? () => undefined : () => setDeleteOperation(null)}>
       <p className="confirm-copy">{deleteOperation.entries.length > 1 ? "这些项目将被永久删除，其中的文件夹及全部内容将被永久删除；链接指向的目标会保留。此操作无法撤销。" : deleteOperation.entries[0].isDirectory ? "文件夹及其中的全部内容将被永久删除，此操作无法撤销。" : deleteOperation.entries[0].isSymlink ? "只会删除此链接，不会删除链接指向的目标。此操作无法撤销。" : "文件将被永久删除，此操作无法撤销。"}</p>
       {deleteOperation.error && <p className="inline-message error" role="alert">{deleteOperation.error}</p>}
-      <footer className="dialog-actions end"><button className="secondary-button" disabled={deleteOperation.busy} onClick={() => setDeleteOperation(null)}>取消</button><button className="danger-button filled" data-dialog-autofocus disabled={deleteOperation.busy} onClick={() => void confirmDelete()}>{deleteOperation.busy ? "删除中…" : "确认删除"}</button></footer>
+      <footer className="dialog-actions end"><Button disabled={deleteOperation.busy} onClick={() => setDeleteOperation(null)}>取消</Button><Button variant="dangerSolid" data-dialog-autofocus loading={deleteOperation.busy} onClick={() => void confirmDelete()}>{deleteOperation.busy ? "删除中…" : "确认删除"}</Button></footer>
     </DialogFrame>}
   </div>;
 }

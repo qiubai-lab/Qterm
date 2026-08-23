@@ -65,6 +65,14 @@
 .secondary-button:disabled,
 .danger-button:disabled { color:var(--text-disabled); cursor:not-allowed; opacity:.58; }
 
+.ui-button[aria-busy="true"]:disabled,
+.ui-icon-button[aria-busy="true"]:disabled { cursor:wait; opacity:1; }
+.ui-button--primary[aria-busy="true"]:disabled { border-color:var(--accent); color:var(--accent-contrast); background:var(--accent); }
+.ui-button--secondary[aria-busy="true"]:disabled { border-color:var(--border); color:var(--text); background:var(--control-bg); }
+.ui-button--quiet[aria-busy="true"]:disabled { color:var(--muted); background:transparent; }
+.ui-button--danger[aria-busy="true"]:disabled { color:var(--danger); background:var(--danger-bg); }
+.ui-button--dangerSolid[aria-busy="true"]:disabled { color:var(--text-strong); background:color-mix(in srgb,var(--danger) 62%,var(--danger-bg)); }
+
 .ui-icon-button,
 .icon-button {
   display:grid;
@@ -81,11 +89,14 @@
 }
 .ui-icon-button--compact { width:26px; height:26px; border-radius:5px; }
 .ui-icon-button--quiet:hover:not(:disabled),
-.icon-button:hover:not(:disabled) { color:var(--icon-hover); background:var(--hover); }
+.icon-button:hover:not(:disabled) { color:var(--icon-hover); background:var(--control-hover); }
 .ui-icon-button--secondary { border-color:var(--border); color:var(--icon); background:var(--control-bg); }
 .ui-icon-button--secondary:hover:not(:disabled) { color:var(--icon-hover); background:var(--hover); }
 .ui-icon-button--danger { border-color:color-mix(in srgb,var(--danger) 48%,var(--border)); color:var(--danger); background:transparent; }
 .ui-icon-button--danger:hover:not(:disabled) { border-color:var(--danger); background:var(--danger-bg); }
+.ui-icon-button--quiet[aria-busy="true"]:disabled { color:var(--icon); background:transparent; }
+.ui-icon-button--secondary[aria-busy="true"]:disabled { border-color:var(--border); color:var(--text); background:var(--control-bg); }
+.ui-icon-button--danger[aria-busy="true"]:disabled { border-color:var(--danger); color:var(--danger); background:var(--danger-bg); }
 
 .ui-status-badge {
   display:inline-flex;
@@ -102,6 +113,9 @@
   white-space:nowrap;
 }
 .ui-status-badge-dot { width:5px; height:5px; flex:none; border-radius:50%; background:var(--icon); }
+.ui-status-badge--tag { gap:0; font-weight:700; letter-spacing:.03em; }
+.ui-status-badge--compact { min-height:18px; padding:0 6px; font-size:7.5px; }
+.ui-status-badge--regular { min-height:26px; padding:0 9px; font-size:9px; }
 .ui-status-badge--success { border-color:color-mix(in srgb,var(--accent) 38%,var(--border)); color:var(--text); background:var(--accent-bg); }
 .ui-status-badge--success .ui-status-badge-dot { background:var(--accent); }
 .ui-status-badge--warning { border-color:color-mix(in srgb,var(--warning) 44%,var(--border)); color:var(--warning); background:var(--warning-bg); }

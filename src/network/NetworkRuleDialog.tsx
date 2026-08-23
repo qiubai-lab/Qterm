@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 
 import { Icon, type IconName } from "../components/Icon";
+import { Button } from "../components/Button";
 import { DialogActionStatus, DialogFrame } from "../components/dialogs/DialogFrame";
 import type { NetworkRule, NetworkRuleInput } from "../lib/tauri/network";
 import { networkRuleTypeLabel, type NetworkRuleType } from "./networkRuleTypes";
@@ -46,7 +47,7 @@ export function NetworkRuleDialog({ profileId, rule, initialType, busy, message,
         {type !== "socks5" && <><label><FieldLabel icon={targetIcon(type)}>目标地址</FieldLabel><input value={targetHost} disabled={busy} onChange={(event) => setTargetHost(event.target.value)}/></label><label>目标端口<input type="number" min={1} max={65535} value={targetPort} disabled={busy} onChange={(event) => setTargetPort(event.target.value)}/></label></>}
       </div>
       <p className={`network-exposure-note${exposed ? " warning" : ""}`}>{exposureNote}</p>
-      <footer className="dialog-actions dialog-actions-with-status"><DialogActionStatus message={validation || message}/><div><button type="button" className="secondary-button" disabled={busy} onClick={onBack ?? onClose}>{onBack ? "返回选择" : "取消"}</button><button className="primary-button" disabled={busy}>{busy ? "正在保存…" : "保存规则"}</button></div></footer>
+      <footer className="dialog-actions dialog-actions-with-status"><DialogActionStatus message={validation || message}/><div><Button disabled={busy} onClick={onBack ?? onClose}>{onBack ? "返回选择" : "取消"}</Button><Button type="submit" variant="primary" loading={busy}>{busy ? "正在保存…" : "保存规则"}</Button></div></footer>
     </form>
   </DialogFrame>;
 }

@@ -82,7 +82,7 @@ describe("NetworkAccessDialog", () => {
     const user = userEvent.setup();
     render(<NetworkAccessDialog rule={socksRule} profileHost="server.example.com" runtimeState="running" activeElsewhere={false} onClose={vi.fn()}/>);
 
-    expect(screen.getByText("实验性")).toBeInTheDocument();
+    expect(screen.getByText("实验性")).toHaveClass("ui-status-badge--tag", "ui-status-badge--warning");
     expect(screen.getByText(/不保证扩展或 WebRTC 流量/)).toBeInTheDocument();
     expect(screen.getByLabelText("SOCKS5 连接地址")).toHaveValue("socks5://127.0.0.1:1080");
     expect(screen.getByRole("switch", { name: "代理本地与内网地址" })).toBeChecked();

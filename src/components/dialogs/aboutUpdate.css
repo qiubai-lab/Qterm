@@ -111,15 +111,15 @@
 
 .update-check-status[data-status="latest"] .update-check-status-icon,
 .update-check-status[data-status="available"] .update-check-status-icon {
-  border-color: #3d655c;
-  color: var(--accent);
-  background: #172722;
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--border));
+  color:var(--accent);
+  background:var(--accent-bg);
 }
 
 .update-check-status[data-status="error"] .update-check-status-icon {
-  border-color: #65413f;
-  color: var(--danger);
-  background: #271817;
+  border-color: color-mix(in srgb, var(--danger) 42%, var(--border));
+  color:var(--danger);
+  background:var(--danger-bg);
 }
 
 .update-check-status > div:first-of-type {
@@ -146,7 +146,7 @@
 }
 
 .update-check-status[data-status="error"] p {
-  color: #d49a96;
+  color:var(--danger);
 }
 
 .update-check-homebrew {
@@ -314,8 +314,8 @@
 .update-check-release,
 .update-check-recheck {
   border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
-  color: var(--accent);
-  background: var(--accent-bg);
+  color: var(--text);
+  background: var(--control-bg);
 }
 
 .update-check-copy:hover,
@@ -325,6 +325,10 @@
   color: var(--text-strong);
   background: var(--hover);
 }
+
+.update-check-copy svg,
+.update-check-release svg,
+.update-check-recheck svg { color:var(--accent); }
 
 @keyframes about-update-spin {
   to { transform: rotate(360deg); }

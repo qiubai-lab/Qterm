@@ -145,9 +145,14 @@ describe("SettingsDialog", () => {
     renderSettings(onClose);
     await user.click(await screen.findByRole("button", { name: /外观/ }));
     const light = screen.getByRole("radio", { name: /亮色/ });
-    expect(screen.getByRole("radio", { name: /深色/ })).toBeChecked();
+    const dark = screen.getByRole("radio", { name: /深色/ });
+    expect(dark).toBeChecked();
+    expect(dark.closest("label")?.querySelector(".settings-theme-check")).toHaveTextContent("✓");
+    expect(light.closest("label")?.querySelector(".settings-theme-check")).toBeNull();
     await user.click(light);
     expect(light).toBeChecked();
+    expect(light.closest("label")?.querySelector(".settings-theme-check")).toHaveTextContent("✓");
+    expect(dark.closest("label")?.querySelector(".settings-theme-check")).toBeNull();
     expect(document.documentElement).toHaveAttribute("data-theme", "light");
     await user.click(screen.getByRole("button", { name: "关闭" }));
     expect(document.documentElement).toHaveAttribute("data-theme", "dark");

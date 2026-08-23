@@ -168,7 +168,7 @@ function ThemeOption({ theme, current, title, description, onSelect }: {
     <input type="radio" name="app-theme" value={theme} checked={selected} onChange={() => onSelect(theme)}/>
     <span className={`settings-theme-preview ${theme}`} aria-hidden="true"><span/><span/><span/></span>
     <span className="settings-theme-copy"><strong>{title}</strong><small>{description}</small></span>
-    <span className="settings-theme-check" aria-hidden="true">{selected ? "✓" : ""}</span>
+    {selected && <span className="settings-theme-check" aria-hidden="true">✓</span>}
   </label>;
 }
 

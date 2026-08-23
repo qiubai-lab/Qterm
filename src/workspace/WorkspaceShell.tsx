@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 
+import { IconButton } from "../components/Button";
 import { Icon, type IconName } from "../components/Icon";
 import { ConnectionDialog } from "../components/dialogs/ConnectionDialog";
 import { CredentialDialog } from "../components/dialogs/CredentialDialog";
@@ -394,9 +395,9 @@ export function WorkspaceShell() {
         {document.workspaces.map((workspace) => <div ref={(element) => { if (element) workspaceTabRefs.current.set(workspace.id, element); else workspaceTabRefs.current.delete(workspace.id); }} key={workspace.id} data-workspace-id={workspace.id} className={`workspace-tab${workspace.id === activeWorkspace.id ? " selected" : ""}${draggedWorkspace === workspace.id ? " dragging" : ""}`} onPointerDown={(event) => beginWorkspaceDrag(event, workspace.id)}>
           {renaming?.id === workspace.id ? <div className="workspace-tab-rename"><Icon name="workspace" size={13}/><input autoFocus aria-label={`重命名 ${workspace.name}`} value={renaming.value} onChange={(event) => setRenaming({ ...renaming, value: event.target.value })} onBlur={commitRename} onKeyDown={(event) => { if (event.key === "Enter") commitRename(); if (event.key === "Escape") setRenaming(null); }}/></div>
             : <button className="workspace-tab-select" onClick={() => dispatch({ type: "selectWorkspace", workspaceId: workspace.id })} onDoubleClick={() => setRenaming({ id: workspace.id, value: workspace.name })}><Icon name="workspace" size={13}/><span>{workspace.name}</span></button>}
-          {document.workspaces.length > 1 && <button className="workspace-tab-close" aria-label={`关闭 ${workspace.name}`} onClick={() => closeWorkspace(workspace)}><Icon name="close" size={12}/></button>}
+          {document.workspaces.length > 1 && <IconButton className="workspace-tab-close" size="compact" label={`关闭 ${workspace.name}`} onClick={() => closeWorkspace(workspace)}><Icon name="close" size={12}/></IconButton>}
         </div>)}
-        <button className="new-workspace-tab" aria-label="新建工作区" title="新建 Workspace (⌘T)" onClick={() => dispatch({ type: "addWorkspace" })}><Icon name="plus" size={14}/></button>
+        <IconButton className="new-workspace-tab" size="compact" label="新建工作区" title="新建 Workspace (⌘T)" onClick={() => dispatch({ type: "addWorkspace" })}><Icon name="plus" size={14}/></IconButton>
       </nav>
       {!usesNativeWindowControls && <div className="window-controls" aria-label="窗口控制">
         <button aria-label="最小化窗口" title="最小化" onClick={() => void minimizeCurrentWindow()}><Icon name="windowMinimize" size={14}/></button>

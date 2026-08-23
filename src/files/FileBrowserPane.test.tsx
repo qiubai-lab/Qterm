@@ -341,12 +341,11 @@ describe("FileBrowserPane", () => {
     expect(listRemoteDirectory).not.toHaveBeenCalled();
   });
 
-  it("shows an explicit connection failure directly below the file navigation", async () => {
+  it("defers connection failures to the owning workbench block", async () => {
     const view = render(<FileBrowserPane initialPath="/srv" runtime={{ ...localRuntime, kind: "sftp", status: "failed", notice: "认证被远程主机拒绝" }} onPathChange={vi.fn()}/>);
-    const alert = within(view.container).getByRole("alert");
 
-    expect(alert).toHaveTextContent("认证被远程主机拒绝");
-    expect(alert.previousElementSibling).toHaveClass("file-browser-navigation");
+    expect(within(view.container).queryByRole("alert")).not.toBeInTheDocument();
+    expect(within(view.container).queryByText("认证被远程主机拒绝")).not.toBeInTheDocument();
     expect(listRemoteDirectory).not.toHaveBeenCalled();
   });
 
@@ -414,7 +413,7 @@ describe("FileBrowserPane", () => {
     expect(edit.querySelector("svg")).toBeInTheDocument();
     expect(edit).toHaveTextContent("编辑");
     fireEvent.click(edit);
-    expect(await ui.findByText("实验功能")).toBeInTheDocument();
+    expect(await ui.findByText("实验功能")).toHaveClass("ui-status-badge--tag", "ui-status-badge--warning");
     expect(await ui.findByRole("textbox", { name: "文件编辑器" })).toHaveValue("# Hello");
     expect(readTextFile).toHaveBeenCalledTimes(1);
   });

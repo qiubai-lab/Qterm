@@ -8,6 +8,7 @@ import {
   updateCheckMessage,
 } from "../../lib/updateCheck";
 import { Icon } from "../Icon";
+import { Button, IconButton } from "../Button";
 import { DialogFrame } from "./DialogFrame";
 import "./aboutUpdate.css";
 
@@ -196,19 +197,20 @@ function UpdateCheckDialog({ onClose }: { onClose: () => void }) {
           {updateState.status !== "checking" && (
             <div className="update-check-status-actions">
               {updateState.status === "available" && (
-                <button type="button" className="update-check-release" onClick={() => void handleOpenReleasePage()}>
+                <Button size="compact" className="update-check-release" onClick={() => void handleOpenReleasePage()}>
                   前往 Releases
-                </button>
+                </Button>
               )}
-              <button
-                type="button"
+              <IconButton
+                label="重新检测"
+                variant="secondary"
+                size="compact"
                 className="update-check-recheck"
-                aria-label="重新检测"
                 title="重新检测"
                 onClick={handleCheckForUpdate}
               >
                 <Icon name="refresh" size={14} />
-              </button>
+              </IconButton>
             </div>
           )}
         </section>
@@ -220,15 +222,15 @@ function UpdateCheckDialog({ onClose }: { onClose: () => void }) {
           </div>
           <div className="update-check-command">
             <code>{HOMEBREW_UPDATE_COMMAND}</code>
-            <button
-              type="button"
+            <Button
+              size="compact"
               className="update-check-copy"
               aria-label={copyState === "copied" ? "已复制 Homebrew 更新命令" : copyState === "error" ? "复制失败，重新复制 Homebrew 更新命令" : "复制 Homebrew 更新命令"}
               onClick={() => void handleCopyCommand()}
             >
               <Icon name={copyState === "copied" ? "check" : copyState === "error" ? "refresh" : "copy"} size={13} />
               {copyState === "copied" ? "已复制" : copyState === "error" ? "重试" : "复制"}
-            </button>
+            </Button>
           </div>
         </section>
       </div>

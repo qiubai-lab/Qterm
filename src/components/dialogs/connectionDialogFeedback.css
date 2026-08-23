@@ -19,3 +19,18 @@
 .credential-unlock-card{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:12px;border:1px solid #34413e;border-radius:8px;background:#131918}.credential-unlock-card:focus{outline:none}.credential-unlock-card strong{color:#d1dcda;font-size:10px}.credential-unlock-card p{margin:4px 0 0;color:#7e8986;font-size:9px;line-height:1.5}.credential-unlock-card button{flex:none}
 .auth-dialog-actions{min-width:0;justify-content:space-between;margin:0;padding-top:12px;border-top:1px solid var(--subtle)}.auth-dialog-action-note{min-width:0;flex:1;margin:0;overflow:hidden;color:#78818a;font-size:9px;line-height:30px;text-overflow:ellipsis;white-space:nowrap}.auth-dialog-action-note.error{color:#ffaaa6}.auth-dialog-actions>div{display:flex;flex:none;gap:7px}
 @keyframes auth-content-forward{from{opacity:.35;transform:translateX(10px)}to{opacity:1;transform:none}}@keyframes auth-content-backward{from{opacity:.35;transform:translateX(-10px)}to{opacity:1;transform:none}}@keyframes auth-content-fade{from{opacity:.55}to{opacity:1}}
+
+/* Authentication state surfaces consume theme roles in every preset. */
+.auth-method-indicator{border-color:color-mix(in srgb,var(--accent) 46%,var(--border));background:var(--accent-bg);box-shadow:0 1px 4px var(--shadow-soft),inset 0 1px 0 color-mix(in srgb,var(--raised) 32%,transparent)}
+.auth-method-picker button{color:var(--muted)}
+.auth-method-picker button.selected{color:var(--text)}
+.auth-security-hint{color:var(--muted)}
+.auth-security-hint::before{background:var(--warning)}
+.agent-auth-note{border-color:color-mix(in srgb,var(--accent) 34%,var(--border));background:var(--panel-bg)}
+.agent-auth-note strong{color:var(--text)}
+.agent-auth-note strong span{color:var(--accent);background:var(--accent-bg)}
+.agent-auth-note p{color:var(--muted)}
+.credential-unlock-card{border-color:var(--border);background:var(--panel-bg)}
+.credential-unlock-card strong{color:var(--text)}
+.credential-unlock-card p,.auth-dialog-action-note{color:var(--dim)}
+.auth-dialog-action-note.error{color:var(--danger)}

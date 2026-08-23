@@ -30,4 +30,9 @@ describe("about update styles", () => {
     expect(declarations(".update-check-copy")).toContain("height: 26px");
     expect(styles).toMatch(/prefers-reduced-motion: reduce[\s\S]*\.update-check-status-icon\.checking svg[\s\S]*animation: none/);
   });
+
+  it("keeps every update-state icon on semantic theme roles", () => {
+    expect(styles).toMatch(/\.update-check-status\[data-status="latest"\] \.update-check-status-icon,[\s\S]*\.update-check-status\[data-status="available"\] \.update-check-status-icon\s*\{[^}]*border-color:\s*color-mix\(in srgb, var\(--accent\)[^}]*color:\s*var\(--accent\)[^}]*background:\s*var\(--accent-bg\)/);
+    expect(styles).toMatch(/\.update-check-status\[data-status="error"\] \.update-check-status-icon\s*\{[^}]*border-color:\s*color-mix\(in srgb, var\(--danger\)[^}]*color:\s*var\(--danger\)[^}]*background:\s*var\(--danger-bg\)/);
+  });
 });

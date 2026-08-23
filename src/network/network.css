@@ -11,3 +11,69 @@
 .network-access-dialog>.dialog-content{padding:14px 18px 11px;overflow:auto}.network-access-content-compact{gap:9px}.network-access-footer{display:grid;min-width:0;min-height:18px;grid-template-areas:"message"}.network-access-footer.with-note{min-height:31px}.network-access-footer-note,.network-access-footer-status{display:flex;min-width:0;min-height:31px;grid-area:message;gap:6px;align-items:center;justify-content:center;box-sizing:border-box;margin:0;padding:6px 10px;overflow:hidden;border:1px solid #30423e;border-radius:6px;color:#9bb0aa;background:#131b19;font-size:8.75px;line-height:1.4;text-align:center;transition:opacity 100ms ease,border-color 120ms ease,background-color 120ms ease}.network-access-footer-note svg{flex:none;color:#72cdbb}.network-access-footer>.network-access-footer-status{border-color:#36534d;color:#a7e5da;background:#15201d;opacity:0;visibility:hidden;white-space:nowrap;text-overflow:ellipsis}.network-access-footer:not(.with-note) .network-access-footer-status{min-height:18px;padding:0;border:0;background:transparent}.network-access-footer.has-message .network-access-footer-note{opacity:0;visibility:hidden}.network-access-footer.has-message .network-access-footer-status{opacity:1;visibility:visible}.network-access-footer.error .network-access-footer-status{border-color:#603d3b;color:#ffaaa6;background:#241817}
 .dialog-frame.network-type-dialog{width:min(660px,calc(100vw - 40px))}.network-type-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}.network-type-option{display:flex;min-width:0;min-height:150px;flex-direction:column;gap:10px;align-items:flex-start;padding:14px;border:1px solid #343b40;border-radius:8px;color:#aeb7b5;background:#121619;text-align:left;transition:color 130ms ease,background-color 130ms ease,border-color 130ms ease,transform 100ms ease}.network-type-option:hover{border-color:#49635d;color:#edf5f3;background:#18201e}.network-type-option:focus-visible{border-color:#568f84;outline:2px solid var(--focus);outline-offset:2px}.network-type-option:active{transform:scale(.985)}.network-type-option-icon{display:grid;width:32px;height:32px;flex:none;place-items:center;border:1px solid #344943;border-radius:7px;color:#82daca;background:#16201e}.network-type-option-copy{display:flex;min-width:0;flex:1;flex-direction:column;gap:4px}.network-type-badge{align-self:flex-start;color:#70827e;font:700 7px/1 "SFMono-Regular",Consolas,monospace;letter-spacing:.08em}.network-type-option strong{color:#dce6e3;font-size:11px}.network-type-route{display:flex;height:16px;gap:7px;align-items:center;color:#82a19a}.network-type-route-endpoint{display:flex;gap:3px;align-items:center}.network-type-route-endpoint svg{flex:none;color:#738c86}.network-type-route-endpoint>span{color:#89938f;font-size:8px}.network-type-route-arrow{flex:none;color:#596763;font-size:10px}.network-type-option small{margin-top:2px;color:#77817f;font-size:9px;line-height:1.55}.network-rule-dialog .dialog-actions>div{align-items:center}
 @media (max-width:620px){.network-type-options{grid-template-columns:1fr}.network-type-option{min-height:88px;display:grid;grid-template-columns:32px minmax(0,1fr);gap:10px}.network-type-option-icon{grid-row:1}.network-type-option-copy{grid-column:2}.network-type-option small{margin-top:0}}
+
+/* Theme-adaptive feature surfaces. Concrete palette values belong to theme presets. */
+.network-rule-list{scrollbar-color:var(--scrollbar-thumb) transparent}
+.network-rule-item{color:var(--muted)}
+.network-rule-item:hover{background:var(--hover)}
+.network-rule-item:focus-visible{border-color:var(--accent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 24%,transparent)}
+.network-rule-item[data-state="running"]{border-color:color-mix(in srgb,var(--accent) 32%,var(--border));background:color-mix(in srgb,var(--accent-bg) 62%,transparent)}
+.network-rule-dot{background:var(--text-disabled)}
+.network-rule-dot.starting,.network-rule-dot.stopping{background:var(--warning)}
+.network-rule-copy strong{color:var(--text)}
+.network-rule-copy small,.network-rule-route{color:var(--dim)}
+.network-rule-endpoint svg,.network-rule-endpoint>span,.network-rule-endpoint code{color:var(--muted)}
+.network-rule-route-arrow{color:var(--text-disabled)}
+.network-rule-access-button{color:var(--icon)}
+.network-rule-access-button:hover{border-color:color-mix(in srgb,var(--accent) 34%,var(--border));color:var(--accent);background:var(--accent-bg)}
+.network-rule-switch-track{border-color:var(--border);background:var(--hover);box-shadow:inset 0 1px 2px var(--shadow-soft)}
+.network-rule-switch-label{color:var(--dim)}
+.network-rule-switch-label.on{color:var(--accent)}
+.network-rule-switch-thumb{background:var(--muted);box-shadow:0 1px 3px var(--shadow-soft)}
+.network-inline-error{border-color:color-mix(in srgb,var(--danger) 35%,var(--border));color:var(--danger);background:var(--danger-bg)}
+
+.network-rule-field-label svg{color:var(--icon)}
+.network-rule-flow{border-color:var(--border);background:var(--panel-bg)}
+.network-rule-flow>header strong{color:var(--text)}
+.network-rule-flow>header small,.network-rule-flow-node small{color:var(--dim)}
+.network-rule-flow-node code{color:var(--muted)}
+.network-rule-flow-icon{border-color:color-mix(in srgb,var(--accent) 32%,var(--border));color:var(--accent);background:var(--accent-bg)}
+.network-rule-flow-connector::before{background:linear-gradient(90deg,var(--border),color-mix(in srgb,var(--accent) 52%,var(--border)))}
+.network-exposure-note{border-color:color-mix(in srgb,var(--accent) 28%,var(--border));color:var(--muted);background:var(--accent-bg)}
+.network-exposure-note.warning{border-color:color-mix(in srgb,var(--warning) 44%,var(--border));color:var(--warning);background:var(--warning-bg)}
+
+.network-access-description,.network-access-proxy-option,.network-access-footer-note,.network-access-footer-status{border-color:var(--border);color:var(--muted);background:var(--panel-bg)}
+.network-access-description svg,.network-access-footer-note svg{color:var(--accent)}
+.network-access-field>label,.network-access-browsers>header p,.network-access-browser-note{color:var(--dim)}
+.network-access-field input{color:var(--text);background:var(--control-bg)}
+.network-access-warning{border-color:color-mix(in srgb,var(--warning) 44%,var(--border));color:var(--warning);background:var(--warning-bg)}
+.network-access-experimental{border-color:color-mix(in srgb,var(--warning) 44%,var(--border));color:var(--warning);background:var(--warning-bg)}
+.network-access-browsers>header strong,.network-access-proxy-option strong{color:var(--text)}
+.network-access-browser-grid>button{border-color:var(--border);color:var(--text);background:var(--panel-bg)}
+.network-access-browser-grid>button:hover:not(:disabled){border-color:color-mix(in srgb,var(--accent) 42%,var(--border));color:var(--text-strong);background:var(--hover)}
+.network-access-browser-grid>button:disabled{color:var(--text-disabled);background:var(--surface)}
+.network-access-browser-icon{border-color:color-mix(in srgb,var(--accent) 32%,var(--border));color:var(--accent);background:var(--accent-bg)}
+.network-access-browser-grid small,.network-access-proxy-option small{color:var(--dim)}
+.network-access-option-switch{border-color:var(--border);background:var(--hover);box-shadow:inset 0 1px 2px var(--shadow-soft)}
+.network-access-option-switch>span{background:var(--muted);box-shadow:0 1px 3px var(--shadow-soft)}
+.network-access-footer>.network-access-footer-status{border-color:color-mix(in srgb,var(--accent) 34%,var(--border));color:var(--accent);background:var(--accent-bg)}
+.network-access-footer.error .network-access-footer-status{border-color:color-mix(in srgb,var(--danger) 40%,var(--border));color:var(--danger);background:var(--danger-bg)}
+
+.network-type-option{border-color:var(--border);color:var(--muted);background:var(--panel-bg)}
+.network-type-option:hover{border-color:color-mix(in srgb,var(--accent) 42%,var(--border));color:var(--text);background:var(--hover)}
+.network-type-option:focus-visible{border-color:var(--accent)}
+.network-type-option-icon{border-color:color-mix(in srgb,var(--accent) 32%,var(--border));color:var(--accent);background:var(--accent-bg)}
+.network-type-badge{color:var(--dim)}
+.network-type-option strong{color:var(--text)}
+.network-type-route,.network-type-route-endpoint svg,.network-type-route-endpoint>span{color:var(--muted)}
+.network-type-route-arrow{color:var(--text-disabled)}
+.network-type-option small{color:var(--dim)}
+
+.network-access-copy-button{width:30px;height:31px;color:var(--text);background:var(--control-bg)}
+.network-access-copy-button:hover:not(:disabled){border-color:color-mix(in srgb,var(--accent) 42%,var(--border));color:var(--text-strong);background:var(--hover)}
+.network-access-browser-grid>button[data-state="detecting"]:disabled,
+.network-access-browser-grid>button[data-state="launching"]:disabled{border-color:color-mix(in srgb,var(--accent) 42%,var(--border));color:var(--text);background:var(--accent-bg);opacity:1}
+.network-access-browser-grid>button[data-state="detecting"]:disabled .network-access-browser-icon,
+.network-access-browser-grid>button[data-state="launching"]:disabled .network-access-browser-icon{border-color:color-mix(in srgb,var(--accent) 42%,var(--border));color:var(--accent);background:var(--raised)}
+.network-access-browser-grid>button[data-state="waiting"]:disabled{border-color:var(--border);color:var(--muted);background:var(--panel-bg);opacity:1}
+.network-access-browser-grid>button[data-state="waiting"]:disabled .network-access-browser-icon{border-color:var(--border);color:var(--icon);background:var(--control-bg)}

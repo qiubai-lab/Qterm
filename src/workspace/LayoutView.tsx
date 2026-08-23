@@ -29,6 +29,10 @@ interface IndicatorBounds {
   ready: boolean;
 }
 
+function BlockNotice({ message }: { message: string }) {
+  return <div className="block-notice" role="alert" aria-live="assertive" aria-atomic="true">{message}</div>;
+}
+
 export function WorkspaceCanvas({ workspace, visible, onRequestClose, onRequestAuthConnection, onOpenConnectionManager }: { workspace: Workspace; visible: boolean; onRequestClose: (blockId: string) => void; onRequestAuthConnection: (owner: ConnectionOwner, blockId: string, profile: ConnectionProfile) => void; onOpenConnectionManager?: () => void }) {
   const { dispatch } = useWorkspace();
   const [drag, setDrag] = useState<DragState | null>(null);
@@ -208,7 +212,7 @@ function TerminalBlock(props: Omit<Parameters<typeof LayoutBranch>[0], "node"> &
       </div>
     </header>
     <TerminalPanel key={props.profileId ?? "local"} blockId={props.blockId} sessionKey={`${props.blockId}:${props.profileId ?? "local"}`} local={props.profileId === null} visible={props.visible} />
-    {runtime?.notice && <div className="block-notice">{runtime.notice}</div>}
+    {runtime?.notice && <BlockNotice message={runtime.notice}/>}
     {drop && <div className={`drop-zone drop-${drop}`} />}
   </section>;
 }
@@ -256,6 +260,7 @@ function FilesBlock(props: Omit<Parameters<typeof LayoutBranch>[0], "node"> & { 
       </div>
     </header>
     <FileBrowserPane key={`files:${props.profileId ?? "local"}`} initialPath={props.profileId !== null && props.path === "~" ? "." : props.path} runtime={runtime} onPathChange={updatePath}/>
+    {runtime.notice && <BlockNotice message={runtime.notice}/>}
     {drop && <div className={`drop-zone drop-${drop}`} />}
   </section>;
 }
@@ -310,7 +315,7 @@ function NetworkBlock(props: Omit<Parameters<typeof LayoutBranch>[0], "node"> & 
       <div className="block-actions"><button aria-label="关闭网络窗口" title="关闭" onClick={() => props.onRequestClose(props.blockId)}><Icon name="close" size={13}/></button></div>
     </header>
     <NetworkPane profileId={props.profileId} profileHost={profile?.host} runtimeStates={runtime?.ruleStates} lockedRuleIds={lockedRuleIds} onStart={(rule) => void startRule(rule.id)} onStop={(rule) => void stopNetworkBlockRule(props.blockId, rule.id)}/>
-    {runtime?.notice && <div className="block-notice">{runtime.notice}</div>}
+    {runtime?.notice && <BlockNotice message={runtime.notice}/>}
     {drop && <div className={`drop-zone drop-${drop}`} />}
   </section>;
 }

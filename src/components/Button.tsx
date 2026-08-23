@@ -32,12 +32,15 @@ export interface IconButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonEle
   label: string;
   variant?: "quiet" | "secondary" | "danger";
   size?: ButtonSize;
+  loading?: boolean;
 }
 
 export function IconButton({
   label,
   variant = "quiet",
   size = "regular",
+  loading = false,
+  disabled,
   type = "button",
   className,
   children,
@@ -47,21 +50,27 @@ export function IconButton({
     {...props}
     type={type}
     aria-label={label}
+    aria-busy={loading || undefined}
+    disabled={disabled || loading}
     className={joinClasses("ui-icon-button", `ui-icon-button--${variant}`, `ui-icon-button--${size}`, className)}
   >{children}</button>;
 }
 
 export function StatusBadge({
   tone = "neutral",
+  presentation = "status",
+  size = "regular",
   className,
   children,
 }: {
   tone?: "neutral" | "success" | "warning" | "danger";
+  presentation?: "status" | "tag";
+  size?: ButtonSize;
   className?: string;
   children: ReactNode;
 }) {
-  return <span className={joinClasses("ui-status-badge", `ui-status-badge--${tone}`, className)}>
-    <span className="ui-status-badge-dot" aria-hidden="true"/>
+  return <span className={joinClasses("ui-status-badge", `ui-status-badge--${tone}`, `ui-status-badge--${presentation}`, `ui-status-badge--${size}`, className)}>
+    {presentation === "status" && <span className="ui-status-badge-dot" aria-hidden="true"/>}
     {children}
   </span>;
 }

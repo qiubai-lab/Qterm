@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
 
 import { Icon } from "../components/Icon";
+import { Button } from "../components/Button";
 import { DialogFrame } from "../components/dialogs/DialogFrame";
 import { createNetworkRule, deleteNetworkRule, listNetworkRules, updateNetworkRule, type NetworkRule, type NetworkRuleInput, type NetworkRuleRuntimeState } from "../lib/tauri/network";
 import { NetworkAccessDialog } from "./NetworkAccessDialog";
@@ -176,7 +177,7 @@ export function NetworkPane({ profileId, profileHost = "", runtimeStates = {}, l
       activeElsewhere={lockedRuleIds.has(accessRule.id)}
       onClose={() => setAccessRule(null)}
     />}
-    {deleteRule && <DialogFrame compact title="删除网络规则？" subtitle="将移除持久化配置" dismissible={!busy} onClose={() => { if (!busy) setDeleteRule(null); }}><p className="confirm-copy">将删除“{deleteRule.name}”。此操作无法撤销，但不会删除连接配置。</p><footer className="dialog-actions end"><button className="secondary-button" disabled={busy} onClick={() => setDeleteRule(null)}>取消</button><button className="danger-button filled" disabled={busy} onClick={() => void confirmDelete()}>{busy ? "正在删除…" : "删除规则"}</button></footer></DialogFrame>}
+    {deleteRule && <DialogFrame compact title="删除网络规则？" subtitle="将移除持久化配置" dismissible={!busy} onClose={() => { if (!busy) setDeleteRule(null); }}><p className="confirm-copy">将删除“{deleteRule.name}”。此操作无法撤销，但不会删除连接配置。</p><footer className="dialog-actions end"><Button disabled={busy} onClick={() => setDeleteRule(null)}>取消</Button><Button variant="dangerSolid" loading={busy} onClick={() => void confirmDelete()}>{busy ? "正在删除…" : "删除规则"}</Button></footer></DialogFrame>}
   </div>;
 }
 

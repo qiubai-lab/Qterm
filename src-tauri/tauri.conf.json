@@ -21,10 +21,9 @@
         "decorations": false,
         "theme": "Dark",
         "transparent": true,
+        "shadow": true,
         "windowEffects": {
-          "effects": ["hudWindow", "mica", "acrylic", "blur"],
-          "state": "followsWindowActiveState",
-          "radius": 12
+          "effects": ["hudWindow", "mica", "acrylic", "blur"]
         }
       }
     ],
