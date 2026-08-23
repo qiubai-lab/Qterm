@@ -109,11 +109,16 @@
   animation: about-update-spin 0.8s linear infinite;
 }
 
-.update-check-status[data-status="latest"] .update-check-status-icon,
-.update-check-status[data-status="available"] .update-check-status-icon {
+.update-check-status[data-status="latest"] .update-check-status-icon {
   border-color: color-mix(in srgb, var(--accent) 42%, var(--border));
   color:var(--accent);
   background:var(--accent-bg);
+}
+
+.update-check-status[data-status="available"] .update-check-status-icon {
+  border-color: color-mix(in srgb, var(--signature) 52%, var(--border));
+  color:var(--signature);
+  background:color-mix(in srgb, var(--signature) 12%, var(--panel-bg));
 }
 
 .update-check-status[data-status="error"] .update-check-status-icon {
@@ -260,21 +265,30 @@
 }
 
 /* Theme-facing surfaces stay on shared roles so future presets inherit them. */
-.about-update-action {
-  border-color: var(--border);
-  color: var(--text);
-  background: var(--control-bg);
+.about-update-action.ui-button--primary {
+  border-color:var(--primary-action);
+  color:var(--primary-action-contrast);
+  background:var(--primary-action);
 }
 
-.about-update-action:hover {
-  border-color: color-mix(in srgb, var(--accent) 42%, var(--border));
-  color: var(--text-strong);
-  background: var(--hover);
+.about-update-action.ui-button--primary:hover:not(:disabled) {
+  border-color:var(--primary-action);
+  color:var(--primary-action-contrast);
+  background:color-mix(in srgb,var(--primary-action) 86%,var(--text-strong));
 }
 
 .update-check-status {
   border-color: var(--border);
   background:var(--panel-bg);
+}
+
+.update-check-status[data-status="available"] {
+  border-color:color-mix(in srgb,var(--signature) 34%,var(--border));
+  box-shadow:inset 2px 0 var(--signature);
+}
+
+.update-check-status[data-status="available"] strong {
+  color:var(--signature);
 }
 
 .update-check-status-icon {
@@ -311,7 +325,6 @@
 }
 
 .update-check-copy,
-.update-check-release,
 .update-check-recheck {
   border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
   color: var(--text);
@@ -319,11 +332,28 @@
 }
 
 .update-check-copy:hover,
-.update-check-release:hover,
 .update-check-recheck:hover {
   border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
   color: var(--text-strong);
   background: var(--hover);
+}
+
+.update-check-release.ui-button--primary {
+  border-color:var(--primary-action);
+  color:var(--primary-action-contrast);
+  background:var(--primary-action);
+}
+
+.update-check-release.ui-button--primary:hover:not(:disabled) {
+  border-color:var(--primary-action);
+  color:var(--primary-action-contrast);
+  background:color-mix(in srgb,var(--primary-action) 86%,var(--text-strong));
+}
+
+.about-product-mark {
+  border-color:color-mix(in srgb,var(--signature) 48%,var(--border));
+  color:var(--signature);
+  background:color-mix(in srgb,var(--signature) 12%,var(--panel-bg));
 }
 
 .update-check-copy svg,

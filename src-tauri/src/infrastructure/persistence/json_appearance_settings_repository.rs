@@ -86,6 +86,7 @@ struct Document {
 enum ThemeRecord {
     Dark,
     Light,
+    Cyberpunk,
 }
 
 impl From<ThemeRecord> for AppTheme {
@@ -93,6 +94,7 @@ impl From<ThemeRecord> for AppTheme {
         match value {
             ThemeRecord::Dark => Self::Dark,
             ThemeRecord::Light => Self::Light,
+            ThemeRecord::Cyberpunk => Self::Cyberpunk,
         }
     }
 }
@@ -102,6 +104,7 @@ impl From<AppTheme> for ThemeRecord {
         match value {
             AppTheme::Dark => Self::Dark,
             AppTheme::Light => Self::Light,
+            AppTheme::Cyberpunk => Self::Cyberpunk,
         }
     }
 }
@@ -121,11 +124,11 @@ mod tests {
         let dir = tempdir().expect("dir");
         let repository = JsonAppearanceSettingsRepository::new(dir.path().join("appearance.json"));
         assert_eq!(repository.load().expect("load"), None);
-        let light = AppearanceSettings {
-            theme: AppTheme::Light,
-        };
-        repository.save(light).expect("save");
-        assert_eq!(repository.load().expect("load"), Some(light));
+        for theme in [AppTheme::Light, AppTheme::Cyberpunk] {
+            let settings = AppearanceSettings { theme };
+            repository.save(settings).expect("save");
+            assert_eq!(repository.load().expect("load"), Some(settings));
+        }
     }
 
     #[test]

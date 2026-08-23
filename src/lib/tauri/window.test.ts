@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@tauri-apps/api/window", () => ({ getCurrentWindow: vi.fn() }));
 
-import { closeCurrentWindow, currentDesktopPlatform, minimizeCurrentWindow, startDraggingCurrentWindow, toggleMaximizeCurrentWindow } from "./window";
+import { closeCurrentWindow, currentDesktopPlatform, minimizeCurrentWindow, setNativeWindowTheme, startDraggingCurrentWindow, toggleMaximizeCurrentWindow } from "./window";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -44,5 +44,17 @@ describe("Tauri window adapter", () => {
     expect(toggleMaximize).toHaveBeenCalledOnce();
     expect(close).toHaveBeenCalledOnce();
     expect(startDragging).toHaveBeenCalledOnce();
+  });
+
+  it("maps custom dark presets to the native dark appearance", async () => {
+    const setTheme = vi.fn();
+    Object.defineProperty(window, "__TAURI_INTERNALS__", { configurable: true, value: {} });
+    vi.mocked(getCurrentWindow).mockReturnValue({ setTheme } as unknown as ReturnType<typeof getCurrentWindow>);
+
+    await setNativeWindowTheme("light");
+    await setNativeWindowTheme("cyberpunk");
+
+    expect(setTheme).toHaveBeenNthCalledWith(1, "light");
+    expect(setTheme).toHaveBeenNthCalledWith(2, "dark");
   });
 });

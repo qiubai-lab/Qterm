@@ -146,9 +146,11 @@ describe("SettingsDialog", () => {
     await user.click(await screen.findByRole("button", { name: /外观/ }));
     const light = screen.getByRole("radio", { name: /亮色/ });
     const dark = screen.getByRole("radio", { name: /深色/ });
+    const cyberpunk = screen.getByRole("radio", { name: /赛博霓虹/ });
     expect(dark).toBeChecked();
     expect(dark.closest("label")?.querySelector(".settings-theme-check")).toHaveTextContent("✓");
     expect(light.closest("label")?.querySelector(".settings-theme-check")).toBeNull();
+    expect(cyberpunk.closest("label")?.querySelector(".settings-theme-preview.cyberpunk")).not.toBeNull();
     await user.click(light);
     expect(light).toBeChecked();
     expect(light.closest("label")?.querySelector(".settings-theme-check")).toHaveTextContent("✓");
@@ -163,11 +165,11 @@ describe("SettingsDialog", () => {
     const user = userEvent.setup();
     renderSettings();
     await user.click(await screen.findByRole("button", { name: /外观/ }));
-    await user.click(screen.getByRole("radio", { name: /亮色/ }));
+    await user.click(screen.getByRole("radio", { name: /赛博霓虹/ }));
     await user.click(screen.getByRole("button", { name: "保存设置" }));
-    await waitFor(() => expect(mocks.updateAppearanceSettings).toHaveBeenCalledWith({ theme: "light" }));
+    await waitFor(() => expect(mocks.updateAppearanceSettings).toHaveBeenCalledWith({ theme: "cyberpunk" }));
     await user.click(screen.getByRole("button", { name: "关闭" }));
-    expect(document.documentElement).toHaveAttribute("data-theme", "light");
+    expect(document.documentElement).toHaveAttribute("data-theme", "cyberpunk");
   });
 
   it("restores the persisted preset when appearance saving fails", async () => {

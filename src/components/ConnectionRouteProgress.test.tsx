@@ -16,6 +16,7 @@ const connectingProgress = {
     { index: 1, name: "Server", endpoint: "server.test:22", role: "target" as const, state: "pending" as const, stage: null },
   ],
 };
+const profile = { name: "Server", username: "root", host: "127.0.0.1", port: 22 };
 
 describe("ConnectionRouteProgress", () => {
   afterEach(cleanup);
@@ -102,11 +103,11 @@ describe("ConnectionRouteProgress", () => {
       nodes: connectingProgress.nodes.map((node) => ({ ...node, state: "complete" as const })),
     };
 
-    const { rerender } = render(<ConnectionRouteProgress progress={successful} endpoint="root@127.0.0.1"/>);
+    const { rerender } = render(<ConnectionRouteProgress progress={successful} endpoint="root@127.0.0.1" profile={profile}/>);
     expect(screen.getByRole("status")).toHaveTextContent("连接成功");
-    expect(screen.getByText("root@127.0.0.1")).toHaveClass("connection-route-endpoint");
+    expect(screen.getByRole("button", { name: /查看 Server 主机概要/ })).toHaveClass("connection-route-endpoint", "host-identity-trigger");
 
-    rerender(<ConnectionRouteProgress progress={successful} endpoint="root@127.0.0.1"/>);
+    rerender(<ConnectionRouteProgress progress={successful} endpoint="root@127.0.0.1" profile={profile}/>);
     expect(screen.getAllByRole("img", { name: /已连接/ })).toHaveLength(2);
     expect(screen.getByText("root@127.0.0.1")).toBeInTheDocument();
 

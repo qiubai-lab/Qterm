@@ -9,6 +9,7 @@ pub enum AppTheme {
     #[default]
     Dark,
     Light,
+    Cyberpunk,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

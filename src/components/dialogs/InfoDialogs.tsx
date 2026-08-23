@@ -89,13 +89,14 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
               <span><i />手动检测</span>
             </div>
             <p>检查 GitHub 上最新发布的稳定版本。</p>
-            <button
-              type="button"
+            <Button
+              variant="primary"
+              size="compact"
               className="about-update-action"
               onClick={() => setUpdateDialogOpen(true)}
             >
               检测更新
-            </button>
+            </Button>
           </section>
         </div>
       </DialogFrame>
@@ -197,7 +198,7 @@ function UpdateCheckDialog({ onClose }: { onClose: () => void }) {
           {updateState.status !== "checking" && (
             <div className="update-check-status-actions">
               {updateState.status === "available" && (
-                <Button size="compact" className="update-check-release" onClick={() => void handleOpenReleasePage()}>
+                <Button variant="primary" size="compact" className="update-check-release" onClick={() => void handleOpenReleasePage()}>
                   前往 Releases
                 </Button>
               )}

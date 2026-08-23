@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { bindTerminalTheme, readTerminalTheme, refreshTerminalThemes } from "./terminalTheme";
 
-const tokens = ["--terminal-foreground", "--terminal-cursor", "--terminal-scrollbar"];
+const tokens = ["--terminal-foreground", "--terminal-cursor", "--terminal-scrollbar", "--terminal-ansi-blue", "--terminal-ansi-bright-white"];
 
 describe("terminal theme adapter", () => {
   afterEach(() => tokens.forEach((token) => document.documentElement.style.removeProperty(token)));
@@ -15,8 +15,10 @@ describe("terminal theme adapter", () => {
 
     document.documentElement.style.setProperty("--terminal-foreground", "#abcdef");
     document.documentElement.style.setProperty("--terminal-cursor", "#123456");
+    document.documentElement.style.setProperty("--terminal-ansi-blue", "#2468ac");
+    document.documentElement.style.setProperty("--terminal-ansi-bright-white", "#fedcba");
 
-    expect(readTerminalTheme()).toMatchObject({ foreground: "#abcdef", cursor: "#123456" });
+    expect(readTerminalTheme()).toMatchObject({ foreground: "#abcdef", cursor: "#123456", blue: "#2468ac", brightWhite: "#fedcba" });
   });
 
   it("refreshes every live terminal consumer and releases disposed views", () => {

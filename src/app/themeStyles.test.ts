@@ -5,6 +5,7 @@ import { readCssBundle } from "../test/css";
 
 const theme = readFileSync("src/app/styles/themes/dark.css", "utf8");
 const lightTheme = readFileSync("src/app/styles/themes/light.css", "utf8");
+const cyberpunkTheme = readFileSync("src/app/styles/themes/cyberpunk.css", "utf8");
 const lightOverrides = readFileSync("src/app/styles/themes/lightOverrides.css", "utf8");
 const styles = readCssBundle("src/app/app.css");
 const main = readFileSync("src/main.tsx", "utf8");
@@ -35,26 +36,84 @@ describe("application theme contract", () => {
     expect(theme).toContain("color-scheme:dark");
     expect(lightTheme).toContain(':root[data-theme="light"]');
     expect(lightTheme).toContain("color-scheme:light");
+    expect(cyberpunkTheme).toContain(':root[data-theme="cyberpunk"]');
+    expect(cyberpunkTheme).toContain("color-scheme:dark");
   });
 
   it("defines shared semantic tokens for CSS and imperative renderers", () => {
     for (const token of [
       "--chrome", "--canvas", "--surface", "--raised", "--text", "--muted", "--accent", "--danger", "--focus",
+      "--signature", "--signature-contrast", "--primary-action", "--primary-action-contrast", "--navigation-accent", "--navigation-accent-bg", "--selection-marker", "--selection-surface", "--warning", "--warning-bg",
       "--shell-material", "--chrome-material", "--rail-material", "--workspace-material", "--floating-material", "--floating-border", "--floating-shadow",
       "--brand-plate-background", "--brand-plate-border", "--brand-plate-shadow", "--file-browser-chrome-background",
       "--text-strong", "--text-disabled", "--icon", "--icon-hover", "--control-hover",
       "--chrome-action-hover", "--chrome-action-pressed", "--chrome-action-border",
-      "--block-border", "--block-border-active", "--block-header-background", "--block-header-active-background",
+      "--block-border", "--block-border-active", "--block-header-background", "--block-header-active-background", "--block-active-endpoint-text",
       "--block-active-ring", "--block-active-inset", "--block-active-shadow", "--block-active-surface-shadow", "--block-active-indicator-shadow",
-      "--workspace-tab-active-border", "--workspace-tab-active-background", "--workspace-tab-active-shadow",
+      "--workspace-tab-active-border", "--workspace-tab-active-background", "--workspace-tab-active-shadow", "--workspace-tab-active-text",
       "--workspace-tab-hover-border", "--workspace-tab-hover-background",
       "--scrollbar-track", "--scrollbar-thumb",
-      "--terminal-background", "--terminal-foreground", "--terminal-cursor", "--terminal-selection", "--terminal-ansi-red",
+      "--terminal-background", "--terminal-foreground", "--terminal-cursor", "--terminal-selection",
+      "--terminal-ansi-red", "--terminal-ansi-yellow", "--terminal-ansi-blue", "--terminal-ansi-magenta", "--terminal-ansi-cyan", "--terminal-ansi-white",
       "--editor-background", "--editor-foreground", "--editor-gutter-background", "--editor-selection",
     ]) {
       expect(theme).toContain(`${token}:`);
       expect(lightTheme).toContain(`${token}:`);
+      expect(cyberpunkTheme).toContain(`${token}:`);
     }
+  });
+
+  it("keeps the Cyberpunk palette readable and separates signature from status semantics", () => {
+    const surface = tokenHex(cyberpunkTheme, "--surface");
+    for (const token of ["--text", "--text-strong", "--muted", "--dim", "--text-disabled", "--icon"]) {
+      expect(contrastRatio(tokenHex(cyberpunkTheme, token), surface), `${token} contrast`).toBeGreaterThanOrEqual(4.5);
+    }
+    expect(contrastRatio(tokenHex(cyberpunkTheme, "--signature-contrast"), tokenHex(cyberpunkTheme, "--signature")), "signature contrast").toBeGreaterThanOrEqual(4.5);
+    expect(contrastRatio(tokenHex(cyberpunkTheme, "--accent-contrast"), tokenHex(cyberpunkTheme, "--accent")), "accent contrast").toBeGreaterThanOrEqual(4.5);
+    expect(contrastRatio(tokenHex(cyberpunkTheme, "--warning"), tokenHex(cyberpunkTheme, "--warning-bg")), "warning contrast").toBeGreaterThanOrEqual(4.5);
+    expect(tokenHex(cyberpunkTheme, "--signature")).toBe("#fcee0a");
+    expect(tokenHex(cyberpunkTheme, "--accent")).toBe("#00ddeb");
+    expect(tokenHex(cyberpunkTheme, "--warning")).toBe("#e3a83b");
+    expect(tokenValue(cyberpunkTheme, "--workspace-tab-active-border")).toBe("#00ddeb");
+    expect(tokenValue(cyberpunkTheme, "--block-border-active")).toBe("#fcee0a");
+    expect(tokenValue(theme, "--block-active-endpoint-text")).toBe("var(--accent)");
+    expect(tokenValue(lightTheme, "--block-active-endpoint-text")).toBe("var(--accent)");
+    expect(tokenValue(cyberpunkTheme, "--block-active-endpoint-text")).toBe("var(--danger)");
+    expect(tokenValue(cyberpunkTheme, "--block-header-active-background")).toContain("252,238,10");
+    expect(tokenValue(cyberpunkTheme, "--block-header-active-background")).toContain("linear-gradient");
+    expect(tokenValue(theme, "--block-header-active-background")).toContain("linear-gradient");
+    expect(tokenValue(lightTheme, "--block-header-active-background")).toContain("linear-gradient");
+    expect(tokenValue(cyberpunkTheme, "--navigation-accent")).toBe("#fcee0a");
+    expect(tokenValue(cyberpunkTheme, "--navigation-accent-bg")).toBe("var(--selection-surface)");
+    expect(tokenValue(cyberpunkTheme, "--selection-marker")).toBe("#fcee0a");
+    expect(tokenValue(cyberpunkTheme, "--selection-surface")).toContain("252,238,10");
+    expect(tokenValue(cyberpunkTheme, "--workspace-tab-active-text")).toBe("var(--text-strong)");
+    expect(tokenValue(cyberpunkTheme, "--floating-border")).toContain("0,221,235");
+    expect(tokenValue(cyberpunkTheme, "--chrome-material")).not.toContain("gradient");
+    expect(tokenValue(cyberpunkTheme, "--rail-material")).not.toContain("gradient");
+    expect(tokenValue(cyberpunkTheme, "--workspace-material")).not.toContain("gradient");
+    expect(tokenValue(cyberpunkTheme, "--scrollbar-thumb")).toBe("#168996");
+    expect(tokenValue(cyberpunkTheme, "--focus")).toBe("#00ddeb");
+    expect(tokenValue(theme, "--primary-action")).toBe("var(--accent)");
+    expect(tokenValue(lightTheme, "--primary-action")).toBe("var(--accent)");
+    expect(tokenValue(theme, "--navigation-accent")).toBe("var(--accent)");
+    expect(tokenValue(lightTheme, "--navigation-accent")).toBe("var(--accent)");
+    expect(tokenValue(theme, "--selection-marker")).toBe("var(--accent)");
+    expect(tokenValue(lightTheme, "--selection-marker")).toBe("var(--accent)");
+    expect(tokenValue(theme, "--selection-surface")).toBe("var(--accent-bg)");
+    expect(tokenValue(lightTheme, "--selection-surface")).toBe("var(--accent-bg)");
+    expect(shell).toContain("color:var(--signature)");
+    expect(shell).toContain(".workspace-tab.selected .workspace-tab-select svg { color:var(--accent); }");
+    expect(styles).toContain("color:var(--navigation-accent)");
+    expect(settingsDialog).toContain("background:var(--navigation-accent-bg)");
+    expect(settingsDialog).toMatch(/\.settings-nav-item\.selected[^}]+color:var\(--navigation-accent\)/);
+    expect(connectionDialog).toContain("background:var(--selection-marker)");
+    expect(connectionDialog).toMatch(/\.connection-item\.selected \.connection-item-name[^}]+color:var\(--selection-marker\)/);
+    expect(fileBrowser).toContain("background:var(--selection-marker)");
+    expect(terminalChrome).toContain('.terminal-target-option[aria-pressed="true"]{color:var(--selection-marker);background:var(--selection-surface)');
+    expect(terminalChrome).toMatch(/\.terminal-target-option\[aria-pressed="true"\]::after[^}]+color:var\(--selection-marker\)/);
+    expect(credentialDialog).toMatch(/\.credential-item\.selected[^}]+background:var\(--selection-surface\)[^}]+var\(--selection-marker\)/);
+    expect(dialogControls).toMatch(/\.segmented button\.selected[^}]+background:var\(--selection-surface\)[^}]+var\(--selection-marker\)/);
   });
 
   it("keeps workbench text and terminal edges on cross-theme semantic roles", () => {
@@ -95,6 +154,8 @@ describe("application theme contract", () => {
     expect(terminalChrome).toMatch(/\.terminal-block\.active[^}]+box-shadow:var\(--block-active-surface-shadow\)/);
     expect(terminalChrome).toMatch(/\.active-block-indicator[^}]+border:1px solid var\(--block-border-active\)/);
     expect(terminalChrome).toMatch(/\.active-block-indicator[^}]+box-shadow:var\(--block-active-indicator-shadow\)/);
+    expect(terminalChrome).toMatch(/\.terminal-block\.active \.terminal-target\[data-remote="true"\]\[data-status="connected"\] \.terminal-target-endpoint[^}]+color:var\(--block-active-endpoint-text\)/);
+    expect(terminalSurface).toMatch(/\.terminal-block\.active \.connection-route-progress\.connected \.connection-route-endpoint[^}]+color:var\(--block-active-endpoint-text\)/);
     expect(shell).toMatch(/\.workspace-tab-selection[^}]+border:1px solid var\(--workspace-tab-active-border\)[^}]+background:var\(--workspace-tab-active-background\)[^}]+box-shadow:var\(--workspace-tab-active-shadow\)/);
   });
 
@@ -120,15 +181,16 @@ describe("application theme contract", () => {
     expect(tokenValue(lightTheme, "--workspace-tab-hover-background")).not.toBe(tokenValue(lightTheme, "--hover"));
     expect(tokenValue(theme, "--chrome-action-hover")).not.toBe(tokenValue(theme, "--chrome-action-pressed"));
     expect(tokenValue(lightTheme, "--chrome-action-hover")).not.toBe(tokenValue(lightTheme, "--chrome-action-pressed"));
-    expect(shell).toMatch(/\.workspace-tab-close\.ui-icon-button:hover:not\(:disabled\),\.new-workspace-tab\.ui-icon-button:hover:not\(:disabled\)[^}]+border-color:var\(--chrome-action-border\)[^}]+background:var\(--chrome-action-hover\)/);
+    expect(shell).toMatch(/\.new-workspace-tab\.ui-icon-button:hover:not\(:disabled\)[^}]+border-color:var\(--chrome-action-border\)[^}]+background:var\(--chrome-action-hover\)/);
+    expect(shell).toMatch(/\.workspace-tab-close\.ui-icon-button:hover:not\(:disabled\)[^}]+color:var\(--danger\)[^}]+background:var\(--danger-bg\)/);
     expect(shell).toMatch(/\.workspace-tab:hover:not\(\.selected\)[^}]+border-color:var\(--workspace-tab-hover-border\)[^}]+background:var\(--workspace-tab-hover-background\)/);
     expect(shell).toMatch(/\.window-controls button:not\(\.window-close\):hover[^}]+background:var\(--chrome-action-hover\)[^}]+var\(--chrome-action-border\)/);
     expect(shell).toMatch(/\.window-controls button:not\(\.window-close\):active[^}]+background:var\(--chrome-action-pressed\)/);
-    expect(shell).toMatch(/\.window-controls \.window-close:hover[^}]+background:#c42b1c[^}]+box-shadow:none/);
+    expect(shell).toMatch(/\.window-controls \.window-close:hover[^}]+var\(--danger\)[^}]+var\(--danger-bg\)/);
   });
 
   it("owns one translucent material hierarchy across Dark and Light presets", () => {
-    for (const preset of [theme, lightTheme]) {
+    for (const preset of [theme, lightTheme, cyberpunkTheme]) {
       expect(tokenValue(preset, "--shell-material")).not.toMatch(/^#[0-9a-f]+$/i);
       expect(tokenValue(preset, "--chrome-material")).toMatch(/rgba\(/);
       expect(tokenValue(preset, "--rail-material")).toMatch(/rgba\(/);
@@ -164,7 +226,7 @@ describe("application theme contract", () => {
     expect(credentialDialog).toMatch(/\.credential-editor-pane[^}]+background:var\(--raised\)/);
     expect(credentialDialog).toMatch(/\.credential-editor-heading strong[^}]+color:var\(--text\)/);
     expect(connectionDialog).toMatch(/\.connection-sidebar[^}]+background:var\(--panel-bg\)/);
-    expect(connectionDialog).toMatch(/\.connection-item\.selected[^}]+background:var\(--accent-bg\)/);
+    expect(connectionDialog).toMatch(/\.connection-item\.selected[^}]+background:var\(--selection-surface\)/);
     expect(connectionDialog).toMatch(/\.connection-item-name[^}]+color:var\(--muted\)/);
     expect(connectionDialog).toMatch(/\.connection-item:hover \.connection-item-name[^}]+color:var\(--text\)/);
     expect(settingsDialog).toMatch(/\.settings-sidebar[^}]+background:var\(--panel-bg\)/);
@@ -172,6 +234,13 @@ describe("application theme contract", () => {
     expect(settingsDialog).toMatch(/\.settings-section-heading h3[^}]+color:var\(--text\)/);
     expect(aboutUpdate).toMatch(/\.update-check-status[^}]+background:var\(--panel-bg\)/);
     expect(aboutUpdate).toMatch(/\.update-check-status strong[^}]+color:var\(--text\)/);
+    expect(aboutUpdate).toMatch(/\.about-product-mark[^}]+color:var\(--signature\)[^}]+var\(--signature\)/);
+    expect(aboutUpdate).toMatch(/\.update-check-status\[data-status="available"\][^}]+var\(--signature\)/);
+    expect(aboutUpdate).toMatch(/\.update-check-status\[data-status="error"\] \.update-check-status-icon[^}]+var\(--danger\)/);
+    expect(infoDialogs).toContain('variant="primary"');
+    expect(dialogControls).toMatch(/\.terminal-lock-option-icon[^}]+color:var\(--accent\)[^}]+background:var\(--accent-bg\)/);
+    expect(connectionDialog).toMatch(/\.jump-picker-option\[aria-selected="true"\][^}]+var\(--selection-marker\)[^}]+var\(--selection-surface\)/);
+    expect(network).toMatch(/\.network-access-experimental[^}]+color:var\(--warning\)[^}]+background:var\(--warning-bg\)/);
     expect(terminalChrome).toMatch(/\.terminal-target-menu[^}]+border:1px solid var\(--floating-border\)/);
     expect(terminalChrome).toMatch(/\.terminal-target-menu[^}]+background:var\(--floating-material\)/);
     expect(terminalChrome).toMatch(/\.terminal-target-option[^}]+color:var\(--muted\)/);
@@ -188,7 +257,9 @@ describe("application theme contract", () => {
 
   it("keeps shared action buttons semantic and outside Light compatibility patches", () => {
     expect(buttons).toContain(".ui-button--primary");
-    expect(buttons).toContain("background:var(--accent)");
+    expect(buttons).toContain("background:var(--primary-action)");
+    expect(settingsDialog).toContain("border-color:var(--selection-marker)");
+    expect(fileBrowser).toContain("border-right-color:var(--signature)");
     expect(buttons).toContain(".ui-button--secondary");
     expect(buttons).toContain("background:var(--control-bg)");
     expect(buttons).toContain(".ui-button:focus-visible");
@@ -209,7 +280,7 @@ describe("application theme contract", () => {
     expect(networkAccessDialog).toContain('<IconButton label={`复制${field.label}`}');
     expect(connectionDialogComponent).toContain('<StatusBadge tone="warning" presentation="tag"');
     expect(fileBrowserComponent).toContain('<StatusBadge tone="warning" presentation="tag"');
-    expect(connectionFeedback).toMatch(/\.auth-method-indicator[^}]+background:var\(--accent-bg\)/);
+    expect(connectionFeedback).toMatch(/\.auth-method-indicator[^}]+background:var\(--selection-surface\)/);
     expect(connectionFeedback).toMatch(/\.agent-auth-note[^}]+background:var\(--panel-bg\)/);
   });
 

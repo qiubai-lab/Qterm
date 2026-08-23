@@ -3,7 +3,7 @@
 .connection-sidebar-toolbar { position:relative; z-index:1; flex:none; padding:9px 7px 7px; background:var(--block-header-background); box-shadow:var(--shadow-soft); }
 .connection-list { min-height:0; flex:1; padding:2px 7px 9px; overflow:auto; scrollbar-color:#3c8074 transparent; scrollbar-width:thin; }
 .connection-list-actions { display:grid; grid-template-columns:1fr 1fr; gap:4px; }.connection-list-actions .ui-button{width:100%}
-.connection-item { display:grid; width:100%; min-height:30px; grid-template-columns:5px minmax(0,1fr); gap:7px; align-items:center; padding:3px 7px; border:0; border-radius:5px; color:var(--muted); background:transparent; cursor:pointer; touch-action:none; user-select:none; text-align:left; transition:opacity 120ms ease,transform 120ms ease,background 120ms ease; }.connection-item:hover{background:var(--hover)}.connection-item.selected{color:var(--text);background:var(--accent-bg)}.connection-item.dragging{opacity:.42;transform:scale(.98)}.connection-item-status{width:4px;height:4px;border-radius:50%;background:var(--icon);box-shadow:0 0 0 2px color-mix(in srgb,var(--icon) 12%,transparent)}.connection-item.selected .connection-item-status{background:var(--accent);box-shadow:0 0 6px color-mix(in srgb,var(--accent) 50%,transparent)}.connection-item-copy{display:flex;min-width:0;flex-direction:column;justify-content:center}.connection-item-name{overflow:hidden;color:var(--muted);font-size:10px;font-weight:700;line-height:1.15;letter-spacing:.005em;text-overflow:ellipsis;white-space:nowrap}.connection-item:hover .connection-item-name{color:var(--text)}.connection-item.selected .connection-item-name{color:var(--text-strong)}.connection-item-endpoint{display:flex;min-width:0;align-items:center;margin-top:1px;overflow:hidden;color:var(--dim);font-family:"SFMono-Regular",Consolas,monospace;font-size:7.5px;line-height:1.15;white-space:nowrap}.connection-item-address{min-width:0;flex:1;overflow:hidden;color:var(--muted);text-overflow:ellipsis;white-space:nowrap}.connection-item-auth{flex:none;margin-left:6px;padding-left:6px;border-left:1px solid var(--border);color:var(--dim);font-family:inherit;font-size:7px}
+.connection-item { display:grid; width:100%; min-height:30px; grid-template-columns:5px minmax(0,1fr); gap:7px; align-items:center; padding:3px 7px; border:0; border-radius:5px; color:var(--muted); background:transparent; cursor:pointer; touch-action:none; user-select:none; text-align:left; transition:opacity 120ms ease,transform 120ms ease,background 120ms ease; }.connection-item:hover{background:var(--hover)}.connection-item.selected{color:var(--text);background:var(--selection-surface)}.connection-item.dragging{opacity:.42;transform:scale(.98)}.connection-item-status{width:4px;height:4px;border-radius:50%;background:var(--icon);box-shadow:0 0 0 2px color-mix(in srgb,var(--icon) 12%,transparent)}.connection-item.selected .connection-item-status{background:var(--accent);box-shadow:0 0 6px color-mix(in srgb,var(--accent) 50%,transparent)}.connection-item-copy{display:flex;min-width:0;flex-direction:column;justify-content:center}.connection-item-name{overflow:hidden;color:var(--muted);font-size:10px;font-weight:700;line-height:1.15;letter-spacing:.005em;text-overflow:ellipsis;white-space:nowrap}.connection-item:hover .connection-item-name{color:var(--text)}.connection-item.selected .connection-item-name{color:var(--text-strong)}.connection-item-endpoint{display:flex;min-width:0;align-items:center;margin-top:1px;overflow:hidden;color:var(--dim);font-family:"SFMono-Regular",Consolas,monospace;font-size:7.5px;line-height:1.15;white-space:nowrap}.connection-item-address{min-width:0;flex:1;overflow:hidden;color:var(--muted);text-overflow:ellipsis;white-space:nowrap}.connection-item-auth{flex:none;margin-left:6px;padding-left:6px;border-left:1px solid var(--border);color:var(--dim);font-family:inherit;font-size:7px}
 .connection-item+.connection-item { margin-top:2px; }
 .connection-save-feedback-bubble { position:fixed; z-index:150; max-width:min(220px,calc(100vw - 24px)); margin:0; padding:6px 9px; border:1px solid #3b6259; border-radius:6px; color:#bce7de; background:#172522f2; box-shadow:0 9px 24px #000a,0 0 0 1px #75e6cf0a; font-size:9px; line-height:1.45; pointer-events:none; transform:translateY(-50%); transform-origin:left center; animation:connection-save-feedback-in 150ms cubic-bezier(.16,1,.3,1); }
 .connection-save-feedback-bubble::before { position:absolute; top:50%; left:-5px; width:8px; height:8px; border-bottom:1px solid #3b6259; border-left:1px solid #3b6259; background:#172522f2; content:""; transform:translateY(-50%) rotate(45deg); }
@@ -46,7 +46,8 @@
 .jump-picker-group>header small{color:var(--dim)}
 .jump-picker-option{border-color:var(--border);color:var(--text);background:var(--panel-bg)}
 .jump-picker-option:hover,.jump-picker-option:focus-visible{border-color:color-mix(in srgb,var(--accent) 38%,var(--border));background:var(--hover)}
-.jump-picker-option[aria-selected="true"]{border-color:color-mix(in srgb,var(--accent) 48%,var(--border));color:var(--text-strong);background:var(--accent-bg);box-shadow:inset 2px 0 var(--accent)}
+.jump-picker-option[aria-selected="true"]{border-color:color-mix(in srgb,var(--selection-marker) 48%,var(--border));color:var(--selection-marker);background:var(--selection-surface);box-shadow:inset 2px 0 var(--selection-marker)}
+.jump-picker-option[aria-selected="true"] .jump-picker-option-icon{border-color:color-mix(in srgb,var(--selection-marker) 48%,var(--border));color:var(--selection-marker);background:var(--selection-surface)}
 .jump-picker-option[data-disabled="true"],.jump-picker-option[data-disabled="true"]:hover{border-color:var(--subtle);color:var(--text-disabled);background:var(--surface)}
 .jump-picker-option-icon{border-color:color-mix(in srgb,var(--accent) 32%,var(--border));color:var(--accent);background:var(--accent-bg)}
 .jump-picker-option[data-disabled="true"] .jump-picker-option-icon{border-color:var(--border);color:var(--text-disabled);background:var(--surface)}
@@ -75,6 +76,11 @@
 .connection-group-toggle:hover .connection-group-chevron { color: var(--icon-hover); }
 .connection-group-items > p { color: var(--text-disabled); }
 .connection-context-menu { border:1px solid var(--floating-border); background: var(--floating-material); box-shadow: 0 14px 38px var(--shadow-strong); }
+.connection-item.selected .connection-item-status{background:var(--selection-marker);box-shadow:0 0 6px color-mix(in srgb,var(--selection-marker) 50%,transparent)}
+.connection-item.selected .connection-item-name{color:var(--selection-marker)}
+.connection-editor-tab-indicator{border-color:color-mix(in srgb,var(--selection-marker) 58%,var(--border));background:var(--selection-surface)}
+.connection-editor-tabs button[aria-selected="true"]>span::before{background:var(--selection-marker);box-shadow:0 0 7px color-mix(in srgb,var(--selection-marker) 50%,transparent)}
+.ssh-config-import-choice>input,.ssh-config-key-option>label input{accent-color:var(--selection-marker)}
 .connection-context-menu button { color: var(--text); }
 .connection-context-menu button:hover,
 .connection-context-menu button:focus-visible { color: var(--text-strong); background: var(--hover); }
@@ -91,12 +97,12 @@
 .ssh-config-import-list{background:var(--raised);scrollbar-color:var(--scrollbar-thumb) transparent}
 .ssh-config-import-item{border-color:var(--border);background:var(--panel-bg)}
 .ssh-config-import-item:hover{border-color:color-mix(in srgb,var(--accent) 28%,var(--border));background:var(--hover)}
-.ssh-config-import-item.selected{border-color:color-mix(in srgb,var(--accent) 45%,var(--border));background:var(--accent-bg);box-shadow:inset 2px 0 var(--accent)}
+.ssh-config-import-item.selected{border-color:color-mix(in srgb,var(--selection-marker) 48%,var(--border));background:var(--selection-surface);box-shadow:inset 2px 0 var(--selection-marker)}
 .ssh-config-import-choice strong,.ssh-config-credential-heading strong{color:var(--text)}
 .ssh-config-import-choice small,.ssh-config-import-choice em,.ssh-config-key-option>small,.ssh-config-credential-heading small,.ssh-config-credential-heading em{color:var(--dim)}
 .ssh-config-import-choice em::before{background:var(--text-disabled)}
 .ssh-config-import-item.selected .ssh-config-import-choice em,.ssh-config-credential-item.selected .ssh-config-credential-heading em{color:var(--accent)}
-.ssh-config-import-item.selected .ssh-config-import-choice em::before{background:var(--accent)}
+.ssh-config-import-item.selected .ssh-config-import-choice em::before{background:var(--selection-marker)}
 .ssh-config-import-details,.ssh-config-credential-heading{border-color:var(--subtle)}
 .ssh-config-import-details>p,.ssh-config-import-global-warning{color:var(--warning)}
 .ssh-config-key-option>label{color:var(--muted)}

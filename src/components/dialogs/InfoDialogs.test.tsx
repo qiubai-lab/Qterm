@@ -31,7 +31,7 @@ describe("HelpDialog", () => {
     expect(screen.getByText("秋白")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "github.com/qiubai-lab/Qterm" })).toHaveAttribute("href", "https://github.com/qiubai-lab/Qterm");
     expect(await screen.findAllByText("v0.1.1")).toHaveLength(2);
-    expect(screen.getByRole("button", { name: "检测更新" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "检测更新" })).toHaveClass("ui-button--primary", "about-update-action");
     expect(screen.queryByRole("dialog", { name: "检测更新" })).not.toBeInTheDocument();
     expect(screen.queryByText("新建工作区")).not.toBeInTheDocument();
   });
@@ -63,6 +63,7 @@ describe("HelpDialog", () => {
 
     expect(await screen.findByText("发现新版本 v0.1.12")).toBeInTheDocument();
     expect(screen.getByText("当前版本 v0.1.1")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "前往 Releases" })).toHaveClass("ui-button--primary", "update-check-release");
     await user.click(screen.getByRole("button", { name: "前往 Releases" }));
     expect(mocks.openLatestReleasePage).toHaveBeenCalledOnce();
   });

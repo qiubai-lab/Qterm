@@ -3,8 +3,9 @@ import { createPortal } from "react-dom";
 
 import type { ConnectionRouteNodeProgress, ConnectionRouteNodeState, ConnectionRouteProgressState } from "../workspace/connectionProgress";
 import { calculateConnectionRouteTooltipPosition } from "./connectionRouteTooltipPosition";
+import { HostIdentity, type HostIdentitySummary } from "./HostIdentity";
 
-export function ConnectionRouteProgress({ progress, endpoint }: { progress: ConnectionRouteProgressState | null | undefined; endpoint?: string | null }) {
+export function ConnectionRouteProgress({ progress, endpoint, profile }: { progress: ConnectionRouteProgressState | null | undefined; endpoint?: string | null; profile?: HostIdentitySummary | null }) {
   const [hoveredNode, setHoveredNode] = useState<number | null>(null);
   const [focusedNode, setFocusedNode] = useState<number | null>(null);
   const anchorRefs = useRef(new Map<number, HTMLSpanElement>());
@@ -84,7 +85,9 @@ export function ConnectionRouteProgress({ progress, endpoint }: { progress: Conn
         ><span className="connection-route-node-mark" aria-hidden="true"/></span>
       </span>)}
     </div>
-    {endpoint && <small className="connection-route-endpoint">{endpoint}</small>}
+    {endpoint && (profile
+      ? <HostIdentity profile={profile} label={endpoint} className="connection-route-endpoint"/>
+      : <small className="connection-route-endpoint">{endpoint}</small>)}
   </div>{tooltip && createPortal(tooltip, document.body)}</>;
 }
 

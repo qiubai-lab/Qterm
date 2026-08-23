@@ -5,7 +5,7 @@ export interface SecuritySettings {
   terminalAutoLockAfterSeconds: number | null;
 }
 
-export type AppTheme = "dark" | "light";
+export type AppTheme = "dark" | "light" | "cyberpunk";
 
 export interface AppearanceSettings {
   theme: AppTheme;

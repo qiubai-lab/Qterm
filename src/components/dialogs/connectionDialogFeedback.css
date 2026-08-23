@@ -4,7 +4,7 @@
 .connection-save-content>span:last-child { display:block; line-height:1; white-space:nowrap; }
 .connection-save-content>svg { display:block; flex:none; }
 .connection-save-spinner { display:block; width:10px; height:10px; flex:none; border:1.5px solid currentColor; border-right-color:transparent; border-radius:50%; animation:connection-save-spin 650ms linear infinite; }
-.connection-save-button.saving:disabled,.connection-save-button.success:disabled { cursor:default; color:#06201b; background:var(--accent); opacity:1; }
+.connection-save-button.saving:disabled,.connection-save-button.success:disabled { cursor:default; color:var(--primary-action-contrast); background:var(--primary-action); opacity:1; }
 .connection-save-button.saving:disabled { cursor:wait; }
 .connection-save-button.success .connection-save-content>svg { flex:none; animation:connection-save-success-icon-in 220ms cubic-bezier(.2,.8,.2,1); }
 @keyframes connection-save-content-in { from { opacity:.35; transform:translateY(2px) scale(.98); } to { opacity:1; transform:none; } }
@@ -21,7 +21,7 @@
 @keyframes auth-content-forward{from{opacity:.35;transform:translateX(10px)}to{opacity:1;transform:none}}@keyframes auth-content-backward{from{opacity:.35;transform:translateX(-10px)}to{opacity:1;transform:none}}@keyframes auth-content-fade{from{opacity:.55}to{opacity:1}}
 
 /* Authentication state surfaces consume theme roles in every preset. */
-.auth-method-indicator{border-color:color-mix(in srgb,var(--accent) 46%,var(--border));background:var(--accent-bg);box-shadow:0 1px 4px var(--shadow-soft),inset 0 1px 0 color-mix(in srgb,var(--raised) 32%,transparent)}
+.auth-method-indicator{border-color:color-mix(in srgb,var(--selection-marker) 52%,var(--border));background:var(--selection-surface);box-shadow:0 1px 4px var(--shadow-soft),inset 0 1px 0 color-mix(in srgb,var(--raised) 32%,transparent)}
 .auth-method-picker button{color:var(--muted)}
 .auth-method-picker button.selected{color:var(--text)}
 .auth-security-hint{color:var(--muted)}

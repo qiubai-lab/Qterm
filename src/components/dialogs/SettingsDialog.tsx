@@ -120,6 +120,7 @@ export function SettingsDialog({ onClose, onSecuritySettingsChanged }: { onClose
               <legend>主题预设</legend>
               <ThemeOption theme="dark" current={appearance.theme} title="深色" description="当前默认的深色工作台" onSelect={chooseTheme}/>
               <ThemeOption theme="light" current={appearance.theme} title="亮色" description="适合明亮环境的浅色工作台" onSelect={chooseTheme}/>
+              <ThemeOption theme="cyberpunk" current={appearance.theme} title="赛博霓虹" description="亮黄重点与青色状态的夜间工作台" onSelect={chooseTheme}/>
             </fieldset> : <p className="dialog-note">正在读取设置…</p>}
           </div> : <>
             <div className="settings-section-heading"><h3 id="security-settings-title">安全</h3><p>管理凭证库有效期与终端空闲锁定策略。</p></div>

@@ -79,10 +79,12 @@ describe("application layout styles", () => {
     expect(declarations(".connection-route-dots")).toContain("flex:none");
     expect(declarations(".terminal-target")).toContain("min-width:0");
     expect(declarations(".terminal-target-trigger")).toContain("flex:0 1 auto");
+    expect(declarations('.terminal-block.active .terminal-target[data-remote="true"][data-status="connected"] .terminal-target-endpoint')).toContain("color:var(--block-active-endpoint-text)");
+    expect(declarations(".terminal-block.active .connection-route-progress.connected .connection-route-endpoint")).toContain("color:var(--block-active-endpoint-text)");
     expect(declarations(".connection-route-endpoint")).toContain("text-overflow:ellipsis");
     expect(declarations(".connection-route-endpoint")).toContain("flex:0 100 auto");
     expect(styles).not.toMatch(/@container terminal-block[^}]+\.connection-route-endpoint\{display:none\}/);
-    expect(styles).toMatch(/@container terminal-block \(max-width:390px\)\{\.terminal-target>small\{display:none\}\}/);
+    expect(styles).toMatch(/@container terminal-block \(max-width:390px\)\{\.terminal-target>small,\.terminal-target-endpoint\{display:none\}\}/);
     expect(styles).not.toContain(".connection-route-progress{display:none}");
     expect(declarations(".block-actions")).toContain("flex:none");
   });
@@ -102,7 +104,21 @@ describe("application layout styles", () => {
     expect(declarations(".connection-route-tooltip.connected")).toContain("color:var(--accent)");
     expect(declarations(".connection-route-tooltip-detail")).toContain("display:flex");
     expect(declarations(".connection-route-tooltip-detail")).toContain("align-items:baseline");
-    expect(styles).toMatch(/prefers-reduced-transparency:reduce[\s\S]*\.connection-route-tooltip\{background:var\(--raised\);backdrop-filter:none/);
+    expect(styles).toMatch(/prefers-reduced-transparency:reduce[\s\S]*\.connection-route-tooltip,\.host-summary-popover\{background:var\(--raised\);backdrop-filter:none/);
+  });
+
+  it("uses one themed interactive host identity and compact floating summary", () => {
+    expect(declarations(".host-identity-trigger")).toContain("color:var(--dim)");
+    expect(declarations('.host-identity-trigger[aria-expanded="true"]')).toContain("color:var(--block-active-endpoint-text)");
+    const popover = declarations(".host-summary-popover");
+    expect(popover).toContain("position:fixed");
+    expect(popover).toContain("border:1px solid var(--floating-border)");
+    expect(popover).toContain("background:var(--floating-material)");
+    expect(popover).toContain("box-shadow:var(--floating-shadow)");
+    expect(styles).toContain("@keyframes host-summary-in{from{opacity:0}to{opacity:1}}");
+    expect(styles).not.toMatch(/@keyframes host-summary-in\{[^}]*transform:/);
+    expect(declarations(".host-summary-endpoint dd")).toContain("color:var(--block-active-endpoint-text)");
+    expect(styles).toMatch(/prefers-reduced-transparency:reduce[\s\S]*\.connection-route-tooltip,\.host-summary-popover\{background:var\(--raised\);backdrop-filter:none/);
   });
 
   it("keeps SSH Config import content in one bounded manager scroller", () => {
@@ -123,10 +139,10 @@ describe("application layout styles", () => {
     expect(declarations(".ssh-config-import-dialog .ui-icon-button")).toContain("height:26px");
     expect(declarations(".ssh-config-import-dialog .ssh-config-import-choice")).toContain("min-height:40px");
     expect(declarations(".ssh-config-import-choice,.ssh-config-key-option>label")).toContain("margin:0");
-    expect(declarations(".ssh-config-import-choice>input")).toContain("accent-color:var(--accent)");
+    expect(styles).toContain(".ssh-config-import-choice>input,.ssh-config-key-option>label input{accent-color:var(--selection-marker)}");
     expect(declarations(".ssh-config-import-dialog .ssh-config-import-item")).toContain("margin-bottom:5px");
-    expect(declarations(".ssh-config-import-dialog .ssh-config-import-item.selected")).toContain("background:#181d1c");
-    expect(declarations(".ssh-config-import-dialog .ssh-config-import-item.selected")).toContain("box-shadow:none");
+    expect(declarations(".ssh-config-import-dialog .ssh-config-import-item.selected")).toContain("background:var(--selection-surface)");
+    expect(declarations(".ssh-config-import-dialog .ssh-config-import-item.selected")).toContain("box-shadow:inset 2px 0 var(--selection-marker)");
     expect(declarations(".ssh-config-import-actions")).toContain("flex:none");
     expect(declarations(".connection-import-button")).toContain("white-space:nowrap");
   });
@@ -219,7 +235,7 @@ describe("application layout styles", () => {
     expect(brandPlate).toContain('content:""');
     expect(brand).toContain("gap:6px");
     expect(brandIcon).toContain("width:14px");
-    expect(brandIcon).toContain("color-mix(in srgb,var(--accent) 56%,var(--muted))");
+    expect(brandIcon).toContain("color-mix(in srgb,var(--signature) 72%,var(--muted))");
     expect(brandLabel).toContain("font-size:12px");
     expect(brandLabel).toContain("font-weight:600");
     expect(brandLabel).toContain("color:var(--muted)");
@@ -388,6 +404,7 @@ describe("application layout styles", () => {
     expect(selection).toContain("border:1px solid var(--workspace-tab-active-border)");
     expect(selection).toContain("background:var(--workspace-tab-active-background)");
     expect(selection).toContain("box-shadow:var(--workspace-tab-active-shadow)");
+    expect(declarations(".workspace-tab.selected")).toContain("color:var(--workspace-tab-active-text)");
     expect(declarations(".workspace-tab.selected .workspace-tab-select svg")).toContain("color:var(--accent)");
     expect(declarations(".workspace-tab:hover:not(.selected)")).toContain("border-color:var(--workspace-tab-hover-border)");
     expect(declarations(".workspace-tab:hover:not(.selected)")).toContain("background:var(--workspace-tab-hover-background)");
@@ -413,10 +430,13 @@ describe("application layout styles", () => {
     expect(declarations(".workspace-tab-close")).toContain("position:absolute");
     expect(declarations(".workspace-tab-close")).toContain("top:1px");
     expect(declarations(".new-workspace-tab")).toContain("margin-left:2px");
-    expect(declarations(".workspace-tab-close.ui-icon-button:hover:not(:disabled),.new-workspace-tab.ui-icon-button:hover:not(:disabled)")).toContain("background:var(--chrome-action-hover)");
-    expect(declarations(".workspace-tab-close.ui-icon-button:active:not(:disabled),.new-workspace-tab.ui-icon-button:active:not(:disabled)")).toContain("background:var(--chrome-action-pressed)");
+    expect(declarations(".new-workspace-tab.ui-icon-button:hover:not(:disabled)")).toContain("background:var(--chrome-action-hover)");
+    expect(declarations(".new-workspace-tab.ui-icon-button:active:not(:disabled)")).toContain("background:var(--chrome-action-pressed)");
+    expect(declarations(".workspace-tab-close.ui-icon-button:hover:not(:disabled)")).toContain("color:var(--danger)");
+    expect(declarations(".workspace-tab-close.ui-icon-button:hover:not(:disabled)")).toContain("background:var(--danger-bg)");
     expect(declarations(".window-controls button:not(.window-close):hover")).toContain("background:var(--chrome-action-hover)");
     expect(declarations(".window-controls button:not(.window-close):active")).toContain("background:var(--chrome-action-pressed)");
+    expect(declarations(".window-controls .window-close:hover")).toContain("var(--danger)");
     expect(lightOverrides).not.toMatch(/workspace-tab-close|new-workspace-tab/);
   });
 
@@ -425,9 +445,9 @@ describe("application layout styles", () => {
     const selected = declarations(".settings-theme-option[data-selected]");
 
     expect(option).toContain("background:var(--surface)");
-    expect(selected).toContain("border-color:var(--accent)");
+    expect(selected).toContain("border-color:var(--selection-marker)");
     expect(selected).toContain("color:var(--text)");
-    expect(selected).toContain("background:var(--accent-bg)");
+    expect(selected).toContain("background:var(--selection-surface)");
     expect(lightOverrides).not.toContain(".settings-theme-option");
   });
 
@@ -444,6 +464,8 @@ describe("application layout styles", () => {
   it("keeps terminal and files block actions visible without hover", () => {
     expect(declarations(".block-actions")).toContain("opacity:1");
     expect(styles).not.toContain(".terminal-block:hover .block-actions,.terminal-block.active .block-actions");
+    expect(declarations('.block-actions button[aria-label^="关闭"]:hover')).toContain("color:var(--danger)");
+    expect(declarations('.block-actions button[aria-label^="关闭"]:hover')).toContain("background:var(--danger-bg)");
   });
 
   it("keeps the labeled utility rail compact and visually secondary", () => {
@@ -452,8 +474,8 @@ describe("application layout styles", () => {
     expect(declarations(".rail-button-label")).toContain("font-size:8px");
     expect(declarations(".rail-button")).toContain("color:var(--icon)");
     expect(declarations(".rail-button-label")).toContain("color:var(--muted)");
-    expect(declarations(".rail-button.active")).toContain("color:var(--accent)");
-    expect(declarations(".rail-button.active")).toContain("background:var(--accent-bg)");
+    expect(declarations(".rail-button.active")).toContain("color:var(--navigation-accent)");
+    expect(declarations(".rail-button.active")).toContain("background:var(--navigation-accent-bg)");
   });
 
   it("uses a sliding segmented connection tab with directional, reduced-motion-aware content transitions", () => {
@@ -605,8 +627,8 @@ describe("application layout styles", () => {
     expect(declarations(".connection-save-content>span:last-child")).toContain("line-height:1");
     expect(declarations(".connection-save-content>svg")).toContain("display:block");
     expect(declarations(".connection-save-spinner")).toContain("animation:connection-save-spin");
-    expect(declarations(".connection-save-button.saving:disabled,.connection-save-button.success:disabled")).toContain("background:var(--accent)");
-    expect(declarations(".connection-save-button.saving:disabled,.connection-save-button.success:disabled")).toContain("color:#06201b");
+    expect(declarations(".connection-save-button.saving:disabled,.connection-save-button.success:disabled")).toContain("background:var(--primary-action)");
+    expect(declarations(".connection-save-button.saving:disabled,.connection-save-button.success:disabled")).toContain("color:var(--primary-action-contrast)");
     expect(declarations(".connection-save-button.success .connection-save-content>svg")).toContain("animation:connection-save-success-icon-in");
     expect(declarations(".connection-save-feedback-bubble")).toContain("position:fixed");
     expect(declarations(".connection-save-feedback-bubble")).toContain("pointer-events:none");
@@ -701,6 +723,19 @@ describe("application layout styles", () => {
     expect(styles).toContain("@keyframes file-loading-spin{to{transform:rotate(360deg)}}");
     expect(styles).toMatch(/prefers-reduced-motion:reduce[\s\S]*\.file-loading-spinner\{animation:none\}/);
     expect(styles).toMatch(/prefers-reduced-transparency:reduce[\s\S]*\.file-loading-popover\{background:var\(--raised\);backdrop-filter:none/);
+  });
+
+  it("shares the file browser scrollbar treatment with every preview scroller", () => {
+    const owners = ".file-browser-content,.file-code-editor .cm-scroller,.file-image-preview,.file-markdown-preview,.file-markdown-preview pre";
+    expect(declarations(owners)).toContain("scrollbar-color:var(--scrollbar-thumb) transparent");
+    expect(declarations(owners)).toContain("scrollbar-width:thin");
+    const webkitOwners = ".file-browser-content::-webkit-scrollbar,.file-code-editor .cm-scroller::-webkit-scrollbar,.file-image-preview::-webkit-scrollbar,.file-markdown-preview::-webkit-scrollbar,.file-markdown-preview pre::-webkit-scrollbar";
+    expect(declarations(webkitOwners)).toContain("width:5px");
+    expect(declarations(webkitOwners)).toContain("height:5px");
+    const thumbs = ".file-browser-content::-webkit-scrollbar-thumb,.file-code-editor .cm-scroller::-webkit-scrollbar-thumb,.file-image-preview::-webkit-scrollbar-thumb,.file-markdown-preview::-webkit-scrollbar-thumb,.file-markdown-preview pre::-webkit-scrollbar-thumb";
+    expect(declarations(thumbs)).toContain("background:var(--scrollbar-thumb)");
+    expect(declarations(thumbs)).toContain("border-radius:999px");
+    expect(declarations(thumbs)).toContain("background-clip:padding-box");
   });
 
   it("shares terminal typography with the file code editor without replacing editor rendering states", () => {

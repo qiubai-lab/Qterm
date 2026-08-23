@@ -22,6 +22,9 @@ describe("TerminalTargetPicker", () => {
     const onSelect = vi.fn();
     render(<TerminalTargetPicker profiles={profiles} groups={groups} recentProfileIds={["profile-2", "profile-1"]} selectedProfileId={null} status="connected" detail="本机" onSelect={onSelect}/>);
 
+    expect(document.querySelector(".terminal-target")).not.toHaveAttribute("data-remote");
+    expect(document.querySelector(".terminal-target")).toHaveAttribute("data-status", "connected");
+
     await user.click(screen.getByRole("button", { name: "选择终端连接，当前：本地终端" }));
     const menu = screen.getByRole("dialog", { name: "选择终端连接" });
     expect(document.querySelector(".terminal-target")).not.toContainElement(menu);
@@ -57,6 +60,8 @@ describe("TerminalTargetPicker", () => {
     });
     const setTimeoutSpy = vi.spyOn(window, "setTimeout");
     render(<TerminalTargetPicker profiles={profiles} groups={groups} recentProfileIds={["profile-1"]} selectedProfileId="profile-1" status="connected" detail="deploy@prod.example" onSelect={vi.fn()}/>);
+
+    expect(document.querySelector(".terminal-target")).toHaveAttribute("data-remote", "true");
 
     const trigger = screen.getByRole("button", { name: "选择终端连接，当前：Production" });
     const triggerRect = vi.spyOn(trigger, "getBoundingClientRect").mockReturnValue({
@@ -147,5 +152,22 @@ describe("TerminalTargetPicker", () => {
     await user.keyboard("{Escape}");
     expect(screen.queryByRole("dialog", { name: "选择终端连接" })).not.toBeInTheDocument();
     expect(trigger).toHaveFocus();
+  });
+
+  it("turns a connected remote endpoint into the shared host summary entry", () => {
+    render(<TerminalTargetPicker profiles={profiles} groups={groups} selectedProfileId="profile-1" status="connected" detail="deploy@prod.example" onSelect={vi.fn()}/>);
+
+    expect(screen.getByRole("button", { name: /查看 Production 主机概要/ })).toHaveClass("host-identity-trigger", "terminal-target-endpoint");
+    expect(screen.queryByText("deploy@prod.example", { selector: "small" })).not.toBeInTheDocument();
+  });
+
+  it("keeps local and disconnected details non-interactive", () => {
+    const { rerender } = render(<TerminalTargetPicker profiles={profiles} selectedProfileId={null} status="connected" detail="本机" onSelect={vi.fn()}/>);
+    expect(screen.getByText("本机", { selector: "small" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /主机概要/ })).not.toBeInTheDocument();
+
+    rerender(<TerminalTargetPicker profiles={profiles} selectedProfileId="profile-1" status="closed" detail="closed" onSelect={vi.fn()}/>);
+    expect(screen.getByText("closed", { selector: "small" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /主机概要/ })).not.toBeInTheDocument();
   });
 });

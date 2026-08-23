@@ -22,9 +22,9 @@
 .danger-button>svg { flex:none; }
 
 .ui-button--primary,
-.primary-button { border-color:var(--accent); color:var(--accent-contrast); background:var(--accent); }
+.primary-button { border-color:var(--primary-action); color:var(--primary-action-contrast); background:var(--primary-action); }
 .ui-button--primary:hover:not(:disabled),
-.primary-button:hover:not(:disabled) { background:color-mix(in srgb,var(--accent) 86%,var(--text-strong)); }
+.primary-button:hover:not(:disabled) { background:color-mix(in srgb,var(--primary-action) 86%,var(--text-strong)); }
 
 .ui-button--secondary,
 .secondary-button { border-color:var(--border); color:var(--text); background:var(--control-bg); }
@@ -67,7 +67,7 @@
 
 .ui-button[aria-busy="true"]:disabled,
 .ui-icon-button[aria-busy="true"]:disabled { cursor:wait; opacity:1; }
-.ui-button--primary[aria-busy="true"]:disabled { border-color:var(--accent); color:var(--accent-contrast); background:var(--accent); }
+.ui-button--primary[aria-busy="true"]:disabled { border-color:var(--primary-action); color:var(--primary-action-contrast); background:var(--primary-action); }
 .ui-button--secondary[aria-busy="true"]:disabled { border-color:var(--border); color:var(--text); background:var(--control-bg); }
 .ui-button--quiet[aria-busy="true"]:disabled { color:var(--muted); background:transparent; }
 .ui-button--danger[aria-busy="true"]:disabled { color:var(--danger); background:var(--danger-bg); }

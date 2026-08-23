@@ -64,6 +64,7 @@ pub struct AppearanceSettingsDto {
 enum AppThemeDto {
     Dark,
     Light,
+    Cyberpunk,
 }
 
 #[derive(Deserialize)]
@@ -211,6 +212,7 @@ impl From<AppThemeDto> for AppTheme {
         match value {
             AppThemeDto::Dark => Self::Dark,
             AppThemeDto::Light => Self::Light,
+            AppThemeDto::Cyberpunk => Self::Cyberpunk,
         }
     }
 }
@@ -220,6 +222,7 @@ impl From<AppTheme> for AppThemeDto {
         match value {
             AppTheme::Dark => Self::Dark,
             AppTheme::Light => Self::Light,
+            AppTheme::Cyberpunk => Self::Cyberpunk,
         }
     }
 }
@@ -249,6 +252,10 @@ mod tests {
     fn settings_input_rejects_unknown_and_sensitive_fields() {
         assert!(
             serde_json::from_value::<AppearanceSettingsDto>(json!({ "theme": "dark" })).is_ok()
+        );
+        assert!(
+            serde_json::from_value::<AppearanceSettingsDto>(json!({ "theme": "cyberpunk" }))
+                .is_ok()
         );
         assert!(
             serde_json::from_value::<AppearanceSettingsDto>(json!({ "theme": "system" })).is_err()

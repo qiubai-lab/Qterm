@@ -201,7 +201,7 @@ function TerminalBlock(props: Omit<Parameters<typeof LayoutBranch>[0], "node"> &
   >
     <header className="terminal-block-header" onPointerDown={(event) => props.beginDrag(event, props.blockId)}>
       <TerminalTargetPicker profiles={profiles} groups={profileGroups} recentProfileIds={document?.recentProfileIds ?? []} selectedProfileId={props.profileId} status={status} detail={detail} hideDetail={Boolean(runtime?.connectionProgress)} onSelect={(profileId) => void chooseTarget(profileId)} onManageConnections={props.onOpenConnectionManager}/>
-      <ConnectionRouteProgress progress={runtime?.connectionProgress} endpoint={endpoint}/>
+      <ConnectionRouteProgress progress={runtime?.connectionProgress} endpoint={endpoint} profile={profile}/>
       <div className="block-actions">
         <button aria-label="清除终端缓冲区" title="清除终端缓冲区" onClick={() => clearBlockBuffer(props.blockId)}><Icon name="clear" size={13}/></button>
         <button aria-label="打开当前文件夹" title={runtime?.cwd ? `打开 ${runtime.cwd}` : "打开当前文件夹"} disabled={status !== "connected"} onClick={() => dispatch({ type: "openFiles", workspaceId: props.workspace.id, anchorBlockId: props.blockId, profileId: props.profileId, path: runtime?.cwd ?? (props.profileId === null ? "~" : ".") })}><Icon name="files" size={13}/></button>
@@ -254,7 +254,7 @@ function FilesBlock(props: Omit<Parameters<typeof LayoutBranch>[0], "node"> & { 
   >
     <header className="terminal-block-header" onPointerDown={(event) => props.beginDrag(event, props.blockId)}>
       <TerminalTargetPicker profiles={profiles} groups={profileGroups} recentProfileIds={document?.recentProfileIds ?? []} selectedProfileId={props.profileId} status={runtime.status} detail={detail} hideDetail={Boolean(runtime.connectionProgress)} onSelect={(profileId) => void chooseTarget(profileId)} onManageConnections={props.onOpenConnectionManager} icon="files" localName="本机文件" localDetail="本地文件系统" ariaContext="文件连接"/>
-      <ConnectionRouteProgress progress={runtime.connectionProgress} endpoint={endpoint}/>
+      <ConnectionRouteProgress progress={runtime.connectionProgress} endpoint={endpoint} profile={profile}/>
       <div className="block-actions">
         <button aria-label="关闭文件窗口" title="关闭" onClick={() => props.onRequestClose(props.blockId)}><Icon name="close" size={13}/></button>
       </div>
@@ -311,7 +311,7 @@ function NetworkBlock(props: Omit<Parameters<typeof LayoutBranch>[0], "node"> & 
   >
     <header className="terminal-block-header" onPointerDown={(event) => props.beginDrag(event, props.blockId)}>
       <TerminalTargetPicker profiles={profiles} groups={profileGroups} recentProfileIds={document?.recentProfileIds ?? []} selectedProfileId={props.profileId} status={status} detail={detail} hideDetail={Boolean(runtime?.connectionProgress)} onSelect={(profileId) => void chooseTarget(profileId)} onManageConnections={props.onOpenConnectionManager} icon="network" localName="选择连接" localDetail="Network Block 需要远程 SSH 连接" ariaContext="网络连接" allowLocal={false}/>
-      <ConnectionRouteProgress progress={runtime?.connectionProgress} endpoint={endpoint}/>
+      <ConnectionRouteProgress progress={runtime?.connectionProgress} endpoint={endpoint} profile={profile}/>
       <div className="block-actions"><button aria-label="关闭网络窗口" title="关闭" onClick={() => props.onRequestClose(props.blockId)}><Icon name="close" size={13}/></button></div>
     </header>
     <NetworkPane profileId={props.profileId} profileHost={profile?.host} runtimeStates={runtime?.ruleStates} lockedRuleIds={lockedRuleIds} onStart={(rule) => void startRule(rule.id)} onStop={(rule) => void stopNetworkBlockRule(props.blockId, rule.id)}/>

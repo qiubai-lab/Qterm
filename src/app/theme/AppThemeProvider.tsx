@@ -16,7 +16,8 @@ interface AppThemeContextValue {
 const AppThemeContext = createContext<AppThemeContextValue | null>(null);
 
 export function currentDocumentTheme(): AppTheme {
-  return document.documentElement.dataset.theme === "light" ? "light" : "dark";
+  const theme = document.documentElement.dataset.theme;
+  return theme === "light" || theme === "cyberpunk" ? theme : "dark";
 }
 
 export function applyAppTheme(theme: AppTheme): void {

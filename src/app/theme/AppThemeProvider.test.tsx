@@ -29,9 +29,9 @@ function ThemeProbe() {
 
 describe("application theme owner", () => {
   it("applies one preset to the root, native window, and all terminal consumers", () => {
-    applyAppTheme("light");
-    expect(document.documentElement).toHaveAttribute("data-theme", "light");
-    expect(mocks.setNativeWindowTheme).toHaveBeenCalledWith("light");
+    applyAppTheme("cyberpunk");
+    expect(document.documentElement).toHaveAttribute("data-theme", "cyberpunk");
+    expect(mocks.setNativeWindowTheme).toHaveBeenCalledWith("cyberpunk");
     expect(mocks.refreshTerminalThemes).toHaveBeenCalledOnce();
   });
 
@@ -50,8 +50,8 @@ describe("application theme owner", () => {
 
   it("loads the saved preset before render and falls back to dark on failure", async () => {
     Object.defineProperty(window, "__TAURI_INTERNALS__", { configurable: true, value: {} });
-    mocks.getSettings.mockResolvedValue({ appearance: { theme: "light" } });
-    await expect(bootstrapAppTheme()).resolves.toBe("light");
+    mocks.getSettings.mockResolvedValue({ appearance: { theme: "cyberpunk" } });
+    await expect(bootstrapAppTheme()).resolves.toBe("cyberpunk");
     mocks.getSettings.mockRejectedValue(new Error("unavailable"));
     await expect(bootstrapAppTheme()).resolves.toBe("dark");
   });

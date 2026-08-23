@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { createPortal } from "react-dom";
 
 import { Icon, type IconName } from "../components/Icon";
+import { HostIdentity } from "../components/HostIdentity";
 import type { ConnectionProfile, ProfileGroup } from "../lib/tauri/profiles";
 import type { SessionState } from "../lib/tauri/sessions";
 
@@ -393,7 +394,7 @@ export function TerminalTargetPicker({ profiles, groups = [], recentProfileIds =
     <div className="terminal-target-scrollbar" aria-hidden="true"><span/></div>
   </div> : null;
 
-  return <div className="terminal-target" ref={rootRef}>
+  return <div className="terminal-target" data-remote={selectedProfileId !== null || undefined} data-status={status} ref={rootRef}>
     <span className={`connection-dot ${status}`} />
     <button
       ref={triggerRef}
@@ -413,7 +414,9 @@ export function TerminalTargetPicker({ profiles, groups = [], recentProfileIds =
       <Icon name={icon} size={13}/>
       <span className="terminal-target-name">{name}</span>
     </button>
-    {!hideDetail && <small>{detail}</small>}
+    {!hideDetail && (selected && status === "connected"
+      ? <HostIdentity profile={selected} label={detail} className="terminal-target-endpoint"/>
+      : <small>{detail}</small>)}
     {popover && createPortal(<>{popover}{submenu}</>, document.body)}
   </div>;
 }

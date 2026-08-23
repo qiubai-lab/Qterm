@@ -29,7 +29,7 @@ export async function startDraggingCurrentWindow(): Promise<void> {
 }
 
 export async function setNativeWindowTheme(theme: AppTheme): Promise<void> {
-  if (isTauriRuntime()) await getCurrentWindow().setTheme(theme);
+  if (isTauriRuntime()) await getCurrentWindow().setTheme(theme === "light" ? "light" : "dark");
 }
 
 function isTauriRuntime(): boolean {

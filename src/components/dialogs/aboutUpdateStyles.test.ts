@@ -32,7 +32,16 @@ describe("about update styles", () => {
   });
 
   it("keeps every update-state icon on semantic theme roles", () => {
-    expect(styles).toMatch(/\.update-check-status\[data-status="latest"\] \.update-check-status-icon,[\s\S]*\.update-check-status\[data-status="available"\] \.update-check-status-icon\s*\{[^}]*border-color:\s*color-mix\(in srgb, var\(--accent\)[^}]*color:\s*var\(--accent\)[^}]*background:\s*var\(--accent-bg\)/);
+    expect(styles).toMatch(/\.update-check-status\[data-status="latest"\] \.update-check-status-icon\s*\{[^}]*border-color:\s*color-mix\(in srgb, var\(--accent\)[^}]*color:\s*var\(--accent\)[^}]*background:\s*var\(--accent-bg\)/);
+    expect(styles).toMatch(/\.update-check-status\[data-status="available"\] \.update-check-status-icon\s*\{[^}]*var\(--signature\)[^}]*color:\s*var\(--signature\)/);
     expect(styles).toMatch(/\.update-check-status\[data-status="error"\] \.update-check-status-icon\s*\{[^}]*border-color:\s*color-mix\(in srgb, var\(--danger\)[^}]*color:\s*var\(--danger\)[^}]*background:\s*var\(--danger-bg\)/);
+  });
+
+  it("separates branded primary actions from cyan utility actions", () => {
+    expect(declarations(".about-update-action.ui-button--primary")).toContain("background:var(--primary-action)");
+    expect(declarations('.update-check-status[data-status="available"]')).toContain("box-shadow:inset 2px 0 var(--signature)");
+    expect(declarations(".update-check-release.ui-button--primary")).toContain("background:var(--primary-action)");
+    expect(styles).toMatch(/\.update-check-copy,\s*\.update-check-recheck\s*\{[^}]*background:\s*var\(--control-bg\)/);
+    expect(declarations(".about-product-mark")).toContain("color:var(--signature)");
   });
 });
