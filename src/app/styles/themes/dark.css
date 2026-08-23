@@ -63,6 +63,7 @@
   --accent-contrast:#08201b; --danger-bg:#2a1918; --warning:#c4a96e; --warning-bg:#211c13;
   --signature:var(--accent); --signature-contrast:var(--accent-contrast);
   --primary-action:var(--accent); --primary-action-contrast:var(--accent-contrast);
+  --menu-hover-background:var(--primary-action); --menu-hover-text:var(--primary-action-contrast);
   --navigation-accent:var(--accent); --navigation-accent-bg:var(--accent-bg); --selection-marker:var(--accent); --selection-surface:var(--accent-bg);
   --control-bg:#101315; --panel-bg:#14171a; --overlay-bg:rgba(10,12,14,.78);
   --shadow-soft:#0005; --shadow-strong:#000b; --selection-bg:#244b44;

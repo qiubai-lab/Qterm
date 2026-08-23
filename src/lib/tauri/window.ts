@@ -20,6 +20,14 @@ export async function toggleMaximizeCurrentWindow(): Promise<void> {
   if (isTauriRuntime()) await getCurrentWindow().toggleMaximize();
 }
 
+export async function isCurrentWindowAlwaysOnTop(): Promise<boolean> {
+  return isTauriRuntime() ? getCurrentWindow().isAlwaysOnTop() : false;
+}
+
+export async function setCurrentWindowAlwaysOnTop(alwaysOnTop: boolean): Promise<void> {
+  if (isTauriRuntime()) await getCurrentWindow().setAlwaysOnTop(alwaysOnTop);
+}
+
 export async function closeCurrentWindow(): Promise<void> {
   if (isTauriRuntime()) await getCurrentWindow().close();
 }

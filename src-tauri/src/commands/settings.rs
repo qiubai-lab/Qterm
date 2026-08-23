@@ -7,11 +7,14 @@ use tauri_plugin_dialog::DialogExt;
 use crate::{
     application::settings_service::{SettingsService, SettingsSnapshot, SettingsWarning},
     commands::error::IpcError,
-    domain::settings::{AppTheme, AppearanceSettings, ConfigurationDirectory, SecuritySettings},
+    domain::settings::{
+        AppTheme, AppearanceSettings, ConfigurationDirectory, SecuritySettings, UpdateSettings,
+    },
     infrastructure::persistence::json_appearance_settings_repository::JsonAppearanceSettingsRepository,
     infrastructure::persistence::json_settings_repository::{
         JsonConfigurationDirectoryRepository, JsonSettingsRepository,
     },
+    infrastructure::persistence::json_update_settings_repository::JsonUpdateSettingsRepository,
 };
 
 pub struct SettingsState {
@@ -19,6 +22,7 @@ pub struct SettingsState {
         JsonSettingsRepository,
         JsonConfigurationDirectoryRepository,
         JsonAppearanceSettingsRepository,
+        JsonUpdateSettingsRepository,
     >,
 }
 
@@ -29,6 +33,7 @@ impl SettingsState {
         default_configuration_directory: ConfigurationDirectory,
         active_configuration_directory: ConfigurationDirectory,
         appearance_repository: JsonAppearanceSettingsRepository,
+        update_repository: JsonUpdateSettingsRepository,
     ) -> Self {
         Self {
             service: SettingsService::new(
@@ -37,6 +42,7 @@ impl SettingsState {
                 default_configuration_directory,
                 active_configuration_directory,
                 appearance_repository,
+                update_repository,
             ),
         }
     }
@@ -59,6 +65,12 @@ pub struct AppearanceSettingsDto {
     theme: AppThemeDto,
 }
 
+#[derive(Clone, Copy, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct UpdateSettingsDto {
+    auto_check_on_startup: bool,
+}
+
 #[derive(Clone, Copy, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 enum AppThemeDto {
@@ -79,6 +91,7 @@ pub struct SettingsSnapshotDto {
     general: GeneralSettingsOutputDto,
     security: SecuritySettingsOutputDto,
     appearance: AppearanceSettingsOutputDto,
+    updates: UpdateSettingsOutputDto,
     warning: Option<&'static str>,
 }
 
@@ -104,6 +117,12 @@ struct SecuritySettingsOutputDto {
 #[serde(rename_all = "camelCase")]
 struct AppearanceSettingsOutputDto {
     theme: AppThemeDto,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct UpdateSettingsOutputDto {
+    auto_check_on_startup: bool,
 }
 
 #[tauri::command]
@@ -176,6 +195,20 @@ pub fn settings_update_appearance(
     Ok(SettingsSnapshotDto::new(snapshot))
 }
 
+#[tauri::command]
+pub fn settings_update_updates(
+    input: UpdateSettingsDto,
+    state: State<'_, SettingsState>,
+) -> Result<SettingsSnapshotDto, IpcError> {
+    let snapshot = state
+        .service
+        .update_updates(UpdateSettings {
+            auto_check_on_startup: input.auto_check_on_startup,
+        })
+        .map_err(IpcError::from)?;
+    Ok(SettingsSnapshotDto::new(snapshot))
+}
+
 impl SettingsSnapshotDto {
     fn new(value: SettingsSnapshot) -> Self {
         let root = value.configuration_directory.path();
@@ -197,6 +230,9 @@ impl SettingsSnapshotDto {
             },
             appearance: AppearanceSettingsOutputDto {
                 theme: value.appearance.theme.into(),
+            },
+            updates: UpdateSettingsOutputDto {
+                auto_check_on_startup: value.updates.auto_check_on_startup,
             },
             warning: value.warning.map(|warning| match warning {
                 SettingsWarning::Corrupt => "corrupt",
@@ -235,7 +271,7 @@ fn display_path(path: &std::path::Path) -> String {
 mod tests {
     use super::{
         AppearanceSettingsDto, ConfigurationDirectorySettingsDto, SecuritySettingsDto,
-        SettingsSnapshotDto,
+        SettingsSnapshotDto, UpdateSettingsDto,
     };
     use crate::{
         application::settings_service::SettingsService,
@@ -244,6 +280,7 @@ mod tests {
         infrastructure::persistence::json_settings_repository::{
             JsonConfigurationDirectoryRepository, JsonSettingsRepository,
         },
+        infrastructure::persistence::json_update_settings_repository::JsonUpdateSettingsRepository,
     };
     use serde_json::json;
     use tempfile::tempdir;
@@ -252,6 +289,19 @@ mod tests {
     fn settings_input_rejects_unknown_and_sensitive_fields() {
         assert!(
             serde_json::from_value::<AppearanceSettingsDto>(json!({ "theme": "dark" })).is_ok()
+        );
+        assert!(
+            serde_json::from_value::<UpdateSettingsDto>(json!({
+                "autoCheckOnStartup": true
+            }))
+            .is_ok()
+        );
+        assert!(
+            serde_json::from_value::<UpdateSettingsDto>(json!({
+                "autoCheckOnStartup": true,
+                "channel": "beta"
+            }))
+            .is_err()
         );
         assert!(
             serde_json::from_value::<AppearanceSettingsDto>(json!({ "theme": "cyberpunk" }))
@@ -297,6 +347,7 @@ mod tests {
             default_root,
             active_root,
             JsonAppearanceSettingsRepository::new(root.join("device/appearance.json")),
+            JsonUpdateSettingsRepository::new(root.join("device/updates.json")),
         );
 
         let value = serde_json::to_value(SettingsSnapshotDto::new(service.snapshot()))
@@ -343,6 +394,7 @@ mod tests {
         );
         assert_eq!(updated["general"]["restartRequired"], true);
         assert_eq!(updated["appearance"]["theme"], "dark");
+        assert_eq!(updated["updates"]["autoCheckOnStartup"], false);
     }
 
     fn display(path: &std::path::Path) -> String {

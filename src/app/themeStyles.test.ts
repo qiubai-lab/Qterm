@@ -184,8 +184,10 @@ describe("application theme contract", () => {
     expect(shell).toMatch(/\.new-workspace-tab\.ui-icon-button:hover:not\(:disabled\)[^}]+border-color:var\(--chrome-action-border\)[^}]+background:var\(--chrome-action-hover\)/);
     expect(shell).toMatch(/\.workspace-tab-close\.ui-icon-button:hover:not\(:disabled\)[^}]+color:var\(--danger\)[^}]+background:var\(--danger-bg\)/);
     expect(shell).toMatch(/\.workspace-tab:hover:not\(\.selected\)[^}]+border-color:var\(--workspace-tab-hover-border\)[^}]+background:var\(--workspace-tab-hover-background\)/);
-    expect(shell).toMatch(/\.window-controls button:not\(\.window-close\):hover[^}]+background:var\(--chrome-action-hover\)[^}]+var\(--chrome-action-border\)/);
-    expect(shell).toMatch(/\.window-controls button:not\(\.window-close\):active[^}]+background:var\(--chrome-action-pressed\)/);
+    expect(shell).toMatch(/\.window-controls button:not\(\.window-close\):not\(\.window-pin\[aria-pressed="true"\]\):hover[^}]+border-color:var\(--chrome-action-border\)[^}]+background:var\(--chrome-action-hover\)/);
+    expect(shell).not.toMatch(/\.window-controls[^}]+box-shadow:inset/);
+    expect(shell).not.toMatch(/\.window-controls button:active[^}]+transform:/);
+    expect(shell).toMatch(/\.window-controls button:not\(\.window-close\):not\(\.window-pin\[aria-pressed="true"\]\):active[^}]+background:var\(--chrome-action-pressed\)/);
     expect(shell).toMatch(/\.window-controls \.window-close:hover[^}]+var\(--danger\)[^}]+var\(--danger-bg\)/);
   });
 

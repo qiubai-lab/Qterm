@@ -36,6 +36,34 @@ describe("HelpDialog", () => {
     expect(screen.queryByText("新建工作区")).not.toBeInTheDocument();
   });
 
+  it("persists the startup update preference through an accessible switch", async () => {
+    const onChange = vi.fn().mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    const view = render(<HelpDialog onClose={vi.fn()} autoCheckOnStartup={false} onAutoCheckOnStartupChange={onChange}/>);
+    const toggle = screen.getByRole("switch", { name: "启动时自动检测更新" });
+
+    expect(toggle).toHaveAttribute("aria-checked", "false");
+    expect(toggle).toHaveClass("ui-button--quiet", "about-update-autocheck");
+    expect(toggle.querySelector(".about-update-autocheck-label")).toHaveAttribute("data-busy", "false");
+    expect(toggle.querySelector(".about-update-autocheck-label-idle")).toHaveTextContent("启动时检测");
+    expect(toggle.querySelector(".about-update-autocheck-label-busy")).toHaveTextContent("保存中");
+    await user.click(toggle);
+    expect(onChange).toHaveBeenCalledWith(true);
+
+    view.rerender(<HelpDialog onClose={vi.fn()} autoCheckOnStartup onAutoCheckOnStartupChange={onChange}/>);
+    expect(toggle).toHaveAttribute("aria-checked", "true");
+  });
+
+  it("keeps the startup update preference unchanged and reports save failures locally", async () => {
+    const user = userEvent.setup();
+    render(<HelpDialog onClose={vi.fn()} autoCheckOnStartup={false} onAutoCheckOnStartupChange={vi.fn().mockRejectedValue(new Error("storage unavailable"))}/>);
+
+    await user.click(screen.getByRole("switch", { name: "启动时自动检测更新" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("保存失败，请重试");
+    expect(screen.getByRole("switch", { name: "启动时自动检测更新" })).toHaveAttribute("aria-checked", "false");
+  });
+
   it("opens a compact dialog, starts checking immediately, and always shows the Homebrew command", async () => {
     let resolveCheck: (result: { status: "latest"; currentVersion: string }) => void = () => undefined;
     mocks.checkForUpdate.mockImplementation(() => new Promise((resolve) => { resolveCheck = resolve; }));

@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-export type IconName = "workspace" | "plus" | "terminal" | "browser" | "computer" | "server" | "network" | "connections" | "files" | "file" | "filePlus" | "folderPlus" | "edit" | "save" | "check" | "checkCircle" | "copy" | "upload" | "key" | "lock" | "trash" | "clear" | "back" | "forward" | "chevronDown" | "refresh" | "settings" | "help" | "splitHorizontal" | "splitVertical" | "menu" | "windowMinimize" | "windowMaximize" | "close" | "more" | "eye" | "eyeOff";
+export type IconName = "workspace" | "plus" | "terminal" | "browser" | "computer" | "server" | "network" | "connections" | "files" | "file" | "filePlus" | "folderPlus" | "edit" | "save" | "check" | "checkCircle" | "copy" | "upload" | "key" | "lock" | "trash" | "clear" | "back" | "forward" | "chevronDown" | "refresh" | "settings" | "help" | "splitHorizontal" | "splitVertical" | "menu" | "pin" | "windowMinimize" | "windowMaximize" | "close" | "more" | "eye" | "eyeOff";
 
 export function Icon({ name, size = 16 }: { name: IconName; size?: number }) {
   const paths: Record<IconName, ReactNode> = {
@@ -35,6 +35,7 @@ export function Icon({ name, size = 16 }: { name: IconName; size?: number }) {
     splitHorizontal: <><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M12 4v16"/></>,
     splitVertical: <><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 12h18"/></>,
     menu: <path d="M6 8h12M6 12h12M6 16h12"/>,
+    pin: <><path d="M8 4h8l-1 6 3 3v2H6v-2l3-3Z"/><path d="M12 15v6"/></>,
     windowMinimize: <path d="M5 12h14"/>,
     windowMaximize: <rect x="5" y="5" width="14" height="14" rx="1"/>,
     close: <path d="m6 6 12 12M18 6 6 18"/>,

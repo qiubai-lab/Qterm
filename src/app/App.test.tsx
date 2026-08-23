@@ -5,6 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("../terminal/TerminalPanel", () => ({ TerminalPanel: () => <div aria-label="SSH 终端"/> }));
 vi.mock("../lib/tauri/window", () => ({
   currentDesktopPlatform: vi.fn(() => "windows"),
+  isCurrentWindowAlwaysOnTop: vi.fn(async () => false),
+  setCurrentWindowAlwaysOnTop: vi.fn(),
   minimizeCurrentWindow: vi.fn(),
   toggleMaximizeCurrentWindow: vi.fn(),
   closeCurrentWindow: vi.fn(),
@@ -12,15 +14,17 @@ vi.mock("../lib/tauri/window", () => ({
 }));
 
 import App from "./App";
-import { closeCurrentWindow, currentDesktopPlatform, minimizeCurrentWindow, startDraggingCurrentWindow, toggleMaximizeCurrentWindow } from "../lib/tauri/window";
+import { closeCurrentWindow, currentDesktopPlatform, isCurrentWindowAlwaysOnTop, minimizeCurrentWindow, setCurrentWindowAlwaysOnTop, startDraggingCurrentWindow, toggleMaximizeCurrentWindow } from "../lib/tauri/window";
 
 beforeEach(() => {
   vi.mocked(currentDesktopPlatform).mockReturnValue("windows");
+  vi.mocked(isCurrentWindowAlwaysOnTop).mockResolvedValue(false);
 });
 
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  vi.useRealTimers();
 });
 
 describe("application shell", () => {
@@ -35,7 +39,8 @@ describe("application shell", () => {
     expect(brand.querySelector("svg")).toBeInTheDocument();
     expect(brand.nextElementSibling).toBe(workspaceNavigation);
     expect(workspaceNavigation.nextElementSibling).toBe(controls);
-    expect(within(controls).getAllByRole("button").map((button) => button.getAttribute("aria-label"))).toEqual(["最小化窗口", "最大化或还原窗口", "关闭窗口"]);
+    expect(within(controls).getAllByRole("button").map((button) => button.getAttribute("aria-label"))).toEqual(["置顶窗口", "最小化窗口", "最大化或还原窗口", "关闭窗口"]);
+    expect(within(controls).getByRole("button", { name: "置顶窗口" }).querySelector('[data-icon="pin"]')).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "关闭窗口" }));
     await user.click(screen.getByRole("button", { name: "最小化窗口" }));
@@ -46,7 +51,7 @@ describe("application shell", () => {
     expect(toggleMaximizeCurrentWindow).toHaveBeenCalledOnce();
   });
 
-  it("uses the macOS native titlebar controls without duplicating window buttons", () => {
+  it("uses the macOS native titlebar controls with only the shared pin action on the right", () => {
     vi.mocked(currentDesktopPlatform).mockReturnValue("macos");
     render(<App/>);
 
@@ -54,24 +59,76 @@ describe("application shell", () => {
     const brand = screen.getByLabelText("Qterm");
     const workspaceNavigation = screen.getByRole("navigation", { name: "工作区" });
     expect(shell).toHaveAttribute("data-platform", "macos");
-    expect(screen.queryByLabelText("窗口控制")).not.toBeInTheDocument();
+    const controls = screen.getByLabelText("窗口控制");
+    expect(within(controls).getAllByRole("button").map((button) => button.getAttribute("aria-label"))).toEqual(["置顶窗口"]);
     expect(brand.nextElementSibling).toBe(workspaceNavigation);
-    expect(workspaceNavigation.nextElementSibling).toBeNull();
+    expect(workspaceNavigation.nextElementSibling).toBe(controls);
   });
 
-  it("starts window dragging only from non-interactive titlebar space", () => {
+  it("toggles the window always-on-top state and exposes the active state", async () => {
+    const user = userEvent.setup();
+    render(<App/>);
+
+    const pin = await screen.findByRole("button", { name: "置顶窗口" });
+    expect(pin).toHaveAttribute("aria-pressed", "false");
+    await user.click(pin);
+    expect(setCurrentWindowAlwaysOnTop).toHaveBeenLastCalledWith(true);
+
+    const activePin = screen.getByRole("button", { name: "取消窗口置顶" });
+    expect(activePin).toHaveAttribute("aria-pressed", "true");
+    await user.click(activePin);
+    expect(setCurrentWindowAlwaysOnTop).toHaveBeenLastCalledWith(false);
+    expect(screen.getByRole("button", { name: "置顶窗口" })).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("starts window dragging only after non-interactive titlebar space moves beyond the click threshold", () => {
     render(<App/>);
 
     const brand = screen.getByLabelText("Qterm");
     const workspaceNavigation = screen.getByRole("navigation", { name: "工作区" });
-    fireEvent.pointerDown(brand, { button: 0, pointerId: 1 });
-    fireEvent.pointerDown(workspaceNavigation, { button: 0, pointerId: 1 });
+    fireEvent.pointerDown(brand, { button: 0, pointerId: 1, clientX: 10, clientY: 10 });
+    fireEvent.pointerMove(window, { pointerId: 1, clientX: 12, clientY: 12, buttons: 1 });
+    expect(startDraggingCurrentWindow).not.toHaveBeenCalled();
+    fireEvent.pointerMove(window, { pointerId: 1, clientX: 16, clientY: 10, buttons: 1 });
+    expect(startDraggingCurrentWindow).toHaveBeenCalledOnce();
+
+    fireEvent.pointerDown(workspaceNavigation, { button: 0, pointerId: 2, clientX: 100, clientY: 10 });
+    fireEvent.pointerMove(window, { pointerId: 2, clientX: 106, clientY: 10, buttons: 1 });
     expect(startDraggingCurrentWindow).toHaveBeenCalledTimes(2);
 
     vi.mocked(startDraggingCurrentWindow).mockClear();
-    fireEvent.pointerDown(screen.getByRole("button", { name: "Workspace 1" }), { button: 0, pointerId: 2 });
-    fireEvent.pointerDown(screen.getByRole("button", { name: "关闭窗口" }), { button: 0, pointerId: 3 });
+    fireEvent.pointerDown(screen.getByRole("button", { name: "Workspace 1" }), { button: 0, pointerId: 3, clientX: 20, clientY: 10 });
+    fireEvent.pointerMove(window, { pointerId: 3, clientX: 30, clientY: 10, buttons: 1 });
+    fireEvent.pointerDown(screen.getByRole("button", { name: "关闭窗口" }), { button: 0, pointerId: 4, clientX: 200, clientY: 10 });
+    fireEvent.pointerMove(window, { pointerId: 4, clientX: 210, clientY: 10, buttons: 1 });
     expect(startDraggingCurrentWindow).not.toHaveBeenCalled();
+  });
+
+  it("toggles maximize and restore from two stationary titlebar clicks without relying on native dblclick delivery", () => {
+    vi.useFakeTimers();
+    render(<App/>);
+
+    const chrome = document.querySelector<HTMLElement>(".app-chrome")!;
+    fireEvent.pointerDown(chrome, { button: 0, pointerId: 1, clientX: 300, clientY: 20, detail: 0 });
+    fireEvent.pointerUp(window, { button: 0, pointerId: 1, clientX: 300, clientY: 20, detail: 0 });
+    vi.advanceTimersByTime(120);
+    fireEvent.pointerDown(chrome, { button: 0, pointerId: 2, clientX: 301, clientY: 20, detail: 0 });
+
+    expect(startDraggingCurrentWindow).not.toHaveBeenCalled();
+    expect(toggleMaximizeCurrentWindow).toHaveBeenCalledOnce();
+
+    vi.advanceTimersByTime(400);
+    fireEvent.pointerDown(chrome, { button: 0, pointerId: 3, clientX: 300, clientY: 20, detail: 0 });
+    fireEvent.pointerUp(window, { button: 0, pointerId: 3, clientX: 300, clientY: 20, detail: 0 });
+    vi.advanceTimersByTime(120);
+    fireEvent.pointerDown(chrome, { button: 0, pointerId: 4, clientX: 299, clientY: 20, detail: 0 });
+    expect(toggleMaximizeCurrentWindow).toHaveBeenCalledTimes(2);
+
+    fireEvent.pointerDown(screen.getByRole("button", { name: "Workspace 1" }), { button: 0, pointerId: 5, clientX: 20, clientY: 20, detail: 0 });
+    fireEvent.pointerUp(window, { button: 0, pointerId: 5, clientX: 20, clientY: 20, detail: 0 });
+    fireEvent.pointerDown(screen.getByRole("button", { name: "Workspace 1" }), { button: 0, pointerId: 6, clientX: 20, clientY: 20, detail: 0 });
+    fireEvent.pointerDown(screen.getByRole("button", { name: "最大化或还原窗口" }), { button: 0, pointerId: 7, clientX: 600, clientY: 20, detail: 0 });
+    expect(toggleMaximizeCurrentWindow).toHaveBeenCalledTimes(2);
   });
 
   it("uses top-level workspace tabs without nested terminal tabs", async () => {

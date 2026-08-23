@@ -6,6 +6,7 @@ import { readFileSync } from "node:fs";
 
 const styles = readCssBundle("src/app/app.css");
 const lightOverrides = readFileSync("src/app/styles/themes/lightOverrides.css", "utf8");
+const defaultCapability = JSON.parse(readFileSync("src-tauri/capabilities/default.json", "utf8")) as { permissions: string[] };
 const workspaceShellSource = readFileSync("src/workspace/WorkspaceShell.tsx", "utf8");
 const tauriConfig = JSON.parse(readFileSync("src-tauri/tauri.conf.json", "utf8")) as {
   app: { windows: Array<{ theme?: string; transparent?: boolean; shadow?: boolean; windowEffects?: { effects: string[]; state?: string; radius?: number } }> };
@@ -26,6 +27,45 @@ function lastDeclarations(selector: string): string {
 }
 
 describe("application layout styles", () => {
+  it("highlights only the active always-on-top icon and grants only its required window permissions", () => {
+    const activePin = declarations('.window-controls .window-pin[aria-pressed="true"]');
+    const activePinHover = declarations('.window-controls .window-pin[aria-pressed="true"]:hover');
+    const activePinPressed = declarations('.window-controls .window-pin[aria-pressed="true"]:active');
+    expect(activePin).toContain("color:var(--navigation-accent)");
+    expect(activePin).toContain("background:transparent");
+    expect(activePin).toContain("box-shadow:none");
+    expect(activePinHover).toContain("color:var(--navigation-accent)");
+    expect(activePinHover).toContain("background:var(--chrome-action-hover)");
+    expect(activePinHover).toContain("border-color:var(--chrome-action-border)");
+    expect(activePinHover).toContain("box-shadow:none");
+    expect(activePinPressed).toContain("background:transparent");
+    expect(activePinPressed).toContain("box-shadow:none");
+    const ordinaryHover = declarations('.window-controls button:not(.window-close):not(.window-pin[aria-pressed="true"]):hover');
+    expect(ordinaryHover).toContain("background:var(--chrome-action-hover)");
+    expect(ordinaryHover).toContain("border-color:var(--chrome-action-border)");
+    expect(ordinaryHover).toContain("box-shadow:none");
+    expect(declarations(".window-controls button")).toContain("border:1px solid transparent");
+    expect(declarations(".window-controls button")).toContain("border-color .1s ease");
+    expect(declarations(".window-controls button")).not.toContain("box-shadow .1s ease");
+    expect(declarations(".window-controls button")).not.toContain("transform .12s");
+    expect(styles).not.toContain(".window-controls button:active { transform:scale(.97)");
+    expect(declarations(".window-controls button:focus-visible")).toContain("outline:2px solid var(--focus)");
+    expect(defaultCapability.permissions).toContain("core:window:allow-is-always-on-top");
+    expect(defaultCapability.permissions).toContain("core:window:allow-set-always-on-top");
+  });
+
+  it("uses the current theme action color for ordinary context-menu hover", () => {
+    const root = declarations(":root");
+    const cyberpunk = declarations(':root[data-theme="cyberpunk"]');
+    expect(root).toContain("--menu-hover-background:var(--primary-action)");
+    expect(root).toContain("--menu-hover-text:var(--primary-action-contrast)");
+    expect(cyberpunk).toContain("--primary-action:#fcee0a");
+    expect(cyberpunk).toContain("--primary-action-contrast:#171500");
+    expect(styles).toContain(":is(.connection-context-menu,.file-context-menu,.network-context-menu,.terminal-context-menu) button:hover:not(:disabled):not(.danger)");
+    expect(styles).toContain("color:var(--menu-hover-text);background:var(--menu-hover-background)");
+    expect(styles).toContain(".terminal-context-menu button:hover:not(:disabled):not(.danger) kbd");
+  });
+
   it("uses one restrained danger marker for required field labels", () => {
     expect(declarations(".required-field-label")).toContain("display:inline-flex");
     expect(declarations(".required-field-label")).toContain("align-items:center");
@@ -59,6 +99,9 @@ describe("application layout styles", () => {
     expect(declarations(".terminal-target-submenu-list")).toContain("overflow-y:auto");
     expect(declarations(".terminal-target-submenu-list")).toContain("scrollbar-width:none");
     expect(declarations(".terminal-target-option+.terminal-target-option")).toContain("margin-top:2px");
+    expect(declarations('.terminal-target-option:hover:not([aria-pressed="true"]),.terminal-target-option:focus-visible:not([aria-pressed="true"])')).toContain("background:color-mix(in srgb,var(--accent) 16%,var(--panel-bg))");
+    expect(declarations('.terminal-target-option:hover:not([aria-pressed="true"]),.terminal-target-option:focus-visible:not([aria-pressed="true"])')).toContain("color-mix(in srgb,var(--accent) 34%,transparent)");
+    expect(declarations('.terminal-target-option:hover:not([aria-pressed="true"]) small,.terminal-target-option:focus-visible:not([aria-pressed="true"]) small')).toContain("color-mix(in srgb,var(--accent) 52%,var(--muted))");
     expect(declarations(".terminal-target-group-entry")).toContain("minmax(0,1fr) auto");
     expect(declarations(".terminal-target-group-meta")).toContain("align-items:center");
     expect(declarations(".terminal-target-group-meta")).toContain("justify-content:flex-end");
@@ -434,8 +477,13 @@ describe("application layout styles", () => {
     expect(declarations(".new-workspace-tab.ui-icon-button:active:not(:disabled)")).toContain("background:var(--chrome-action-pressed)");
     expect(declarations(".workspace-tab-close.ui-icon-button:hover:not(:disabled)")).toContain("color:var(--danger)");
     expect(declarations(".workspace-tab-close.ui-icon-button:hover:not(:disabled)")).toContain("background:var(--danger-bg)");
-    expect(declarations(".window-controls button:not(.window-close):hover")).toContain("background:var(--chrome-action-hover)");
-    expect(declarations(".window-controls button:not(.window-close):active")).toContain("background:var(--chrome-action-pressed)");
+    expect(declarations(".window-controls")).toContain("gap:2px");
+    expect(declarations(".window-controls")).toContain("padding:0 4px");
+    expect(declarations(".window-controls button")).toContain("width:38px");
+    expect(declarations(".window-controls button")).toContain("height:30px");
+    expect(declarations(".window-controls button")).toContain("border-radius:5px");
+    expect(declarations('.window-controls button:not(.window-close):not(.window-pin[aria-pressed="true"]):hover')).toContain("background:var(--chrome-action-hover)");
+    expect(declarations('.window-controls button:not(.window-close):not(.window-pin[aria-pressed="true"]):active')).toContain("background:var(--chrome-action-pressed)");
     expect(declarations(".window-controls .window-close:hover")).toContain("var(--danger)");
     expect(lightOverrides).not.toMatch(/workspace-tab-close|new-workspace-tab/);
   });
@@ -476,6 +524,15 @@ describe("application layout styles", () => {
     expect(declarations(".rail-button-label")).toContain("color:var(--muted)");
     expect(declarations(".rail-button.active")).toContain("color:var(--navigation-accent)");
     expect(declarations(".rail-button.active")).toContain("background:var(--navigation-accent-bg)");
+    const updateAttention = declarations(".rail-button.update-attention:not(.active)");
+    expect(updateAttention).toContain("color:var(--navigation-accent)");
+    expect(updateAttention).not.toContain("background:");
+    expect(updateAttention).not.toContain("border-color:");
+    expect(updateAttention).not.toContain("animation:");
+    expect(declarations(".rail-button.update-attention:not(.active)>svg")).toContain("animation:rail-update-icon-attention 1.25s ease-in-out 4");
+    expect(declarations(".rail-button.update-attention:not(.active)>.rail-button-label")).toContain("animation:rail-update-label-attention 1.25s ease-in-out 4");
+    expect(styles).toMatch(/prefers-reduced-motion:reduce[\s\S]*\.rail-button\.update-attention:not\(\.active\)>svg,[\s\S]*animation:none/);
+    expect(styles).not.toContain(".rail-update-notice");
   });
 
   it("uses a sliding segmented connection tab with directional, reduced-motion-aware content transitions", () => {
@@ -736,6 +793,15 @@ describe("application layout styles", () => {
     expect(declarations(thumbs)).toContain("background:var(--scrollbar-thumb)");
     expect(declarations(thumbs)).toContain("border-radius:999px");
     expect(declarations(thumbs)).toContain("background-clip:padding-box");
+  });
+
+  it("keeps overwrite confirmation path and feedback on shared theme roles", () => {
+    const target = declarations(".file-preview-confirmation-target");
+    expect(target).toContain("border:1px solid color-mix(in srgb,var(--warning) 36%,var(--border))");
+    expect(target).toContain("background:var(--panel-bg)");
+    expect(declarations(".file-preview-confirmation-target>span")).toContain("color:var(--warning)");
+    expect(declarations(".file-preview-confirmation-target>code")).toContain("color:var(--text)");
+    expect(declarations(".file-preview-confirmation-target>code")).toContain("text-overflow:ellipsis");
   });
 
   it("shares terminal typography with the file code editor without replacing editor rendering states", () => {

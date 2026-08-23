@@ -29,11 +29,12 @@
 }
 
 .about-update-action {
+  width: 76px;
   min-width: 76px;
-  height: 28px;
-  grid-column: 3;
-  grid-row: 1 / 3;
-  align-self: center;
+  height: 30px;
+  min-height: 30px;
+  flex: 0 0 76px;
+  box-sizing: border-box;
   padding: 0 10px;
   border: 1px solid #3c4946;
   border-radius: 6px;
@@ -42,6 +43,144 @@
   font-size: 9px;
   font-weight: 600;
   transition: border-color 130ms ease, background-color 130ms ease, transform 100ms ease;
+}
+
+.about-update-controls {
+  --about-update-control-height: 30px;
+  display: grid;
+  position: relative;
+  grid-column: 3;
+  grid-row: 1 / 3;
+  grid-template-columns: 96px 76px;
+  grid-template-rows: var(--about-update-control-height);
+  gap: 7px;
+  align-items: stretch;
+  min-width: 179px;
+}
+
+.about-update-controls > .ui-button {
+  width: 100%;
+  height: var(--about-update-control-height);
+  min-height: var(--about-update-control-height);
+  max-height: none;
+  align-self: stretch;
+  box-sizing: border-box;
+  margin: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  overflow: hidden;
+  border-radius: 6px;
+}
+
+.about-update-autocheck.ui-button--quiet {
+  display: inline-flex;
+  width: 96px;
+  min-width: 96px;
+  height: 30px;
+  min-height: 30px;
+  flex: 0 0 96px;
+  box-sizing: border-box;
+  gap: 6px;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--muted);
+  background: transparent;
+  box-shadow: none;
+  font-size: 8.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: color 130ms ease, border-color 130ms ease, background-color 130ms ease;
+}
+
+.about-update-autocheck-label {
+  display: grid;
+  width: 42px;
+  height: 11px;
+  flex: none;
+  place-items: center;
+  overflow: hidden;
+}
+
+.about-update-autocheck-label > span {
+  grid-area: 1 / 1;
+  white-space: nowrap;
+  transition: opacity 160ms ease, transform 160ms cubic-bezier(.2, .8, .2, 1);
+}
+
+.about-update-autocheck-label-idle {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.about-update-autocheck-label-busy {
+  opacity: 0;
+  transform: translateY(2px);
+}
+
+.about-update-autocheck-label[data-busy="true"] .about-update-autocheck-label-idle {
+  opacity: 0;
+  transform: translateY(-2px);
+}
+
+.about-update-autocheck-label[data-busy="true"] .about-update-autocheck-label-busy {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.about-update-autocheck.ui-button--quiet:hover:not(:disabled) {
+  border-color: transparent;
+  color: var(--text);
+  background: var(--hover);
+}
+
+.about-update-autocheck:disabled { cursor: default; opacity: .72; }
+
+.about-update-switch-track {
+  display: block;
+  position: relative;
+  width: 22px;
+  height: 14px;
+  flex: none;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--control-bg);
+  transition: border-color 130ms ease, background-color 130ms ease;
+}
+
+.about-update-switch-thumb {
+  display: block;
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 3px;
+  width: 8px;
+  height: 8px;
+  margin-block: auto;
+  border-radius: 50%;
+  background: var(--muted);
+  transition: transform 130ms ease, background-color 130ms ease;
+}
+
+.about-update-autocheck[aria-checked="true"] { color: var(--text); }
+.about-update-autocheck[aria-checked="true"] .about-update-switch-track {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 22%, var(--control-bg));
+}
+.about-update-autocheck[aria-checked="true"] .about-update-switch-thumb {
+  background: var(--accent);
+  transform: translateX(8px);
+}
+
+.about-update-preference-error {
+  position: absolute;
+  right: 0;
+  bottom: -12px;
+  color: var(--danger);
+  font-size: 7.5px;
+  white-space: nowrap;
 }
 
 .about-update-action:hover {
@@ -55,6 +194,7 @@
 }
 
 .about-update-action:focus-visible,
+.about-update-autocheck:focus-visible,
 .update-check-copy:focus-visible,
 .update-check-release:focus-visible,
 .update-check-recheck:focus-visible {
@@ -269,6 +409,7 @@
   border-color:var(--primary-action);
   color:var(--primary-action-contrast);
   background:var(--primary-action);
+  box-shadow:inset 0 1px color-mix(in srgb,var(--primary-action-contrast) 16%,transparent);
 }
 
 .about-update-action.ui-button--primary:hover:not(:disabled) {
@@ -365,6 +506,13 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .about-update-autocheck-label > span,
+  .about-update-autocheck-label[data-busy="true"] .about-update-autocheck-label-idle,
+  .about-update-autocheck-label[data-busy="true"] .about-update-autocheck-label-busy {
+    transition: opacity 80ms linear;
+    transform: none;
+  }
+
   .update-check-status-icon.checking svg {
     animation: none;
   }

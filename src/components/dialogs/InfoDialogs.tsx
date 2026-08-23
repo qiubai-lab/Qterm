@@ -21,10 +21,31 @@ type UpdateState =
   | { status: "available"; currentVersion: string; version: string }
   | { status: "error"; message: string };
 
-export function HelpDialog({ onClose }: { onClose: () => void }) {
+interface HelpDialogProps {
+  onClose: () => void;
+  autoCheckOnStartup?: boolean;
+  onAutoCheckOnStartupChange?: (enabled: boolean) => Promise<void>;
+}
+
+export function HelpDialog({ onClose, autoCheckOnStartup = false, onAutoCheckOnStartupChange }: HelpDialogProps) {
   const [version, setVersion] = useState<string | null>(null);
   const [versionUnavailable, setVersionUnavailable] = useState(false);
   const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
+  const [updatePreferenceBusy, setUpdatePreferenceBusy] = useState(false);
+  const [updatePreferenceError, setUpdatePreferenceError] = useState("");
+
+  const changeAutoCheckPreference = async () => {
+    if (!onAutoCheckOnStartupChange || updatePreferenceBusy) return;
+    setUpdatePreferenceBusy(true);
+    setUpdatePreferenceError("");
+    try {
+      await onAutoCheckOnStartupChange(!autoCheckOnStartup);
+    } catch {
+      setUpdatePreferenceError("保存失败，请重试");
+    } finally {
+      setUpdatePreferenceBusy(false);
+    }
+  };
 
   useEffect(() => {
     let active = true;
@@ -86,17 +107,43 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
             </span>
             <div className="about-update-heading">
               <h4 id="about-update-title">检测更新</h4>
-              <span><i />手动检测</span>
+              <span><i />{autoCheckOnStartup ? "启动检测已开启" : "手动检测"}</span>
             </div>
-            <p>检查 GitHub 上最新发布的稳定版本。</p>
-            <Button
-              variant="primary"
-              size="compact"
-              className="about-update-action"
-              onClick={() => setUpdateDialogOpen(true)}
-            >
-              检测更新
-            </Button>
+            <p>启动检测仅在发现新版时提示，也可随时手动检查。</p>
+            <div className="about-update-controls">
+              <Button
+                variant="quiet"
+                size="compact"
+                className="about-update-autocheck"
+                role="switch"
+                aria-checked={autoCheckOnStartup}
+                aria-busy={updatePreferenceBusy || undefined}
+                aria-label="启动时自动检测更新"
+                disabled={!onAutoCheckOnStartupChange || updatePreferenceBusy}
+                onClick={() => void changeAutoCheckPreference()}
+              >
+                <span className="about-update-switch-track" aria-hidden="true">
+                  <span className="about-update-switch-thumb" />
+                </span>
+                <span
+                  className="about-update-autocheck-label"
+                  data-busy={updatePreferenceBusy ? "true" : "false"}
+                  aria-hidden="true"
+                >
+                  <span className="about-update-autocheck-label-idle">启动时检测</span>
+                  <span className="about-update-autocheck-label-busy">保存中</span>
+                </span>
+              </Button>
+              <Button
+                variant="primary"
+                size="compact"
+                className="about-update-action"
+                onClick={() => setUpdateDialogOpen(true)}
+              >
+                检测更新
+              </Button>
+              {updatePreferenceError && <span className="about-update-preference-error" role="alert">{updatePreferenceError}</span>}
+            </div>
           </section>
         </div>
       </DialogFrame>

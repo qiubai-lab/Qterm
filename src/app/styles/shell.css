@@ -29,10 +29,14 @@
 .new-workspace-tab.ui-icon-button:active:not(:disabled) { border-color:var(--chrome-action-border); background:var(--chrome-action-pressed); box-shadow:none; transform:scale(.94); }
 .workspace-tab-close.ui-icon-button:hover:not(:disabled) { border-color:color-mix(in srgb,var(--danger) 58%,var(--border)); color:var(--danger); background:var(--danger-bg); box-shadow:0 1px 2px var(--shadow-soft); }
 .workspace-tab-close.ui-icon-button:active:not(:disabled) { border-color:var(--danger); color:var(--danger); background:color-mix(in srgb,var(--danger) 22%,var(--danger-bg)); box-shadow:none; transform:scale(.94); }
-.window-controls { display:flex; height:40px; flex:none; align-self:stretch; margin-left:6px; }
-.window-controls button { display:grid; width:46px; height:40px; place-items:center; padding:0; border:0; border-radius:0; color:var(--icon); background:transparent; box-shadow:none; transition:color .1s ease,background-color .1s ease,box-shadow .1s ease,transform .12s cubic-bezier(.23,1,.32,1); }
-.window-controls button:not(.window-close):hover { color:var(--icon-hover); background:var(--chrome-action-hover); box-shadow:inset 0 0 0 1px var(--chrome-action-border); }
-.window-controls button:not(.window-close):active { background:var(--chrome-action-pressed); box-shadow:inset 0 0 0 1px var(--chrome-action-border); }
-.window-controls button:active { transform:scale(.97); }
-.window-controls .window-close:hover { color:var(--text-strong); background:color-mix(in srgb,var(--danger) 76%,var(--danger-bg)); box-shadow:inset 0 0 0 1px var(--danger); }
-.window-controls .window-close:active { color:var(--text-strong); background:var(--danger); box-shadow:none; }
+.window-controls { display:flex; height:40px; flex:none; gap:2px; align-items:center; align-self:stretch; margin-left:6px; padding:0 4px; }
+.window-controls button { display:grid; width:38px; height:30px; place-items:center; padding:0; border:1px solid transparent; border-radius:5px; color:var(--icon); background:transparent; box-shadow:none; transition:color .1s ease,background-color .1s ease,border-color .1s ease; }
+.window-controls button:not(.window-close):not(.window-pin[aria-pressed="true"]):hover { border-color:var(--chrome-action-border); color:var(--icon-hover); background:var(--chrome-action-hover); box-shadow:none; }
+.window-controls button:not(.window-close):not(.window-pin[aria-pressed="true"]):active { border-color:var(--chrome-action-border); background:var(--chrome-action-pressed); box-shadow:none; }
+.window-controls button:focus-visible { position:relative; z-index:1; outline:2px solid var(--focus); outline-offset:-2px; }
+.window-controls button:disabled { cursor:wait; opacity:.68; }
+.window-controls .window-pin[aria-pressed="true"] { color:var(--navigation-accent); background:transparent; box-shadow:none; }
+.window-controls .window-pin[aria-pressed="true"]:hover { border-color:var(--chrome-action-border); color:var(--navigation-accent); background:var(--chrome-action-hover); box-shadow:none; }
+.window-controls .window-pin[aria-pressed="true"]:active { border-color:transparent; color:var(--navigation-accent); background:transparent; box-shadow:none; }
+.window-controls .window-close:hover { border-color:var(--danger); color:var(--text-strong); background:color-mix(in srgb,var(--danger) 76%,var(--danger-bg)); box-shadow:none; }
+.window-controls .window-close:active { border-color:var(--danger); color:var(--text-strong); background:var(--danger); box-shadow:none; }

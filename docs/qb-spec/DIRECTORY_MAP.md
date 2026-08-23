@@ -13,7 +13,7 @@
 - `src/app/app.css`、`src/app/styles/themes/{dark,light,cyberpunk}.css`：固定顺序样式 manifest 与三套封闭预设 semantic token；Dark 保持缺省，Cyberpunk 复用 Dark 原生窗口模式，Light compatibility override 只承接尚未语义化的旧 feature 颜色。
 - `src/app/theme/AppThemeProvider.tsx`：应用级主题唯一状态 owner，负责 bootstrap、preview/commit/restore，以及 DOM、xterm 和原生窗口同步；不进入 Workspace persistence，也不允许任意主题值。
 - `src/app/App.tsx`：前端组合入口，只装配 App theme、Workspace provider 与 shell；不直接调用底层 SSH 库。
-- `src/workspace/WorkspaceShell.tsx`：顶部 Workspace 标签、工具轨、Terminal/Files/Network 认证路由、route 凭证库解锁、关闭编排和快捷键入口；不解析跳板图、布局树或 SSH 协议。
+- `src/workspace/WorkspaceShell.tsx`：顶部 Workspace 标签、工具轨、Terminal/Files/Network 认证路由、route 凭证库解锁、关闭编排、快捷键与一次性启动更新提示入口；不请求任意更新地址、解析跳板图、布局树或 SSH 协议。
 - `src/workspace/model.ts`、`layout.ts`、`reducer.ts`：可持久化工作区契约、纯布局树变换与低频结构状态；不持有 session、xterm 或凭据。
 - `src/workspace/WorkspaceProvider.tsx`：Workspace 持久化与按 `blockId` 隔离的 Terminal/File/Network runtime 编排边界，并展示结构化 route 节点事件；Files 与 Network 远程 session 独立于终端，且不持久化活动转发状态。
 - `src/workspace/workspaceRuntime.ts`：Workspace runtime 类型、默认值、epoch/failure key、connection intent 与 route notice 纯规则；不持有 React state 或可变全局单例。
@@ -33,7 +33,8 @@
 - `src/files/FileBrowserPane.tsx`、`FileList.tsx`、`fileBrowserModel.ts`、`CodeEditor.tsx`、`MarkdownPreview.tsx`：内部文件窗口的目录导航、虚拟列表/排序纯规则、下载、瞬时预览编辑状态与按需编辑/渲染组件；不依赖 TerminalRuntime，不直接读取本地文件或实现 SFTP。
 - `src/lib/tauri/profiles.ts`：连接配置、有序跃点候选/route 要求、不兼容存储清除与 SSH Config 导入 IPC 客户端契约；不包含配置路径、私钥路径、强制删除参数或领域校验。
 - `src/lib/tauri/credentials.ts`：密码/私钥凭证库的窄 IPC 契约；不实现 KDF、加密或 JSON 访问。
-- `src/lib/tauri/settings.ts`：配置根选择、派生存储布局快照与设备安全设置的窄 IPC 契约；不开放分区路径写入、缓存或执行锁定策略。
+- `src/lib/tauri/settings.ts`：配置根选择、派生存储布局快照，以及设备安全、外观与更新偏好的窄 IPC 契约；不开放分区路径写入、缓存或执行锁定/更新检测策略。
+- `src/lib/updateCheck.ts`：固定 GitHub Latest Release 的超时请求、稳定 SemVer 比较、进程内启动单次去重与固定 Releases opener；不持久化偏好、自动安装或接受任意 URL。
 - `src/lib/tauri/sessions.ts`：以目标 profile ID 建连的 SSH 会话命令与带节点/阶段的有序状态 Channel 契约；不解析 route、主机密钥规则或协议状态机。
 - `src/lib/tauri/transfers.ts`：单文件 SFTP 选择、启动、进度和取消 IPC 契约；不直接访问本地或远程文件系统。
 - `src/lib/tauri/files.ts`：本地/远程目录、受限文件读取、带修订保存与 Files-only SSH connect IPC 契约；不执行文件系统或 SFTP 操作。
@@ -60,7 +61,7 @@
 - `src-tauri/src/commands/browser.rs`：Chrome/Edge 白名单 DTO、SOCKS5 规则类型复核与浏览器 adapter 调用；不接受可执行路径、命令参数或实现平台探测。
 - `src-tauri/src/infrastructure/browser/`：共享 SOCKS5 greeting、固定 Chromium 参数和机器本地隔离 Profile，并以 Windows、macOS、Linux adapter 受限探测和无 Shell 启动 Chrome/Edge；不修改系统代理、支持沙箱化 Linux 浏览器、复用日常 Profile 或管理浏览器退出。
 - `src-tauri/src/infrastructure/persistence/json_network_repository.rs`：`network-forwards.json` schema v1 的严格、无敏感字段、原子持久化适配器。
-- `src-tauri/src/ports/settings_repository.rs`、`src-tauri/src/infrastructure/persistence/json_appearance_settings_repository.rs`：设备外观 port 与独立 `device/appearance.json` schema v1 适配器；只保存 Dark/Light/Cyberpunk 内置预设，不覆盖损坏或未来文件，也不修改 security settings。
+- `src-tauri/src/ports/settings_repository.rs`、`src-tauri/src/infrastructure/persistence/json_{appearance,update}_settings_repository.rs`：设备外观/更新偏好 ports 与独立 `device/appearance.json`、`device/updates.json` schema v1 适配器；只保存封闭预设或启动检测布尔值，不覆盖损坏/未来文件，也不修改 security settings。
 - `src-tauri/src/infrastructure/ssh/forwarding.rs`：本地 listener、SOCKS5 CONNECT、Remote target 路由、有界转发任务与 TCP/SSH 双向数据泵；第三方 channel 类型不得离开 infrastructure。
 - `src-tauri/src/ports/profile_repository.rs`：应用层拥有的连接配置 repository 契约；不规定文件格式。
 - `src-tauri/src/infrastructure/ssh/client.rs`、`client/{handler,session,network,transfer}.rs`：稳定 `SshSessionManager` façade 与内部 route/host-key handler、session runner、forward runtime、SFTP/transfer 实现；第三方 russh/SFTP 类型只在该 infrastructure 子树内，测试位于 `client/tests.rs`。

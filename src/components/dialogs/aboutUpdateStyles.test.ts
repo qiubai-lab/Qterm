@@ -23,6 +23,39 @@ describe("about update styles", () => {
     expect(styles).not.toContain(".update-check-actions");
   });
 
+  it("aligns the quiet startup preference with the manual action on one control box", () => {
+    expect(declarations(".about-update-controls")).toContain("display: grid");
+    expect(declarations(".about-update-controls")).toContain("grid-template-columns: 96px 76px");
+    expect(declarations(".about-update-controls")).toContain("grid-template-rows: var(--about-update-control-height)");
+    expect(declarations(".about-update-controls")).toContain("min-width: 179px");
+    expect(declarations(".about-update-controls > .ui-button")).toContain("height: var(--about-update-control-height)");
+    expect(declarations(".about-update-controls > .ui-button")).toContain("min-height: var(--about-update-control-height)");
+    expect(declarations(".about-update-controls > .ui-button")).toContain("align-self: stretch");
+    expect(declarations(".about-update-autocheck.ui-button--quiet")).toContain("width: 96px");
+    expect(declarations(".about-update-autocheck.ui-button--quiet")).toContain("height: 30px");
+    expect(declarations(".about-update-action")).toContain("height: 30px");
+    expect(declarations(".about-update-autocheck.ui-button--quiet")).toContain("border: 1px solid transparent");
+    expect(declarations(".about-update-autocheck.ui-button--quiet")).toContain("background: transparent");
+    expect(declarations(".about-update-autocheck.ui-button--quiet")).toContain("box-shadow: none");
+    expect(declarations(".about-update-switch-track")).toContain("height: 14px");
+    expect(declarations(".about-update-switch-thumb")).toContain("top: 0");
+    expect(declarations(".about-update-switch-thumb")).toContain("bottom: 0");
+    expect(declarations(".about-update-switch-thumb")).toContain("left: 3px");
+    expect(declarations(".about-update-switch-thumb")).toContain("margin-block: auto");
+    expect(declarations(".about-update-switch-thumb")).toContain("height: 8px");
+    expect(declarations('.about-update-autocheck[aria-checked="true"] .about-update-switch-track')).toContain("border-color: var(--accent)");
+    expect(declarations('.about-update-autocheck[aria-checked="true"] .about-update-switch-thumb')).toContain("translateX(8px)");
+    expect(declarations(".about-update-preference-error")).toContain("color: var(--danger)");
+  });
+
+  it("cross-fades fixed-width startup preference labels without layout shifts", () => {
+    expect(declarations(".about-update-autocheck-label")).toContain("display: grid");
+    expect(declarations(".about-update-autocheck-label")).toContain("width: 42px");
+    expect(declarations(".about-update-autocheck-label > span")).toContain("transition: opacity 160ms ease, transform 160ms cubic-bezier(.2, .8, .2, 1)");
+    expect(declarations('.about-update-autocheck-label[data-busy="true"] .about-update-autocheck-label-busy')).toContain("opacity: 1");
+    expect(styles).toMatch(/prefers-reduced-motion: reduce[\s\S]*\.about-update-autocheck-label > span,[\s\S]*\.about-update-autocheck-label\[data-busy="true"\][\s\S]*transition: opacity 80ms linear;[\s\S]*transform: none/);
+  });
+
   it("presents the Homebrew command as a persistent monospace copy surface", () => {
     expect(declarations(".update-check-command")).toContain("grid-template-columns: minmax(0, 1fr) auto");
     expect(declarations(".update-check-command code")).toContain("font-family: var(--terminal-font-family)");

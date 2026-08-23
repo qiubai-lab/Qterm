@@ -4,7 +4,7 @@ import { writeText as writeClipboardText } from "@tauri-apps/plugin-clipboard-ma
 
 import { Icon } from "../components/Icon";
 import { Button, StatusBadge } from "../components/Button";
-import { DialogFrame } from "../components/dialogs/DialogFrame";
+import { DialogActionStatus, DialogFrame } from "../components/dialogs/DialogFrame";
 import { copyFile, createEntry, deleteEntry, listLocalDirectory, listLocalRoots, listRemoteDirectory, readBinaryFile, readTextFile, renameEntry, writeTextFile, type DirectoryListing, type FileEntry, type LocalRoot } from "../lib/tauri/files";
 import { cancelTransfer, downloadDirectory, downloadFile, selectDownloadDirectory, selectDownloadPath, uploadDroppedEntries, type TransferEvent } from "../lib/tauri/transfers";
 import type { FileRuntime } from "../workspace/WorkspaceProvider";
@@ -49,6 +49,8 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [preview, setPreview] = useState<PreviewState | null>(null);
   const [saving, setSaving] = useState(false);
+  const [saveConfirmation, setSaveConfirmation] = useState<{ error: string } | null>(null);
+  const [leaveConfirmation, setLeaveConfirmation] = useState(false);
   const [transfer, setTransfer] = useState<TransferState | null>(null);
   const [operationMessage, setOperationMessage] = useState("");
   const [nameOperation, setNameOperation] = useState<NameOperation | null>(null);
@@ -288,23 +290,36 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
   function leavePreview() {
     previewRequest.current += 1;
     if (preview?.imageUrl) URL.revokeObjectURL(preview.imageUrl);
+    setSaveConfirmation(null);
+    setLeaveConfirmation(false);
     setPreview(null);
     requestAnimationFrame(() => { if (listScroll.current) listScroll.current.scrollTop = savedScroll.current; });
   }
 
-  function closePreview() {
-    if (preview?.mode === "edit" && preview.content !== preview.original && !window.confirm("文件有未保存的修改，确定放弃吗？")) return;
+  function requestLeavePreview() {
+    if (preview?.mode === "edit" && preview.content !== preview.original) {
+      setLeaveConfirmation(true);
+      return;
+    }
     leavePreview();
   }
 
-  async function savePreview() {
+  function requestPreviewSave() {
     if (!preview || preview.mode !== "edit" || preview.kind === "image" || preview.loading || preview.content === preview.original) return;
+    setSaveConfirmation({ error: "" });
+  }
+
+  async function confirmPreviewSave() {
+    if (!preview || !saveConfirmation || saving || preview.mode !== "edit" || preview.kind === "image" || preview.loading || preview.content === preview.original) return;
+    const requested = preview;
     setSaving(true); setPreview((current) => current ? { ...current, error: "" } : current);
+    setSaveConfirmation({ error: "" });
     try {
-      const saved = await writeTextFile(kind === "sftp" ? sessionId : null, preview.entry.path, preview.content, preview.revision);
-      setPreview((current) => current?.entry.path === preview.entry.path ? { ...current, original: saved.content, content: saved.content, revision: saved.revision } : current);
+      const saved = await writeTextFile(kind === "sftp" ? sessionId : null, requested.entry.path, requested.content, requested.revision);
+      setPreview((current) => current?.entry.path === requested.entry.path ? { ...current, original: saved.content, content: saved.content, revision: saved.revision } : current);
+      setSaveConfirmation(null);
     } catch (reason) {
-      setPreview((current) => current ? { ...current, error: fileErrorMessage(reason) } : current);
+      setSaveConfirmation({ error: fileErrorMessage(reason) });
     } finally { setSaving(false); }
   }
 
@@ -473,23 +488,38 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
 
   if (preview) {
     const dirty = preview.mode === "edit" && preview.content !== preview.original;
+    const previewDisplayPath = kind === "local" ? displayLocalPath(preview.entry.path) : preview.entry.path;
     return <div className="file-browser file-preview">
       <header className="file-preview-toolbar">
-        <button aria-label="返回文件夹" title="返回文件夹" onClick={closePreview}><Icon name="back" size={14}/></button>
-        <div className="file-preview-identity"><strong>{preview.entry.name}{dirty && <span className="file-dirty-indicator" aria-label="有未保存的修改">*</span>}</strong><small title={kind === "local" ? displayLocalPath(preview.entry.path) : preview.entry.path}>{kind === "local" ? displayLocalPath(preview.entry.path) : preview.entry.path}</small></div>
+        <button aria-label="返回文件夹" title="返回文件夹" onClick={requestLeavePreview}><Icon name="back" size={14}/></button>
+        <div className="file-preview-identity"><strong>{preview.entry.name}{dirty && <span className="file-dirty-indicator" aria-label="有未保存的修改">*</span>}</strong><small title={previewDisplayPath}>{previewDisplayPath}</small></div>
         {preview.mode === "edit" && <StatusBadge tone="warning" presentation="tag" size="compact">实验功能</StatusBadge>}
         <span className="file-view-mode">{preview.mode === "preview" ? "预览" : "编辑"}</span>
         {preview.mode === "preview" && <button className="file-edit-button" disabled={preview.kind === "image"} title={preview.kind === "image" ? "此文件类型不支持编辑" : "编辑文件（实验功能）"} onClick={() => setPreview((current) => current && current.kind !== "image" ? { ...current, mode: "edit" } : current)}><Icon name="edit" size={11}/><span>编辑</span></button>}
-        {preview.mode === "edit" && <button className="file-cancel-button" onClick={leavePreview}><Icon name="close" size={10}/><span>取消</span></button>}
-        {preview.mode === "edit" && <button className="file-save-button" aria-label={saving ? "正在保存" : dirty ? "保存" : "已保存"} aria-busy={saving || undefined} title={saving ? "正在保存" : dirty ? "保存文件" : "文件已保存"} disabled={!dirty || saving || preview.loading} onClick={() => void savePreview()}><Icon name={dirty || saving ? "save" : "check"} size={11}/><span>保存</span></button>}
+        {preview.mode === "edit" && <button className="file-cancel-button" onClick={requestLeavePreview}><Icon name="close" size={10}/><span>取消</span></button>}
+        {preview.mode === "edit" && <button className="file-save-button" aria-label={saving ? "正在保存" : dirty ? "保存" : "已保存"} aria-busy={saving || undefined} title={saving ? "正在保存" : dirty ? "保存文件" : "文件已保存"} disabled={!dirty || saving || preview.loading} onClick={requestPreviewSave}><Icon name={dirty || saving ? "save" : "check"} size={11}/><span>保存</span></button>}
       </header>
       {preview.error && <div className="file-preview-message error" role="alert">{preview.error}</div>}
       <main className="file-preview-content">
         {preview.loading && <FileLoadingState label="正在读取文件…"/>}
         {!preview.loading && preview.kind === "image" && preview.imageUrl && <div className="file-image-preview"><img src={preview.imageUrl} alt={preview.entry.name}/></div>}
         {!preview.loading && preview.mode === "preview" && preview.kind === "markdown" && <Suspense fallback={<FileLoadingState label="正在加载预览…"/>}><MarkdownPreview content={preview.content}/></Suspense>}
-        {!preview.loading && preview.kind !== "image" && (preview.mode === "edit" || preview.kind !== "markdown") && <Suspense fallback={<FileLoadingState label="正在加载文件…"/>}><CodeEditor value={preview.content} language={preview.kind} readOnly={preview.mode === "preview"} onChange={(content) => setPreview((current) => current ? { ...current, content } : current)} onSave={() => void savePreview()}/></Suspense>}
+        {!preview.loading && preview.kind !== "image" && (preview.mode === "edit" || preview.kind !== "markdown") && <Suspense fallback={<FileLoadingState label="正在加载文件…"/>}><CodeEditor value={preview.content} language={preview.kind} readOnly={preview.mode === "preview"} onChange={(content) => setPreview((current) => current ? { ...current, content } : current)} onSave={requestPreviewSave}/></Suspense>}
       </main>
+      {saveConfirmation && <DialogFrame title="覆盖保存文件？" subtitle={preview.entry.name} compact dismissible={!saving} onClose={() => { if (!saving) setSaveConfirmation(null); }}>
+        <div className="file-preview-confirmation">
+          <p className="confirm-copy">保存后，当前文件的现有内容将被替换。若没有其他备份，此操作无法撤销。</p>
+          <div className="file-preview-confirmation-target"><span>目标文件</span><code title={previewDisplayPath}>{previewDisplayPath}</code></div>
+        </div>
+        <footer className="dialog-actions dialog-actions-with-status"><DialogActionStatus message={saveConfirmation.error}/><div><Button disabled={saving} onClick={() => setSaveConfirmation(null)}>取消</Button><Button variant="dangerSolid" loading={saving} onClick={() => void confirmPreviewSave()}>{saving ? "正在保存…" : "确认覆盖"}</Button></div></footer>
+      </DialogFrame>}
+      {leaveConfirmation && <DialogFrame title="放弃未保存的修改？" subtitle={preview.entry.name} compact onClose={() => setLeaveConfirmation(false)}>
+        <div className="file-preview-confirmation">
+          <p className="confirm-copy">当前修改尚未保存。退出编辑后，这些修改将丢失且无法恢复。</p>
+          <div className="file-preview-confirmation-target"><span>正在编辑</span><code title={previewDisplayPath}>{previewDisplayPath}</code></div>
+        </div>
+        <footer className="dialog-actions end"><Button onClick={() => setLeaveConfirmation(false)}>继续编辑</Button><Button variant="dangerSolid" onClick={leavePreview}>放弃并退出</Button></footer>
+      </DialogFrame>}
     </div>;
   }
 

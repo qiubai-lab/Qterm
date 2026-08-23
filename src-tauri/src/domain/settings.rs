@@ -17,6 +17,11 @@ pub struct AppearanceSettings {
     pub theme: AppTheme,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct UpdateSettings {
+    pub auto_check_on_startup: bool,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SecuritySettings {
     pub credential_auto_lock_after_seconds: Option<u32>,
@@ -101,11 +106,13 @@ mod tests {
     use super::{
         AppTheme, AppearanceSettings, ConfigurationDirectory, DEFAULT_CREDENTIAL_AUTO_LOCK_SECONDS,
         MAX_AUTO_LOCK_SECONDS, MIN_AUTO_LOCK_SECONDS, SecuritySettings, SettingsError,
+        UpdateSettings,
     };
 
     #[test]
     fn defaults_are_secure() {
         assert_eq!(AppearanceSettings::default().theme, AppTheme::Dark);
+        assert!(!UpdateSettings::default().auto_check_on_startup);
         assert_eq!(
             SecuritySettings::default(),
             SecuritySettings {

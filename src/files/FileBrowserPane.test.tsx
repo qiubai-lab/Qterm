@@ -29,7 +29,7 @@ vi.mock("@tauri-apps/api/webview", () => ({ getCurrentWebview: () => ({ onDragDr
 vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({ writeText: writeClipboardText }));
 vi.mock("../lib/tauri/files", () => ({ listLocalDirectory, listLocalRoots, listRemoteDirectory, readTextFile, readBinaryFile, writeTextFile, copyFile, createEntry, renameEntry, deleteEntry }));
 vi.mock("../lib/tauri/transfers", () => ({ selectDownloadDirectory, selectDownloadPath, downloadDirectory, downloadFile, uploadDroppedEntries, cancelTransfer }));
-vi.mock("./CodeEditor", () => ({ CodeEditor: ({ value, readOnly, onChange }: { value: string; readOnly?: boolean; onChange: (value: string) => void }) => <textarea aria-label={readOnly ? "文件只读预览" : "文件编辑器"} readOnly={readOnly} value={value} onChange={(event) => onChange(event.target.value)}/> }));
+vi.mock("./CodeEditor", () => ({ CodeEditor: ({ value, readOnly, onChange, onSave }: { value: string; readOnly?: boolean; onChange: (value: string) => void; onSave: () => void }) => <textarea aria-label={readOnly ? "文件只读预览" : "文件编辑器"} readOnly={readOnly} value={value} onChange={(event) => onChange(event.target.value)} onKeyDown={(event) => { if (!readOnly && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") { event.preventDefault(); onSave(); } }}/>}));
 vi.mock("./MarkdownPreview", () => ({ MarkdownPreview: ({ content }: { content: string }) => <h1>{content.replace(/^#\s*/, "")}</h1> }));
 
 import { FileBrowserPane } from "./FileBrowserPane";
@@ -570,7 +570,13 @@ describe("FileBrowserPane", () => {
     expect(save.querySelector("svg")).toBeInTheDocument();
     expect(save.querySelector("svg")).toHaveAttribute("data-icon", "save");
     fireEvent.click(save);
+    const confirmation = screen.getByRole("dialog", { name: "覆盖保存文件？" });
+    expect(confirmation).toHaveTextContent("现有内容将被替换");
+    expect(confirmation).toHaveTextContent("C:/work/README.md");
+    expect(writeTextFile).not.toHaveBeenCalled();
+    fireEvent.click(within(confirmation).getByRole("button", { name: "确认覆盖" }));
     await waitFor(() => expect(writeTextFile).toHaveBeenCalledWith(null, "C:/work/README.md", "# Updated", "r1"));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "覆盖保存文件？" })).not.toBeInTheDocument());
     await waitFor(() => expect(ui.queryByText("*", { selector: ".file-dirty-indicator" })).not.toBeInTheDocument());
     expect(ui.getByRole("button", { name: "已保存" })).toHaveTextContent("保存");
     expect(ui.getByRole("button", { name: "已保存" }).querySelector("svg")).toHaveAttribute("data-icon", "check");
@@ -578,7 +584,57 @@ describe("FileBrowserPane", () => {
     expect(await ui.findByRole("listitem", { name: /README.md/ })).toBeInTheDocument();
   });
 
-  it("discards dirty edits and returns to the file list from Cancel", async () => {
+  it("routes keyboard save through confirmation and preserves dirty edits after cancellation", async () => {
+    listLocalDirectory.mockResolvedValue({ path: "C:/work", entries: [{ name: "README.md", path: "C:/work/README.md", isDirectory: false, isSymlink: false, size: 7, modifiedAt: null }] });
+    readTextFile.mockResolvedValue({ content: "# Hello", revision: "r1", modifiedAt: null, size: 7 });
+    const view = render(<FileBrowserPane initialPath="C:/work" runtime={localRuntime} onPathChange={vi.fn()}/>);
+    const ui = within(view.container);
+    const file = await ui.findByRole("listitem", { name: /README.md/ });
+    fireEvent.contextMenu(file);
+    fireEvent.click(ui.getByRole("menuitem", { name: /编辑.*实验/ }));
+    const editor = await ui.findByRole("textbox", { name: "文件编辑器" });
+    fireEvent.change(editor, { target: { value: "# Keep me" } });
+
+    fireEvent.keyDown(editor, { key: "s", ctrlKey: true });
+    const confirmation = screen.getByRole("dialog", { name: "覆盖保存文件？" });
+    expect(writeTextFile).not.toHaveBeenCalled();
+    fireEvent.click(within(confirmation).getByRole("button", { name: "取消" }));
+
+    expect(screen.queryByRole("dialog", { name: "覆盖保存文件？" })).not.toBeInTheDocument();
+    expect(ui.getByRole("textbox", { name: "文件编辑器" })).toHaveValue("# Keep me");
+    expect(ui.getByText("*", { selector: ".file-dirty-indicator" })).toBeInTheDocument();
+    expect(writeTextFile).not.toHaveBeenCalled();
+  });
+
+  it("keeps the overwrite confirmation and dirty content available when saving fails", async () => {
+    listLocalDirectory.mockResolvedValue({ path: "C:/work", entries: [{ name: "README.md", path: "C:/work/README.md", isDirectory: false, isSymlink: false, size: 7, modifiedAt: null }] });
+    readTextFile.mockResolvedValue({ content: "# Hello", revision: "r1", modifiedAt: null, size: 7 });
+    writeTextFile.mockRejectedValue(new Error("文件已被其他程序修改"));
+    const view = render(<FileBrowserPane initialPath="C:/work" runtime={localRuntime} onPathChange={vi.fn()}/>);
+    const ui = within(view.container);
+    const file = await ui.findByRole("listitem", { name: /README.md/ });
+    fireEvent.contextMenu(file);
+    fireEvent.click(ui.getByRole("menuitem", { name: /编辑.*实验/ }));
+    const editor = await ui.findByRole("textbox", { name: "文件编辑器" });
+    fireEvent.change(editor, { target: { value: "# Conflicted" } });
+    fireEvent.click(ui.getByRole("button", { name: "保存" }));
+    const confirmation = screen.getByRole("dialog", { name: "覆盖保存文件？" });
+    fireEvent.click(within(confirmation).getByRole("button", { name: "确认覆盖" }));
+
+    expect(await within(confirmation).findByRole("alert")).toHaveTextContent("文件已被其他程序修改");
+    expect(confirmation).toBeInTheDocument();
+    expect(ui.getByRole("textbox", { name: "文件编辑器" })).toHaveValue("# Conflicted");
+    expect(ui.getByText("*", { selector: ".file-dirty-indicator" })).toBeInTheDocument();
+    const retry = within(confirmation).getByRole("button", { name: "确认覆盖" });
+    expect(retry).toBeEnabled();
+    writeTextFile.mockResolvedValueOnce({ content: "# Conflicted", revision: "r2", modifiedAt: null, size: 12 });
+    fireEvent.click(retry);
+    await waitFor(() => expect(writeTextFile).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "覆盖保存文件？" })).not.toBeInTheDocument());
+    expect(ui.queryByText("*", { selector: ".file-dirty-indicator" })).not.toBeInTheDocument();
+  });
+
+  it("guards both editor exit actions and keeps dirty content when the user continues editing", async () => {
     listLocalDirectory.mockResolvedValue({ path: "C:/work", entries: [{ name: "README.md", path: "C:/work/README.md", isDirectory: false, isSymlink: false, size: 7, modifiedAt: null }] });
     readTextFile.mockResolvedValue({ content: "# Hello", revision: "r1", modifiedAt: null, size: 7 });
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
@@ -587,13 +643,47 @@ describe("FileBrowserPane", () => {
     const file = await ui.findByRole("listitem", { name: /README.md/ });
     fireEvent.contextMenu(file);
     fireEvent.click(ui.getByRole("menuitem", { name: /编辑.*实验/ }));
-    fireEvent.change(await ui.findByRole("textbox", { name: "文件编辑器" }), { target: { value: "# Discarded" } });
-    fireEvent.click(ui.getByRole("button", { name: "取消" }));
+    const editor = await ui.findByRole("textbox", { name: "文件编辑器" });
+    fireEvent.change(editor, { target: { value: "# Keep editing" } });
 
+    fireEvent.click(ui.getByRole("button", { name: "返回文件夹" }));
+    let leaveConfirmation = screen.getByRole("dialog", { name: "放弃未保存的修改？" });
+    expect(leaveConfirmation).toHaveTextContent("C:/work/README.md");
+    expect(writeTextFile).not.toHaveBeenCalled();
+    fireEvent.click(within(leaveConfirmation).getByRole("button", { name: "继续编辑" }));
+    expect(screen.queryByRole("dialog", { name: "放弃未保存的修改？" })).not.toBeInTheDocument();
+    expect(ui.getByRole("textbox", { name: "文件编辑器" })).toHaveValue("# Keep editing");
+    expect(ui.getByText("*", { selector: ".file-dirty-indicator" })).toBeInTheDocument();
+
+    fireEvent.click(ui.getByRole("button", { name: "取消" }));
+    expect(screen.getByRole("dialog", { name: "放弃未保存的修改？" })).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("dialog", { name: "放弃未保存的修改？" })).not.toBeInTheDocument();
+    expect(ui.getByRole("textbox", { name: "文件编辑器" })).toHaveValue("# Keep editing");
+
+    fireEvent.click(ui.getByRole("button", { name: "取消" }));
+    leaveConfirmation = screen.getByRole("dialog", { name: "放弃未保存的修改？" });
+    fireEvent.click(within(leaveConfirmation).getByRole("button", { name: "放弃并退出" }));
     expect(await ui.findByRole("listitem", { name: /README.md/ })).toBeInTheDocument();
     expect(writeTextFile).not.toHaveBeenCalled();
     expect(confirm).not.toHaveBeenCalled();
     confirm.mockRestore();
+  });
+
+  it("leaves the editor immediately when there are no unsaved changes", async () => {
+    listLocalDirectory.mockResolvedValue({ path: "C:/work", entries: [{ name: "README.md", path: "C:/work/README.md", isDirectory: false, isSymlink: false, size: 7, modifiedAt: null }] });
+    readTextFile.mockResolvedValue({ content: "# Hello", revision: "r1", modifiedAt: null, size: 7 });
+    const view = render(<FileBrowserPane initialPath="C:/work" runtime={localRuntime} onPathChange={vi.fn()}/>);
+    const ui = within(view.container);
+    const file = await ui.findByRole("listitem", { name: /README.md/ });
+    fireEvent.contextMenu(file);
+    fireEvent.click(ui.getByRole("menuitem", { name: /编辑.*实验/ }));
+    await ui.findByRole("textbox", { name: "文件编辑器" });
+
+    fireEvent.click(ui.getByRole("button", { name: "取消" }));
+
+    expect(screen.queryByRole("dialog", { name: "放弃未保存的修改？" })).not.toBeInTheDocument();
+    expect(await ui.findByRole("listitem", { name: /README.md/ })).toBeInTheDocument();
   });
 
   it("does not offer the experimental editor for images", async () => {

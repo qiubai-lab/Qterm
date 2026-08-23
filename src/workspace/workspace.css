@@ -13,6 +13,13 @@
 .rail-button:disabled{cursor:not-allowed;color:var(--text-disabled);background:transparent}.rail-button:disabled:hover{color:var(--text-disabled);background:transparent}
 .rail-button-label { color:var(--muted); font-size:8px; line-height:1; white-space:nowrap; transition:color .12s ease; }
 .rail-button:hover .rail-button-label { color:var(--text); }.rail-button.active .rail-button-label{color:var(--navigation-accent)}.rail-button:disabled .rail-button-label{color:var(--text-disabled)}.rail-spacer{flex:1}
+.rail-button.update-attention:not(.active){color:var(--navigation-accent)}
+.rail-button.update-attention:not(.active) .rail-button-label{color:var(--navigation-accent)}
+.rail-button.update-attention:not(.active)>svg{animation:rail-update-icon-attention 1.25s ease-in-out 4}
+.rail-button.update-attention:not(.active)>.rail-button-label{animation:rail-update-label-attention 1.25s ease-in-out 4}
+@keyframes rail-update-icon-attention{0%,100%{opacity:.58;filter:drop-shadow(0 0 0 transparent)}50%{opacity:1;filter:drop-shadow(0 0 4px color-mix(in srgb,var(--navigation-accent) 68%,transparent))}}
+@keyframes rail-update-label-attention{0%,100%{opacity:.62;text-shadow:0 0 0 transparent}50%{opacity:1;text-shadow:0 0 5px color-mix(in srgb,var(--navigation-accent) 58%,transparent)}}
+@media(prefers-reduced-motion:reduce){.rail-button.update-attention:not(.active)>svg,.rail-button.update-attention:not(.active)>.rail-button-label{animation:none;opacity:1;filter:none;text-shadow:none}}
 
 .workspace-canvas { --workspace-block-radius:9px; position:absolute; inset:0; padding:5px; background:var(--workspace-material); overflow:hidden; }
 .split { display:flex; width:100%; height:100%; min-width:0; min-height:0; }

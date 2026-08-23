@@ -1,9 +1,10 @@
 use crate::{
     domain::settings::{
-        AppearanceSettings, ConfigurationDirectory, SecuritySettings, SettingsError,
+        AppearanceSettings, ConfigurationDirectory, SecuritySettings, SettingsError, UpdateSettings,
     },
     ports::settings_repository::{
         AppearanceSettingsRepository, ConfigurationDirectoryRepository, SettingsRepository,
+        UpdateSettingsRepository,
     },
 };
 
@@ -20,19 +21,25 @@ pub struct SettingsSnapshot {
     pub active_configuration_directory: ConfigurationDirectory,
     pub security: SecuritySettings,
     pub appearance: AppearanceSettings,
+    pub updates: UpdateSettings,
     pub warning: Option<SettingsWarning>,
 }
 
-pub struct SettingsService<S, D, A> {
+pub struct SettingsService<S, D, A, U> {
     security_repository: S,
     configuration_repository: D,
     default_configuration_directory: ConfigurationDirectory,
     active_configuration_directory: ConfigurationDirectory,
     appearance_repository: A,
+    update_repository: U,
 }
 
-impl<S: SettingsRepository, D: ConfigurationDirectoryRepository, A: AppearanceSettingsRepository>
-    SettingsService<S, D, A>
+impl<
+    S: SettingsRepository,
+    D: ConfigurationDirectoryRepository,
+    A: AppearanceSettingsRepository,
+    U: UpdateSettingsRepository,
+> SettingsService<S, D, A, U>
 {
     pub fn new(
         security_repository: S,
@@ -40,6 +47,7 @@ impl<S: SettingsRepository, D: ConfigurationDirectoryRepository, A: AppearanceSe
         default_configuration_directory: ConfigurationDirectory,
         active_configuration_directory: ConfigurationDirectory,
         appearance_repository: A,
+        update_repository: U,
     ) -> Self {
         Self {
             security_repository,
@@ -47,6 +55,7 @@ impl<S: SettingsRepository, D: ConfigurationDirectoryRepository, A: AppearanceSe
             default_configuration_directory,
             active_configuration_directory,
             appearance_repository,
+            update_repository,
         }
     }
 
@@ -70,14 +79,20 @@ impl<S: SettingsRepository, D: ConfigurationDirectoryRepository, A: AppearanceSe
             Ok(value) => (value.unwrap_or_default(), None),
             Err(error) => (AppearanceSettings::default(), Some(warning_for(error))),
         };
+        let (updates, update_warning) = match self.update_repository.load() {
+            Ok(value) => (value.unwrap_or_default(), None),
+            Err(error) => (UpdateSettings::default(), Some(warning_for(error))),
+        };
         SettingsSnapshot {
             configuration_directory,
             active_configuration_directory: self.active_configuration_directory.clone(),
             security,
             appearance,
+            updates,
             warning: configuration_warning
                 .or(security_warning)
-                .or(appearance_warning),
+                .or(appearance_warning)
+                .or(update_warning),
         }
     }
 
@@ -102,6 +117,14 @@ impl<S: SettingsRepository, D: ConfigurationDirectoryRepository, A: AppearanceSe
         settings: AppearanceSettings,
     ) -> Result<SettingsSnapshot, SettingsError> {
         self.appearance_repository.save(settings)?;
+        Ok(self.snapshot())
+    }
+
+    pub fn update_updates(
+        &self,
+        settings: UpdateSettings,
+    ) -> Result<SettingsSnapshot, SettingsError> {
+        self.update_repository.save(settings)?;
         Ok(self.snapshot())
     }
 }

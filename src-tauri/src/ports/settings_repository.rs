@@ -1,10 +1,15 @@
 use crate::domain::settings::{
-    AppearanceSettings, ConfigurationDirectory, SecuritySettings, SettingsError,
+    AppearanceSettings, ConfigurationDirectory, SecuritySettings, SettingsError, UpdateSettings,
 };
 
 pub trait AppearanceSettingsRepository: Send + Sync {
     fn load(&self) -> Result<Option<AppearanceSettings>, SettingsError>;
     fn save(&self, settings: AppearanceSettings) -> Result<(), SettingsError>;
+}
+
+pub trait UpdateSettingsRepository: Send + Sync {
+    fn load(&self) -> Result<Option<UpdateSettings>, SettingsError>;
+    fn save(&self, settings: UpdateSettings) -> Result<(), SettingsError>;
 }
 
 pub trait ConfigurationDirectoryRepository: Send + Sync {

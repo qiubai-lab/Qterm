@@ -22,6 +22,8 @@ export type UpdateCheckResult =
       publishedAt: string | null;
     };
 
+let startupUpdateCheckPromise: Promise<UpdateCheckResult | null> | null = null;
+
 export class UpdateCheckError extends Error {
   constructor(
     public readonly kind: UpdateCheckFailureKind,
@@ -113,6 +115,11 @@ export async function checkForUpdate(): Promise<UpdateCheckResult> {
   } finally {
     window.clearTimeout(timeout);
   }
+}
+
+export function checkForUpdateOnStartupOnce(): Promise<UpdateCheckResult | null> {
+  startupUpdateCheckPromise ??= checkForUpdate().catch(() => null);
+  return startupUpdateCheckPromise;
 }
 
 export function updateCheckMessage(error: unknown) {

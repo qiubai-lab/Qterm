@@ -16,8 +16,12 @@ const mocks = vi.hoisted(() => ({
   unlockVault: vi.fn(),
   onVaultStatusChanged: vi.fn(),
   getSettings: vi.fn(),
+  updateUpdateSettings: vi.fn(),
+  checkForUpdateOnStartupOnce: vi.fn(),
   closeCurrentWindow: vi.fn(),
   minimizeCurrentWindow: vi.fn(),
+  isCurrentWindowAlwaysOnTop: vi.fn().mockResolvedValue(false),
+  setCurrentWindowAlwaysOnTop: vi.fn().mockResolvedValue(undefined),
   toggleMaximizeCurrentWindow: vi.fn(),
   isConnectionTargetCurrent: vi.fn().mockReturnValue(true),
 }));
@@ -40,8 +44,14 @@ vi.mock("../components/dialogs/ConnectionDialog", () => ({ ConnectionDialog: () 
 vi.mock("../components/dialogs/MasterPasswordDialog", () => ({ MasterPasswordDialog: ({ mode, onSuccess }: { mode: string; onSuccess: () => void }) => <div role="dialog" aria-label="解锁凭证库">{mode}<button onClick={onSuccess}>解锁</button></div> }));
 vi.mock("../lib/tauri/credentials", () => ({ getVaultStatus: mocks.getVaultStatus, lockVault: mocks.lockVault, unlockVault: mocks.unlockVault, onVaultStatusChanged: mocks.onVaultStatusChanged }));
 vi.mock("../lib/tauri/profiles", () => ({ getProfileRouteRequirements: mocks.getProfileRouteRequirements }));
-vi.mock("../lib/tauri/settings", () => ({ getSettings: mocks.getSettings }));
-vi.mock("../lib/tauri/window", () => ({ closeCurrentWindow: mocks.closeCurrentWindow, currentDesktopPlatform: () => "windows", minimizeCurrentWindow: mocks.minimizeCurrentWindow, startDraggingCurrentWindow: vi.fn(), toggleMaximizeCurrentWindow: mocks.toggleMaximizeCurrentWindow }));
+vi.mock("../lib/tauri/settings", () => ({ getSettings: mocks.getSettings, updateUpdateSettings: mocks.updateUpdateSettings }));
+vi.mock("../lib/updateCheck", () => ({
+  checkForUpdateOnStartupOnce: mocks.checkForUpdateOnStartupOnce,
+  checkForUpdate: vi.fn(),
+  openLatestReleasePage: vi.fn(),
+  updateCheckMessage: () => "无法检查更新。",
+}));
+vi.mock("../lib/tauri/window", () => ({ closeCurrentWindow: mocks.closeCurrentWindow, currentDesktopPlatform: () => "windows", isCurrentWindowAlwaysOnTop: mocks.isCurrentWindowAlwaysOnTop, minimizeCurrentWindow: mocks.minimizeCurrentWindow, setCurrentWindowAlwaysOnTop: mocks.setCurrentWindowAlwaysOnTop, startDraggingCurrentWindow: vi.fn(), toggleMaximizeCurrentWindow: mocks.toggleMaximizeCurrentWindow }));
 
 import { WorkspaceShell } from "./WorkspaceShell";
 
@@ -57,8 +67,17 @@ beforeEach(() => {
   mocks.getSettings.mockResolvedValue({
     general: { rootDirectory: "", activeRootDirectory: "", dataDirectory: "", deviceDirectory: "", cacheDirectory: "", restartRequired: false },
     security: { credentialAutoLockAfterSeconds: 3600, terminalAutoLockAfterSeconds: null },
+    updates: { autoCheckOnStartup: false },
     warning: null,
   });
+  mocks.updateUpdateSettings.mockImplementation(async (updates) => ({
+    general: { rootDirectory: "", activeRootDirectory: "", dataDirectory: "", deviceDirectory: "", cacheDirectory: "", restartRequired: false },
+    security: { credentialAutoLockAfterSeconds: 3600, terminalAutoLockAfterSeconds: null },
+    appearance: { theme: "dark" },
+    updates,
+    warning: null,
+  }));
+  mocks.checkForUpdateOnStartupOnce.mockResolvedValue(null);
   mocks.isConnectionTargetCurrent.mockReturnValue(true);
 });
 
@@ -146,11 +165,63 @@ describe("WorkspaceShell configured connection routing", () => {
 });
 
 describe("WorkspaceShell utility rail", () => {
+  it("breathes the About action for five seconds when startup checking finds an update", async () => {
+    vi.useFakeTimers();
+    mocks.getSettings.mockResolvedValue({
+      general: { rootDirectory: "", activeRootDirectory: "", dataDirectory: "", deviceDirectory: "", cacheDirectory: "", restartRequired: false },
+      security: { credentialAutoLockAfterSeconds: 3600, terminalAutoLockAfterSeconds: null },
+      appearance: { theme: "dark" },
+      updates: { autoCheckOnStartup: true },
+      warning: null,
+    });
+    mocks.checkForUpdateOnStartupOnce.mockResolvedValue({ status: "available", currentVersion: "0.2.3", latestVersion: "0.2.4", publishedAt: null });
+
+    render(<WorkspaceShell/>);
+    await act(async () => undefined);
+
+    expect(mocks.checkForUpdateOnStartupOnce).toHaveBeenCalledOnce();
+    const about = screen.getByRole("button", { name: "关于，发现新版本 v0.2.4" });
+    expect(about).toHaveClass("update-attention");
+    expect(document.querySelector(".rail-update-notice")).not.toBeInTheDocument();
+    await act(async () => { vi.advanceTimersByTime(5_000); });
+    expect(screen.getByRole("button", { name: "关于" })).not.toHaveClass("update-attention");
+  });
+
+  it("opens About from its highlighted action and saves its startup preference", async () => {
+    mocks.getSettings.mockResolvedValue({
+      general: { rootDirectory: "", activeRootDirectory: "", dataDirectory: "", deviceDirectory: "", cacheDirectory: "", restartRequired: false },
+      security: { credentialAutoLockAfterSeconds: 3600, terminalAutoLockAfterSeconds: null },
+      appearance: { theme: "dark" },
+      updates: { autoCheckOnStartup: true },
+      warning: null,
+    });
+    mocks.checkForUpdateOnStartupOnce.mockResolvedValue({ status: "available", currentVersion: "0.2.3", latestVersion: "0.2.4", publishedAt: null });
+    const user = userEvent.setup();
+
+    render(<WorkspaceShell/>);
+    await user.click(await screen.findByRole("button", { name: "关于，发现新版本 v0.2.4" }));
+
+    expect(screen.getByRole("dialog", { name: "关于 Qterm" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "关于" })).not.toHaveClass("update-attention");
+    await user.click(screen.getByRole("switch", { name: "启动时自动检测更新" }));
+    await waitFor(() => expect(mocks.updateUpdateSettings).toHaveBeenCalledWith({ autoCheckOnStartup: false }));
+    expect(screen.getByRole("switch", { name: "启动时自动检测更新" })).toHaveAttribute("aria-checked", "false");
+  });
+
+  it("keeps startup update checking disabled by default", async () => {
+    render(<WorkspaceShell/>);
+    await act(async () => undefined);
+
+    expect(mocks.checkForUpdateOnStartupOnce).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "关于" })).not.toHaveClass("update-attention");
+  });
+
   it("locks the terminal and vault after the configured inactivity deadline", async () => {
     vi.useFakeTimers();
     mocks.getSettings.mockResolvedValue({
       general: { rootDirectory: "", activeRootDirectory: "", dataDirectory: "", deviceDirectory: "", cacheDirectory: "", restartRequired: false },
       security: { credentialAutoLockAfterSeconds: 3600, terminalAutoLockAfterSeconds: 300 },
+      updates: { autoCheckOnStartup: false },
       warning: null,
     });
     render(<WorkspaceShell/>);
@@ -167,6 +238,7 @@ describe("WorkspaceShell utility rail", () => {
     mocks.getSettings.mockResolvedValue({
       general: { rootDirectory: "", activeRootDirectory: "", dataDirectory: "", deviceDirectory: "", cacheDirectory: "", restartRequired: false },
       security: { credentialAutoLockAfterSeconds: 3600, terminalAutoLockAfterSeconds: 300 },
+      updates: { autoCheckOnStartup: false },
       warning: null,
     });
     render(<WorkspaceShell/>);
@@ -192,6 +264,7 @@ describe("WorkspaceShell utility rail", () => {
     mocks.getSettings.mockResolvedValue({
       general: { rootDirectory: "", activeRootDirectory: "", dataDirectory: "", deviceDirectory: "", cacheDirectory: "", restartRequired: false },
       security: { credentialAutoLockAfterSeconds: 3600, terminalAutoLockAfterSeconds: 300 },
+      updates: { autoCheckOnStartup: false },
       warning: null,
     });
     render(<WorkspaceShell/>);
@@ -210,6 +283,7 @@ describe("WorkspaceShell utility rail", () => {
     mocks.getSettings.mockResolvedValue({
       general: { rootDirectory: "", activeRootDirectory: "", dataDirectory: "", deviceDirectory: "", cacheDirectory: "", restartRequired: false },
       security: { credentialAutoLockAfterSeconds: 3600, terminalAutoLockAfterSeconds: 300 },
+      updates: { autoCheckOnStartup: false },
       warning: null,
     });
     render(<WorkspaceShell/>);

@@ -11,6 +11,10 @@ export interface AppearanceSettings {
   theme: AppTheme;
 }
 
+export interface UpdateSettings {
+  autoCheckOnStartup: boolean;
+}
+
 export interface GeneralSettings {
   rootDirectory: string;
   activeRootDirectory: string;
@@ -24,6 +28,7 @@ export interface SettingsSnapshot {
   general: GeneralSettings;
   security: SecuritySettings;
   appearance: AppearanceSettings;
+  updates: UpdateSettings;
   warning: "corrupt" | "unsupportedVersion" | "storageUnavailable" | null;
 }
 
@@ -40,3 +45,6 @@ export const updateSecuritySettings = (security: SecuritySettings): Promise<Sett
 
 export const updateAppearanceSettings = (appearance: AppearanceSettings): Promise<SettingsSnapshot> =>
   invoke("settings_update_appearance", { input: appearance });
+
+export const updateUpdateSettings = (updates: UpdateSettings): Promise<SettingsSnapshot> =>
+  invoke("settings_update_updates", { input: updates });

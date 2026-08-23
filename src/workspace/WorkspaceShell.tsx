@@ -12,8 +12,9 @@ import { MasterPasswordDialog, type MasterPasswordMode } from "../components/dia
 import { TerminalLockChoiceDialog, TerminalLockScreen } from "../components/dialogs/TerminalLockDialogs";
 import { getVaultStatus, lockVault, onVaultStatusChanged, type VaultStatus } from "../lib/tauri/credentials";
 import { getProfileRouteRequirements, type ConnectionProfile } from "../lib/tauri/profiles";
-import { getSettings, type SecuritySettings } from "../lib/tauri/settings";
-import { closeCurrentWindow, currentDesktopPlatform, minimizeCurrentWindow, startDraggingCurrentWindow, toggleMaximizeCurrentWindow } from "../lib/tauri/window";
+import { getSettings, updateUpdateSettings, type SecuritySettings, type UpdateSettings } from "../lib/tauri/settings";
+import { checkForUpdateOnStartupOnce } from "../lib/updateCheck";
+import { closeCurrentWindow, currentDesktopPlatform, isCurrentWindowAlwaysOnTop, minimizeCurrentWindow, setCurrentWindowAlwaysOnTop, startDraggingCurrentWindow, toggleMaximizeCurrentWindow } from "../lib/tauri/window";
 import { WorkspaceCanvas, type ConnectionOwner } from "./LayoutView";
 import { resolveConfiguredAuth } from "./configuredAuth";
 import { openFileWindowAction } from "./fileWindow";
@@ -24,6 +25,12 @@ import { useWorkspace } from "./WorkspaceProvider";
 type Tool = "connections" | "credentials" | "settings" | "help";
 type WorkspaceTransitionDirection = "forward" | "backward";
 interface CloseRequest { title: string; detail: string; ids: string[]; execute: () => void }
+interface TitlebarGesture { pointerId: number; x: number; y: number }
+interface TitlebarClick { at: number; x: number; y: number }
+
+const TITLEBAR_DRAG_THRESHOLD_PX = 5;
+const TITLEBAR_DOUBLE_CLICK_DISTANCE_PX = 5;
+const TITLEBAR_DOUBLE_CLICK_MS = 350;
 
 export function WorkspaceShell() {
   const desktopPlatform = currentDesktopPlatform();
@@ -40,6 +47,10 @@ export function WorkspaceShell() {
   const [lockChoiceOpen, setLockChoiceOpen] = useState(false);
   const [terminalLocked, setTerminalLocked] = useState(false);
   const [securitySettings, setSecuritySettings] = useState<SecuritySettings | null>(null);
+  const [updateSettings, setUpdateSettings] = useState<UpdateSettings | null>(null);
+  const [availableUpdateVersion, setAvailableUpdateVersion] = useState<string | null>(null);
+  const [windowAlwaysOnTop, setWindowAlwaysOnTop] = useState(false);
+  const [windowPinBusy, setWindowPinBusy] = useState(false);
   const [draggedWorkspace, setDraggedWorkspace] = useState<string | null>(null);
   const [workspaceTabIndicator, setWorkspaceTabIndicator] = useState({ x: 0, width: 0, ready: false });
   const [workspaceTransition, setWorkspaceTransition] = useState<{ workspaceId: string; direction: WorkspaceTransitionDirection | null }>(() => ({ workspaceId: activeWorkspace.id, direction: null }));
@@ -48,6 +59,9 @@ export function WorkspaceShell() {
   const previousWorkspaceOrderRef = useRef(document.workspaces.map((workspace) => workspace.id));
   const workspaceDragRef = useRef<{ id: string; pointerId: number; x: number; y: number; active: boolean } | null>(null);
   const workspaceDragCleanupRef = useRef<(() => void) | null>(null);
+  const titlebarGestureRef = useRef<TitlebarGesture | null>(null);
+  const titlebarGestureCleanupRef = useRef<(() => void) | null>(null);
+  const titlebarLastClickRef = useRef<TitlebarClick | null>(null);
   const automaticAttemptsRef = useRef(new Set<string>());
   const vaultStatusRef = useRef<VaultStatus | null>(null);
   const vaultLockBusyRef = useRef(false);
@@ -163,8 +177,72 @@ export function WorkspaceShell() {
   }
 
   function beginWindowDrag(event: ReactPointerEvent<HTMLElement>) {
-    if (event.button !== 0 || (event.target as HTMLElement).closest("button,input,[data-workspace-id]")) return;
-    void startDraggingCurrentWindow();
+    if (event.button !== 0) return;
+    if (isInteractiveTitlebarTarget(event.target)) {
+      titlebarGestureCleanupRef.current?.();
+      titlebarLastClickRef.current = null;
+      return;
+    }
+
+    titlebarGestureCleanupRef.current?.();
+    const now = Date.now();
+    const lastClick = titlebarLastClickRef.current;
+    const isDoubleClick = lastClick
+      && now - lastClick.at <= TITLEBAR_DOUBLE_CLICK_MS
+      && Math.hypot(event.clientX - lastClick.x, event.clientY - lastClick.y) <= TITLEBAR_DOUBLE_CLICK_DISTANCE_PX;
+    if (isDoubleClick) {
+      event.preventDefault();
+      titlebarLastClickRef.current = null;
+      void toggleMaximizeCurrentWindow();
+      return;
+    }
+    if (lastClick && now - lastClick.at > TITLEBAR_DOUBLE_CLICK_MS) titlebarLastClickRef.current = null;
+
+    titlebarGestureRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
+    const finish = () => {
+      titlebarGestureRef.current = null;
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", end);
+      window.removeEventListener("pointercancel", cancel);
+      if (titlebarGestureCleanupRef.current === finish) titlebarGestureCleanupRef.current = null;
+    };
+    const move = (pointer: PointerEvent) => {
+      const gesture = titlebarGestureRef.current;
+      if (!gesture || pointer.pointerId !== gesture.pointerId) return;
+      if (Math.hypot(pointer.clientX - gesture.x, pointer.clientY - gesture.y) < TITLEBAR_DRAG_THRESHOLD_PX) return;
+      titlebarLastClickRef.current = null;
+      finish();
+      void startDraggingCurrentWindow();
+    };
+    const end = (pointer: PointerEvent) => {
+      const gesture = titlebarGestureRef.current;
+      if (!gesture || pointer.pointerId !== gesture.pointerId) return;
+      finish();
+      titlebarLastClickRef.current = { at: Date.now(), x: pointer.clientX, y: pointer.clientY };
+    };
+    const cancel = (pointer: PointerEvent) => {
+      if (pointer.pointerId !== titlebarGestureRef.current?.pointerId) return;
+      finish();
+      titlebarLastClickRef.current = null;
+    };
+    titlebarGestureCleanupRef.current = finish;
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", end);
+    window.addEventListener("pointercancel", cancel);
+  }
+
+  async function toggleWindowAlwaysOnTop() {
+    if (windowPinBusy) return;
+    const next = !windowAlwaysOnTop;
+    setWindowPinBusy(true);
+    try {
+      await setCurrentWindowAlwaysOnTop(next);
+      setWindowAlwaysOnTop(next);
+    } catch {
+      // Keep the visible state aligned with the last confirmed native state.
+    } finally {
+      setWindowPinBusy(false);
+    }
   }
 
   const commitVaultStatus = useCallback((status: VaultStatus) => {
@@ -197,15 +275,44 @@ export function WorkspaceShell() {
     }
   }, [commitVaultStatus]);
 
-  useEffect(() => () => workspaceDragCleanupRef.current?.(), []);
+  useEffect(() => () => {
+    workspaceDragCleanupRef.current?.();
+    titlebarGestureCleanupRef.current?.();
+  }, []);
 
   useEffect(() => {
     let disposed = false;
-    void getSettings().then((snapshot) => {
-      if (!disposed) setSecuritySettings(snapshot.security);
+    void isCurrentWindowAlwaysOnTop().then((value) => {
+      if (!disposed) setWindowAlwaysOnTop(value);
     }).catch(() => undefined);
     return () => { disposed = true; };
   }, []);
+
+  useEffect(() => {
+    let disposed = false;
+    void getSettings().then(async (snapshot) => {
+      if (disposed) return;
+      setSecuritySettings(snapshot.security);
+      setUpdateSettings(snapshot.updates);
+      if (!snapshot.updates.autoCheckOnStartup) return;
+      const result = await checkForUpdateOnStartupOnce();
+      if (!disposed && result?.status === "available") {
+        setAvailableUpdateVersion(result.latestVersion);
+      }
+    }).catch(() => undefined);
+    return () => { disposed = true; };
+  }, []);
+
+  useEffect(() => {
+    if (!availableUpdateVersion) return;
+    const timer = window.setTimeout(() => setAvailableUpdateVersion(null), 5_000);
+    return () => window.clearTimeout(timer);
+  }, [availableUpdateVersion]);
+
+  async function changeAutoUpdateCheck(enabled: boolean) {
+    const snapshot = await updateUpdateSettings({ autoCheckOnStartup: enabled });
+    setUpdateSettings(snapshot.updates);
+  }
 
   useEffect(() => {
     let disposed = false;
@@ -399,11 +506,14 @@ export function WorkspaceShell() {
         </div>)}
         <IconButton className="new-workspace-tab" size="compact" label="新建工作区" title="新建 Workspace (⌘T)" onClick={() => dispatch({ type: "addWorkspace" })}><Icon name="plus" size={14}/></IconButton>
       </nav>
-      {!usesNativeWindowControls && <div className="window-controls" aria-label="窗口控制">
-        <button aria-label="最小化窗口" title="最小化" onClick={() => void minimizeCurrentWindow()}><Icon name="windowMinimize" size={14}/></button>
-        <button aria-label="最大化或还原窗口" title="最大化或还原" onClick={() => void toggleMaximizeCurrentWindow()}><Icon name="windowMaximize" size={12}/></button>
-        <button className="window-close" aria-label="关闭窗口" title="关闭" onClick={() => void closeCurrentWindow()}><Icon name="close" size={14}/></button>
-      </div>}
+      <div className="window-controls" aria-label="窗口控制">
+        <button className="window-pin" aria-label={windowAlwaysOnTop ? "取消窗口置顶" : "置顶窗口"} aria-pressed={windowAlwaysOnTop} aria-busy={windowPinBusy || undefined} title={windowAlwaysOnTop ? "取消置顶" : "置顶窗口"} disabled={windowPinBusy} onClick={() => void toggleWindowAlwaysOnTop()}><Icon name="pin" size={14}/></button>
+        {!usesNativeWindowControls && <>
+          <button aria-label="最小化窗口" title="最小化" onClick={() => void minimizeCurrentWindow()}><Icon name="windowMinimize" size={14}/></button>
+          <button aria-label="最大化或还原窗口" title="最大化或还原" onClick={() => void toggleMaximizeCurrentWindow()}><Icon name="windowMaximize" size={12}/></button>
+          <button className="window-close" aria-label="关闭窗口" title="关闭" onClick={() => void closeCurrentWindow()}><Icon name="close" size={14}/></button>
+        </>}
+      </div>
     </header>
 
     <section className="workspace-stage">
@@ -424,7 +534,14 @@ export function WorkspaceShell() {
           <span className="rail-spacer"/>
           <RailActionButton icon="lock" label="锁定终端" accessibleLabel={terminalLockLabel} title={terminalLockLabel} disabled={!vaultStatus?.initialized || vaultStatus.legacy || vaultLockBusy} onClick={() => { setVaultLockError(""); setLockChoiceOpen(true); }}/>
           <RailButton tool="settings" icon="settings" label="系统设置" active={tool === "settings"} onClick={setTool}/>
-          <RailButton tool="help" icon="help" label="关于" active={tool === "help"} onClick={setTool}/>
+          <RailButton
+            tool="help"
+            icon="help"
+            label="关于"
+            active={tool === "help"}
+            notice={availableUpdateVersion ? `发现新版本 v${availableUpdateVersion}` : undefined}
+            onClick={(next) => { setAvailableUpdateVersion(null); setTool(next); }}
+          />
         </aside>
       </div>
       {terminalLocked && (
@@ -453,7 +570,11 @@ export function WorkspaceShell() {
       void requestConfiguredConnection(request.owner, request.blockId, request.profile);
     }}/>}
     {tool === "settings" && <SettingsDialog onClose={() => setTool(null)} onSecuritySettingsChanged={setSecuritySettings}/>}
-    {tool === "help" && <HelpDialog onClose={() => setTool(null)}/>}
+    {tool === "help" && <HelpDialog
+      onClose={() => setTool(null)}
+      autoCheckOnStartup={updateSettings?.autoCheckOnStartup ?? false}
+      onAutoCheckOnStartupChange={updateSettings ? changeAutoUpdateCheck : undefined}
+    />}
     {lockChoiceOpen && <TerminalLockChoiceDialog vaultUnlocked={Boolean(vaultStatus?.unlocked)} busy={vaultLockBusy} message={vaultLockError} onClose={() => { setLockChoiceOpen(false); setVaultLockError(""); }} onLockVault={() => void applyLockScope("vault")} onLockTerminalAndVault={() => void applyLockScope("terminalAndVault")}/>}
     {closeRequest && <DialogFrame title={closeRequest.title} subtitle="未保存的终端输出无法恢复" onClose={() => setCloseRequest(null)}><p className="confirm-copy">{closeRequest.detail}</p><p className="callout">将断开 {connectedCount(closeRequest.ids)} 个活动会话。</p><footer className="dialog-actions end"><button className="secondary-button" onClick={() => setCloseRequest(null)}>取消</button><button className="danger-button filled" onClick={() => void confirmClose()}>关闭并断开</button></footer></DialogFrame>}
     {hostPrompt && <DialogFrame title="确认主机身份" subtitle={`${hostPrompt.prompt.node.role === "jump" ? "跳板" : "目标"}“${hostPrompt.prompt.node.name}” · ${hostPrompt.prompt.node.host}:${hostPrompt.prompt.node.port}`} onClose={() => void rejectPromptHostKey(hostPrompt.owner, hostPrompt.blockId)}><p className="confirm-copy">请通过可信渠道核对当前节点的主机密钥指纹：</p><code className="fingerprint">{hostPrompt.prompt.algorithm}<br/>{hostPrompt.prompt.fingerprint}</code><footer className="dialog-actions end"><button className="danger-button" onClick={() => void rejectPromptHostKey(hostPrompt.owner, hostPrompt.blockId)}>拒绝</button><button className="primary-button" onClick={() => void acceptPromptHostKey(hostPrompt.owner, hostPrompt.blockId)}>信任并继续</button></footer></DialogFrame>}
@@ -469,8 +590,12 @@ export function WorkspaceShell() {
   }
 }
 
-function RailButton({ tool, icon, label, active, onClick }: { tool: Tool; icon: IconName; label: string; active: boolean; onClick: (tool: Tool | null) => void }) {
-  return <button className={`rail-button${active ? " active" : ""}`} aria-label={label} aria-pressed={active} onClick={() => onClick(active ? null : tool)}><Icon name={icon}/><span className="rail-button-label">{label}</span></button>;
+function isInteractiveTitlebarTarget(target: EventTarget): boolean {
+  return target instanceof Element && Boolean(target.closest("button,input,[data-workspace-id]"));
+}
+
+function RailButton({ tool, icon, label, active, notice, onClick }: { tool: Tool; icon: IconName; label: string; active: boolean; notice?: string; onClick: (tool: Tool | null) => void }) {
+  return <button className={`rail-button${active ? " active" : ""}${notice ? " update-attention" : ""}`} aria-label={notice ? `${label}，${notice}` : label} title={notice} aria-pressed={active} onClick={() => onClick(active ? null : tool)}><Icon name={icon}/><span className="rail-button-label">{label}</span></button>;
 }
 
 function RailActionButton({ icon, label, accessibleLabel = label, title, disabled = false, onClick }: { icon: IconName; label: string; accessibleLabel?: string; title?: string; disabled?: boolean; onClick: () => void }) {

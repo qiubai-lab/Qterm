@@ -41,6 +41,7 @@ use commands::session::{
 use commands::settings::{
     SettingsState, settings_get, settings_select_configuration_directory,
     settings_update_appearance, settings_update_configuration_directory, settings_update_security,
+    settings_update_updates,
 };
 use commands::transfer::{
     TransferState, transfer_cancel, transfer_download, transfer_select_download_directory,
@@ -58,6 +59,7 @@ use infrastructure::persistence::json_profile_repository::JsonProfileRepository;
 use infrastructure::persistence::json_settings_repository::{
     JsonConfigurationDirectoryRepository, JsonSettingsRepository,
 };
+use infrastructure::persistence::json_update_settings_repository::JsonUpdateSettingsRepository;
 use infrastructure::persistence::json_workspace_repository::JsonWorkspaceRepository;
 use infrastructure::ssh::client::SshSessionManager;
 use ports::settings_repository::ConfigurationDirectoryRepository;
@@ -83,6 +85,7 @@ struct DataPaths {
     workspaces: std::path::PathBuf,
     settings: std::path::PathBuf,
     appearance: std::path::PathBuf,
+    updates: std::path::PathBuf,
     browser_profiles: std::path::PathBuf,
 }
 
@@ -99,6 +102,7 @@ impl DataPaths {
             workspaces: device.join("workspaces.json"),
             settings: device.join("settings.json"),
             appearance: device.join("appearance.json"),
+            updates: device.join("updates.json"),
             browser_profiles: cache.join("browser-profiles"),
             root,
             data,
@@ -153,6 +157,7 @@ pub fn run() {
                 default_configuration,
                 active_configuration,
                 JsonAppearanceSettingsRepository::new(paths.appearance.clone()),
+                JsonUpdateSettingsRepository::new(paths.updates.clone()),
             ));
             app.manage(ProfileState::new(JsonProfileRepository::new(
                 paths.profiles,
@@ -220,6 +225,7 @@ pub fn run() {
             settings_update_configuration_directory,
             settings_update_security,
             settings_update_appearance,
+            settings_update_updates,
             session_connect,
             session_accept_host_key,
             session_reject_host_key,
