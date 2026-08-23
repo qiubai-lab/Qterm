@@ -434,8 +434,11 @@ describe("application layout styles", () => {
     expect(declarations(".workspace-canvas")).toContain("padding:5px");
     expect(styles).not.toContain(".terminal-block.maximized");
     expect(styles).not.toContain(".terminal-block.hidden-by-maximize");
-    expect(declarations(".split-horizontal>.split-divider")).toContain("width:3px");
-    expect(declarations(".split-vertical>.split-divider")).toContain("height:3px");
+    expect(declarations(".workspace-layout-surface")).toContain("inset:5px");
+    expect(declarations(".workspace-block-host")).toContain("position:absolute");
+    expect(declarations(".split-divider")).toContain("position:absolute");
+    expect(declarations(".split-divider-horizontal")).toContain("cursor:col-resize");
+    expect(declarations(".split-divider-vertical")).toContain("cursor:row-resize");
   });
 
   it("makes active blocks obvious and moves one non-interactive focus indicator", () => {

@@ -1,9 +1,11 @@
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { useState } from "react";
 
 import type { Workspace } from "./model";
 import type { FileRuntime, NetworkRuntime, TerminalRuntime } from "./WorkspaceProvider";
+import { moveTerminal } from "./layout";
 
 const dispatch = vi.fn();
 const selectBlockTarget = vi.fn().mockResolvedValue(undefined);
@@ -20,6 +22,7 @@ const connectedLocalRuntime = { sessionId: "local-1", kind: "local" as const, st
 let terminalRuntimes: Record<string, TerminalRuntime> = { "block-1": connectedLocalRuntime };
 let fileRuntimes: Record<string, FileRuntime> = {};
 let networkRuntimes: Record<string, NetworkRuntime> = {};
+let fileBrowserMountCount = 0;
 
 afterEach(cleanup);
 
@@ -28,7 +31,13 @@ vi.mock("../terminal/TerminalPanel", () => ({
 }));
 
 vi.mock("../files/FileBrowserPane", () => ({
-  FileBrowserPane: ({ initialPath }: { initialPath: string }) => <div aria-label="测试文件窗口" data-initial-path={initialPath}/>,
+  FileBrowserPane: ({ initialPath }: { initialPath: string }) => {
+    const [instance] = useState(() => ++fileBrowserMountCount);
+    const [progress, setProgress] = useState(0);
+    return <div aria-label="测试文件窗口" data-initial-path={initialPath} data-instance={instance} data-progress={progress}>
+      <button onClick={() => setProgress(40)}>测试传输进度</button>
+    </div>;
+  },
 }));
 
 vi.mock("../network/NetworkPane", () => ({
@@ -72,6 +81,7 @@ describe("WorkspaceCanvas terminal actions", () => {
     terminalRuntimes = { "block-1": connectedLocalRuntime };
     fileRuntimes = {};
     networkRuntimes = {};
+    fileBrowserMountCount = 0;
   });
   it("does not expose terminal maximize or restore controls", () => {
     render(<WorkspaceCanvas workspace={workspace} visible onRequestClose={vi.fn()} onRequestAuthConnection={vi.fn()}/>);
@@ -248,12 +258,6 @@ describe("WorkspaceCanvas terminal actions", () => {
   });
 
   it("moves one shared active indicator between terminal and files blocks", async () => {
-    const bounds = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
-      if (this.classList.contains("workspace-canvas")) return domRect(0, 0, 600, 400);
-      if (this.dataset.layoutBlock === "block-1") return domRect(2, 2, 296, 396);
-      if (this.dataset.layoutBlock === "files-1") return domRect(302, 2, 296, 396);
-      return domRect(0, 0, 0, 0);
-    });
     const splitWorkspace: Workspace = {
       ...workspace,
       layout: {
@@ -267,22 +271,43 @@ describe("WorkspaceCanvas terminal actions", () => {
     const indicator = view.container.querySelector<HTMLElement>(".active-block-indicator");
     expect(indicator).not.toBeNull();
     await waitFor(() => {
-      expect(indicator?.style.transform).toBe("translate3d(2px, 2px, 0)");
-      expect(indicator?.style.width).toBe("296px");
-      expect(indicator?.style.height).toBe("396px");
+      expect(indicator?.style.transform).toBe("translate3d(0%, 0%, 0)");
+      expect(indicator?.style.width).toBe("calc(50% - 1.5px)");
+      expect(indicator?.style.height).toBe("100%");
     });
 
     view.rerender(<WorkspaceCanvas workspace={{ ...splitWorkspace, activeBlockId: "files-1" }} visible onRequestClose={vi.fn()} onRequestAuthConnection={vi.fn()}/>);
     await waitFor(() => {
-      expect(indicator?.style.transform).toBe("translate3d(302px, 2px, 0)");
-      expect(indicator?.style.width).toBe("296px");
-      expect(indicator?.style.height).toBe("396px");
+      expect(indicator?.style.transform).toBe("translate3d(calc(50% + 1.5px), 0%, 0)");
+      expect(indicator?.style.width).toBe("calc(50% - 1.5px)");
+      expect(indicator?.style.height).toBe("100%");
     });
     expect(view.container.querySelectorAll(".active-block-indicator")).toHaveLength(1);
-    bounds.mockRestore();
+  });
+
+  it("preserves one files window instance and its in-flight state when another block changes the split ancestry", async () => {
+    const user = userEvent.setup();
+    const files = { type: "files" as const, blockId: "files-1", profileId: null, path: "C:/work" };
+    const network = { type: "network" as const, blockId: "network-1", profileId: null };
+    const initialLayout = {
+      type: "split" as const, id: "split-root", direction: "horizontal" as const, ratio: 0.4,
+      first: workspace.layout,
+      second: { type: "split" as const, id: "split-right", direction: "vertical" as const, ratio: 0.5, first: files, second: network },
+    };
+    const initialWorkspace: Workspace = { ...workspace, activeBlockId: "files-1", layout: initialLayout };
+    const view = render(<WorkspaceCanvas workspace={initialWorkspace} visible onRequestClose={vi.fn()} onRequestAuthConnection={vi.fn()}/>);
+    const fileBrowser = within(view.container).getByLabelText("测试文件窗口");
+    expect(fileBrowser).toHaveAttribute("data-instance", "1");
+    await user.click(within(fileBrowser).getByRole("button", { name: "测试传输进度" }));
+    expect(fileBrowser).toHaveAttribute("data-progress", "40");
+
+    const movedLayout = moveTerminal(initialLayout, "block-1", "network-1", "bottom", "split-moved");
+    view.rerender(<WorkspaceCanvas workspace={{ ...initialWorkspace, layout: movedLayout }} visible onRequestClose={vi.fn()} onRequestAuthConnection={vi.fn()}/>);
+
+    const movedFileBrowser = within(view.container).getByLabelText("测试文件窗口");
+    expect(movedFileBrowser).toBe(fileBrowser);
+    expect(movedFileBrowser).toHaveAttribute("data-instance", "1");
+    expect(movedFileBrowser).toHaveAttribute("data-progress", "40");
+    expect(fileBrowserMountCount).toBe(1);
   });
 });
-
-function domRect(x: number, y: number, width: number, height: number): DOMRect {
-  return { x, y, width, height, top: y, right: x + width, bottom: y + height, left: x, toJSON: () => ({}) };
-}
