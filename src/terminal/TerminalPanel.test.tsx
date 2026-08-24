@@ -321,6 +321,7 @@ describe("TerminalPanel clipboard interaction", () => {
   beforeEach(() => {
     mocks.terminals.length = 0;
     mocks.registerWriter.mockClear();
+    mocks.writeBlock.mockClear();
     mocks.clearBlockBuffer.mockClear();
     mocks.writeClipboardText.mockClear();
     mocks.readClipboardText.mockReset().mockResolvedValue("");
@@ -442,6 +443,46 @@ describe("TerminalPanel clipboard interaction", () => {
     await act(async () => undefined);
     expect(terminal.paste).toHaveBeenCalledWith("clipboard");
     view.unmount();
+  });
+
+  it("maps macOS Ctrl or Option with Left and Right to shell word navigation", () => {
+    vi.stubGlobal("navigator", { platform: "MacIntel", userAgent: "Macintosh" });
+    const view = render(<TerminalPanel blockId="block-keys" sessionKey="block-keys:local" local={false} visible/>);
+    const terminal = mocks.terminals[0];
+
+    expect(terminal.keyHandler?.(new KeyboardEvent("keydown", { key: "ArrowLeft", ctrlKey: true }))).toBe(false);
+    expect(terminal.keyHandler?.(new KeyboardEvent("keydown", { key: "ArrowRight", ctrlKey: true }))).toBe(false);
+    expect(terminal.keyHandler?.(new KeyboardEvent("keydown", { key: "ArrowLeft", altKey: true }))).toBe(false);
+    expect(terminal.keyHandler?.(new KeyboardEvent("keydown", { key: "ArrowRight", altKey: true }))).toBe(false);
+
+    expect(mocks.writeBlock).toHaveBeenCalledTimes(4);
+    expect(Array.from(mocks.writeBlock.mock.calls[0]?.[1] ?? [])).toEqual([27, 98]);
+    expect(Array.from(mocks.writeBlock.mock.calls[1]?.[1] ?? [])).toEqual([27, 102]);
+    expect(Array.from(mocks.writeBlock.mock.calls[2]?.[1] ?? [])).toEqual([27, 98]);
+    expect(Array.from(mocks.writeBlock.mock.calls[3]?.[1] ?? [])).toEqual([27, 102]);
+    view.unmount();
+  });
+
+  it("leaves other arrow key combinations and platforms to xterm", () => {
+    vi.stubGlobal("navigator", { platform: "MacIntel", userAgent: "Macintosh" });
+    const macView = render(<TerminalPanel blockId="block-keys" sessionKey="block-keys:local" local={false} visible/>);
+    const macTerminal = mocks.terminals[0];
+
+    expect(macTerminal.keyHandler?.(new KeyboardEvent("keyup", { key: "ArrowLeft", ctrlKey: true }))).toBe(true);
+    expect(macTerminal.keyHandler?.(new KeyboardEvent("keydown", { key: "ArrowLeft" }))).toBe(true);
+    expect(macTerminal.keyHandler?.(new KeyboardEvent("keydown", { key: "ArrowLeft", ctrlKey: true, shiftKey: true }))).toBe(true);
+    expect(macTerminal.keyHandler?.(new KeyboardEvent("keydown", { key: "ArrowRight", ctrlKey: true, altKey: true }))).toBe(true);
+    expect(macTerminal.keyHandler?.(new KeyboardEvent("keydown", { key: "ArrowRight", ctrlKey: true, metaKey: true }))).toBe(true);
+    expect(mocks.writeBlock).not.toHaveBeenCalled();
+    macView.unmount();
+    act(() => vi.runAllTimers());
+
+    vi.stubGlobal("navigator", { platform: "Linux x86_64", userAgent: "Linux" });
+    const linuxView = render(<TerminalPanel blockId="block-keys" sessionKey="block-keys:linux" local={false} visible/>);
+    const linuxTerminal = mocks.terminals[mocks.terminals.length - 1];
+    expect(linuxTerminal.keyHandler?.(new KeyboardEvent("keydown", { key: "ArrowLeft", ctrlKey: true }))).toBe(true);
+    expect(mocks.writeBlock).not.toHaveBeenCalled();
+    linuxView.unmount();
   });
 });
 

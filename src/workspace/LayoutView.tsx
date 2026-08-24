@@ -119,7 +119,7 @@ export function WorkspaceCanvas({ workspace, visible, onRequestClose, onRequestA
       <div
         className="active-block-indicator ready"
         aria-hidden="true"
-        style={activeBounds ? { ...indicatorBoundsStyle(activeBounds), opacity: visible ? 1 : 0 } : { opacity: 0 }}
+        style={activeBounds ? { ...boundsStyle(activeBounds), opacity: visible ? 1 : 0 } : { opacity: 0 }}
       />
     </div>
     {drag && <div className="drag-ghost" style={{ transform: `translate3d(${drag.x + 12}px, ${drag.y + 12}px, 0)` }}><Icon name="terminal" /> Terminal</div>}
@@ -319,13 +319,5 @@ function boundsStyle(bounds: LayoutBounds): CSSProperties {
     top: layoutScalarCss(bounds.y),
     width: layoutScalarCss(bounds.width),
     height: layoutScalarCss(bounds.height),
-  };
-}
-
-function indicatorBoundsStyle(bounds: LayoutBounds): CSSProperties {
-  return {
-    width: layoutScalarCss(bounds.width),
-    height: layoutScalarCss(bounds.height),
-    transform: `translate3d(${layoutScalarCss(bounds.x)}, ${layoutScalarCss(bounds.y)}, 0)`,
   };
 }

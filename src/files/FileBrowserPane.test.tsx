@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { TransferEvent } from "../lib/tauri/transfers";
 
-const { listLocalDirectory, listLocalRoots, listRemoteDirectory, readTextFile, readBinaryFile, writeTextFile, writeClipboardText, copyFile, createEntry, renameEntry, deleteEntry, selectDownloadDirectory, selectDownloadPath, downloadDirectory, downloadFile, uploadDroppedEntries, cancelTransfer, dragDrop } = vi.hoisted(() => ({
+const { listLocalDirectory, listLocalRoots, listRemoteDirectory, readTextFile, readBinaryFile, writeTextFile, writeClipboardText, copyImageUrlToClipboard, copyFile, createEntry, renameEntry, deleteEntry, selectDownloadDirectory, selectDownloadPath, downloadDirectory, downloadFile, uploadDroppedEntries, cancelTransfer, dragDrop } = vi.hoisted(() => ({
   listLocalDirectory: vi.fn(),
   listLocalRoots: vi.fn(),
   listRemoteDirectory: vi.fn(),
@@ -12,6 +12,7 @@ const { listLocalDirectory, listLocalRoots, listRemoteDirectory, readTextFile, r
   readBinaryFile: vi.fn(),
   writeTextFile: vi.fn(),
   writeClipboardText: vi.fn(),
+  copyImageUrlToClipboard: vi.fn(),
   copyFile: vi.fn(),
   createEntry: vi.fn(),
   renameEntry: vi.fn(),
@@ -27,6 +28,7 @@ const { listLocalDirectory, listLocalRoots, listRemoteDirectory, readTextFile, r
 
 vi.mock("@tauri-apps/api/webview", () => ({ getCurrentWebview: () => ({ onDragDropEvent: vi.fn(async (handler) => { dragDrop.handler = handler; return () => { dragDrop.handler = null; }; }) }) }));
 vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({ writeText: writeClipboardText }));
+vi.mock("../lib/tauri/clipboard", () => ({ copyImageUrlToClipboard }));
 vi.mock("../lib/tauri/files", () => ({ listLocalDirectory, listLocalRoots, listRemoteDirectory, readTextFile, readBinaryFile, writeTextFile, copyFile, createEntry, renameEntry, deleteEntry }));
 vi.mock("../lib/tauri/transfers", () => ({ selectDownloadDirectory, selectDownloadPath, downloadDirectory, downloadFile, uploadDroppedEntries, cancelTransfer }));
 vi.mock("./CodeEditor", () => ({ CodeEditor: ({ value, readOnly, onChange, onSave }: { value: string; readOnly?: boolean; onChange: (value: string) => void; onSave: () => void }) => <textarea aria-label={readOnly ? "文件只读预览" : "文件编辑器"} readOnly={readOnly} value={value} onChange={(event) => onChange(event.target.value)} onKeyDown={(event) => { if (!readOnly && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") { event.preventDefault(); onSave(); } }}/>}));
@@ -42,7 +44,7 @@ describe("FileBrowserPane", () => {
     listLocalDirectory.mockReset();
     listLocalRoots.mockReset();
     listRemoteDirectory.mockReset();
-    readTextFile.mockReset(); readBinaryFile.mockReset(); writeTextFile.mockReset(); writeClipboardText.mockReset(); copyFile.mockReset(); createEntry.mockReset(); renameEntry.mockReset(); deleteEntry.mockReset();
+    readTextFile.mockReset(); readBinaryFile.mockReset(); writeTextFile.mockReset(); writeClipboardText.mockReset(); copyImageUrlToClipboard.mockReset(); copyFile.mockReset(); createEntry.mockReset(); renameEntry.mockReset(); deleteEntry.mockReset();
     selectDownloadDirectory.mockReset(); selectDownloadPath.mockReset(); downloadDirectory.mockReset(); downloadFile.mockReset(); uploadDroppedEntries.mockReset(); cancelTransfer.mockReset();
     dragDrop.handler = null;
   });
@@ -695,6 +697,109 @@ describe("FileBrowserPane", () => {
     expect(ui.queryByRole("menuitem", { name: /编辑/ })).not.toBeInTheDocument();
     fireEvent.click(ui.getByRole("menuitem", { name: "预览" }));
     expect(await ui.findByRole("button", { name: "编辑" })).toBeDisabled();
+  });
+
+  it("opens folders from an icon-led context menu and supports roving keyboard focus", async () => {
+    const folder = { name: "assets", path: "C:/work/assets", isDirectory: true, isSymlink: false, size: 0, modifiedAt: null };
+    listLocalDirectory
+      .mockResolvedValueOnce({ path: "C:/work", entries: [folder] })
+      .mockResolvedValueOnce({ path: folder.path, entries: [] });
+    const view = render(<FileBrowserPane initialPath="C:/work" runtime={localRuntime} onPathChange={vi.fn()}/>);
+    const ui = within(view.container);
+
+    fireEvent.contextMenu(await ui.findByRole("listitem", { name: /assets/ }));
+    const menu = ui.getByRole("menu", { name: /assets/ });
+    const open = within(menu).getByRole("menuitem", { name: "打开" });
+    expect(open.querySelector('[data-icon="files"]')).toBeInTheDocument();
+    await waitFor(() => expect(open).toHaveFocus());
+    fireEvent.keyDown(menu, { key: "ArrowDown" });
+    expect(within(menu).getByRole("menuitem", { name: "复制路径" })).toHaveFocus();
+    fireEvent.keyDown(menu, { key: "End" });
+    expect(within(menu).getByRole("menuitem", { name: "删除" })).toHaveFocus();
+    fireEvent.keyDown(menu, { key: "Home" });
+    expect(open).toHaveFocus();
+    fireEvent.click(open);
+
+    await waitFor(() => expect(listLocalDirectory).toHaveBeenLastCalledWith(folder.path));
+  });
+
+  it("copies an image directly from its file context menu", async () => {
+    const entry = { name: "photo.png", path: "C:/work/photo.png", isDirectory: false, isSymlink: false, size: 8, modifiedAt: null };
+    listLocalDirectory.mockResolvedValue({ path: "C:/work", entries: [entry] });
+    readBinaryFile.mockResolvedValue(new Uint8Array([137, 80, 78, 71]));
+    copyImageUrlToClipboard.mockResolvedValue(undefined);
+    const createObjectUrl = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:photo-context-menu");
+    const revokeObjectUrl = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
+    try {
+      const view = render(<FileBrowserPane initialPath="C:/work" runtime={localRuntime} onPathChange={vi.fn()}/>);
+      const ui = within(view.container);
+      fireEvent.contextMenu(await ui.findByRole("listitem", { name: /photo\.png/ }));
+      fireEvent.click(ui.getByRole("menuitem", { name: "复制图片" }));
+
+      await waitFor(() => expect(copyImageUrlToClipboard).toHaveBeenCalledWith("blob:photo-context-menu"));
+      expect(readBinaryFile).toHaveBeenCalledWith(null, entry.path);
+      expect(revokeObjectUrl).toHaveBeenCalledWith("blob:photo-context-menu");
+      expect(ui.getByRole("status", { name: "文件状态" })).toHaveTextContent("图片已复制");
+    } finally {
+      createObjectUrl.mockRestore();
+      revokeObjectUrl.mockRestore();
+    }
+  });
+
+  it("copies an image from its preview context menu and exposes stable operation feedback", async () => {
+    const entry = { name: "photo.png", path: "C:/work/photo.png", isDirectory: false, isSymlink: false, size: 8, modifiedAt: null };
+    listLocalDirectory.mockResolvedValue({ path: "C:/work", entries: [entry] });
+    readBinaryFile.mockResolvedValue(new Uint8Array([137, 80, 78, 71]));
+    copyImageUrlToClipboard.mockResolvedValue(undefined);
+    const createObjectUrl = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:photo-preview");
+    const revokeObjectUrl = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
+    try {
+      const view = render(<FileBrowserPane initialPath="C:/work" runtime={localRuntime} onPathChange={vi.fn()}/>);
+      const ui = within(view.container);
+      fireEvent.contextMenu(await ui.findByRole("listitem", { name: /photo\.png/ }));
+      fireEvent.click(ui.getByRole("menuitem", { name: "预览" }));
+      const image = await ui.findByRole("img", { name: "photo.png" });
+
+      fireEvent.contextMenu(image, { clientX: 80, clientY: 90 });
+      const menu = ui.getByRole("menu", { name: "photo.png 图片菜单" });
+      const copyImage = within(menu).getByRole("menuitem", { name: "复制图片" });
+      expect(copyImage.querySelector('[data-icon="copy"]')).toBeInTheDocument();
+      fireEvent.click(copyImage);
+
+      await waitFor(() => expect(copyImageUrlToClipboard).toHaveBeenCalledWith("blob:photo-preview"));
+      expect(ui.getByRole("status", { name: "图片操作状态" })).toHaveTextContent("图片已复制");
+
+      fireEvent.contextMenu(image, { clientX: 80, clientY: 90 });
+      fireEvent.click(ui.getByRole("menuitem", { name: "复制路径" }));
+      await waitFor(() => expect(writeClipboardText).toHaveBeenCalledWith("C:/work/photo.png"));
+      expect(ui.getByRole("status", { name: "图片操作状态" })).toHaveTextContent("路径已复制");
+    } finally {
+      createObjectUrl.mockRestore();
+      revokeObjectUrl.mockRestore();
+    }
+  });
+
+  it("reports image clipboard failures without leaving the preview menu open", async () => {
+    const entry = { name: "photo.png", path: "C:/work/photo.png", isDirectory: false, isSymlink: false, size: 8, modifiedAt: null };
+    listLocalDirectory.mockResolvedValue({ path: "C:/work", entries: [entry] });
+    readBinaryFile.mockResolvedValue(new Uint8Array([137, 80, 78, 71]));
+    copyImageUrlToClipboard.mockRejectedValue(new Error("剪贴板不可用"));
+    const createObjectUrl = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:photo-preview");
+    const revokeObjectUrl = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
+    try {
+      const view = render(<FileBrowserPane initialPath="C:/work" runtime={localRuntime} onPathChange={vi.fn()}/>);
+      const ui = within(view.container);
+      fireEvent.contextMenu(await ui.findByRole("listitem", { name: /photo\.png/ }));
+      fireEvent.click(ui.getByRole("menuitem", { name: "预览" }));
+      fireEvent.contextMenu(await ui.findByRole("img", { name: "photo.png" }));
+      fireEvent.click(ui.getByRole("menuitem", { name: "复制图片" }));
+
+      expect(await ui.findByRole("status", { name: "图片操作状态" })).toHaveTextContent("复制图片失败：剪贴板不可用");
+      expect(ui.queryByRole("menu", { name: "photo.png 图片菜单" })).not.toBeInTheDocument();
+    } finally {
+      createObjectUrl.mockRestore();
+      revokeObjectUrl.mockRestore();
+    }
   });
 
   it("keeps a compact footer with the current directory counts", async () => {

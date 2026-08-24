@@ -271,18 +271,53 @@ describe("WorkspaceCanvas terminal actions", () => {
     const indicator = view.container.querySelector<HTMLElement>(".active-block-indicator");
     expect(indicator).not.toBeNull();
     await waitFor(() => {
-      expect(indicator?.style.transform).toBe("translate3d(0%, 0%, 0)");
+      expect(indicator?.style.left).toBe("0%");
+      expect(indicator?.style.top).toBe("0%");
       expect(indicator?.style.width).toBe("calc(50% - 1.5px)");
       expect(indicator?.style.height).toBe("100%");
+      expect(indicator?.style.transform).toBe("");
     });
 
     view.rerender(<WorkspaceCanvas workspace={{ ...splitWorkspace, activeBlockId: "files-1" }} visible onRequestClose={vi.fn()} onRequestAuthConnection={vi.fn()}/>);
     await waitFor(() => {
-      expect(indicator?.style.transform).toBe("translate3d(calc(50% + 1.5px), 0%, 0)");
+      expect(indicator?.style.left).toBe("calc(50% + 1.5px)");
+      expect(indicator?.style.top).toBe("0%");
       expect(indicator?.style.width).toBe("calc(50% - 1.5px)");
       expect(indicator?.style.height).toBe("100%");
+      expect(indicator?.style.transform).toBe("");
     });
     expect(view.container.querySelectorAll(".active-block-indicator")).toHaveLength(1);
+  });
+
+  it("keeps the moving indicator in the workspace coordinate system across nested block sizes", async () => {
+    const nestedWorkspace: Workspace = {
+      ...workspace,
+      layout: {
+        type: "split", id: "split-root", direction: "horizontal", ratio: 0.5,
+        first: workspace.layout,
+        second: {
+          type: "split", id: "split-right", direction: "vertical", ratio: 0.5,
+          first: { type: "files", blockId: "files-1", profileId: null, path: "C:/work" },
+          second: { type: "terminal", blockId: "block-2", profileId: null },
+        },
+      },
+    };
+    const view = render(<WorkspaceCanvas workspace={nestedWorkspace} visible onRequestClose={vi.fn()} onRequestAuthConnection={vi.fn()}/>);
+    const indicator = view.container.querySelector<HTMLElement>(".active-block-indicator");
+
+    expect(indicator?.style.left).toBe("0%");
+    expect(indicator?.style.top).toBe("0%");
+    expect(indicator?.style.width).toBe("calc(50% - 1.5px)");
+    expect(indicator?.style.height).toBe("100%");
+
+    view.rerender(<WorkspaceCanvas workspace={{ ...nestedWorkspace, activeBlockId: "block-2" }} visible onRequestClose={vi.fn()} onRequestAuthConnection={vi.fn()}/>);
+    await waitFor(() => {
+      expect(indicator?.style.left).toBe("calc(50% + 1.5px)");
+      expect(indicator?.style.top).toBe("calc(50% + 1.5px)");
+      expect(indicator?.style.width).toBe("calc(50% - 1.5px)");
+      expect(indicator?.style.height).toBe("calc(50% - 1.5px)");
+      expect(indicator?.style.transform).toBe("");
+    });
   });
 
   it("preserves one files window instance and its in-flight state when another block changes the split ancestry", async () => {

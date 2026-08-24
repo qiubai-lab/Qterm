@@ -14,6 +14,7 @@
     "core:window:allow-set-theme",
     "clipboard-manager:allow-read-text",
     "clipboard-manager:allow-write-text",
+    "clipboard-manager:allow-write-image",
     {
       "identifier": "opener:allow-open-url",
       "allow": [

@@ -140,7 +140,10 @@ export function TerminalPanel({ blockId, sessionKey, visible, local }: { blockId
   useEffect(() => {
     const view = viewRef.current;
     if (!view) return;
-    view.onKey = (event) => handleClipboardShortcut(event, clipboardPlatform, view.terminal, inputEnabled, copySelection, requestPaste);
+    view.onKey = (event) => {
+      if (!handleClipboardShortcut(event, clipboardPlatform, view.terminal, inputEnabled, copySelection, requestPaste)) return false;
+      return handleMacWordNavigationShortcut(event, clipboardPlatform, view.write);
+    };
     return () => { view.onKey = () => true; };
   }, [clipboardPlatform, copySelection, inputEnabled, requestPaste]);
 
@@ -290,6 +293,17 @@ function handleClipboardShortcut(event: KeyboardEvent, platform: ClipboardPlatfo
     return false;
   }
   return true;
+}
+
+function handleMacWordNavigationShortcut(event: KeyboardEvent, platform: ClipboardPlatform, write: (data: string) => void): boolean {
+  const hasSingleWordModifier = event.ctrlKey !== event.altKey;
+  if (platform !== "mac" || event.type !== "keydown" || !hasSingleWordModifier || event.shiftKey || event.metaKey) return true;
+  const input = event.key === "ArrowLeft" ? "\x1bb" : event.key === "ArrowRight" ? "\x1bf" : null;
+  if (!input) return true;
+  event.preventDefault();
+  event.stopPropagation();
+  write(input);
+  return false;
 }
 
 function copyShortcutLabel(platform: ClipboardPlatform): string {

@@ -5,6 +5,7 @@ import { writeText as writeClipboardText } from "@tauri-apps/plugin-clipboard-ma
 import { Icon } from "../components/Icon";
 import { Button, StatusBadge } from "../components/Button";
 import { DialogActionStatus, DialogFrame } from "../components/dialogs/DialogFrame";
+import { copyImageUrlToClipboard } from "../lib/tauri/clipboard";
 import { copyFile, createEntry, deleteEntry, listLocalDirectory, listLocalRoots, listRemoteDirectory, readBinaryFile, readTextFile, renameEntry, writeTextFile, type DirectoryListing, type FileEntry, type LocalRoot } from "../lib/tauri/files";
 import { cancelTransfer, downloadDirectory, downloadFile, selectDownloadDirectory, selectDownloadPath, uploadDroppedEntries, type TransferEvent } from "../lib/tauri/transfers";
 import type { FileRuntime } from "../workspace/WorkspaceProvider";
@@ -266,6 +267,7 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
 
   async function openFile(entry: FileEntry, requestedMode: FileViewMode) {
     if (entry.isDirectory || entry.isSymlink) return;
+    setOperationMessage("");
     const previewKind = previewKindFor(entry.name);
     const mode = previewKind === "image" ? "preview" : requestedMode;
     const currentRequest = ++previewRequest.current;
@@ -357,6 +359,22 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
     setContextMenu({ entry, anchorX, anchorY, x: anchorX, y: anchorY, placement: "below" });
   }
 
+  function handleContextMenuKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (!(["ArrowDown", "ArrowUp", "Home", "End"] as string[]).includes(event.key)) return;
+    const items = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>("[role='menuitem']:not(:disabled)"));
+    if (items.length === 0) return;
+    event.preventDefault();
+    const currentIndex = items.findIndex((item) => item === document.activeElement);
+    const nextIndex = event.key === "Home"
+      ? 0
+      : event.key === "End"
+        ? items.length - 1
+        : event.key === "ArrowUp"
+          ? (currentIndex <= 0 ? items.length - 1 : currentIndex - 1)
+          : (currentIndex + 1) % items.length;
+    items[nextIndex].focus();
+  }
+
   async function copyPath(entry: FileEntry) {
     setContextMenu(null);
     try {
@@ -364,6 +382,26 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
       setOperationMessage("路径已复制");
     } catch {
       setOperationMessage("复制路径失败");
+    }
+  }
+
+  async function copyImage(entry: FileEntry, existingUrl?: string) {
+    setContextMenu(null);
+    setOperationMessage("");
+    let temporaryUrl = "";
+    try {
+      let imageUrl = existingUrl;
+      if (!imageUrl) {
+        const bytes = await readBinaryFile(kind === "sftp" ? sessionId : null, entry.path);
+        temporaryUrl = URL.createObjectURL(new Blob([bytes], { type: imageMime(entry.name) }));
+        imageUrl = temporaryUrl;
+      }
+      await copyImageUrlToClipboard(imageUrl);
+      setOperationMessage("图片已复制");
+    } catch (reason) {
+      setOperationMessage(`复制图片失败：${fileErrorMessage(reason)}`);
+    } finally {
+      if (temporaryUrl) URL.revokeObjectURL(temporaryUrl);
     }
   }
 
@@ -502,10 +540,15 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
       {preview.error && <div className="file-preview-message error" role="alert">{preview.error}</div>}
       <main className="file-preview-content">
         {preview.loading && <FileLoadingState label="正在读取文件…"/>}
-        {!preview.loading && preview.kind === "image" && preview.imageUrl && <div className="file-image-preview"><img src={preview.imageUrl} alt={preview.entry.name}/></div>}
+        {!preview.loading && preview.kind === "image" && preview.imageUrl && <div className="file-image-preview" onContextMenu={(event) => { event.preventDefault(); showContextMenu(preview.entry, event.clientX, event.clientY); }}><img src={preview.imageUrl} alt={preview.entry.name}/></div>}
         {!preview.loading && preview.mode === "preview" && preview.kind === "markdown" && <Suspense fallback={<FileLoadingState label="正在加载预览…"/>}><MarkdownPreview content={preview.content}/></Suspense>}
         {!preview.loading && preview.kind !== "image" && (preview.mode === "edit" || preview.kind !== "markdown") && <Suspense fallback={<FileLoadingState label="正在加载文件…"/>}><CodeEditor value={preview.content} language={preview.kind} readOnly={preview.mode === "preview"} onChange={(content) => setPreview((current) => current ? { ...current, content } : current)} onSave={requestPreviewSave}/></Suspense>}
       </main>
+      {operationMessage && <div className="file-preview-operation" role="status" aria-label="图片操作状态" aria-live="polite">{operationMessage}</div>}
+      {contextMenu && preview.kind === "image" && preview.imageUrl && <div ref={menuRef} className="file-context-menu" data-placement={contextMenu.placement} role="menu" aria-label={`${preview.entry.name} 图片菜单`} style={{ left: contextMenu.x, top: contextMenu.y }} onKeyDown={handleContextMenuKeyDown} onContextMenu={(event) => event.preventDefault()}>
+        <button role="menuitem" onClick={() => void copyImage(preview.entry, preview.imageUrl)}><Icon name="copy" size={13}/><span>复制图片</span></button>
+        <button role="menuitem" onClick={() => void copyPath(preview.entry)}><Icon name="copy" size={13}/><span>复制路径</span></button>
+      </div>}
       {saveConfirmation && <DialogFrame title="覆盖保存文件？" subtitle={preview.entry.name} compact dismissible={!saving} onClose={() => { if (!saving) setSaveConfirmation(null); }}>
         <div className="file-preview-confirmation">
           <p className="confirm-copy">保存后，当前文件的现有内容将被替换。若没有其他备份，此操作无法撤销。</p>
@@ -559,15 +602,17 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
       {!showLocalRoots && listing && <FileList entries={displayedEntries} range={virtualRange} ariaLabel={`文件夹 ${listing.path}`} selectedPaths={selectedPaths} onSelect={selectEntry} onOpen={(entry) => entry.isDirectory ? void navigateTo(entry.path) : void openFile(entry, "preview")} onContextMenu={openContextMenu} onContextMenuKey={openContextMenuFromKeyboard}/>}
       {!showLocalRoots && dropActive && <div className="file-upload-drop-overlay" role="status"><Icon name="upload" size={24}/><strong>上传到当前目录</strong><span>{visiblePath}</span><small>释放鼠标以上传文件或文件夹</small></div>}
     </div>
-    {contextMenu && <div ref={menuRef} className="file-context-menu" data-placement={contextMenu.placement} role="menu" aria-label={contextEntries.length > 1 ? `${contextEntries.length} 个已选项目菜单` : `${contextMenu.entry.name} 文件菜单`} style={{ left: contextMenu.x, top: contextMenu.y }} onContextMenu={(event) => event.preventDefault()}>
-      {contextEntries.length === 1 && !contextMenu.entry.isDirectory && !contextMenu.entry.isSymlink && <button role="menuitem" onClick={() => { setContextMenu(null); void openFile(contextMenu.entry, "preview"); }}>预览</button>}
-      {contextEntries.length === 1 && !contextMenu.entry.isDirectory && !contextMenu.entry.isSymlink && previewKindFor(contextMenu.entry.name) !== "image" && <button role="menuitem" className="file-context-edit" onClick={() => { setContextMenu(null); void openFile(contextMenu.entry, "edit"); }}><span>编辑</span><StatusBadge tone="warning" presentation="tag" size="compact">实验</StatusBadge></button>}
-      {contextEntries.length === 1 && kind === "sftp" && !contextMenu.entry.isSymlink && <button role="menuitem" onClick={() => void startDownload(contextMenu.entry)}>下载到本地…</button>}
-      {contextEntries.length === 1 && <button role="menuitem" onClick={() => void copyPath(contextMenu.entry)}>复制路径</button>}
+    {contextMenu && <div ref={menuRef} className="file-context-menu" data-placement={contextMenu.placement} role="menu" aria-label={contextEntries.length > 1 ? `${contextEntries.length} 个已选项目菜单` : `${contextMenu.entry.name} 文件菜单`} style={{ left: contextMenu.x, top: contextMenu.y }} onKeyDown={handleContextMenuKeyDown} onContextMenu={(event) => event.preventDefault()}>
+      {contextEntries.length === 1 && contextMenu.entry.isDirectory && <button role="menuitem" onClick={() => { setContextMenu(null); void navigateTo(contextMenu.entry.path); }}><Icon name="files" size={13}/><span>打开</span></button>}
+      {contextEntries.length === 1 && !contextMenu.entry.isDirectory && !contextMenu.entry.isSymlink && <button role="menuitem" onClick={() => { setContextMenu(null); void openFile(contextMenu.entry, "preview"); }}><Icon name="eye" size={13}/><span>预览</span></button>}
+      {contextEntries.length === 1 && !contextMenu.entry.isDirectory && !contextMenu.entry.isSymlink && previewKindFor(contextMenu.entry.name) !== "image" && <button role="menuitem" className="file-context-edit" onClick={() => { setContextMenu(null); void openFile(contextMenu.entry, "edit"); }}><Icon name="edit" size={13}/><span>编辑</span><StatusBadge tone="warning" presentation="tag" size="compact">实验</StatusBadge></button>}
+      {contextEntries.length === 1 && kind === "sftp" && !contextMenu.entry.isSymlink && <button role="menuitem" onClick={() => void startDownload(contextMenu.entry)}><Icon name="download" size={13}/><span>下载到本地…</span></button>}
+      {contextEntries.length === 1 && <button role="menuitem" onClick={() => void copyPath(contextMenu.entry)}><Icon name="copy" size={13}/><span>复制路径</span></button>}
+      {contextEntries.length === 1 && !contextMenu.entry.isDirectory && !contextMenu.entry.isSymlink && previewKindFor(contextMenu.entry.name) === "image" && <button role="menuitem" onClick={() => void copyImage(contextMenu.entry)}><Icon name="copy" size={13}/><span>复制图片</span></button>}
       {contextEntries.length === 1 && <div className="file-context-menu-separator" role="separator"/>}
-      {contextEntries.length === 1 && !contextMenu.entry.isDirectory && !contextMenu.entry.isSymlink && <button role="menuitem" onClick={() => requestNameOperation("copy", contextMenu.entry)}>复制文件…</button>}
-      {contextEntries.length === 1 && <button role="menuitem" onClick={() => requestNameOperation("rename", contextMenu.entry)}>改名…</button>}
-      <button role="menuitem" className="danger" onClick={() => { setContextMenu(null); setDeleteOperation({ entries: contextEntries, error: "", busy: false }); }}>{contextEntries.length > 1 ? `删除 ${contextEntries.length} 个项目` : "删除"}</button>
+      {contextEntries.length === 1 && !contextMenu.entry.isDirectory && !contextMenu.entry.isSymlink && <button role="menuitem" onClick={() => requestNameOperation("copy", contextMenu.entry)}><Icon name="copy" size={13}/><span>复制文件…</span></button>}
+      {contextEntries.length === 1 && <button role="menuitem" onClick={() => requestNameOperation("rename", contextMenu.entry)}><Icon name="edit" size={13}/><span>改名…</span></button>}
+      <button role="menuitem" className="danger" onClick={() => { setContextMenu(null); setDeleteOperation({ entries: contextEntries, error: "", busy: false }); }}><Icon name="trash" size={13}/><span>{contextEntries.length > 1 ? `删除 ${contextEntries.length} 个项目` : "删除"}</span></button>
     </div>}
     <footer className={`file-browser-statusbar${transfer ? ` ${transfer.status}` : ""}`} role="status" aria-label="文件状态">
       {transferActive && transfer ? <>

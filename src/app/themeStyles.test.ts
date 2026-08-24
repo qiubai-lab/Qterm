@@ -55,7 +55,8 @@ describe("application theme contract", () => {
       "--scrollbar-track", "--scrollbar-thumb",
       "--terminal-background", "--terminal-foreground", "--terminal-cursor", "--terminal-selection",
       "--terminal-ansi-red", "--terminal-ansi-yellow", "--terminal-ansi-blue", "--terminal-ansi-magenta", "--terminal-ansi-cyan", "--terminal-ansi-white",
-      "--editor-background", "--editor-foreground", "--editor-gutter-background", "--editor-selection",
+      "--file-active-surface", "--file-selection-surface", "--file-selection-foreground", "--file-selection-marker",
+      "--editor-background", "--editor-foreground", "--editor-gutter-background", "--editor-active-line", "--editor-selection", "--editor-selection-foreground", "--editor-selection-marker",
     ]) {
       expect(theme).toContain(`${token}:`);
       expect(lightTheme).toContain(`${token}:`);
@@ -87,6 +88,20 @@ describe("application theme contract", () => {
     expect(tokenValue(cyberpunkTheme, "--navigation-accent-bg")).toBe("var(--selection-surface)");
     expect(tokenValue(cyberpunkTheme, "--selection-marker")).toBe("#fcee0a");
     expect(tokenValue(cyberpunkTheme, "--selection-surface")).toContain("252,238,10");
+    expect(tokenValue(cyberpunkTheme, "--file-active-surface")).toContain("0,221,235");
+    expect(tokenValue(cyberpunkTheme, "--file-selection-surface")).toBe("rgba(252,238,10,.58)");
+    expect(tokenValue(cyberpunkTheme, "--file-selection-foreground")).toBe("#171500");
+    expect(tokenValue(cyberpunkTheme, "--file-selection-marker")).toBe("#fcee0a");
+    expect(tokenValue(theme, "--file-active-surface")).toContain("117,230,207");
+    expect(tokenValue(theme, "--file-selection-surface")).toContain("95,179,255");
+    expect(tokenValue(lightTheme, "--file-active-surface")).toContain("22,123,105");
+    expect(tokenValue(lightTheme, "--file-selection-surface")).toContain("18,111,187");
+    for (const preset of [theme, lightTheme, cyberpunkTheme]) {
+      expect(tokenValue(preset, "--editor-active-line")).toBe("var(--file-active-surface)");
+      expect(tokenValue(preset, "--editor-selection")).toBe("var(--file-selection-surface)");
+      expect(tokenValue(preset, "--editor-selection-foreground")).toBe("var(--file-selection-foreground)");
+      expect(tokenValue(preset, "--editor-selection-marker")).toBe("var(--file-selection-marker)");
+    }
     expect(tokenValue(cyberpunkTheme, "--workspace-tab-active-text")).toBe("var(--text-strong)");
     expect(tokenValue(cyberpunkTheme, "--brand-plate-background")).toBe(tokenValue(theme, "--brand-plate-background"));
     expect(tokenValue(cyberpunkTheme, "--brand-plate-border")).toBe(tokenValue(theme, "--brand-plate-border"));
@@ -152,9 +167,10 @@ describe("application theme contract", () => {
     expect(contrastRatio(tokenHex(lightTheme, "--editor-foreground"), tokenHex(lightTheme, "--editor-background")), "editor foreground contrast").toBeLessThanOrEqual(13);
   });
 
-  it("makes active workbench emphasis fully theme-owned", () => {
+  it("gives the theme-owned active outline to the moving indicator only", () => {
     expect(contrastRatio(tokenHex(lightTheme, "--block-border-active"), tokenHex(lightTheme, "--surface")), "Light active outline contrast").toBeGreaterThanOrEqual(4.5);
-    expect(terminalChrome).toMatch(/\.terminal-block\.active[^}]+box-shadow:var\(--block-active-surface-shadow\)/);
+    expect(terminalChrome).not.toMatch(/\.terminal-block\.active[^}]+(?:border-color|box-shadow)/);
+    expect(accessibilityOverrides).not.toMatch(/\.terminal-block\.active\s*\{[^}]*(?:border-color|box-shadow)/);
     expect(terminalChrome).toMatch(/\.active-block-indicator[^}]+border:1px solid var\(--block-border-active\)/);
     expect(terminalChrome).toMatch(/\.active-block-indicator[^}]+box-shadow:var\(--block-active-indicator-shadow\)/);
     expect(terminalChrome).toMatch(/\.terminal-block\.active \.terminal-target\[data-remote="true"\]\[data-status="connected"\] \.terminal-target-endpoint[^}]+color:var\(--block-active-endpoint-text\)/);
@@ -317,7 +333,15 @@ describe("application theme contract", () => {
 
   it("makes CodeMirror consume editor semantic tokens", () => {
     expect(styles).toContain(".file-code-editor .cm-editor{height:100%;color:var(--editor-foreground);background:var(--editor-background)");
-    expect(styles).toContain(".file-code-editor .cm-selectionBackground{background:var(--editor-selection)!important}");
+    expect(styles).toContain(".file-code-editor .cm-activeLine{background:var(--editor-active-line)}");
+    expect(styles).toContain(".file-code-editor .cm-selectionBackground{background:var(--editor-selection)!important;box-shadow:none}");
+    expect(styles).toContain(".file-code-editor .cm-content::selection,.file-code-editor .cm-content ::selection{color:var(--editor-selection-foreground)}");
+    expect(fileBrowser).toContain(".file-row:hover,.file-row:focus-visible{color:var(--text-strong);background:var(--file-active-surface)");
+    expect(fileBrowser).toContain(".file-row[data-selected]{background:var(--file-selection-surface);box-shadow:inset 2px 0 var(--file-selection-marker)}");
+    expect(lightOverrides).toContain(':root[data-theme="light"] .file-row:hover');
+    expect(lightOverrides).toContain('background:var(--file-active-surface)');
+    expect(lightOverrides).toContain(':root[data-theme="light"] .file-row[data-selected]');
+    expect(lightOverrides).toContain('background:var(--file-selection-surface)');
   });
 
   it("isolates legacy Light compatibility selectors behind the theme root", () => {

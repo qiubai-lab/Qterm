@@ -96,8 +96,14 @@
   --editor-gutter-background:#f2f5f3;
   --editor-gutter-foreground:#68736f;
   --editor-border:#cfd6d3;
-  --editor-active-line:#f0f5f2;
-  --editor-selection:#b1d8ce;
+  --file-active-surface:rgba(22,123,105,.12);
+  --file-selection-surface:rgba(18,111,187,.26);
+  --file-selection-foreground:var(--editor-foreground);
+  --file-selection-marker:#126fbb;
+  --editor-active-line:var(--file-active-surface);
+  --editor-selection:var(--file-selection-surface);
+  --editor-selection-foreground:var(--file-selection-foreground);
+  --editor-selection-marker:var(--file-selection-marker);
   --editor-preview-background:#f7f9f8;
   --workspace-tab-active-border:#b7c2bd;
   --workspace-tab-active-background:linear-gradient(180deg,#f8faf9,#edf1ef);

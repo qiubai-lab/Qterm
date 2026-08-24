@@ -441,7 +441,7 @@ describe("application layout styles", () => {
     expect(declarations(".split-divider-vertical")).toContain("cursor:row-resize");
   });
 
-  it("makes active blocks obvious and moves one non-interactive focus indicator", () => {
+  it("uses one moving outer outline while keeping active block content obvious", () => {
     const canvas = declarations(".workspace-canvas");
     const block = declarations(".terminal-block");
     const activeBlock = declarations(".terminal-block.active");
@@ -451,14 +451,18 @@ describe("application layout styles", () => {
 
     expect(canvas).toContain("--workspace-block-radius:9px");
     expect(block).toContain("border-radius:var(--workspace-block-radius)");
-    expect(activeBlock).toContain("border-color:var(--block-border-active)");
-    expect(activeBlock).toContain("box-shadow:var(--block-active-surface-shadow)");
+    expect(activeBlock).not.toContain("border-color");
+    expect(activeBlock).not.toContain("box-shadow");
+    expect(styles).not.toMatch(/\.terminal-block\.active\s*\{[^}]*border-color/);
+    expect(styles).not.toMatch(/\.terminal-block\.active\s*\{[^}]*box-shadow/);
     expect(activeHeader).toContain("background:var(--block-header-active-background)");
     expect(indicator).toContain("pointer-events:none");
     expect(indicator).toContain("border-radius:var(--workspace-block-radius)");
     expect(indicator).toContain("border:1px solid var(--block-border-active)");
     expect(indicator).toContain("box-shadow:var(--block-active-indicator-shadow)");
-    expect(movingIndicator).toContain("transition:transform 300ms");
+    expect(movingIndicator).toContain("transition:left 300ms");
+    expect(movingIndicator).toContain("top 300ms");
+    expect(movingIndicator).not.toContain("transition:transform");
     expect(styles).toContain("@media (prefers-reduced-motion:reduce)");
     expect(styles).toContain(".active-block-indicator.ready{transition:none}");
   });
@@ -848,8 +852,17 @@ describe("application layout styles", () => {
     expect(editor).toContain("font-family:var(--terminal-font-family)");
     expect(editor).toContain("font-size:var(--terminal-font-size)");
     expect(editor).toContain("line-height:var(--terminal-line-height)");
-    expect(declarations(".file-code-editor .cm-activeLine,.file-code-editor .cm-activeLineGutter")).toContain("background:var(--editor-active-line)");
-    expect(declarations(".file-code-editor .cm-selectionBackground")).toContain("background:var(--editor-selection)!important");
+    expect(lastDeclarations(".file-code-editor .cm-activeLine")).toContain("background:var(--editor-active-line)");
+    expect(lastDeclarations(".file-code-editor .cm-activeLineGutter")).toContain("background:var(--editor-active-line)");
+    expect(lastDeclarations(".file-code-editor .cm-activeLineGutter")).toContain("color:var(--accent)");
+    expect(lastDeclarations(".file-code-editor .cm-selectionBackground")).toContain("background:var(--editor-selection)!important");
+    expect(lastDeclarations(".file-code-editor .cm-selectionBackground")).toContain("box-shadow:none");
+    expect(lastDeclarations(".file-code-editor .cm-content::selection,.file-code-editor .cm-content ::selection")).toContain("color:var(--editor-selection-foreground)");
+    expect(lastDeclarations(".file-row:hover,.file-row:focus-visible")).toContain("background:var(--file-active-surface)");
+    expect(lastDeclarations(".file-row[data-selected]")).toContain("background:var(--file-selection-surface)");
+    expect(lastDeclarations(".file-row[data-selected]")).toContain("box-shadow:inset 2px 0 var(--file-selection-marker)");
+    expect(defaultCapability.permissions).toContain("clipboard-manager:allow-write-image");
+    expect(defaultCapability.permissions).not.toContain("clipboard-manager:allow-read-image");
   });
 
   it("keeps path editing inline and anchors refresh to the far edge", () => {
