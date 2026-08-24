@@ -5,7 +5,7 @@ import { connectFileSession } from "../lib/tauri/files";
 import { connectNetworkSession, startNetworkRule, stopNetworkRule } from "../lib/tauri/network";
 import { closeLocalSession, connectLocalSession, getLocalTerminalCapabilities, resizeLocalSession, writeLocalSession, type LocalSessionEvent, type LocalTerminalCapabilities } from "../lib/tauri/localSessions";
 import { listProfileGroups, listProfiles, type ConnectionProfile, type ProfileGroup } from "../lib/tauri/profiles";
-import { acceptHostKey, closeSession, connectSession, rejectHostKey, resizeSession, writeSession, type SessionAuth, type SessionEvent } from "../lib/tauri/sessions";
+import { acceptHostKey, closeSession, connectSession, rejectHostKey, resizeSession, writeSession, type SessionAuth, type SessionEvent, type TerminalSizeInput } from "../lib/tauri/sessions";
 import { loadWorkspaces, saveWorkspaces } from "../lib/tauri/workspaces";
 import { completeConnectionProgress, connectionProgressFromRouteEvent, failConnectionProgress, initialConnectionProgress } from "./connectionProgress";
 import { blockIds, findLeaf } from "./layout";
@@ -46,7 +46,7 @@ interface WorkspaceContextValue {
   localTerminalCapabilities: LocalTerminalCapabilities | null;
   activeWorkspace: Workspace;
   activeBlockId: string;
-  registerWriter: (blockId: string, writer: (data: Uint8Array) => void, clearer: (reset: boolean) => void) => () => void;
+  registerWriter: (blockId: string, writer: (data: Uint8Array) => void, clearer: (reset: boolean) => void, readSize: () => TerminalSizeInput) => () => void;
   clearBlockBuffer: (blockId: string, reset?: boolean) => void;
   setBlockCwd: (blockId: string, cwd: string) => void;
   startLocalBlock: (blockId: string, columns: number, rows: number) => Promise<void>;
@@ -89,6 +89,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [storageNotice, setStorageNotice] = useState("");
   const writers = useRef(new Map<string, (data: Uint8Array) => void>());
   const clearers = useRef(new Map<string, (reset: boolean) => void>());
+  const terminalSizeReaders = useRef(new Map<string, () => TerminalSizeInput>());
   const writerOwners = useRef(new Map<string, symbol>());
   const pendingTerminalOutput = useRef(new Map<string, { chunks: Uint8Array[]; bytes: number }>());
   const runtimesRef = useRef(runtimes);
@@ -399,10 +400,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     if (onFailure) connectionFailureHandlers.current.set(failureKey, onFailure);
     const key = epochKey(blockId, epoch);
     finishedEpochs.current.delete(key);
+    const terminalSize = terminalSizeReaders.current.get(blockId)?.() ?? { columns: 80, rows: 24 };
     updateRuntime(blockId, () => ({ ...defaultRuntime, kind: "ssh", status: "connecting", connectionProgress: initialConnectionProgress(profile.jumpProfileIds?.length ?? 0), cwd: "." }));
     try {
       const sessionId = await connectSession(
-        { profileId: profile.id, auth },
+        { profileId: profile.id, auth, terminalSize },
         (event) => onSessionEvent(blockId, epoch, event),
         (data) => { if (isCurrentEpoch(blockId, epoch)) deliverTerminalOutput(blockId, data); },
       );
@@ -548,11 +550,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const resizeBlock = useCallback(async (blockId: string, columns: number, rows: number) => {
-    const runtime = runtimes[blockId];
+    const runtime = runtimesRef.current[blockId];
     if (!runtime?.sessionId || runtime.status !== "connected") return;
     if (runtime.kind === "local") await resizeLocalSession(runtime.sessionId, columns, rows);
     else await resizeSession(runtime.sessionId, columns, rows);
-  }, [runtimes]);
+  }, []);
 
   const acceptBlockHostKey = useCallback(async (blockId: string) => {
     const sessionId = runtimes[blockId]?.sessionId;
@@ -590,10 +592,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     updateNetworkRuntime(blockId, (runtime) => ({ ...runtime, hostKeyPrompt: null }));
   }, [networkRuntimes, updateNetworkRuntime]);
 
-  const registerWriter = useCallback((blockId: string, writer: (data: Uint8Array) => void, clearer: (reset: boolean) => void) => {
+  const registerWriter = useCallback((blockId: string, writer: (data: Uint8Array) => void, clearer: (reset: boolean) => void, readSize: () => TerminalSizeInput) => {
     const owner = Symbol(blockId);
     writers.current.set(blockId, writer);
     clearers.current.set(blockId, clearer);
+    terminalSizeReaders.current.set(blockId, readSize);
     writerOwners.current.set(blockId, owner);
     const pending = pendingTerminalOutput.current.get(blockId);
     pendingTerminalOutput.current.delete(blockId);
@@ -603,6 +606,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       writerOwners.current.delete(blockId);
       writers.current.delete(blockId);
       clearers.current.delete(blockId);
+      terminalSizeReaders.current.delete(blockId);
     };
   }, []);
   const setBlockCwd = useCallback((blockId: string, cwd: string) => {
@@ -619,6 +623,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       if (networkRuntimesRef.current[id]) await closeCurrentNetworkSession(id);
       writers.current.delete(id);
       clearers.current.delete(id);
+      terminalSizeReaders.current.delete(id);
       writerOwners.current.delete(id);
       pendingTerminalOutput.current.delete(id);
       connectionTargetIntents.current.delete(connectionIntentKey("terminal", id));

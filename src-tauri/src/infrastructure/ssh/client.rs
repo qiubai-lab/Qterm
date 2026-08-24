@@ -67,6 +67,7 @@ pub struct SessionConnectRequest {
     pub route: Vec<SessionRouteNode>,
     pub purpose: SessionPurpose,
     pub profile_id: Option<String>,
+    pub terminal_size: Option<TerminalSize>,
     pub terminal_output: Arc<dyn Fn(Vec<u8>) + Send + Sync>,
 }
 

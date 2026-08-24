@@ -55,7 +55,7 @@ describe("application theme contract", () => {
       "--scrollbar-track", "--scrollbar-thumb",
       "--terminal-background", "--terminal-foreground", "--terminal-cursor", "--terminal-selection",
       "--terminal-ansi-red", "--terminal-ansi-yellow", "--terminal-ansi-blue", "--terminal-ansi-magenta", "--terminal-ansi-cyan", "--terminal-ansi-white",
-      "--file-active-surface", "--file-selection-surface", "--file-selection-foreground", "--file-selection-marker",
+      "--file-active-surface", "--file-active-marker", "--file-selection-surface", "--file-selection-foreground", "--file-selection-secondary-foreground", "--file-selection-marker",
       "--editor-background", "--editor-foreground", "--editor-gutter-background", "--editor-active-line", "--editor-selection", "--editor-selection-foreground", "--editor-selection-marker",
     ]) {
       expect(theme).toContain(`${token}:`);
@@ -88,20 +88,39 @@ describe("application theme contract", () => {
     expect(tokenValue(cyberpunkTheme, "--navigation-accent-bg")).toBe("var(--selection-surface)");
     expect(tokenValue(cyberpunkTheme, "--selection-marker")).toBe("#fcee0a");
     expect(tokenValue(cyberpunkTheme, "--selection-surface")).toContain("252,238,10");
-    expect(tokenValue(cyberpunkTheme, "--file-active-surface")).toContain("0,221,235");
-    expect(tokenValue(cyberpunkTheme, "--file-selection-surface")).toBe("rgba(252,238,10,.58)");
-    expect(tokenValue(cyberpunkTheme, "--file-selection-foreground")).toBe("#171500");
-    expect(tokenValue(cyberpunkTheme, "--file-selection-marker")).toBe("#fcee0a");
+    expect(tokenValue(cyberpunkTheme, "--file-active-surface")).toBe("rgba(252,238,10,.09)");
+    expect(tokenValue(cyberpunkTheme, "--file-active-marker")).toBe("var(--block-border-active)");
+    expect(tokenValue(cyberpunkTheme, "--file-selection-surface")).toBe("var(--selection-surface)");
+    expect(tokenValue(cyberpunkTheme, "--file-selection-foreground")).toBe(tokenValue(cyberpunkTheme, "--block-active-endpoint-text"));
+    expect(tokenValue(cyberpunkTheme, "--file-selection-secondary-foreground")).toBe(tokenValue(cyberpunkTheme, "--block-active-endpoint-text"));
+    expect(tokenValue(cyberpunkTheme, "--file-selection-marker")).toBe("var(--block-border-active)");
+    expect(tokenValue(theme, "--file-selection-foreground")).toBe("var(--text-strong)");
+    expect(tokenValue(theme, "--file-selection-secondary-foreground")).toBe("var(--dim)");
+    expect(tokenValue(lightTheme, "--file-selection-foreground")).toBe("var(--text-strong)");
+    expect(tokenValue(lightTheme, "--file-selection-secondary-foreground")).toBe("var(--dim)");
     expect(tokenValue(theme, "--file-active-surface")).toContain("117,230,207");
+    expect(tokenValue(theme, "--file-active-marker")).toBe("var(--accent)");
     expect(tokenValue(theme, "--file-selection-surface")).toContain("95,179,255");
     expect(tokenValue(lightTheme, "--file-active-surface")).toContain("22,123,105");
+    expect(tokenValue(lightTheme, "--file-active-marker")).toBe("var(--accent)");
     expect(tokenValue(lightTheme, "--file-selection-surface")).toContain("18,111,187");
     for (const preset of [theme, lightTheme, cyberpunkTheme]) {
       expect(tokenValue(preset, "--editor-active-line")).toBe("var(--file-active-surface)");
-      expect(tokenValue(preset, "--editor-selection")).toBe("var(--file-selection-surface)");
-      expect(tokenValue(preset, "--editor-selection-foreground")).toBe("var(--file-selection-foreground)");
       expect(tokenValue(preset, "--editor-selection-marker")).toBe("var(--file-selection-marker)");
     }
+    expect(tokenValue(theme, "--editor-selection-foreground")).toBe("var(--editor-foreground)");
+    expect(tokenValue(lightTheme, "--editor-selection-foreground")).toBe("var(--editor-foreground)");
+    expect(tokenValue(cyberpunkTheme, "--editor-selection-foreground")).toBe("#f99197");
+    expect(tokenValue(theme, "--editor-selection")).toBe("var(--file-selection-surface)");
+    expect(tokenValue(lightTheme, "--editor-selection")).toBe("var(--file-selection-surface)");
+    expect(tokenValue(cyberpunkTheme, "--editor-selection")).toBe("rgba(252,238,10,.24)");
+    expect(contrastRatio(
+      tokenHex(cyberpunkTheme, "--editor-selection-foreground"),
+      compositeRgbaOverHex(
+        tokenValue(cyberpunkTheme, "--editor-selection"),
+        tokenHex(cyberpunkTheme, "--editor-background"),
+      ),
+    ), "editor selection contrast").toBeGreaterThanOrEqual(4.5);
     expect(tokenValue(cyberpunkTheme, "--workspace-tab-active-text")).toBe("var(--text-strong)");
     expect(tokenValue(cyberpunkTheme, "--brand-plate-background")).toBe(tokenValue(theme, "--brand-plate-background"));
     expect(tokenValue(cyberpunkTheme, "--brand-plate-border")).toBe(tokenValue(theme, "--brand-plate-border"));
@@ -337,7 +356,10 @@ describe("application theme contract", () => {
     expect(styles).toContain(".file-code-editor .cm-selectionBackground{background:var(--editor-selection)!important;box-shadow:none}");
     expect(styles).toContain(".file-code-editor .cm-content::selection,.file-code-editor .cm-content ::selection{color:var(--editor-selection-foreground)}");
     expect(fileBrowser).toContain(".file-row:hover,.file-row:focus-visible{color:var(--text-strong);background:var(--file-active-surface)");
-    expect(fileBrowser).toContain(".file-row[data-selected]{background:var(--file-selection-surface);box-shadow:inset 2px 0 var(--file-selection-marker)}");
+    expect(fileBrowser).toContain("box-shadow:inset 2px 0 color-mix(in srgb,var(--file-active-marker) 72%,transparent)");
+    expect(fileBrowser).toContain(".file-row[data-selected]{background:var(--file-selection-surface);box-shadow:inset 0 0 0 1px var(--file-selection-marker)}");
+    expect(fileBrowser).toContain(".file-row[data-selected] .file-name{color:var(--file-selection-foreground)}");
+    expect(fileBrowser).toContain(".file-row[data-selected] .file-name small,.file-row[data-selected]>span:not(:first-child){color:var(--file-selection-secondary-foreground)}");
     expect(lightOverrides).toContain(':root[data-theme="light"] .file-row:hover');
     expect(lightOverrides).toContain('background:var(--file-active-surface)');
     expect(lightOverrides).toContain(':root[data-theme="light"] .file-row[data-selected]');
@@ -401,6 +423,17 @@ function tokenValue(css: string, token: string): string {
 function contrastRatio(first: string, second: string): number {
   const [lighter, darker] = [relativeLuminance(first), relativeLuminance(second)].sort((a, b) => b - a);
   return (lighter + 0.05) / (darker + 0.05);
+}
+
+function compositeRgbaOverHex(foreground: string, background: string): string {
+  const match = foreground.match(/^rgba\((\d+),(\d+),(\d+),(\.?\d+)\)$/);
+  if (!match) throw new Error(`Invalid RGBA color: ${foreground}`);
+  const alpha = Number.parseFloat(match[4]);
+  const backgroundChannels = [1, 3, 5].map((offset) => Number.parseInt(background.slice(offset, offset + 2), 16));
+  const channels = match.slice(1, 4).map((channel, index) => (
+    Math.round(Number.parseInt(channel, 10) * alpha + backgroundChannels[index] * (1 - alpha))
+  ));
+  return `#${channels.map((channel) => channel.toString(16).padStart(2, "0")).join("")}`;
 }
 
 function relativeLuminance(hex: string): number {

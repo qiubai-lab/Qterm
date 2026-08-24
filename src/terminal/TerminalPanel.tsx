@@ -9,6 +9,7 @@ import { DialogFrame } from "../components/dialogs/DialogFrame";
 import { useWorkspace } from "../workspace/WorkspaceProvider";
 import { parseOsc7Cwd } from "./osc7";
 import { createResizeScheduler, type ResizeScheduler } from "./resizeScheduler";
+import { createTerminalInputScheduler, type TerminalInputScheduler } from "./terminalInputScheduler";
 import { bindTerminalTheme, readTerminalTheme } from "./terminalTheme";
 
 interface TerminalView {
@@ -20,7 +21,8 @@ interface TerminalView {
   cwdHandler: { dispose: () => void };
   onCwd: (cwd: string) => void;
   onKey: (event: KeyboardEvent) => boolean;
-  write: (data: string) => void;
+  write: (data: string) => Promise<void>;
+  inputScheduler: TerminalInputScheduler;
   resize: { send: (columns: number, rows: number) => Promise<void> };
   resizeScheduler: ResizeScheduler;
   themeBinding: { dispose: () => void };
@@ -47,6 +49,7 @@ export function TerminalPanel({ blockId, sessionKey, visible, local }: { blockId
   const { hydrated = true, localTerminalCapabilities, registerWriter, setBlockCwd, startLocalBlock, writeBlock, resizeBlock, clearBlockBuffer, runtimes } = useWorkspace();
   const windowsPty = local ? localTerminalCapabilities?.windowsPty ?? undefined : undefined;
   const inputEnabled = runtimes[blockId]?.status === "connected";
+  const connectedSessionId = runtimes[blockId]?.sessionId ?? null;
   const clipboardPlatform = terminalClipboardPlatform();
   const writeRef = useRef(writeBlock);
   const resizeRef = useRef(resizeBlock);
@@ -74,17 +77,22 @@ export function TerminalPanel({ blockId, sessionKey, visible, local }: { blockId
 
   const requestPaste = useCallback(async () => {
     if (!inputEnabled) return;
-    let text: string;
-    try { text = await readClipboardText(); }
-    catch { closeContextMenu(); return; }
-    closeContextMenu(false);
-    if (!text) { restoreTerminalFocus(); return; }
-    if (isGuardedPaste(text)) {
-      setPendingPaste({ text, lines: pasteLineCount(text), characters: text.length });
-      return;
-    }
-    viewRef.current?.terminal.paste(text);
-    restoreTerminalFocus();
+    const view = viewRef.current;
+    if (!view) return;
+    await view.inputScheduler.runExclusive(async (capture) => {
+      let text: string;
+      try { text = await readClipboardText(); }
+      catch { closeContextMenu(); return; }
+      if (viewRef.current !== view) return;
+      closeContextMenu(false);
+      if (!text) { restoreTerminalFocus(); return; }
+      if (isGuardedPaste(text)) {
+        setPendingPaste({ text, lines: pasteLineCount(text), characters: text.length });
+        return;
+      }
+      await capture(() => view.terminal.paste(text));
+      restoreTerminalFocus();
+    });
   }, [closeContextMenu, inputEnabled, restoreTerminalFocus]);
 
   const selectAll = useCallback(() => {
@@ -101,7 +109,7 @@ export function TerminalPanel({ blockId, sessionKey, visible, local }: { blockId
     const container = containerRef.current;
     if (!container) return;
     const view = acquireTerminalView(sessionKey, container, windowsPty, local ? 50 : 0);
-    view.write = (data) => { void writeRef.current(blockId, new TextEncoder().encode(data)); };
+    view.write = (data) => writeRef.current(blockId, new TextEncoder().encode(data));
     view.resize.send = (columns, rows) => resizeRef.current(blockId, columns, rows);
     view.onCwd = (cwd) => setBlockCwd(blockId, cwd);
     viewRef.current = view;
@@ -113,10 +121,14 @@ export function TerminalPanel({ blockId, sessionKey, visible, local }: { blockId
           view.decoder = new TextDecoder();
           view.terminal.reset();
         } else if (local && windowsPty?.backend === "conpty") {
-          view.write(CLEAR_SCREEN_INPUT);
+          void view.inputScheduler.send(CLEAR_SCREEN_INPUT);
         } else {
           view.terminal.clear();
         }
+      },
+      () => {
+        restoreTerminalLayout(view);
+        return { columns: view.terminal.cols, rows: view.terminal.rows };
       },
     );
     const observer = new ResizeObserver(() => {
@@ -128,7 +140,7 @@ export function TerminalPanel({ blockId, sessionKey, visible, local }: { blockId
     return () => {
       observer.disconnect();
       unregisterWriter();
-      view.write = () => undefined;
+      view.write = async () => undefined;
       view.resize.send = async () => undefined;
       view.onCwd = () => undefined;
       view.onKey = () => true;
@@ -142,7 +154,7 @@ export function TerminalPanel({ blockId, sessionKey, visible, local }: { blockId
     if (!view) return;
     view.onKey = (event) => {
       if (!handleClipboardShortcut(event, clipboardPlatform, view.terminal, inputEnabled, copySelection, requestPaste)) return false;
-      return handleMacWordNavigationShortcut(event, clipboardPlatform, view.write);
+      return handleMacWordNavigationShortcut(event, clipboardPlatform, (data) => { void view.inputScheduler.send(data); });
     };
     return () => { view.onKey = () => true; };
   }, [clipboardPlatform, copySelection, inputEnabled, requestPaste]);
@@ -171,6 +183,25 @@ export function TerminalPanel({ blockId, sessionKey, visible, local }: { blockId
     frame = requestAnimationFrame(restore);
     return () => { cancelled = true; cancelAnimationFrame(frame); };
   }, [blockId, local, visible]);
+
+  useEffect(() => {
+    if (local || !visible || !inputEnabled || !connectedSessionId) return;
+    let frame = 0;
+    let cancelled = false;
+    let attempts = 0;
+    const synchronize = () => {
+      if (cancelled) return;
+      const view = viewRef.current;
+      if (!view || !restoreTerminalLayout(view)) {
+        attempts += 1;
+        if (attempts < 12) frame = requestAnimationFrame(synchronize);
+        return;
+      }
+      view.resizeScheduler.request(view.terminal.cols, view.terminal.rows, true);
+    };
+    frame = requestAnimationFrame(synchronize);
+    return () => { cancelled = true; cancelAnimationFrame(frame); };
+  }, [blockId, connectedSessionId, inputEnabled, local, visible]);
 
   useEffect(() => {
     if (!contextMenu) return;
@@ -235,7 +266,8 @@ export function TerminalPanel({ blockId, sessionKey, visible, local }: { blockId
 
   function confirmPaste() {
     if (!pendingPaste || !inputEnabled) return;
-    viewRef.current?.terminal.paste(pendingPaste.text);
+    const view = viewRef.current;
+    if (view) void view.inputScheduler.runExclusive((capture) => capture(() => view.terminal.paste(pendingPaste.text)));
     setPendingPaste(null);
     restoreTerminalFocus();
   }
@@ -374,6 +406,8 @@ function acquireTerminalView(sessionKey: string, container: HTMLElement, windows
   const resize: TerminalView["resize"] = { send: async () => undefined };
   const resizeScheduler = createResizeScheduler((columns, rows) => resize.send(columns, rows), resizeDelayMs);
   const themeBinding = bindTerminalTheme((theme) => { terminal.options.theme = theme; });
+  const writeTarget: { send: (data: string) => Promise<void> } = { send: () => Promise.resolve() };
+  const inputScheduler = createTerminalInputScheduler((data) => writeTarget.send(data));
   const view: TerminalView = {
     terminal,
     fit,
@@ -383,14 +417,16 @@ function acquireTerminalView(sessionKey: string, container: HTMLElement, windows
     cwdHandler: { dispose: () => undefined },
     onCwd: () => undefined,
     onKey: () => true,
-    write: () => undefined,
+    write: async () => undefined,
+    inputScheduler,
     resize,
     resizeScheduler,
     themeBinding,
     disposeTimer: null,
   };
+  writeTarget.send = (data) => view.write(data);
   terminal.attachCustomKeyEventHandler((event) => view.onKey(event));
-  view.input = terminal.onData((data) => view.write(data));
+  view.input = terminal.onData((data) => { void view.inputScheduler.send(data); });
   view.cwdHandler = terminal.parser.registerOscHandler(7, (data) => {
     const cwd = parseOsc7Cwd(data);
     if (cwd) view.onCwd(cwd);
@@ -417,6 +453,7 @@ function scheduleTerminalViewDisposal(sessionKey: string, view: TerminalView) {
   view.disposeTimer = window.setTimeout(() => {
     if (terminalViews.get(sessionKey) !== view || view.disposeTimer === null) return;
     view.input.dispose();
+    view.inputScheduler.dispose();
     view.cwdHandler.dispose();
     view.resizeScheduler.dispose();
     view.themeBinding.dispose();

@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   terminals: [] as Array<{
+    cols: number;
+    rows: number;
     element: HTMLElement | null;
     options: Record<string, unknown>;
     dispose: ReturnType<typeof vi.fn>;
@@ -16,18 +18,20 @@ const mocks = vi.hoisted(() => ({
     hasSelection: ReturnType<typeof vi.fn>;
     getSelection: ReturnType<typeof vi.fn>;
     keyHandler: ((event: KeyboardEvent) => boolean) | null;
+    dataHandler: ((data: string) => void) | null;
   }>,
   fits: [] as Array<{ fit: ReturnType<typeof vi.fn>; proposeDimensions: ReturnType<typeof vi.fn> }>,
-  registerWriter: vi.fn<(blockId: string, writer: (data: Uint8Array) => void, clearer: (reset: boolean) => void) => () => void>(() => vi.fn()),
+  registerWriter: vi.fn<(blockId: string, writer: (data: Uint8Array) => void, clearer: (reset: boolean) => void, readSize: () => { columns: number; rows: number }) => () => void>(() => vi.fn()),
   setBlockCwd: vi.fn(),
   startLocalBlock: vi.fn(),
   hydrated: true,
   localTerminalCapabilities: { windowsPty: { backend: "conpty" as const, buildNumber: 26100 } } as { windowsPty: { backend: "conpty"; buildNumber: number } | null } | null,
   writeBlock: vi.fn().mockResolvedValue(undefined),
+  resizeBlock: vi.fn().mockResolvedValue(undefined),
   clearBlockBuffer: vi.fn(),
   writeClipboardText: vi.fn().mockResolvedValue(undefined),
   readClipboardText: vi.fn().mockResolvedValue(""),
-  runtimes: {} as Record<string, { status: string }>,
+  runtimes: {} as Record<string, { status: string; sessionId?: string | null }>,
 }));
 
 vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({
@@ -56,7 +60,8 @@ vi.mock("@xterm/xterm", () => ({
     refresh = vi.fn();
     clear = vi.fn();
     reset = vi.fn();
-    paste = vi.fn();
+    dataHandler: ((data: string) => void) | null = null;
+    paste = vi.fn((data: string) => this.dataHandler?.(data));
     focus = vi.fn();
     selectAll = vi.fn();
     hasSelection = vi.fn(() => false);
@@ -79,7 +84,8 @@ vi.mock("@xterm/xterm", () => ({
       container.append(this.element);
     }
 
-    onData() {
+    onData(handler: (data: string) => void) {
+      this.dataHandler = handler;
       return { dispose: vi.fn() };
     }
 
@@ -99,7 +105,7 @@ vi.mock("../workspace/WorkspaceProvider", () => ({
     writeBlock: mocks.writeBlock,
     clearBlockBuffer: mocks.clearBlockBuffer,
     runtimes: mocks.runtimes,
-    resizeBlock: vi.fn(),
+    resizeBlock: mocks.resizeBlock,
   }),
 }));
 
@@ -123,6 +129,7 @@ describe("TerminalPanel view lifetime", () => {
     mocks.registerWriter.mockClear();
     mocks.startLocalBlock.mockClear();
     mocks.writeBlock.mockClear();
+    mocks.resizeBlock.mockClear();
     mocks.clearBlockBuffer.mockClear();
     mocks.writeClipboardText.mockClear();
     mocks.readClipboardText.mockReset().mockResolvedValue("");
@@ -221,12 +228,13 @@ describe("TerminalPanel view lifetime", () => {
     view.unmount();
   });
 
-  it("asks a local ConPTY shell to clear so its cursor stays synchronized with xterm", () => {
+  it("asks a local ConPTY shell to clear so its cursor stays synchronized with xterm", async () => {
     const view = render(<TerminalPanel blockId="block-clear-local" sessionKey="block-clear-local:local" local visible/>);
     const terminal = mocks.terminals[mocks.terminals.length - 1];
     const clear = mocks.registerWriter.mock.calls[mocks.registerWriter.mock.calls.length - 1]?.[2];
 
     clear?.(false);
+    await act(async () => undefined);
 
     expect(mocks.writeBlock).toHaveBeenCalledOnce();
     expect(mocks.writeBlock.mock.calls[0]?.[0]).toBe("block-clear-local");
@@ -315,6 +323,34 @@ describe("TerminalPanel view lifetime", () => {
     expect(terminal.refresh).toHaveBeenCalledWith(0, 23);
     view.unmount();
   });
+
+  it("registers a live terminal size reader that refits before an SSH connection", () => {
+    const view = render(<TerminalPanel blockId="block-size-reader" sessionKey="block-size-reader:ssh" local={false} visible/>);
+    const terminal = mocks.terminals[mocks.terminals.length - 1];
+    const fit = mocks.fits[mocks.fits.length - 1];
+    const readSize = mocks.registerWriter.mock.calls[mocks.registerWriter.mock.calls.length - 1]?.[3];
+    terminal.cols = 93;
+    terminal.rows = 31;
+    const fitsBeforeRead = fit.fit.mock.calls.length;
+
+    expect(readSize?.()).toEqual({ columns: 93, rows: 31 });
+    expect(fit.fit.mock.calls.length).toBeGreaterThan(fitsBeforeRead);
+    view.unmount();
+  });
+
+  it("force-synchronizes the current dimensions when an SSH session id becomes available", async () => {
+    mocks.runtimes = { "block-ssh-size": { status: "connecting", sessionId: null } };
+    const view = render(<TerminalPanel blockId="block-ssh-size" sessionKey="block-ssh-size:ssh" local={false} visible/>);
+    await act(async () => vi.runAllTimersAsync());
+    mocks.resizeBlock.mockClear();
+
+    mocks.runtimes = { "block-ssh-size": { status: "connected", sessionId: "ssh-1" } };
+    view.rerender(<TerminalPanel blockId="block-ssh-size" sessionKey="block-ssh-size:ssh" local={false} visible/>);
+    await act(async () => vi.runAllTimersAsync());
+
+    expect(mocks.resizeBlock).toHaveBeenCalledWith("block-ssh-size", 80, 24);
+    view.unmount();
+  });
 });
 
 describe("TerminalPanel clipboard interaction", () => {
@@ -322,6 +358,7 @@ describe("TerminalPanel clipboard interaction", () => {
     mocks.terminals.length = 0;
     mocks.registerWriter.mockClear();
     mocks.writeBlock.mockClear();
+    mocks.resizeBlock.mockClear();
     mocks.clearBlockBuffer.mockClear();
     mocks.writeClipboardText.mockClear();
     mocks.readClipboardText.mockReset().mockResolvedValue("");
@@ -371,7 +408,11 @@ describe("TerminalPanel clipboard interaction", () => {
     expect(screen.queryByText("secret one")).not.toBeInTheDocument();
     expect(terminal.paste).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByRole("button", { name: "粘贴到终端" }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "粘贴到终端" }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
     expect(terminal.paste).toHaveBeenLastCalledWith("secret one\nsecret two");
     view.unmount();
   });
@@ -432,6 +473,29 @@ describe("TerminalPanel clipboard interaction", () => {
     view.unmount();
   });
 
+  it("keeps a control key pressed during clipboard IPC behind the pasted text", async () => {
+    vi.stubGlobal("navigator", { platform: "Win32", userAgent: "Windows" });
+    let resolveClipboard: ((text: string) => void) | null = null;
+    mocks.readClipboardText.mockReturnValue(new Promise<string>((resolve) => { resolveClipboard = resolve; }));
+    const view = render(<TerminalPanel blockId="block-keys" sessionKey="block-keys:paste-order" local={false} visible/>);
+    const terminal = mocks.terminals[0];
+
+    expect(terminal.keyHandler?.(new KeyboardEvent("keydown", { key: "v", ctrlKey: true }))).toBe(false);
+    terminal.dataHandler?.("\x03");
+    expect(mocks.writeBlock).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolveClipboard?.("/data/models/Qwen");
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(terminal.paste).toHaveBeenCalledWith("/data/models/Qwen");
+    expect(mocks.writeBlock.mock.calls.map(([, data]) => new TextDecoder().decode(data))).toEqual(["/data/models/Qwen", "\x03"]);
+    view.unmount();
+  });
+
   it("preserves plain Ctrl+V for Linux terminal programs while supporting Ctrl+Shift+V", async () => {
     vi.stubGlobal("navigator", { platform: "Linux x86_64", userAgent: "Linux" });
     mocks.readClipboardText.mockResolvedValue("clipboard");
@@ -445,7 +509,7 @@ describe("TerminalPanel clipboard interaction", () => {
     view.unmount();
   });
 
-  it("maps macOS Ctrl or Option with Left and Right to shell word navigation", () => {
+  it("maps macOS Ctrl or Option with Left and Right to shell word navigation", async () => {
     vi.stubGlobal("navigator", { platform: "MacIntel", userAgent: "Macintosh" });
     const view = render(<TerminalPanel blockId="block-keys" sessionKey="block-keys:local" local={false} visible/>);
     const terminal = mocks.terminals[0];
@@ -454,6 +518,8 @@ describe("TerminalPanel clipboard interaction", () => {
     expect(terminal.keyHandler?.(new KeyboardEvent("keydown", { key: "ArrowRight", ctrlKey: true }))).toBe(false);
     expect(terminal.keyHandler?.(new KeyboardEvent("keydown", { key: "ArrowLeft", altKey: true }))).toBe(false);
     expect(terminal.keyHandler?.(new KeyboardEvent("keydown", { key: "ArrowRight", altKey: true }))).toBe(false);
+
+    await act(async () => undefined);
 
     expect(mocks.writeBlock).toHaveBeenCalledTimes(4);
     expect(Array.from(mocks.writeBlock.mock.calls[0]?.[1] ?? [])).toEqual([27, 98]);

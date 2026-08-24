@@ -41,6 +41,14 @@ impl SessionState {
 pub struct SessionConnectDto {
     profile_id: String,
     auth: SessionAuthDto,
+    terminal_size: Option<TerminalSizeDto>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct TerminalSizeDto {
+    columns: u32,
+    rows: u32,
 }
 
 #[derive(Deserialize)]
@@ -138,14 +146,20 @@ pub(crate) fn build_connect_request(
     purpose: SessionPurpose,
     terminal_output: Arc<dyn Fn(Vec<u8>) + Send + Sync>,
 ) -> Result<SessionConnectRequest, IpcError> {
-    let target_auth = match input.auth {
+    let SessionConnectDto {
+        profile_id,
+        auth,
+        terminal_size: requested_terminal_size,
+    } = input;
+    let terminal_size = terminal_size(requested_terminal_size, purpose)?;
+    let target_auth = match auth {
         SessionAuthDto::Password { password } => AuthRequest::Password(SecretText::new(password)),
         SessionAuthDto::SshAgent {} => AuthRequest::SshAgent,
         SessionAuthDto::StoredCredential { credential_id } => {
             credential_state.resolve_auth(&credential_id)?
         }
     };
-    let profiles = profile_state.route(&input.profile_id)?;
+    let profiles = profile_state.route(&profile_id)?;
     let route_length = profiles.len();
     let mut target_auth = Some(target_auth);
     let route = profiles
@@ -170,9 +184,35 @@ pub(crate) fn build_connect_request(
     Ok(SessionConnectRequest {
         route,
         purpose,
-        profile_id: Some(input.profile_id),
+        profile_id: Some(profile_id),
+        terminal_size,
         terminal_output,
     })
+}
+
+fn terminal_size(
+    requested: Option<TerminalSizeDto>,
+    purpose: SessionPurpose,
+) -> Result<Option<TerminalSize>, IpcError> {
+    if purpose != SessionPurpose::Terminal {
+        return Ok(None);
+    }
+    let requested = requested.ok_or_else(|| {
+        IpcError::from(ApplicationError::new(
+            ApplicationErrorCode::InvalidTerminalInput,
+            "SSH 终端缺少初始窗口尺寸",
+            false,
+        ))
+    })?;
+    TerminalSize::new(requested.columns, requested.rows)
+        .map(Some)
+        .map_err(|_| {
+            IpcError::from(ApplicationError::new(
+                ApplicationErrorCode::InvalidTerminalInput,
+                "终端窗口尺寸无效",
+                false,
+            ))
+        })
 }
 
 fn configured_jump_auth(
@@ -477,7 +517,7 @@ fn failure_message(failure: SessionFailure) -> (&'static str, &'static str) {
 mod tests {
     use serde_json::json;
 
-    use super::{SessionConnectDto, SessionEventDto};
+    use super::{SessionConnectDto, SessionEventDto, terminal_size};
     use crate::domain::session::{
         HostEndpoint, RouteNodeMetadata, RouteNodeRole, RouteStage, SessionEvent, SessionFailure,
     };
@@ -532,6 +572,54 @@ mod tests {
             "auth": { "method": "sshAgent", "password": "must-not-be-accepted" }
         });
         assert!(serde_json::from_value::<SessionConnectDto>(with_secret).is_err());
+    }
+
+    #[test]
+    fn terminal_connect_input_validates_initial_pty_size() {
+        let input = json!({
+            "profileId": "profile-1",
+            "auth": { "method": "sshAgent" },
+            "terminalSize": { "columns": 93, "rows": 31 }
+        });
+        let input = serde_json::from_value::<SessionConnectDto>(input).expect("terminal input");
+        assert_eq!(
+            terminal_size(
+                input.terminal_size,
+                crate::infrastructure::ssh::client::SessionPurpose::Terminal
+            )
+            .expect("valid size"),
+            Some(crate::domain::session::TerminalSize::new(93, 31).expect("terminal size"))
+        );
+
+        let invalid = json!({
+            "profileId": "profile-1",
+            "auth": { "method": "sshAgent" },
+            "terminalSize": { "columns": 0, "rows": 31 }
+        });
+        let invalid =
+            serde_json::from_value::<SessionConnectDto>(invalid).expect("transport input");
+        assert!(
+            terminal_size(
+                invalid.terminal_size,
+                crate::infrastructure::ssh::client::SessionPurpose::Terminal
+            )
+            .is_err()
+        );
+        assert!(
+            terminal_size(
+                None,
+                crate::infrastructure::ssh::client::SessionPurpose::Terminal
+            )
+            .is_err()
+        );
+        assert!(
+            terminal_size(
+                None,
+                crate::infrastructure::ssh::client::SessionPurpose::Files
+            )
+            .expect("file sessions do not need a PTY size")
+            .is_none()
+        );
     }
 
     #[test]

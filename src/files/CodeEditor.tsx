@@ -54,6 +54,9 @@ export function CodeEditor({ value, language, readOnly = false, onChange, onSave
           EditorView.lineWrapping,
           EditorState.readOnly.of(readOnly),
           EditorView.editable.of(!readOnly),
+          EditorView.editorAttributes.of((editorView) => (
+            editorView.state.selection.ranges.some((range) => !range.empty) ? { class: "cm-has-selection" } : null
+          )),
           languageExtension,
           EditorView.updateListener.of((update) => {
             if (!readOnly && update.docChanged) onChangeRef.current(update.state.doc.toString());

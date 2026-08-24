@@ -3,8 +3,10 @@ interface TerminalSize {
   rows: number;
 }
 
+type PendingTerminalSize = TerminalSize & { forced: boolean };
+
 export interface ResizeScheduler {
-  request: (columns: number, rows: number) => void;
+  request: (columns: number, rows: number, force?: boolean) => void;
   dispose: () => void;
 }
 
@@ -12,7 +14,7 @@ export function createResizeScheduler(
   send: (columns: number, rows: number) => Promise<void>,
   delayMs = 0,
 ): ResizeScheduler {
-  let pending: TerminalSize | null = null;
+  let pending: PendingTerminalSize | null = null;
   let inFlight: TerminalSize | null = null;
   let lastSuccessful: TerminalSize | null = null;
   let timer: ReturnType<typeof setTimeout> | null = null;
@@ -37,8 +39,9 @@ export function createResizeScheduler(
     }
     if (succeeded) lastSuccessful = next;
     inFlight = null;
-    if (disposed || !pending) return;
-    if (sameSize(pending, lastSuccessful)) {
+    const nextPending = pending as PendingTerminalSize | null;
+    if (disposed || !nextPending) return;
+    if (!nextPending.forced && sameSize(nextPending, lastSuccessful)) {
       pending = null;
       return;
     }
@@ -54,9 +57,14 @@ export function createResizeScheduler(
   };
 
   return {
-    request(columns, rows) {
+    request(columns, rows, force = false) {
       if (disposed) return;
       const next = { columns, rows };
+      if (force) {
+        pending = { ...next, forced: true };
+        schedule();
+        return;
+      }
       if (sameSize(next, pending)) return;
       if (sameSize(next, inFlight)) {
         pending = null;
@@ -68,7 +76,7 @@ export function createResizeScheduler(
         clearTimer();
         return;
       }
-      pending = next;
+      pending = { ...next, forced: false };
       schedule();
     },
     dispose() {

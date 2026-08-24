@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => ({
   onFailure: vi.fn(),
   unregisterWriters: [] as Array<() => void>,
   clearers: [vi.fn(), vi.fn()],
+  terminalSizes: [{ columns: 93, rows: 31 }, { columns: 117, rows: 42 }],
   localConnections: [] as Array<{ event: (event: { type: "stateChanged"; state: "connected" | "closed" }) => void; terminal: (data: Uint8Array) => void }>,
   networkConnections: [] as Array<{ event: (event: SessionEvent) => void }>,
 }));
@@ -59,9 +60,9 @@ function Harness() {
     <output>{ids.length}</output>
     <output data-testid="recent-profiles">{document.recentProfileIds.join(",")}</output>
     <button onClick={() => dispatch({ type: "splitBlock", workspaceId: activeWorkspace.id, blockId: activeWorkspace.activeBlockId, direction: "horizontal" })}>split</button>
-    <button onClick={() => ids.forEach((id, index) => registerWriter(id, mocks.writers[index], mocks.clearers[index]))}>register</button>
-    <button onClick={() => mocks.unregisterWriters.push(registerWriter(ids[0], mocks.writers[0], mocks.clearers[0]))}>register-old-writer</button>
-    <button onClick={() => mocks.unregisterWriters.push(registerWriter(ids[0], mocks.writers[1], mocks.clearers[1]))}>register-new-writer</button>
+    <button onClick={() => ids.forEach((id, index) => registerWriter(id, mocks.writers[index], mocks.clearers[index], () => mocks.terminalSizes[index]))}>register</button>
+    <button onClick={() => mocks.unregisterWriters.push(registerWriter(ids[0], mocks.writers[0], mocks.clearers[0], () => mocks.terminalSizes[0]))}>register-old-writer</button>
+    <button onClick={() => mocks.unregisterWriters.push(registerWriter(ids[0], mocks.writers[1], mocks.clearers[1], () => mocks.terminalSizes[1]))}>register-new-writer</button>
     <button onClick={() => mocks.unregisterWriters[0]?.()}>unregister-old-writer</button>
     <button onClick={() => clearBlockBuffer(ids[0])}>clear-buffer</button>
     <button onClick={() => void startLocalBlock(ids[0], 100, 30)}>local</button>
@@ -140,6 +141,25 @@ describe("WorkspaceProvider multi-session routing", () => {
     expect(mocks.writers[0]).toHaveBeenCalledWith(Uint8Array.from([65]));
     expect(mocks.writers[0]).not.toHaveBeenCalledWith(Uint8Array.from([66]));
     expect(mocks.writers[1]).toHaveBeenCalledWith(Uint8Array.from([66]));
+  });
+
+  it("starts SSH with the current dimensions registered by the terminal view", async () => {
+    mocks.connectSession.mockResolvedValue("ssh-sized");
+    const user = userEvent.setup();
+    render(<WorkspaceProvider><Harness/></WorkspaceProvider>);
+
+    await user.click(screen.getByRole("button", { name: "register" }));
+    await user.click(screen.getByRole("button", { name: "connect" }));
+
+    expect(mocks.connectSession).toHaveBeenCalledWith(
+      {
+        profileId: "profile-1",
+        auth: { method: "password", password: "ephemeral" },
+        terminalSize: { columns: 93, rows: 31 },
+      },
+      expect.any(Function),
+      expect.any(Function),
+    );
   });
 
   it("routes a default local shell independently and closes it before SSH", async () => {

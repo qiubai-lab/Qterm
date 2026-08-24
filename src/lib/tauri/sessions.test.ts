@@ -37,13 +37,18 @@ describe("SSH session IPC client", () => {
       {
         profileId: "profile-1",
         auth: { method: "password", password: "temporary" },
+        terminalSize: { columns: 93, rows: 31 },
       },
       onEvent,
       onTerminalData,
     );
 
     expect(mocks.invoke).toHaveBeenCalledWith("session_connect", {
-      input: expect.any(Object),
+      input: {
+        profileId: "profile-1",
+        auth: { method: "password", password: "temporary" },
+        terminalSize: { columns: 93, rows: 31 },
+      },
       onEvent: expect.any(Object),
       onTerminal: expect.any(Object),
     });

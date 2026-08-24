@@ -15,6 +15,7 @@ use tokio::sync::{mpsc, oneshot};
 use super::{
     HostKeyDecision, PendingHostKey, SessionConnectRequest, SessionEntry, SessionPurpose,
     SessionRouteNode, SshSessionManager, TransferRequest, scan_local_upload_entries,
+    session::initial_terminal_size,
 };
 use crate::{
     domain::{
@@ -22,7 +23,7 @@ use crate::{
         network::ForwardRuleKind,
         session::{
             HostEndpoint, PresentedHostKey, RouteNodeMetadata, RouteNodeRole, SessionEvent,
-            SessionFailure, SessionState,
+            SessionFailure, SessionState, TerminalSize,
         },
         transfer::{RemotePath, TransferEvent},
     },
@@ -58,8 +59,27 @@ fn connect_request(
         }],
         purpose,
         profile_id,
+        terminal_size: (purpose == SessionPurpose::Terminal)
+            .then(|| TerminalSize::new(93, 31).expect("terminal size")),
         terminal_output,
     }
+}
+
+#[test]
+fn terminal_connect_request_keeps_the_initial_pty_size() {
+    let request = connect_request(
+        HostEndpoint::new("example.test", 22).expect("endpoint"),
+        "user".into(),
+        AuthRequest::SshAgent,
+        SessionPurpose::Terminal,
+        Some("profile-1".into()),
+        Arc::new(|_| {}),
+    );
+
+    assert_eq!(
+        initial_terminal_size(&request),
+        TerminalSize::new(93, 31).expect("terminal size")
+    );
 }
 
 #[test]
@@ -395,6 +415,7 @@ fn local_openssh_connects_to_a_target_through_a_jump_profile() {
             ],
             purpose: SessionPurpose::Terminal,
             profile_id: Some("target-profile".into()),
+            terminal_size: Some(TerminalSize::new(101, 37).expect("terminal size")),
             terminal_output: Arc::new(move |data| {
                 let _ = terminal_sender.send(data);
             }),

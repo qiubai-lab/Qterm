@@ -802,7 +802,8 @@ describe("application layout styles", () => {
     expect(declarations(".file-preview-toolbar .file-edit-button,.file-preview-toolbar .file-cancel-button,.file-preview-toolbar .file-save-button")).toContain("height:23px");
     expect(declarations(".file-preview-toolbar .file-edit-button,.file-preview-toolbar .file-cancel-button,.file-preview-toolbar .file-save-button")).toContain("display:flex");
     expect(styles).toContain(".file-preview-toolbar .file-save-button{width:48px}");
-    expect(declarations(".file-code-editor:not([data-read-only]) .cm-cursor,.file-code-editor:not([data-read-only]) .cm-dropCursor")).toContain("border-left-color:var(--accent)");
+    expect(declarations(".file-code-editor:not([data-read-only]) .cm-cursor,.file-code-editor:not([data-read-only]) .cm-dropCursor")).toContain("border-left-color:var(--file-active-marker)");
+    expect(declarations(".file-code-editor:not([data-read-only]) .cm-content")).toContain("caret-color:var(--file-active-marker)");
     expect(styles).toContain(".connection-context-menu,.file-context-menu,.network-context-menu,.terminal-context-menu{animation:none}");
   });
 
@@ -853,14 +854,20 @@ describe("application layout styles", () => {
     expect(editor).toContain("font-size:var(--terminal-font-size)");
     expect(editor).toContain("line-height:var(--terminal-line-height)");
     expect(lastDeclarations(".file-code-editor .cm-activeLine")).toContain("background:var(--editor-active-line)");
+    expect(lastDeclarations(".file-code-editor .cm-editor.cm-has-selection .cm-activeLine")).toContain("background:transparent");
     expect(lastDeclarations(".file-code-editor .cm-activeLineGutter")).toContain("background:var(--editor-active-line)");
-    expect(lastDeclarations(".file-code-editor .cm-activeLineGutter")).toContain("color:var(--accent)");
+    expect(lastDeclarations(".file-code-editor .cm-activeLineGutter")).toContain("color:var(--file-active-marker)");
+    expect(lastDeclarations(".file-code-editor .cm-activeLineGutter")).toContain("color-mix(in srgb,var(--file-active-marker) 72%,transparent)");
     expect(lastDeclarations(".file-code-editor .cm-selectionBackground")).toContain("background:var(--editor-selection)!important");
     expect(lastDeclarations(".file-code-editor .cm-selectionBackground")).toContain("box-shadow:none");
     expect(lastDeclarations(".file-code-editor .cm-content::selection,.file-code-editor .cm-content ::selection")).toContain("color:var(--editor-selection-foreground)");
     expect(lastDeclarations(".file-row:hover,.file-row:focus-visible")).toContain("background:var(--file-active-surface)");
+    expect(lastDeclarations(".file-row:hover,.file-row:focus-visible")).toContain("color-mix(in srgb,var(--file-active-marker) 72%,transparent)");
+    expect(lastDeclarations(".file-row:hover .file-name svg,.file-row:focus-visible .file-name svg")).toContain("color:var(--file-active-marker)");
     expect(lastDeclarations(".file-row[data-selected]")).toContain("background:var(--file-selection-surface)");
-    expect(lastDeclarations(".file-row[data-selected]")).toContain("box-shadow:inset 2px 0 var(--file-selection-marker)");
+    expect(lastDeclarations(".file-row[data-selected]")).toContain("box-shadow:inset 0 0 0 1px var(--file-selection-marker)");
+    expect(lastDeclarations(".file-row[data-selected] .file-name")).toContain("color:var(--file-selection-foreground)");
+    expect(lastDeclarations(".file-row[data-selected] .file-name small,.file-row[data-selected]>span:not(:first-child)")).toContain("color:var(--file-selection-secondary-foreground)");
     expect(defaultCapability.permissions).toContain("clipboard-manager:allow-write-image");
     expect(defaultCapability.permissions).not.toContain("clipboard-manager:allow-read-image");
   });

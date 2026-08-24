@@ -1,5 +1,11 @@
 use super::*;
 
+pub(super) fn initial_terminal_size(request: &SessionConnectRequest) -> TerminalSize {
+    request
+        .terminal_size
+        .expect("terminal sessions have a validated initial size")
+}
+
 async fn connect_route(
     entry: Arc<SessionEntry>,
     host_keys: Arc<KnownHostService>,
@@ -337,8 +343,17 @@ pub(super) async fn run_session(
             return;
         }
     };
+    let terminal_size = initial_terminal_size(&request);
     if terminal
-        .request_pty(false, "xterm-256color", 80, 24, 0, 0, &[])
+        .request_pty(
+            false,
+            "xterm-256color",
+            terminal_size.columns,
+            terminal_size.rows,
+            0,
+            0,
+            &[],
+        )
         .await
         .is_err()
         || terminal.request_shell(false).await.is_err()

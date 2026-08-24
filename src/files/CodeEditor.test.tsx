@@ -36,6 +36,7 @@ describe("CodeEditor context menu", () => {
     expect(within(menu).getByRole("menuitem", { name: /剪切/ })).toBeDisabled();
     expect(within(menu).getByRole("menuitem", { name: /复制/ })).toBeDisabled();
     fireEvent.click(within(menu).getByRole("menuitem", { name: /全选/ }));
+    expect(view.container.querySelector(".cm-editor")).toHaveClass("cm-has-selection");
 
     fireEvent.contextMenu(content, { clientX: 80, clientY: 90 });
     menu = screen.getByRole("menu", { name: "文件编辑菜单" });
@@ -52,6 +53,7 @@ describe("CodeEditor context menu", () => {
     fireEvent.click(screen.getByRole("menuitem", { name: /剪切/ }));
     await waitFor(() => expect(onChange).toHaveBeenLastCalledWith(""));
     expect(writeClipboardText).toHaveBeenLastCalledWith("replacement");
+    expect(view.container.querySelector(".cm-editor")).not.toHaveClass("cm-has-selection");
   });
 
   it("keeps read-only previews non-mutating while allowing copy and select all", async () => {

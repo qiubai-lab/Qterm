@@ -48,8 +48,17 @@ export interface SessionConnectInput {
   auth: SessionAuth;
 }
 
+export interface TerminalSizeInput {
+  columns: number;
+  rows: number;
+}
+
+export interface TerminalSessionConnectInput extends SessionConnectInput {
+  terminalSize: TerminalSizeInput;
+}
+
 export function connectSession(
-  input: SessionConnectInput,
+  input: TerminalSessionConnectInput,
   onEvent: (event: SessionEvent) => void,
   onTerminalData: (data: Uint8Array) => void,
 ): Promise<string> {
