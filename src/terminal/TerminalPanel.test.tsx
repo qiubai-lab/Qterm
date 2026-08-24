@@ -17,10 +17,17 @@ const mocks = vi.hoisted(() => ({
     selectAll: ReturnType<typeof vi.fn>;
     hasSelection: ReturnType<typeof vi.fn>;
     getSelection: ReturnType<typeof vi.fn>;
+    loadAddon: ReturnType<typeof vi.fn>;
     keyHandler: ((event: KeyboardEvent) => boolean) | null;
     dataHandler: ((data: string) => void) | null;
   }>,
   fits: [] as Array<{ fit: ReturnType<typeof vi.fn>; proposeDimensions: ReturnType<typeof vi.fn> }>,
+  searches: [] as Array<{
+    findNext: ReturnType<typeof vi.fn>;
+    findPrevious: ReturnType<typeof vi.fn>;
+    clearDecorations: ReturnType<typeof vi.fn>;
+    resultHandler: ((result: { resultIndex: number; resultCount: number }) => void) | null;
+  }>,
   registerWriter: vi.fn<(blockId: string, writer: (data: Uint8Array) => void, clearer: (reset: boolean) => void, readSize: () => { columns: number; rows: number }) => () => void>(() => vi.fn()),
   setBlockCwd: vi.fn(),
   startLocalBlock: vi.fn(),
@@ -50,6 +57,21 @@ vi.mock("@xterm/addon-fit", () => ({
   },
 }));
 
+vi.mock("@xterm/addon-search", () => ({
+  SearchAddon: class {
+    findNext = vi.fn(() => true);
+    findPrevious = vi.fn(() => true);
+    clearDecorations = vi.fn();
+    resultHandler: ((result: { resultIndex: number; resultCount: number }) => void) | null = null;
+
+    constructor() { mocks.searches.push(this); }
+    onDidChangeResults = (handler: (result: { resultIndex: number; resultCount: number }) => void) => {
+      this.resultHandler = handler;
+      return { dispose: vi.fn() };
+    };
+  },
+}));
+
 vi.mock("@xterm/xterm", () => ({
   Terminal: class {
     cols = 80;
@@ -76,7 +98,7 @@ vi.mock("@xterm/xterm", () => ({
       mocks.terminals.push(this);
     }
 
-    loadAddon() {}
+    loadAddon = vi.fn();
 
     open(container: HTMLElement) {
       this.element = document.createElement("div");
@@ -111,6 +133,7 @@ vi.mock("../workspace/WorkspaceProvider", () => ({
 
 import { TerminalPanel } from "./TerminalPanel";
 import { parseOsc7Cwd } from "./osc7";
+import { ensureTerminalSearch } from "./terminalSearch";
 
 class ResizeObserverMock {
   observe() {}
@@ -126,6 +149,7 @@ describe("TerminalPanel view lifetime", () => {
   beforeEach(() => {
     mocks.terminals.length = 0;
     mocks.fits.length = 0;
+    mocks.searches.length = 0;
     mocks.registerWriter.mockClear();
     mocks.startLocalBlock.mockClear();
     mocks.writeBlock.mockClear();
@@ -195,6 +219,7 @@ describe("TerminalPanel view lifetime", () => {
       fontFamily: string;
       fontSize: number;
       lineHeight: number;
+      allowProposedApi: boolean;
       allowTransparency: boolean;
       overviewRuler: { width: number };
       theme: Record<string, string>;
@@ -203,6 +228,7 @@ describe("TerminalPanel view lifetime", () => {
     expect(options.fontFamily).toBe("SFMono-Regular, Menlo, Monaco, Consolas, monospace");
     expect(options.fontSize).toBe(13);
     expect(options.lineHeight).toBe(1.22);
+    expect(options.allowProposedApi).toBe(true);
     expect(options.allowTransparency).toBe(true);
     expect(options.theme.background).toBe("#00000000");
     expect(options.overviewRuler.width).toBe(3);
@@ -321,6 +347,25 @@ describe("TerminalPanel view lifetime", () => {
     expect(fit.proposeDimensions).toHaveBeenCalledTimes(2);
     expect(fit.fit).toHaveBeenCalledOnce();
     expect(terminal.refresh).toHaveBeenCalledWith(0, 23);
+    view.unmount();
+  });
+
+  it("restores search capability on a terminal view created before the addon existed", () => {
+    const view = render(<TerminalPanel blockId="block-legacy-search" sessionKey="block-legacy-search:local" local={false} visible/>);
+    const terminal = mocks.terminals[0];
+    const onSearchResults = vi.fn();
+    const legacyView = { terminal, onSearchResults } as unknown as Parameters<typeof ensureTerminalSearch>[0];
+    const initialAddonCount = mocks.searches.length;
+
+    const search = ensureTerminalSearch(legacyView);
+    const recoveredSearch = mocks.searches[mocks.searches.length - 1];
+
+    expect(mocks.searches).toHaveLength(initialAddonCount + 1);
+    expect(terminal.loadAddon).toHaveBeenCalledWith(recoveredSearch);
+    act(() => recoveredSearch.resultHandler?.({ resultIndex: 0, resultCount: 3 }));
+    expect(onSearchResults).toHaveBeenCalledWith({ resultIndex: 0, resultCount: 3 });
+    expect(ensureTerminalSearch(legacyView)).toBe(search);
+    expect(mocks.searches).toHaveLength(initialAddonCount + 1);
     view.unmount();
   });
 
@@ -443,6 +488,8 @@ describe("TerminalPanel clipboard interaction", () => {
     expect(screen.getByRole("menuitem", { name: /粘贴/ })).toHaveFocus();
 
     fireEvent.keyDown(menu, { key: "ArrowDown" });
+    expect(screen.getByRole("menuitem", { name: /搜索/ })).toHaveFocus();
+    fireEvent.keyDown(menu, { key: "ArrowDown" });
     expect(screen.getByRole("menuitem", { name: "全选" })).toHaveFocus();
     fireEvent.keyDown(window, { key: "Escape" });
     act(() => vi.runOnlyPendingTimers());
@@ -506,6 +553,37 @@ describe("TerminalPanel clipboard interaction", () => {
     expect(terminal.keyHandler?.(new KeyboardEvent("keydown", { key: "v", ctrlKey: true, shiftKey: true }))).toBe(false);
     await act(async () => undefined);
     expect(terminal.paste).toHaveBeenCalledWith("clipboard");
+    view.unmount();
+  });
+
+  it("searches terminal output in both directions and restores focus on Escape", () => {
+    vi.stubGlobal("navigator", { platform: "Win32", userAgent: "Windows" });
+    const view = render(<TerminalPanel blockId="block-search" sessionKey="block-search:local" local={false} visible/>);
+    const terminal = mocks.terminals[0];
+    const search = mocks.searches[mocks.searches.length - 1];
+
+    expect(terminal.keyHandler?.(new KeyboardEvent("keydown", { key: "f", ctrlKey: true }))).toBe(true);
+    act(() => expect(terminal.keyHandler?.(new KeyboardEvent("keydown", { key: "f", ctrlKey: true, shiftKey: true }))).toBe(false));
+    const input = screen.getByRole("searchbox", { name: "搜索内容" });
+    expect(input.closest(".terminal-search-field")).not.toBeNull();
+    expect(screen.queryByText("0/0")).not.toBeInTheDocument();
+    fireEvent.change(input, { target: { value: "needle" } });
+    expect(search.findNext).toHaveBeenCalledWith("needle", expect.objectContaining({ incremental: true, decorations: expect.any(Object) }));
+
+    act(() => search.resultHandler?.({ resultIndex: 1, resultCount: 4 }));
+    expect(screen.getByText("2/4")).toBeInTheDocument();
+    fireEvent.keyDown(input, { key: "Enter", shiftKey: true });
+    expect(search.findPrevious).toHaveBeenCalledWith("needle", expect.objectContaining({ decorations: expect.any(Object) }));
+
+    const searchSurface = screen.getByRole("search", { name: "搜索终端输出" });
+    fireEvent.keyDown(input, { key: "Escape" });
+    expect(searchSurface).toHaveAttribute("data-state", "closing");
+    expect(terminal.focus).not.toHaveBeenCalled();
+    fireEvent.animationEnd(searchSurface, { animationName: "terminal-search-out" });
+    act(() => vi.runAllTimers());
+    expect(screen.queryByRole("search", { name: "搜索终端输出" })).not.toBeInTheDocument();
+    expect(search.clearDecorations).toHaveBeenCalled();
+    expect(terminal.focus).toHaveBeenCalled();
     view.unmount();
   });
 

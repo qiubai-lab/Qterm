@@ -1,6 +1,6 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ConnectionRouteProgress } from "./ConnectionRouteProgress";
 import { calculateConnectionRouteTooltipPosition } from "./connectionRouteTooltipPosition";
@@ -115,6 +115,36 @@ describe("ConnectionRouteProgress", () => {
     const detail = screen.getByRole("tooltip").querySelector(".connection-route-tooltip-detail");
     expect(detail?.children[0]).toHaveTextContent("已连接");
     expect(detail?.children[1]).toHaveTextContent("server.test:22");
+  });
+
+  it("keeps the connecting route cancellable beside its progress", async () => {
+    const user = userEvent.setup();
+    const onCancel = vi.fn();
+    const { container } = render(<ConnectionRouteProgress progress={connectingProgress} statusAction={{ label: "取消连接", icon: "disconnect", tone: "danger", onSelect: onCancel }}/>);
+
+    const route = container.querySelector(".connection-route-progress");
+    const action = screen.getByRole("button", { name: "取消连接" });
+    expect(route).toContainElement(action);
+    await user.click(action);
+    expect(onCancel).toHaveBeenCalledOnce();
+  });
+
+  it("forwards disconnect into the connected host summary", async () => {
+    const user = userEvent.setup();
+    const onRequestDisconnect = vi.fn();
+    const successful = {
+      ...connectingProgress,
+      completedNodes: 2,
+      activeNode: null,
+      phase: "connected" as const,
+      message: "连接成功",
+      nodes: connectingProgress.nodes.map((node) => ({ ...node, state: "complete" as const })),
+    };
+    render(<ConnectionRouteProgress progress={successful} endpoint="root@127.0.0.1" profile={profile} onRequestDisconnect={onRequestDisconnect}/>);
+
+    await user.click(screen.getByRole("button", { name: /查看 Server 主机概要/ }));
+    await user.click(screen.getByRole("button", { name: "断开连接" }));
+    expect(onRequestDisconnect).toHaveBeenCalledOnce();
   });
 
   it("exposes a retained failed-node reason on hover", async () => {

@@ -155,10 +155,24 @@ describe("TerminalTargetPicker", () => {
   });
 
   it("turns a connected remote endpoint into the shared host summary entry", () => {
-    render(<TerminalTargetPicker profiles={profiles} groups={groups} selectedProfileId="profile-1" status="connected" detail="deploy@prod.example" onSelect={vi.fn()}/>);
+    const onRequestDisconnect = vi.fn();
+    render(<TerminalTargetPicker profiles={profiles} groups={groups} selectedProfileId="profile-1" status="connected" detail="deploy@prod.example" onSelect={vi.fn()} onRequestDisconnect={onRequestDisconnect}/>);
 
     expect(screen.getByRole("button", { name: /查看 Production 主机概要/ })).toHaveClass("host-identity-trigger", "terminal-target-endpoint");
     expect(screen.queryByText("deploy@prod.example", { selector: "small" })).not.toBeInTheDocument();
+  });
+
+  it("places reconnect directly after the closed status", async () => {
+    const user = userEvent.setup();
+    const onReconnect = vi.fn();
+    const { container } = render(<TerminalTargetPicker profiles={profiles} selectedProfileId="profile-1" status="closed" detail="closed" onSelect={vi.fn()} statusAction={{ label: "重新连接", icon: "refresh", onSelect: onReconnect }}/>);
+
+    const status = screen.getByText("closed", { selector: "small" });
+    const action = screen.getByRole("button", { name: "重新连接" });
+    expect(status.nextElementSibling).toBe(action);
+    expect(container.querySelector(".terminal-target-status-action")).toBe(action);
+    await user.click(action);
+    expect(onReconnect).toHaveBeenCalledOnce();
   });
 
   it("keeps local and disconnected details non-interactive", () => {

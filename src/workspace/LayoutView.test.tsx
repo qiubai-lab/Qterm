@@ -14,6 +14,11 @@ const selectNetworkTarget = vi.fn().mockResolvedValue(undefined);
 const startNetworkBlockRule = vi.fn().mockResolvedValue(undefined);
 const stopNetworkBlockRule = vi.fn().mockResolvedValue(undefined);
 const clearBlockBuffer = vi.fn();
+const disconnectBlock = vi.fn().mockResolvedValue(undefined);
+const disconnectFileBlock = vi.fn().mockResolvedValue(undefined);
+const disconnectNetworkBlock = vi.fn().mockResolvedValue(undefined);
+const restartLocalBlock = vi.fn().mockResolvedValue(undefined);
+const terminalRegistryMocks = vi.hoisted(() => ({ openTerminalSearch: vi.fn().mockReturnValue(true) }));
 const profiles = [
   { id: "password-profile", name: "Password Server", host: "password.example", port: 22, username: "root", authPreference: "password" as const, credentialId: null, groupId: null },
   { id: "key-profile", name: "Key Server", host: "key.example", port: 22, username: "deploy", authPreference: "privateKey" as const, credentialId: null, groupId: null },
@@ -29,6 +34,8 @@ afterEach(cleanup);
 vi.mock("../terminal/TerminalPanel", () => ({
   TerminalPanel: () => <div aria-label="测试终端"/>,
 }));
+
+vi.mock("../terminal/terminalViewRegistry", () => terminalRegistryMocks);
 
 vi.mock("../files/FileBrowserPane", () => ({
   FileBrowserPane: ({ initialPath }: { initialPath: string }) => {
@@ -57,6 +64,10 @@ vi.mock("./WorkspaceProvider", () => ({
     startNetworkBlockRule,
     stopNetworkBlockRule,
     clearBlockBuffer,
+    disconnectBlock,
+    disconnectFileBlock,
+    disconnectNetworkBlock,
+    restartLocalBlock,
   }),
 }));
 
@@ -78,6 +89,11 @@ describe("WorkspaceCanvas terminal actions", () => {
     startNetworkBlockRule.mockClear();
     stopNetworkBlockRule.mockClear();
     clearBlockBuffer.mockClear();
+    disconnectBlock.mockClear();
+    disconnectFileBlock.mockClear();
+    disconnectNetworkBlock.mockClear();
+    restartLocalBlock.mockClear();
+    terminalRegistryMocks.openTerminalSearch.mockClear();
     terminalRuntimes = { "block-1": connectedLocalRuntime };
     fileRuntimes = {};
     networkRuntimes = {};
@@ -89,6 +105,93 @@ describe("WorkspaceCanvas terminal actions", () => {
     expect(screen.queryByRole("button", { name: /最大化终端|恢复布局/ })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "左右分割" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "上下分割" })).toBeInTheDocument();
+  });
+
+  it("keeps search in the header action group", async () => {
+    const user = userEvent.setup();
+    render(<WorkspaceCanvas workspace={workspace} visible onRequestClose={vi.fn()} onRequestAuthConnection={vi.fn()}/>);
+
+    await user.click(screen.getByRole("button", { name: "搜索终端输出" }));
+    expect(terminalRegistryMocks.openTerminalSearch).toHaveBeenCalledWith("block-1");
+  });
+
+  it("confirms active disconnects, cancels connecting sessions, and restarts closed local shells", async () => {
+    const user = userEvent.setup();
+    const onRequestDisconnect = vi.fn();
+    const view = render(<WorkspaceCanvas workspace={workspace} visible onRequestClose={vi.fn()} onRequestDisconnect={onRequestDisconnect} onRequestAuthConnection={vi.fn()}/>);
+
+    await user.click(screen.getByRole("button", { name: "停止本地终端" }));
+    expect(onRequestDisconnect).toHaveBeenCalledWith("terminal", "block-1", "本地终端", true);
+
+    terminalRuntimes = { "block-1": { ...connectedLocalRuntime, sessionId: null, status: "connecting" } };
+    view.rerender(<WorkspaceCanvas workspace={workspace} visible onRequestClose={vi.fn()} onRequestDisconnect={onRequestDisconnect} onRequestAuthConnection={vi.fn()}/>);
+    await user.click(screen.getByRole("button", { name: "取消连接" }));
+    expect(disconnectBlock).toHaveBeenCalledWith("block-1");
+
+    terminalRuntimes = { "block-1": { ...connectedLocalRuntime, sessionId: null, status: "closed" } };
+    view.rerender(<WorkspaceCanvas workspace={workspace} visible onRequestClose={vi.fn()} onRequestDisconnect={onRequestDisconnect} onRequestAuthConnection={vi.fn()}/>);
+    await user.click(screen.getByRole("button", { name: "启动本地终端" }));
+    expect(restartLocalBlock).toHaveBeenCalledWith("block-1");
+  });
+
+  it("reconnects a closed remote terminal through configured authentication", async () => {
+    const user = userEvent.setup();
+    const onRequestAuthConnection = vi.fn();
+    const remoteWorkspace: Workspace = { ...workspace, layout: { type: "terminal", blockId: "block-1", profileId: "password-profile" } };
+    terminalRuntimes = { "block-1": { ...connectedLocalRuntime, sessionId: null, kind: "ssh", status: "failed" } };
+    render(<WorkspaceCanvas workspace={remoteWorkspace} visible onRequestClose={vi.fn()} onRequestAuthConnection={onRequestAuthConnection}/>);
+
+    await user.click(screen.getByRole("button", { name: "重新连接" }));
+    expect(onRequestAuthConnection).toHaveBeenCalledWith("terminal", "block-1", profiles[0]);
+  });
+
+  it("moves a connected remote disconnect into the host summary", async () => {
+    const user = userEvent.setup();
+    const onRequestDisconnect = vi.fn();
+    const remoteWorkspace: Workspace = { ...workspace, layout: { type: "terminal", blockId: "block-1", profileId: "password-profile" } };
+    terminalRuntimes = { "block-1": { ...connectedLocalRuntime, kind: "ssh", status: "connected" } };
+    const view = render(<WorkspaceCanvas workspace={remoteWorkspace} visible onRequestClose={vi.fn()} onRequestDisconnect={onRequestDisconnect} onRequestAuthConnection={vi.fn()}/>);
+
+    expect(within(view.container.querySelector(".block-actions")!).queryByRole("button", { name: "断开连接" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /查看 Password Server 主机概要/ }));
+    await user.click(screen.getByRole("button", { name: "断开连接" }));
+    expect(onRequestDisconnect).toHaveBeenCalledWith("terminal", "block-1", "Password Server", false);
+  });
+
+  it("applies disconnect and reconnect lifecycle actions to a remote files window", async () => {
+    const user = userEvent.setup();
+    const onRequestDisconnect = vi.fn();
+    const onRequestAuthConnection = vi.fn();
+    const filesWorkspace: Workspace = { ...workspace, layout: { type: "files", blockId: "block-1", profileId: "password-profile", path: "." } };
+    fileRuntimes = { "block-1": { sessionId: "files-1", kind: "sftp", status: "connected", hostKeyPrompt: null, notice: "", connectionProgress: null } };
+    const view = render(<WorkspaceCanvas workspace={filesWorkspace} visible onRequestClose={vi.fn()} onRequestDisconnect={onRequestDisconnect} onRequestAuthConnection={onRequestAuthConnection}/>);
+
+    await user.click(screen.getByRole("button", { name: /查看 Password Server 主机概要/ }));
+    await user.click(screen.getByRole("button", { name: "断开连接" }));
+    expect(onRequestDisconnect).toHaveBeenCalledWith("files", "block-1", "Password Server", false);
+
+    fileRuntimes = { "block-1": { ...fileRuntimes["block-1"], sessionId: null, status: "closed" } };
+    view.rerender(<WorkspaceCanvas workspace={filesWorkspace} visible onRequestClose={vi.fn()} onRequestDisconnect={onRequestDisconnect} onRequestAuthConnection={onRequestAuthConnection}/>);
+    await user.click(screen.getByRole("button", { name: "重新连接文件" }));
+    expect(onRequestAuthConnection).toHaveBeenCalledWith("files", "block-1", profiles[0]);
+  });
+
+  it("applies disconnect and reconnect lifecycle actions to a network window", async () => {
+    const user = userEvent.setup();
+    const onRequestDisconnect = vi.fn();
+    const onRequestAuthConnection = vi.fn();
+    const networkWorkspace: Workspace = { ...workspace, layout: { type: "network", blockId: "block-1", profileId: "password-profile" } };
+    networkRuntimes = { "block-1": { sessionId: "network-1", status: "connected", hostKeyPrompt: null, notice: "", connectionProgress: null, ruleStates: {} } };
+    const view = render(<WorkspaceCanvas workspace={networkWorkspace} visible onRequestClose={vi.fn()} onRequestDisconnect={onRequestDisconnect} onRequestAuthConnection={onRequestAuthConnection}/>);
+
+    await user.click(screen.getByRole("button", { name: /查看 Password Server 主机概要/ }));
+    await user.click(screen.getByRole("button", { name: "断开连接" }));
+    expect(onRequestDisconnect).toHaveBeenCalledWith("network", "block-1", "Password Server", false);
+
+    networkRuntimes = { "block-1": { ...networkRuntimes["block-1"], sessionId: null, status: "closed" } };
+    view.rerender(<WorkspaceCanvas workspace={networkWorkspace} visible onRequestClose={vi.fn()} onRequestDisconnect={onRequestDisconnect} onRequestAuthConnection={onRequestAuthConnection}/>);
+    await user.click(screen.getByRole("button", { name: "重新连接网络" }));
+    expect(onRequestAuthConnection).toHaveBeenCalledWith("network", "block-1", profiles[0]);
   });
 
   it("opens connection management from the block target picker", async () => {

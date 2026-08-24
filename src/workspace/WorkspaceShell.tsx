@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 
+import { resolveAppShortcut, shortcutLabel } from "../app/shortcuts";
 import { IconButton } from "../components/Button";
 import { Icon, type IconName } from "../components/Icon";
 import { ConnectionDialog } from "../components/dialogs/ConnectionDialog";
@@ -15,8 +16,11 @@ import { getProfileRouteRequirements, type ConnectionProfile } from "../lib/taur
 import { getSettings, updateUpdateSettings, type SecuritySettings, type UpdateSettings } from "../lib/tauri/settings";
 import { checkForUpdateOnStartupOnce } from "../lib/updateCheck";
 import { closeCurrentWindow, currentDesktopPlatform, isCurrentWindowAlwaysOnTop, minimizeCurrentWindow, setCurrentWindowAlwaysOnTop, startDraggingCurrentWindow, toggleMaximizeCurrentWindow } from "../lib/tauri/window";
+import { focusTerminalBlock, openTerminalSearch } from "../terminal/terminalViewRegistry";
 import { WorkspaceCanvas, type ConnectionOwner } from "./LayoutView";
 import { resolveConfiguredAuth } from "./configuredAuth";
+import { adjacentBlockId } from "./blockNavigation";
+import { blockIds } from "./layout";
 import { openFileWindowAction } from "./fileWindow";
 import type { Workspace } from "./model";
 import { openNetworkWindowAction } from "./networkWindow";
@@ -25,6 +29,7 @@ import { useWorkspace } from "./WorkspaceProvider";
 type Tool = "connections" | "credentials" | "settings" | "help";
 type WorkspaceTransitionDirection = "forward" | "backward";
 interface CloseRequest { title: string; detail: string; ids: string[]; execute: () => void }
+interface DisconnectRequest { owner: ConnectionOwner; blockId: string; name: string; local: boolean }
 interface TitlebarGesture { pointerId: number; x: number; y: number }
 interface TitlebarClick { at: number; x: number; y: number }
 interface WorkspaceTabSlot { id: string; centerX: number }
@@ -39,10 +44,11 @@ const TITLEBAR_DOUBLE_CLICK_MS = 350;
 export function WorkspaceShell() {
   const desktopPlatform = currentDesktopPlatform();
   const usesNativeWindowControls = desktopPlatform === "macos";
-  const { document, activeWorkspace, dispatch, runtimes, fileRuntimes, networkRuntimes, connectBlock, connectFileBlock, connectNetworkBlock, isConnectionTargetCurrent, connectedCount, closeSessions, blocksForWorkspace, acceptBlockHostKey, rejectBlockHostKey, acceptFileHostKey, rejectFileHostKey, acceptNetworkHostKey, rejectNetworkHostKey, storageNotice, dismissStorageNotice } = useWorkspace();
+  const { document, activeWorkspace, dispatch, runtimes, fileRuntimes, networkRuntimes, connectBlock, connectFileBlock, connectNetworkBlock, disconnectBlock, disconnectFileBlock, disconnectNetworkBlock, isConnectionTargetCurrent, connectedCount, closeSessions, blocksForWorkspace, acceptBlockHostKey, rejectBlockHostKey, acceptFileHostKey, rejectFileHostKey, acceptNetworkHostKey, rejectNetworkHostKey, storageNotice, dismissStorageNotice } = useWorkspace();
   const [tool, setTool] = useState<Tool | null>(null);
   const [renaming, setRenaming] = useState<{ id: string; value: string } | null>(null);
   const [closeRequest, setCloseRequest] = useState<CloseRequest | null>(null);
+  const [disconnectRequest, setDisconnectRequest] = useState<DisconnectRequest | null>(null);
   const [authRequest, setAuthRequest] = useState<{ owner: ConnectionOwner; blockId: string; profile: ConnectionProfile } | null>(null);
   const [vaultUnlockRequest, setVaultUnlockRequest] = useState<{ owner: ConnectionOwner; blockId: string; profile: ConnectionProfile; mode: MasterPasswordMode } | null>(null);
   const [vaultStatus, setVaultStatus] = useState<VaultStatus | null>(null);
@@ -87,6 +93,7 @@ export function WorkspaceShell() {
       : networkHostPrompt
         ? { owner: "network" as const, blockId: networkHostPrompt[0], prompt: networkHostPrompt[1].hostKeyPrompt! }
         : null;
+  const hostPromptOpen = Boolean(hostPrompt);
 
   useLayoutEffect(() => {
     const strip = workspaceTabStripRef.current;
@@ -447,48 +454,79 @@ export function WorkspaceShell() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (!(event.metaKey || event.ctrlKey) || isEditable(event.target)) return;
-      if (terminalLocked) {
-        if (event.key.toLowerCase() === "t" && !event.shiftKey) {
-          event.preventDefault(); dispatch({ type: "addWorkspace" });
-        } else if (/^[1-9]$/.test(event.key) && !event.shiftKey) {
-          const workspace = document.workspaces[Number(event.key) - 1];
-          if (workspace) { event.preventDefault(); dispatch({ type: "selectWorkspace", workspaceId: workspace.id }); }
-        } else if ((event.key === "[" || event.key === "]") && event.shiftKey) {
-          event.preventDefault();
-          const index = document.workspaces.findIndex((workspace) => workspace.id === activeWorkspace.id);
-          const offset = event.key === "]" ? 1 : -1;
-          const workspace = document.workspaces[(index + offset + document.workspaces.length) % document.workspaces.length];
-          dispatch({ type: "selectWorkspace", workspaceId: workspace.id });
-        }
-        return;
+      if (event.repeat || isEditableOutsideTerminal(event.target)) return;
+      const command = resolveAppShortcut(event, desktopPlatform);
+      if (!command) return;
+      const modalOpen = Boolean(tool || authRequest || vaultUnlockRequest || lockChoiceOpen || closeRequest || disconnectRequest || hostPromptOpen);
+      if (modalOpen) return;
+      const allowedWhileLocked = command.type === "newWorkspace" || command.type === "selectWorkspace" || command.type === "cycleWorkspace";
+      if (terminalLocked && !allowedWhileLocked) return;
+
+      let handled = true;
+      if (command.type === "newWorkspace") dispatch({ type: "addWorkspace" });
+      else if (command.type === "openConnections") setTool("connections");
+      else if (command.type === "splitBlock") dispatch({ type: "splitBlock", workspaceId: activeWorkspace.id, blockId: activeWorkspace.activeBlockId, direction: command.direction });
+      else if (command.type === "focusBlock") {
+        const blockId = adjacentBlockId(activeWorkspace.layout, activeWorkspace.activeBlockId, command.direction);
+        if (blockId) dispatch({ type: "selectBlock", workspaceId: activeWorkspace.id, blockId });
+        else handled = false;
       }
-      if (event.key.toLowerCase() === "t" && !event.shiftKey) {
-        event.preventDefault(); dispatch({ type: "addWorkspace" });
-      } else if (event.key.toLowerCase() === "k") {
-        event.preventDefault(); setTool("connections");
-      } else if (event.key.toLowerCase() === "d") {
-        event.preventDefault(); dispatch({ type: "splitBlock", workspaceId: activeWorkspace.id, blockId: activeWorkspace.activeBlockId, direction: event.shiftKey ? "vertical" : "horizontal" });
-      } else if (/^[1-9]$/.test(event.key) && !event.shiftKey) {
-        const workspace = document.workspaces[Number(event.key) - 1];
-        if (workspace) { event.preventDefault(); dispatch({ type: "selectWorkspace", workspaceId: workspace.id }); }
-      } else if ((event.key === "[" || event.key === "]") && event.shiftKey) {
-        event.preventDefault();
+      else if (command.type === "cycleBlock") {
+        const ids = blockIds(activeWorkspace.layout);
+        const index = ids.indexOf(activeWorkspace.activeBlockId);
+        const blockId = ids[(index + command.offset + ids.length) % ids.length];
+        if (blockId && blockId !== activeWorkspace.activeBlockId) dispatch({ type: "selectBlock", workspaceId: activeWorkspace.id, blockId });
+        else handled = false;
+      }
+      else if (command.type === "searchTerminal") handled = openTerminalSearch(activeWorkspace.activeBlockId);
+      else if (command.type === "selectWorkspace") {
+        const workspace = document.workspaces[command.index];
+        if (workspace) dispatch({ type: "selectWorkspace", workspaceId: workspace.id });
+        else handled = false;
+      } else {
         const index = document.workspaces.findIndex((workspace) => workspace.id === activeWorkspace.id);
-        const offset = event.key === "]" ? 1 : -1;
-        const workspace = document.workspaces[(index + offset + document.workspaces.length) % document.workspaces.length];
+        const workspace = document.workspaces[(index + command.offset + document.workspaces.length) % document.workspaces.length];
         dispatch({ type: "selectWorkspace", workspaceId: workspace.id });
       }
+      if (handled) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
     };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [document.workspaces, activeWorkspace.id, activeWorkspace.activeBlockId, dispatch, terminalLocked]);
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [activeWorkspace.activeBlockId, activeWorkspace.id, activeWorkspace.layout, authRequest, closeRequest, desktopPlatform, disconnectRequest, dispatch, document.workspaces, hostPromptOpen, lockChoiceOpen, terminalLocked, tool, vaultUnlockRequest]);
+
+  useEffect(() => {
+    if (terminalLocked) return;
+    const activeElement = globalThis.document.activeElement;
+    const focusedBlockId = activeElement instanceof Element
+      ? activeElement.closest<HTMLElement>("[data-layout-block]")?.dataset.layoutBlock
+      : undefined;
+    if (focusedBlockId === activeWorkspace.activeBlockId) return;
+    if (activeElement instanceof Element && activeElement.closest(".workspace-tab")) {
+      const timer = window.setTimeout(() => {
+        if (!isEditableOutsideTerminal(globalThis.document.activeElement)) focusWorkspaceBlock(activeWorkspace.activeBlockId);
+      }, TITLEBAR_DOUBLE_CLICK_MS + 30);
+      return () => window.clearTimeout(timer);
+    }
+    const frame = window.requestAnimationFrame(() => focusWorkspaceBlock(activeWorkspace.activeBlockId));
+    return () => window.cancelAnimationFrame(frame);
+  }, [activeWorkspace.activeBlockId, activeWorkspace.id, terminalLocked]);
 
   async function confirmClose() {
     if (!closeRequest) return;
     await closeSessions(closeRequest.ids);
     closeRequest.execute();
     setCloseRequest(null);
+  }
+
+  async function confirmDisconnect() {
+    if (!disconnectRequest) return;
+    if (disconnectRequest.owner === "files") await disconnectFileBlock(disconnectRequest.blockId);
+    else if (disconnectRequest.owner === "network") await disconnectNetworkBlock(disconnectRequest.blockId);
+    else await disconnectBlock(disconnectRequest.blockId);
+    setDisconnectRequest(null);
   }
 
   async function requestConfiguredConnection(owner: ConnectionOwner, blockId: string, profile: ConnectionProfile) {
@@ -578,7 +616,7 @@ export function WorkspaceShell() {
             : <button className="workspace-tab-select" onClick={(event) => { if (!suppressWorkspaceDragClick(event, workspace.id)) dispatch({ type: "selectWorkspace", workspaceId: workspace.id }); }} onDoubleClick={(event) => { if (!suppressWorkspaceDragClick(event, workspace.id)) setRenaming({ id: workspace.id, value: workspace.name }); }}><Icon name="workspace" size={13}/><span>{workspace.name}</span></button>}
           {document.workspaces.length > 1 && <IconButton className="workspace-tab-close" size="compact" label={`关闭 ${workspace.name}`} onClick={() => closeWorkspace(workspace)}><Icon name="close" size={12}/></IconButton>}
         </div>})}
-        <IconButton className="new-workspace-tab" size="compact" label="新建工作区" title="新建 Workspace (⌘T)" onClick={() => dispatch({ type: "addWorkspace" })}><Icon name="plus" size={14}/></IconButton>
+        <IconButton className="new-workspace-tab" size="compact" label="新建工作区" title={`新建 Workspace (${shortcutLabel("newWorkspace", desktopPlatform)})`} onClick={() => dispatch({ type: "addWorkspace" })}><Icon name="plus" size={14}/></IconButton>
       </nav>
       <div className="window-controls" aria-label="窗口控制">
         <button className="window-pin" aria-label={windowAlwaysOnTop ? "取消窗口置顶" : "置顶窗口"} aria-pressed={windowAlwaysOnTop} aria-busy={windowPinBusy || undefined} title={windowAlwaysOnTop ? "取消置顶" : "置顶窗口"} disabled={windowPinBusy} onClick={() => void toggleWindowAlwaysOnTop()}><Icon name="pin" size={14}/></button>
@@ -596,7 +634,7 @@ export function WorkspaceShell() {
           {document.workspaces.map((workspace) => {
             const visible = workspace.id === activeWorkspace.id;
             const transitionDirection = visible && workspaceTransition.workspaceId === workspace.id ? workspaceTransition.direction : null;
-            return <div key={workspace.id} className={`workspace-canvas-stage${visible ? " visible" : ""}${transitionDirection ? ` workspace-transition-${transitionDirection}` : ""}`} aria-hidden={!visible}><WorkspaceCanvas workspace={workspace} visible={visible} onRequestClose={closeBlock} onRequestAuthConnection={(owner, blockId, profile) => void requestConfiguredConnection(owner, blockId, profile)} onOpenConnectionManager={() => setTool("connections")}/></div>;
+            return <div key={workspace.id} className={`workspace-canvas-stage${visible ? " visible" : ""}${transitionDirection ? ` workspace-transition-${transitionDirection}` : ""}`} aria-hidden={!visible}><WorkspaceCanvas workspace={workspace} visible={visible} onRequestClose={closeBlock} onRequestDisconnect={(owner, blockId, name, local) => setDisconnectRequest({ owner, blockId, name, local })} onRequestAuthConnection={(owner, blockId, profile) => void requestConfiguredConnection(owner, blockId, profile)} onOpenConnectionManager={() => setTool("connections")}/></div>;
           })}
         </div>
         <aside className="utility-rail" aria-label="工具">
@@ -651,6 +689,7 @@ export function WorkspaceShell() {
     />}
     {lockChoiceOpen && <TerminalLockChoiceDialog vaultUnlocked={Boolean(vaultStatus?.unlocked)} busy={vaultLockBusy} message={vaultLockError} onClose={() => { setLockChoiceOpen(false); setVaultLockError(""); }} onLockVault={() => void applyLockScope("vault")} onLockTerminalAndVault={() => void applyLockScope("terminalAndVault")}/>}
     {closeRequest && <DialogFrame title={closeRequest.title} subtitle="未保存的终端输出无法恢复" onClose={() => setCloseRequest(null)}><p className="confirm-copy">{closeRequest.detail}</p><p className="callout">将断开 {connectedCount(closeRequest.ids)} 个活动会话。</p><footer className="dialog-actions end"><button className="secondary-button" onClick={() => setCloseRequest(null)}>取消</button><button className="danger-button filled" onClick={() => void confirmClose()}>关闭并断开</button></footer></DialogFrame>}
+    {disconnectRequest && <DialogFrame compact title={disconnectRequest.local ? "停止本地终端？" : `断开“${disconnectRequest.name}”？`} subtitle={disconnectRequest.owner === "files" ? "文件窗口和当前路径将保留" : disconnectRequest.owner === "network" ? "网络窗口和规则配置将保留" : "终端 Block 和当前输出将保留"} onClose={() => setDisconnectRequest(null)}><p className="confirm-copy">{disconnectRequest.local ? "正在运行的本地 Shell 和前台进程将停止。" : disconnectRequest.owner === "files" ? "当前 SFTP 会话将结束，之后可以从状态旁重新连接。" : disconnectRequest.owner === "network" ? "当前 SSH 会话及运行中的网络规则将结束，之后可以从状态旁重新连接。" : "当前 SSH 会话和其中运行的前台进程将结束，之后可以从状态旁重新连接。"}</p><footer className="dialog-actions end"><button className="secondary-button" onClick={() => setDisconnectRequest(null)}>取消</button><button className="danger-button filled" onClick={() => void confirmDisconnect()}>{disconnectRequest.local ? "停止终端" : "断开连接"}</button></footer></DialogFrame>}
     {hostPrompt && <DialogFrame title="确认主机身份" subtitle={`${hostPrompt.prompt.node.role === "jump" ? "跳板" : "目标"}“${hostPrompt.prompt.node.name}” · ${hostPrompt.prompt.node.host}:${hostPrompt.prompt.node.port}`} onClose={() => void rejectPromptHostKey(hostPrompt.owner, hostPrompt.blockId)}><p className="confirm-copy">请通过可信渠道核对当前节点的主机密钥指纹：</p><code className="fingerprint">{hostPrompt.prompt.algorithm}<br/>{hostPrompt.prompt.fingerprint}</code><footer className="dialog-actions end"><button className="danger-button" onClick={() => void rejectPromptHostKey(hostPrompt.owner, hostPrompt.blockId)}>拒绝</button><button className="primary-button" onClick={() => void acceptPromptHostKey(hostPrompt.owner, hostPrompt.blockId)}>信任并继续</button></footer></DialogFrame>}
     {storageNotice && <div className="global-notice" role="status"><span>{storageNotice}</span><button aria-label="关闭提示" onClick={dismissStorageNotice}><Icon name="close" size={13}/></button></div>}
   </main>;
@@ -698,8 +737,18 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function isEditable(target: EventTarget | null): boolean {
-  return target instanceof HTMLElement && Boolean(target.closest("input,textarea,select,[contenteditable=true]"));
+function isEditableOutsideTerminal(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.closest(".terminal-surface")) return false;
+  return Boolean(target.closest("input,textarea,select,[contenteditable=true]"));
+}
+
+function focusWorkspaceBlock(blockId: string): boolean {
+  if (focusTerminalBlock(blockId)) return true;
+  const block = Array.from(globalThis.document.querySelectorAll<HTMLElement>("[data-layout-block]"))
+    .find((element) => element.dataset.layoutBlock === blockId);
+  block?.focus();
+  return Boolean(block);
 }
 
 function findBlockType(workspace: Workspace, blockId: string): "terminal" | "files" | "network" | null {

@@ -50,12 +50,15 @@ interface WorkspaceContextValue {
   clearBlockBuffer: (blockId: string, reset?: boolean) => void;
   setBlockCwd: (blockId: string, cwd: string) => void;
   startLocalBlock: (blockId: string, columns: number, rows: number) => Promise<void>;
+  restartLocalBlock: (blockId: string) => Promise<void>;
   selectBlockTarget: (workspaceId: string, blockId: string, profileId: string | null) => Promise<void>;
   connectBlock: (blockId: string, profile: ConnectionProfile, auth: SessionAuth, onFailure?: () => void) => Promise<void>;
   selectFileTarget: (workspaceId: string, blockId: string, profileId: string | null) => Promise<void>;
   connectFileBlock: (blockId: string, profile: ConnectionProfile, auth: SessionAuth, onFailure?: () => void) => Promise<void>;
+  disconnectFileBlock: (blockId: string) => Promise<void>;
   selectNetworkTarget: (workspaceId: string, blockId: string, profileId: string | null) => Promise<void>;
   connectNetworkBlock: (blockId: string, profile: ConnectionProfile, auth: SessionAuth, onFailure?: () => void) => Promise<void>;
+  disconnectNetworkBlock: (blockId: string) => Promise<void>;
   isConnectionTargetCurrent: (owner: "terminal" | "files" | "network", blockId: string, profileId: string) => boolean;
   startNetworkBlockRule: (blockId: string, ruleId: string) => Promise<void>;
   stopNetworkBlockRule: (blockId: string, ruleId: string) => Promise<void>;
@@ -330,6 +333,16 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     updateNetworkRuntime(blockId, () => defaultNetworkRuntime);
   }, [nextEpoch, updateNetworkRuntime]);
 
+  const disconnectFileBlock = useCallback(async (blockId: string) => {
+    const remote = fileRuntimesRef.current[blockId]?.kind === "sftp";
+    await closeCurrentFileSession(blockId);
+    if (remote) updateFileRuntime(blockId, () => ({ ...defaultFileRuntime, kind: "sftp", status: "closed" }));
+  }, [closeCurrentFileSession, updateFileRuntime]);
+
+  const disconnectNetworkBlock = useCallback(async (blockId: string) => {
+    await closeCurrentNetworkSession(blockId);
+  }, [closeCurrentNetworkSession]);
+
   const startLocalBlock = useCallback(async (blockId: string, columns: number, rows: number) => {
     if (!isTauriRuntime() || startingLocal.current.has(blockId)) return;
     if (!connectionIntentAllows(connectionTargetIntents.current, "terminal", blockId, null)) return;
@@ -420,6 +433,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       }
     }
   }, [clearBlockBuffer, closeCurrentSession, deliverTerminalOutput, isCurrentEpoch, nextEpoch, onSessionEvent, updateRuntime]);
+
+  const restartLocalBlock = useCallback(async (blockId: string) => {
+    const size = terminalSizeReaders.current.get(blockId)?.() ?? { columns: 80, rows: 24 };
+    await startLocalBlock(blockId, size.columns, size.rows);
+  }, [startLocalBlock]);
 
   const disconnectBlock = useCallback(async (blockId: string) => {
     await closeCurrentSession(blockId);
@@ -653,13 +671,13 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const activeWorkspace = document.workspaces.find((workspace) => workspace.id === document.activeWorkspaceId) ?? document.workspaces[0];
   const value = useMemo<WorkspaceContextValue>(() => ({
     hydrated, document, dispatch, profiles, profileGroups, refreshProfiles, runtimes, fileRuntimes, networkRuntimes, localTerminalCapabilities, activeWorkspace,
-    activeBlockId: activeWorkspace.activeBlockId, registerWriter, clearBlockBuffer, setBlockCwd, startLocalBlock, selectBlockTarget, connectBlock, disconnectBlock,
-    selectFileTarget, connectFileBlock, selectNetworkTarget, connectNetworkBlock, startNetworkBlockRule, stopNetworkBlockRule, writeBlock, resizeBlock,
+    activeBlockId: activeWorkspace.activeBlockId, registerWriter, clearBlockBuffer, setBlockCwd, startLocalBlock, restartLocalBlock, selectBlockTarget, connectBlock, disconnectBlock,
+    selectFileTarget, connectFileBlock, disconnectFileBlock, selectNetworkTarget, connectNetworkBlock, disconnectNetworkBlock, startNetworkBlockRule, stopNetworkBlockRule, writeBlock, resizeBlock,
     isConnectionTargetCurrent,
     acceptBlockHostKey, rejectBlockHostKey, acceptFileHostKey, rejectFileHostKey, acceptNetworkHostKey, rejectNetworkHostKey, connectedCount,
     closeSessions, blocksForWorkspace,
     storageNotice, dismissStorageNotice,
-  }), [hydrated, document, profiles, profileGroups, refreshProfiles, runtimes, fileRuntimes, networkRuntimes, localTerminalCapabilities, activeWorkspace, registerWriter, clearBlockBuffer, setBlockCwd, startLocalBlock, selectBlockTarget, connectBlock, disconnectBlock, selectFileTarget, connectFileBlock, selectNetworkTarget, connectNetworkBlock, startNetworkBlockRule, stopNetworkBlockRule, writeBlock, resizeBlock, acceptBlockHostKey, rejectBlockHostKey, acceptFileHostKey, rejectFileHostKey, acceptNetworkHostKey, rejectNetworkHostKey, isConnectionTargetCurrent, connectedCount, closeSessions, blocksForWorkspace, storageNotice, dismissStorageNotice]);
+  }), [hydrated, document, profiles, profileGroups, refreshProfiles, runtimes, fileRuntimes, networkRuntimes, localTerminalCapabilities, activeWorkspace, registerWriter, clearBlockBuffer, setBlockCwd, startLocalBlock, restartLocalBlock, selectBlockTarget, connectBlock, disconnectBlock, selectFileTarget, connectFileBlock, disconnectFileBlock, selectNetworkTarget, connectNetworkBlock, disconnectNetworkBlock, startNetworkBlockRule, stopNetworkBlockRule, writeBlock, resizeBlock, acceptBlockHostKey, rejectBlockHostKey, acceptFileHostKey, rejectFileHostKey, acceptNetworkHostKey, rejectNetworkHostKey, isConnectionTargetCurrent, connectedCount, closeSessions, blocksForWorkspace, storageNotice, dismissStorageNotice]);
 
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;
 }

@@ -43,7 +43,7 @@ describe("application theme contract", () => {
   it("defines shared semantic tokens for CSS and imperative renderers", () => {
     for (const token of [
       "--chrome", "--canvas", "--surface", "--raised", "--text", "--muted", "--accent", "--danger", "--focus",
-      "--signature", "--signature-contrast", "--primary-action", "--primary-action-contrast", "--navigation-accent", "--navigation-accent-bg", "--selection-marker", "--selection-surface", "--warning", "--warning-bg",
+      "--signature", "--signature-contrast", "--primary-action", "--primary-action-contrast", "--menu-text", "--menu-secondary-text", "--menu-disabled-text", "--menu-hover-background", "--menu-hover-text", "--navigation-accent", "--navigation-accent-bg", "--selection-marker", "--selection-surface", "--warning", "--warning-bg",
       "--shell-material", "--chrome-material", "--rail-material", "--workspace-material", "--floating-material", "--floating-border", "--floating-shadow",
       "--brand-plate-background", "--brand-plate-border", "--brand-plate-shadow", "--file-browser-chrome-background",
       "--text-strong", "--text-disabled", "--icon", "--icon-hover", "--control-hover",
@@ -151,6 +151,19 @@ describe("application theme contract", () => {
     expect(terminalChrome).toMatch(/\.terminal-target-option\[aria-pressed="true"\]::after[^}]+color:var\(--selection-marker\)/);
     expect(credentialDialog).toMatch(/\.credential-item\.selected[^}]+background:var\(--selection-surface\)[^}]+var\(--selection-marker\)/);
     expect(dialogControls).toMatch(/\.segmented button\.selected[^}]+background:var\(--selection-surface\)[^}]+var\(--selection-marker\)/);
+  });
+
+  it("keeps disabled context-menu copy readable across every theme", () => {
+    for (const [name, preset] of [["dark", theme], ["light", lightTheme], ["cyberpunk", cyberpunkTheme]] as const) {
+      expect(tokenValue(preset, "--menu-text"), `${name} menu text`).toBe("var(--text)");
+      expect(tokenValue(preset, "--menu-secondary-text"), `${name} menu secondary`).toBe("var(--dim)");
+      expect(contrastRatio(
+        tokenHex(preset, "--menu-disabled-text"),
+        tokenHex(preset, "--raised"),
+      ), `${name} disabled menu contrast`).toBeGreaterThanOrEqual(4.5);
+      expect(tokenValue(preset, "--menu-hover-background"), `${name} menu hover background`).toBe("var(--primary-action)");
+      expect(tokenValue(preset, "--menu-hover-text"), `${name} menu hover text`).toBe("var(--primary-action-contrast)");
+    }
   });
 
   it("keeps workbench text and terminal edges on cross-theme semantic roles", () => {

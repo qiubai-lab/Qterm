@@ -4,6 +4,11 @@ type ThemeConsumer = (theme: ITheme) => void;
 
 const consumers = new Set<ThemeConsumer>();
 
+const fallbackSearchColors = {
+  matchBackground: "#153b35",
+  activeMatchBackground: "#75e6cf",
+};
+
 const fallbackTheme = {
   background: "#00000000",
   foreground: "#f1f3f5",
@@ -64,6 +69,18 @@ export function readTerminalTheme(root: Element = document.documentElement): ITh
     key,
     style.getPropertyValue(token).trim() || fallbackTheme[key as keyof typeof fallbackTheme],
   ])) as ITheme;
+}
+
+export function readTerminalSearchColors(root: Element = document.documentElement): typeof fallbackSearchColors {
+  const style = getComputedStyle(root);
+  const hex = (property: string, fallback: string) => {
+    const value = style.getPropertyValue(property).trim();
+    return /^#[0-9a-f]{6}$/i.test(value) ? value : fallback;
+  };
+  return {
+    matchBackground: hex("--accent-bg", fallbackSearchColors.matchBackground),
+    activeMatchBackground: hex("--accent", fallbackSearchColors.activeMatchBackground),
+  };
 }
 
 export function bindTerminalTheme(consumer: ThemeConsumer): { dispose: () => void } {

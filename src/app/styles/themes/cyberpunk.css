@@ -52,6 +52,11 @@
   --signature-contrast:#171500;
   --primary-action:#fcee0a;
   --primary-action-contrast:#171500;
+  --menu-text:var(--text);
+  --menu-secondary-text:var(--dim);
+  --menu-disabled-text:#7f8c91;
+  --menu-hover-background:var(--primary-action);
+  --menu-hover-text:var(--primary-action-contrast);
   --navigation-accent:#fcee0a;
   --navigation-accent-bg:var(--selection-surface);
   --selection-marker:#fcee0a;

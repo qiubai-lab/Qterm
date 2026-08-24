@@ -52,6 +52,11 @@
   --signature-contrast:var(--accent-contrast);
   --primary-action:var(--accent);
   --primary-action-contrast:var(--accent-contrast);
+  --menu-text:var(--text);
+  --menu-secondary-text:var(--dim);
+  --menu-disabled-text:#6b7671;
+  --menu-hover-background:var(--primary-action);
+  --menu-hover-text:var(--primary-action-contrast);
   --navigation-accent:var(--accent);
   --navigation-accent-bg:var(--accent-bg);
   --selection-marker:var(--accent);

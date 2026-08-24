@@ -53,7 +53,7 @@ import { WorkspaceProvider, useWorkspace } from "./WorkspaceProvider";
 const profile = { id: "profile-1", name: "Server", host: "example.test", port: 22, username: "user", authPreference: "password" as const, credentialId: null, groupId: null };
 
 function Harness() {
-  const { document, activeWorkspace, dispatch, registerWriter, clearBlockBuffer, startLocalBlock, connectBlock, connectFileBlock, connectNetworkBlock, startNetworkBlockRule, selectBlockTarget, selectFileTarget, selectNetworkTarget, writeBlock, resizeBlock, runtimes, fileRuntimes, networkRuntimes } = useWorkspace();
+  const { document, activeWorkspace, dispatch, registerWriter, clearBlockBuffer, startLocalBlock, connectBlock, connectFileBlock, disconnectFileBlock, connectNetworkBlock, disconnectNetworkBlock, startNetworkBlockRule, selectBlockTarget, selectFileTarget, selectNetworkTarget, writeBlock, resizeBlock, runtimes, fileRuntimes, networkRuntimes } = useWorkspace();
   const ids = blockIds(activeWorkspace.layout);
   const activeLeaf = findLeaf(activeWorkspace.layout, activeWorkspace.activeBlockId);
   return <>
@@ -76,10 +76,12 @@ function Harness() {
     <button onClick={() => void connectBlock(ids[0], profile, { method: "sshAgent" }, mocks.onFailure)}>connect-with-fallback</button>
     <button onClick={() => dispatch({ type: "openFiles", workspaceId: activeWorkspace.id, anchorBlockId: ids[0], profileId: profile.id, path: "/srv" })}>open-files</button>
     <button onClick={() => void connectFileBlock(activeWorkspace.activeBlockId, profile, { method: "password", password: "ephemeral" })}>connect-files</button>
+    <button onClick={() => void disconnectFileBlock(activeWorkspace.activeBlockId)}>disconnect-files</button>
     <button onClick={() => void selectFileTarget(activeWorkspace.id, activeWorkspace.activeBlockId, null)}>files-local</button>
     <button onClick={() => void selectFileTarget(activeWorkspace.id, activeWorkspace.activeBlockId, profile.id)}>files-remote</button>
     <button onClick={() => dispatch({ type: "openNetwork", workspaceId: activeWorkspace.id, anchorBlockId: ids[0], profileId: profile.id })}>open-network</button>
     <button onClick={() => void connectNetworkBlock(activeWorkspace.activeBlockId, profile, { method: "sshAgent" })}>connect-network</button>
+    <button onClick={() => void disconnectNetworkBlock(activeWorkspace.activeBlockId)}>disconnect-network</button>
     <button onClick={() => void startNetworkBlockRule(activeWorkspace.activeBlockId, "rule-1")}>start-network-rule</button>
     <button onClick={() => void selectNetworkTarget(activeWorkspace.id, activeWorkspace.activeBlockId, null)}>network-clear-target</button>
     <span data-testid="runtime">{runtimes[ids[0]]?.kind}:{runtimes[ids[0]]?.status}</span>
@@ -454,6 +456,12 @@ describe("WorkspaceProvider multi-session routing", () => {
     expect(screen.getByTestId("file-progress")).toHaveTextContent("connected:连接成功");
     expect(mocks.connectSession).not.toHaveBeenCalled();
 
+    await user.click(screen.getByRole("button", { name: "disconnect-files" }));
+    await waitFor(() => expect(screen.getByTestId("file-runtime")).toHaveTextContent("sftp:closed"));
+    expect(mocks.closeSession).toHaveBeenCalledWith("files-session-1");
+    await user.click(screen.getByRole("button", { name: "connect-files" }));
+    await waitFor(() => expect(screen.getByTestId("file-runtime")).toHaveTextContent("sftp:connected"));
+
     await user.click(screen.getByRole("button", { name: "files-local" }));
     await waitFor(() => expect(mocks.closeSession).toHaveBeenCalledWith("files-session-1"));
     expect(screen.getByTestId("file-runtime")).toHaveTextContent("local:connected");
@@ -481,6 +489,12 @@ describe("WorkspaceProvider multi-session routing", () => {
     await user.click(screen.getByRole("button", { name: "start-network-rule" }));
     await waitFor(() => expect(mocks.startNetworkRule).toHaveBeenCalledWith("network-session-1", "rule-1"));
     expect(screen.getByTestId("network-runtime")).toHaveTextContent("connected:running");
+
+    await user.click(screen.getByRole("button", { name: "disconnect-network" }));
+    await waitFor(() => expect(screen.getByTestId("network-runtime")).toHaveTextContent("closed"));
+    expect(mocks.closeSession).toHaveBeenCalledWith("network-session-1");
+    await user.click(screen.getByRole("button", { name: "connect-network" }));
+    await waitFor(() => expect(screen.getByTestId("network-runtime")).toHaveTextContent("connected"));
 
     await user.click(screen.getByRole("button", { name: "network-clear-target" }));
     await waitFor(() => expect(mocks.closeSession).toHaveBeenCalledWith("network-session-1"));

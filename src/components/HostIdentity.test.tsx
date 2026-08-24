@@ -29,10 +29,24 @@ describe("HostIdentity", () => {
     expect(dialog).toHaveTextContent("2222");
     expect(dialog).toHaveTextContent("deploy@prod.example:2222");
 
-    await user.click(screen.getByRole("button", { name: "复制主机地址" }));
+    const copyButton = screen.getByRole("button", { name: "复制主机地址" });
+    expect(copyButton).toHaveClass("host-summary-copy-action");
+    await user.click(copyButton);
     expect(mocks.writeText).toHaveBeenCalledWith("prod.example");
     expect(await screen.findByRole("status")).toHaveTextContent("主机地址已复制");
-    expect(screen.getByRole("button", { name: "已复制" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "已复制" })).toBe(copyButton);
+  });
+
+  it("keeps a destructive host action inside the summary card", async () => {
+    const user = userEvent.setup();
+    const onDisconnect = vi.fn();
+    render(<HostIdentity profile={profile} dangerAction={{ label: "断开连接", onSelect: onDisconnect }}/>);
+
+    await user.click(screen.getByRole("button", { name: /查看 Production 主机概要/ }));
+    await user.click(screen.getByRole("button", { name: "断开连接" }));
+
+    expect(onDisconnect).toHaveBeenCalledOnce();
+    expect(screen.queryByRole("dialog", { name: "Production" })).not.toBeInTheDocument();
   });
 
   it("reports clipboard failure and closes from Escape with focus restored", async () => {

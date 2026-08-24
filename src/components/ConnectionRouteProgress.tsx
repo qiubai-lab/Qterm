@@ -4,8 +4,17 @@ import { createPortal } from "react-dom";
 import type { ConnectionRouteNodeProgress, ConnectionRouteNodeState, ConnectionRouteProgressState } from "../workspace/connectionProgress";
 import { calculateConnectionRouteTooltipPosition } from "./connectionRouteTooltipPosition";
 import { HostIdentity, type HostIdentitySummary } from "./HostIdentity";
+import { Icon, type IconName } from "./Icon";
 
-export function ConnectionRouteProgress({ progress, endpoint, profile }: { progress: ConnectionRouteProgressState | null | undefined; endpoint?: string | null; profile?: HostIdentitySummary | null }) {
+interface ConnectionRouteAction {
+  label: string;
+  icon: IconName;
+  tone?: "default" | "danger";
+  disabled?: boolean;
+  onSelect: () => void;
+}
+
+export function ConnectionRouteProgress({ progress, endpoint, profile, onRequestDisconnect, statusAction }: { progress: ConnectionRouteProgressState | null | undefined; endpoint?: string | null; profile?: HostIdentitySummary | null; onRequestDisconnect?: () => void; statusAction?: ConnectionRouteAction }) {
   const [hoveredNode, setHoveredNode] = useState<number | null>(null);
   const [focusedNode, setFocusedNode] = useState<number | null>(null);
   const anchorRefs = useRef(new Map<number, HTMLSpanElement>());
@@ -85,8 +94,17 @@ export function ConnectionRouteProgress({ progress, endpoint, profile }: { progr
         ><span className="connection-route-node-mark" aria-hidden="true"/></span>
       </span>)}
     </div>
+    {statusAction && <button
+      type="button"
+      className="terminal-target-status-action"
+      data-tone={statusAction.tone}
+      aria-label={statusAction.label}
+      title={statusAction.label}
+      disabled={statusAction.disabled}
+      onClick={statusAction.onSelect}
+    ><Icon name={statusAction.icon} size={11}/></button>}
     {endpoint && (profile
-      ? <HostIdentity profile={profile} label={endpoint} className="connection-route-endpoint"/>
+      ? <HostIdentity profile={profile} label={endpoint} className="connection-route-endpoint" dangerAction={onRequestDisconnect ? { label: "断开连接", onSelect: onRequestDisconnect } : undefined}/>
       : <small className="connection-route-endpoint">{endpoint}</small>)}
   </div>{tooltip && createPortal(tooltip, document.body)}</>;
 }

@@ -16,13 +16,17 @@ interface HostIdentityProps {
   profile: HostIdentitySummary;
   label?: string;
   className?: string;
+  dangerAction?: {
+    label: string;
+    onSelect: () => void;
+  };
 }
 
 const VIEWPORT_INSET = 8;
 const POPOVER_GAP = 5;
-const POPOVER_WIDTH = 276;
+const POPOVER_WIDTH = 300;
 
-export function HostIdentity({ profile, label = `${profile.username}@${profile.host}`, className }: HostIdentityProps) {
+export function HostIdentity({ profile, label = `${profile.username}@${profile.host}`, className, dangerAction }: HostIdentityProps) {
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState<CSSProperties | null>(null);
   const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
@@ -115,7 +119,13 @@ export function HostIdentity({ profile, label = `${profile.username}@${profile.h
     </dl>
     <div className="host-summary-actions">
       <span role="status" aria-live="polite">{copyState === "copied" ? "主机地址已复制" : copyState === "failed" ? "复制失败，请重试" : "复制纯主机/IP"}</span>
-      <Button size="compact" variant="primary" onClick={() => void copyHost()}><Icon name="copy" size={11}/>{copyState === "copied" ? "已复制" : "复制主机地址"}</Button>
+      <span className="host-summary-action-buttons">
+        {dangerAction && <Button size="compact" variant="danger" onClick={() => {
+          setOpen(false);
+          dangerAction.onSelect();
+        }}><Icon name="disconnect" size={11}/>{dangerAction.label}</Button>}
+        <Button className="host-summary-copy-action" size="compact" variant="primary" onClick={() => void copyHost()}><Icon name="copy" size={11}/>{copyState === "copied" ? "已复制" : "复制主机地址"}</Button>
+      </span>
     </div>
   </div> : null;
 

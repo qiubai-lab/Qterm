@@ -59,7 +59,7 @@ xattr -cr /Applications/Qterm.app
 ### Workspace 与终端
 
 - **多 Workspace 工作台**：顶部标签直接代表独立工作环境，会话、布局与终端输出在切换后继续保留。
-- **自由分割布局**：Terminal、Files 与 Network Block 可以横向或纵向分割，并支持调整比例、重排与最大化。
+- **自由分割布局**：Terminal、Files 与 Network Block 可以横向或纵向分割，并支持调整比例与重排。
 - **本地与远程终端**：在同一界面中同时运行本机 shell 和 SSH 会话，终端尺寸变化会同步到底层 PTY。
 - **会话保护**：支持手动锁定终端界面，也可配置应用内空闲自动锁定。
 
@@ -81,16 +81,19 @@ xattr -cr /Applications/Qterm.app
 
 ## ⌨️ 常用操作
 
-快捷键中的 `Mod` 在 macOS 上是 `Command`，在 Windows 和 Linux 上是 `Ctrl`。
+为避免覆盖 Shell、vim 和 tmux 的控制键，macOS 使用 `Command`，Windows/Linux 的工作台快捷键使用 `Ctrl+Shift`。
 
 | 操作 | 快捷键或手势 |
 | --- | --- |
-| 新建 Workspace | `Mod+T` |
-| 左右分割当前 Block | `Mod+D` |
-| 上下分割当前 Block | `Shift+Mod+D` |
-| 切换到第 1–9 个 Workspace | `Mod+1` … `Mod+9` |
-| 循环切换 Workspace | `Shift+Mod+[` / `Shift+Mod+]` |
-| 打开连接管理 | `Mod+K` |
+| 新建 Workspace | macOS `⌘T`；Windows/Linux `Ctrl+Shift+T` |
+| 搜索当前终端输出 | macOS `⌘F`；Windows/Linux `Ctrl+Shift+F` |
+| 左右分割当前 Block | macOS `⌘D`；Windows/Linux `Ctrl+Shift+D` |
+| 上下分割当前 Block | macOS `⇧⌘D`；Windows/Linux `Ctrl+Alt+Shift+D` |
+| 切换到第 1–9 个 Workspace | macOS `⌘1` … `⌘9`；Windows/Linux `Ctrl+Shift+1` … `Ctrl+Shift+9` |
+| 循环切换 Workspace | macOS `⇧⌘[` / `⇧⌘]`；Windows/Linux `Ctrl+Shift+[` / `Ctrl+Shift+]` |
+| 聚焦相邻 Block | macOS `⌘⌥方向键`；Windows/Linux `Ctrl+Shift+方向键` |
+| 聚焦上一个/下一个 Block | macOS `⌘⌥PageUp` / `⌘⌥PageDown`；Windows/Linux `Ctrl+Shift+PageUp` / `Ctrl+Shift+PageDown` |
+| 打开连接管理 | macOS `⌘K`；Windows/Linux `Ctrl+Shift+K` |
 | 重命名 Workspace | 双击标签 |
 | 重排 Workspace / Block | 拖动标签或 Block 标题栏 |
 

@@ -14,6 +14,10 @@ import { fitContextMenu } from "./fileBrowserModel";
 
 export type EditorLanguage = "markdown" | "json" | "yaml" | "text";
 type EditorContextMenuState = { anchorX: number; anchorY: number; x: number; y: number; placement: "above" | "below"; hasSelection: boolean; hasContent: boolean };
+type EditorOperationMessage = { text: string; tone: "success" | "error" };
+
+const SUCCESS_OPERATION_MESSAGE_MS = 1_800;
+const ERROR_OPERATION_MESSAGE_MS = 4_200;
 
 export function CodeEditor({ value, language, readOnly = false, onChange, onSave }: {
   value: string;
@@ -29,12 +33,21 @@ export function CodeEditor({ value, language, readOnly = false, onChange, onSave
   const onChangeRef = useRef(onChange);
   const onSaveRef = useRef(onSave);
   const [contextMenu, setContextMenu] = useState<EditorContextMenuState | null>(null);
-  const [operationMessage, setOperationMessage] = useState("");
+  const [operationMessage, setOperationMessage] = useState<EditorOperationMessage | null>(null);
 
   useEffect(() => {
     onChangeRef.current = onChange;
     onSaveRef.current = onSave;
   }, [onChange, onSave]);
+
+  useEffect(() => {
+    if (!operationMessage) return;
+    const duration = operationMessage.tone === "error" ? ERROR_OPERATION_MESSAGE_MS : SUCCESS_OPERATION_MESSAGE_MS;
+    const timeout = window.setTimeout(() => {
+      setOperationMessage((current) => current === operationMessage ? null : current);
+    }, duration);
+    return () => window.clearTimeout(timeout);
+  }, [operationMessage]);
 
   useEffect(() => {
     if (!host.current) return;
@@ -150,9 +163,9 @@ export function CodeEditor({ value, language, readOnly = false, onChange, onSave
         const changes = view.state.selection.ranges.filter((range) => !range.empty).map((range) => ({ from: range.from, to: range.to, insert: "" }));
         if (changes.length > 0) view.dispatch({ changes });
       }
-      setOperationMessage(cut ? "已剪切" : "已复制");
+      setOperationMessage({ text: cut ? "已剪切" : "已复制", tone: "success" });
     } catch (reason) {
-      if (editor.current === view) setOperationMessage(`${cut ? "剪切" : "复制"}失败：${clipboardErrorMessage(reason)}`);
+      if (editor.current === view) setOperationMessage({ text: `${cut ? "剪切" : "复制"}失败：${clipboardErrorMessage(reason)}`, tone: "error" });
     } finally {
       if (editor.current === view) view.focus();
     }
@@ -167,9 +180,9 @@ export function CodeEditor({ value, language, readOnly = false, onChange, onSave
       if (editor.current !== view) return;
       const changes = view.state.selection.ranges.map((range) => ({ from: range.from, to: range.to, insert: text }));
       view.dispatch({ changes });
-      setOperationMessage("已粘贴");
+      setOperationMessage({ text: "已粘贴", tone: "success" });
     } catch (reason) {
-      if (editor.current === view) setOperationMessage(`粘贴失败：${clipboardErrorMessage(reason)}`);
+      if (editor.current === view) setOperationMessage({ text: `粘贴失败：${clipboardErrorMessage(reason)}`, tone: "error" });
     } finally {
       if (editor.current === view) view.focus();
     }
@@ -201,7 +214,7 @@ export function CodeEditor({ value, language, readOnly = false, onChange, onSave
   const shortcuts = editorShortcutLabels();
   return <div className="file-code-editor" data-read-only={readOnly || undefined}>
     <div className="file-code-editor-host" ref={host}/>
-    {operationMessage && <div className="file-editor-operation" role="status" aria-label="编辑器操作状态" aria-live="polite">{operationMessage}</div>}
+    {operationMessage && <div className="file-editor-operation" data-tone={operationMessage.tone} role="status" aria-label="编辑器操作状态" aria-live="polite">{operationMessage.text}</div>}
     {contextMenu && createPortal(<div ref={menuRef} className="file-context-menu file-editor-context-menu" data-placement={contextMenu.placement} role="menu" aria-label={readOnly ? "文件预览菜单" : "文件编辑菜单"} style={{ left: contextMenu.x, top: contextMenu.y }} onContextMenu={(event) => event.preventDefault()} onKeyDown={handleMenuKeyDown}>
       {!readOnly && <button role="menuitem" disabled={!contextMenu.hasSelection} onClick={() => void copySelection(true)}><span>剪切</span><kbd>{shortcuts.cut}</kbd></button>}
       <button role="menuitem" disabled={!contextMenu.hasSelection} onClick={() => void copySelection(false)}><span>复制</span><kbd>{shortcuts.copy}</kbd></button>

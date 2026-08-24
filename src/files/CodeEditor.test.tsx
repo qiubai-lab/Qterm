@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 const { readClipboardText, writeClipboardText } = vi.hoisted(() => ({
@@ -20,8 +20,30 @@ describe("CodeEditor context menu", () => {
   });
   afterEach(() => {
     cleanup();
+    vi.useRealTimers();
     readClipboardText.mockReset();
     writeClipboardText.mockReset();
+  });
+
+  it("dismisses successful clipboard feedback after a short delay", async () => {
+    writeClipboardText.mockResolvedValue(undefined);
+    const view = render(<CodeEditor value="hello" language="text" onChange={vi.fn()} onSave={vi.fn()}/>);
+    const content = await editorContent(view.container);
+    fireEvent.contextMenu(content);
+    fireEvent.click(screen.getByRole("menuitem", { name: /全选/ }));
+    fireEvent.contextMenu(content);
+
+    vi.useFakeTimers();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("menuitem", { name: /复制/ }));
+      await Promise.resolve();
+    });
+    expect(screen.getByRole("status", { name: "编辑器操作状态" })).toHaveTextContent("已复制");
+
+    act(() => vi.advanceTimersByTime(1_799));
+    expect(screen.getByRole("status", { name: "编辑器操作状态" })).toBeInTheDocument();
+    act(() => vi.advanceTimersByTime(1));
+    expect(screen.queryByRole("status", { name: "编辑器操作状态" })).not.toBeInTheDocument();
   });
 
   it("supports select all, copy, cut, and paste in editable files", async () => {
@@ -98,9 +120,17 @@ describe("CodeEditor context menu", () => {
     fireEvent.contextMenu(content);
     fireEvent.click(screen.getByRole("menuitem", { name: /全选/ }));
     fireEvent.contextMenu(content);
-    fireEvent.click(screen.getByRole("menuitem", { name: /复制/ }));
+    vi.useFakeTimers();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("menuitem", { name: /复制/ }));
+      await Promise.resolve();
+    });
 
-    expect(await screen.findByRole("status", { name: "编辑器操作状态" })).toHaveTextContent("复制失败：剪贴板不可用");
+    expect(screen.getByRole("status", { name: "编辑器操作状态" })).toHaveTextContent("复制失败：剪贴板不可用");
+    act(() => vi.advanceTimersByTime(4_199));
+    expect(screen.getByRole("status", { name: "编辑器操作状态" })).toBeInTheDocument();
+    act(() => vi.advanceTimersByTime(1));
+    expect(screen.queryByRole("status", { name: "编辑器操作状态" })).not.toBeInTheDocument();
   });
 });
 

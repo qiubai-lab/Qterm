@@ -64,6 +64,11 @@ describe("application layout styles", () => {
     expect(styles).toContain(":is(.connection-context-menu,.file-context-menu,.network-context-menu,.terminal-context-menu) button:hover:not(:disabled):not(.danger)");
     expect(styles).toContain("color:var(--menu-hover-text);background:var(--menu-hover-background)");
     expect(styles).toContain(".terminal-context-menu button:hover:not(:disabled):not(.danger) kbd");
+    expect(styles).toContain(":is(.connection-context-menu,.file-context-menu,.network-context-menu,.terminal-context-menu) button{color:var(--menu-text)}");
+    expect(styles).toContain(":is(.connection-context-menu,.file-context-menu,.network-context-menu,.terminal-context-menu) kbd{color:var(--menu-secondary-text)}");
+    expect(styles).toContain(":is(.connection-context-menu,.file-context-menu,.network-context-menu,.terminal-context-menu) button:disabled,:is(.connection-context-menu,.file-context-menu,.network-context-menu,.terminal-context-menu) button.danger:disabled{color:var(--menu-disabled-text);background:transparent;opacity:1}");
+    expect(styles).toContain(":is(.connection-context-menu,.file-context-menu,.network-context-menu,.terminal-context-menu) button:disabled :is(svg,kbd){color:currentColor}");
+    expect(lightOverrides).not.toMatch(/(?:file|connection|profile)-context-menu/);
   });
 
   it("uses one restrained danger marker for required field labels", () => {
@@ -861,6 +866,9 @@ describe("application layout styles", () => {
     expect(lastDeclarations(".file-code-editor .cm-selectionBackground")).toContain("background:var(--editor-selection)!important");
     expect(lastDeclarations(".file-code-editor .cm-selectionBackground")).toContain("box-shadow:none");
     expect(lastDeclarations(".file-code-editor .cm-content::selection,.file-code-editor .cm-content ::selection")).toContain("color:var(--editor-selection-foreground)");
+    expect(styles).toContain(".file-editor-operation{animation:file-editor-operation-lifecycle 1800ms ease both}");
+    expect(lastDeclarations('.file-editor-operation[data-tone="error"]')).toContain("animation-duration:4200ms");
+    expect(styles).toContain("@media(prefers-reduced-motion:reduce){.file-editor-operation{animation:none!important}}");
     expect(lastDeclarations(".file-row:hover,.file-row:focus-visible")).toContain("background:var(--file-active-surface)");
     expect(lastDeclarations(".file-row:hover,.file-row:focus-visible")).toContain("color-mix(in srgb,var(--file-active-marker) 72%,transparent)");
     expect(lastDeclarations(".file-row:hover .file-name svg,.file-row:focus-visible .file-name svg")).toContain("color:var(--file-active-marker)");

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { bindTerminalTheme, readTerminalTheme, refreshTerminalThemes } from "./terminalTheme";
+import { bindTerminalTheme, readTerminalSearchColors, readTerminalTheme, refreshTerminalThemes } from "./terminalTheme";
 
 const tokens = ["--terminal-foreground", "--terminal-cursor", "--terminal-scrollbar", "--terminal-ansi-blue", "--terminal-ansi-bright-white"];
 
@@ -43,5 +43,14 @@ describe("terminal theme adapter", () => {
 
     expect(first).not.toHaveBeenCalled();
     expect(second).not.toHaveBeenCalled();
+  });
+
+  it("reads search decorations from semantic accent tokens", () => {
+    expect(readTerminalSearchColors()).toEqual({ matchBackground: "#153b35", activeMatchBackground: "#75e6cf" });
+    document.documentElement.style.setProperty("--accent-bg", "#112233");
+    document.documentElement.style.setProperty("--accent", "#abcdef");
+    expect(readTerminalSearchColors()).toEqual({ matchBackground: "#112233", activeMatchBackground: "#abcdef" });
+    document.documentElement.style.removeProperty("--accent-bg");
+    document.documentElement.style.removeProperty("--accent");
   });
 });

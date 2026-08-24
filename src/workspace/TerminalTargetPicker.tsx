@@ -21,6 +21,14 @@ interface TerminalTargetPickerProps {
   ariaContext?: string;
   allowLocal?: boolean;
   hideDetail?: boolean;
+  onRequestDisconnect?: () => void;
+  statusAction?: {
+    label: string;
+    icon: IconName;
+    tone?: "default" | "danger";
+    disabled?: boolean;
+    onSelect: () => void;
+  };
 }
 
 interface PickerPosition {
@@ -50,7 +58,7 @@ const GROUP_OPEN_DELAY = 100;
 const GROUP_CLOSE_DELAY = 180;
 const SUBMENU_SCROLLBAR_HIDE_DELAY = 1_200;
 
-export function TerminalTargetPicker({ profiles, groups = [], recentProfileIds = [], selectedProfileId, status, detail, onSelect, onManageConnections, icon = "terminal", localName = "本地终端", localDetail = "系统默认 Shell", ariaContext = "终端连接", allowLocal = true, hideDetail = false }: TerminalTargetPickerProps) {
+export function TerminalTargetPicker({ profiles, groups = [], recentProfileIds = [], selectedProfileId, status, detail, onSelect, onManageConnections, icon = "terminal", localName = "本地终端", localDetail = "系统默认 Shell", ariaContext = "终端连接", allowLocal = true, hideDetail = false, onRequestDisconnect, statusAction }: TerminalTargetPickerProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [position, setPosition] = useState<PickerPosition | null>(null);
@@ -415,8 +423,17 @@ export function TerminalTargetPicker({ profiles, groups = [], recentProfileIds =
       <span className="terminal-target-name">{name}</span>
     </button>
     {!hideDetail && (selected && status === "connected"
-      ? <HostIdentity profile={selected} label={detail} className="terminal-target-endpoint"/>
+      ? <HostIdentity profile={selected} label={detail} className="terminal-target-endpoint" dangerAction={onRequestDisconnect ? { label: "断开连接", onSelect: onRequestDisconnect } : undefined}/>
       : <small>{detail}</small>)}
+    {!hideDetail && statusAction && <button
+      type="button"
+      className="terminal-target-status-action"
+      data-tone={statusAction.tone}
+      aria-label={statusAction.label}
+      title={statusAction.label}
+      disabled={statusAction.disabled}
+      onClick={statusAction.onSelect}
+    ><Icon name={statusAction.icon} size={11}/></button>}
     {popover && createPortal(<>{popover}{submenu}</>, document.body)}
   </div>;
 }

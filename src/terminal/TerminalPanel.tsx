@@ -1,19 +1,24 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from "react";
 import { createPortal } from "react-dom";
 import { FitAddon } from "@xterm/addon-fit";
+import type { ISearchOptions } from "@xterm/addon-search";
 import { Terminal } from "@xterm/xterm";
 import { readText as readClipboardText, writeText as writeClipboardText } from "@tauri-apps/plugin-clipboard-manager";
 import "@xterm/xterm/css/xterm.css";
 
+import { resolveAppShortcut, shortcutLabel } from "../app/shortcuts";
 import { DialogFrame } from "../components/dialogs/DialogFrame";
+import { Icon } from "../components/Icon";
+import { currentDesktopPlatform } from "../lib/tauri/window";
 import { useWorkspace } from "../workspace/WorkspaceProvider";
 import { parseOsc7Cwd } from "./osc7";
 import { createResizeScheduler, type ResizeScheduler } from "./resizeScheduler";
 import { createTerminalInputScheduler, type TerminalInputScheduler } from "./terminalInputScheduler";
-import { bindTerminalTheme, readTerminalTheme } from "./terminalTheme";
+import { ensureTerminalSearch, type TerminalSearchHost } from "./terminalSearch";
+import { bindTerminalTheme, readTerminalSearchColors, readTerminalTheme } from "./terminalTheme";
+import { registerTerminalController } from "./terminalViewRegistry";
 
-interface TerminalView {
-  terminal: Terminal;
+interface TerminalView extends TerminalSearchHost {
   fit: FitAddon;
   decoder: TextDecoder;
   element: HTMLElement;
@@ -32,6 +37,7 @@ interface TerminalView {
 type ClipboardPlatform = "mac" | "windows" | "linux";
 type ContextMenuState = { anchorX: number; anchorY: number; x: number; y: number; placement: "above" | "below"; hasSelection: boolean };
 type PendingPaste = { text: string; lines: number; characters: number };
+type SearchResults = { resultIndex: number; resultCount: number };
 
 const terminalViews = new Map<string, TerminalView>();
 const CLEAR_SCREEN_INPUT = "\x1bcls\r";
@@ -39,18 +45,26 @@ const FALLBACK_TERMINAL_FONT_FAMILY = "SFMono-Regular, Menlo, Monaco, Consolas, 
 const FALLBACK_TERMINAL_FONT_SIZE = 13;
 const FALLBACK_TERMINAL_LINE_HEIGHT = 1.22;
 const LONG_PASTE_THRESHOLD = 1000;
+const SEARCH_EXIT_DURATION_MS = 110;
 
 export function TerminalPanel({ blockId, sessionKey, visible, local }: { blockId: string; sessionKey: string; visible: boolean; local: boolean }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const searchCloseTimerRef = useRef<number | null>(null);
   const viewRef = useRef<TerminalView | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [pendingPaste, setPendingPaste] = useState<PendingPaste | null>(null);
+  const [searchMounted, setSearchMounted] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [searchResults, setSearchResults] = useState<SearchResults>({ resultIndex: 0, resultCount: 0 });
   const { hydrated = true, localTerminalCapabilities, registerWriter, setBlockCwd, startLocalBlock, writeBlock, resizeBlock, clearBlockBuffer, runtimes } = useWorkspace();
   const windowsPty = local ? localTerminalCapabilities?.windowsPty ?? undefined : undefined;
   const inputEnabled = runtimes[blockId]?.status === "connected";
   const connectedSessionId = runtimes[blockId]?.sessionId ?? null;
   const clipboardPlatform = terminalClipboardPlatform();
+  const desktopPlatform = currentDesktopPlatform();
   const writeRef = useRef(writeBlock);
   const resizeRef = useRef(resizeBlock);
   const startLocalRef = useRef(startLocalBlock);
@@ -105,6 +119,54 @@ export function TerminalPanel({ blockId, sessionKey, visible, local }: { blockId
     closeContextMenu();
   }, [blockId, clearBlockBuffer, closeContextMenu]);
 
+  const openSearch = useCallback(() => {
+    if (searchCloseTimerRef.current !== null) window.clearTimeout(searchCloseTimerRef.current);
+    searchCloseTimerRef.current = null;
+    setContextMenu(null);
+    setSearchMounted(true);
+    setSearchOpen(true);
+  }, []);
+
+  const finishSearchClose = useCallback(() => {
+    if (searchCloseTimerRef.current !== null) window.clearTimeout(searchCloseTimerRef.current);
+    searchCloseTimerRef.current = null;
+    setSearchMounted(false);
+    restoreTerminalFocus();
+  }, [restoreTerminalFocus]);
+
+  const closeSearch = useCallback(() => {
+    viewRef.current?.search?.clearDecorations();
+    setSearchOpen(false);
+    setSearchResults({ resultIndex: 0, resultCount: 0 });
+    if (searchCloseTimerRef.current !== null) window.clearTimeout(searchCloseTimerRef.current);
+    searchCloseTimerRef.current = window.setTimeout(finishSearchClose, SEARCH_EXIT_DURATION_MS);
+  }, [finishSearchClose]);
+
+  useEffect(() => () => {
+    if (searchCloseTimerRef.current !== null) window.clearTimeout(searchCloseTimerRef.current);
+  }, []);
+
+  const runSearch = useCallback((direction: "next" | "previous", term = searchTerm, incremental = false) => {
+    const view = viewRef.current;
+    if (!view) return;
+    view.onSearchResults = setSearchResults;
+    const search = ensureTerminalSearch(view);
+    if (!term) {
+      search.clearDecorations();
+      setSearchResults({ resultIndex: 0, resultCount: 0 });
+      return;
+    }
+    const options: ISearchOptions = { ...terminalSearchOptions(), incremental };
+    if (direction === "next") search.findNext(term, options);
+    else search.findPrevious(term, options);
+  }, [searchTerm]);
+
+  function updateSearch(event: ChangeEvent<HTMLInputElement>) {
+    const value = event.currentTarget.value;
+    setSearchTerm(value);
+    runSearch("next", value, true);
+  }
+
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -112,6 +174,8 @@ export function TerminalPanel({ blockId, sessionKey, visible, local }: { blockId
     view.write = (data) => writeRef.current(blockId, new TextEncoder().encode(data));
     view.resize.send = (columns, rows) => resizeRef.current(blockId, columns, rows);
     view.onCwd = (cwd) => setBlockCwd(blockId, cwd);
+    view.onSearchResults = setSearchResults;
+    ensureTerminalSearch(view);
     viewRef.current = view;
     const unregisterWriter = registerWriter(
       blockId,
@@ -143,6 +207,7 @@ export function TerminalPanel({ blockId, sessionKey, visible, local }: { blockId
       view.write = async () => undefined;
       view.resize.send = async () => undefined;
       view.onCwd = () => undefined;
+      view.onSearchResults = () => undefined;
       view.onKey = () => true;
       scheduleTerminalViewDisposal(sessionKey, view);
       if (viewRef.current === view) viewRef.current = null;
@@ -153,11 +218,28 @@ export function TerminalPanel({ blockId, sessionKey, visible, local }: { blockId
     const view = viewRef.current;
     if (!view) return;
     view.onKey = (event) => {
+      if (resolveAppShortcut(event, desktopPlatform)?.type === "searchTerminal") {
+        event.preventDefault();
+        event.stopPropagation();
+        openSearch();
+        return false;
+      }
       if (!handleClipboardShortcut(event, clipboardPlatform, view.terminal, inputEnabled, copySelection, requestPaste)) return false;
       return handleMacWordNavigationShortcut(event, clipboardPlatform, (data) => { void view.inputScheduler.send(data); });
     };
     return () => { view.onKey = () => true; };
-  }, [clipboardPlatform, copySelection, inputEnabled, requestPaste]);
+  }, [clipboardPlatform, copySelection, desktopPlatform, inputEnabled, openSearch, requestPaste]);
+
+  useEffect(() => registerTerminalController(blockId, {
+    focus: () => viewRef.current?.terminal.focus(),
+    openSearch,
+  }), [blockId, openSearch]);
+
+  useLayoutEffect(() => {
+    if (!searchMounted || !searchOpen) return;
+    searchInputRef.current?.focus();
+    searchInputRef.current?.select();
+  }, [searchMounted, searchOpen]);
 
   useEffect(() => {
     if (!hydrated || !local) return;
@@ -274,6 +356,40 @@ export function TerminalPanel({ blockId, sessionKey, visible, local }: { blockId
 
   return <>
     <div className="terminal-surface" ref={containerRef} aria-label={`终端 ${blockId}`} onContextMenu={openContextMenu} onKeyDown={openKeyboardContextMenu}/>
+    {searchMounted && <div
+      className="terminal-search"
+      data-state={searchOpen ? "open" : "closing"}
+      role="search"
+      aria-label="搜索终端输出"
+      onAnimationEnd={() => {
+        if (searchOpen) return;
+        finishSearchClose();
+      }}
+    >
+      <label className="terminal-search-field">
+        <Icon name="search" size={13}/>
+        <input
+          ref={searchInputRef}
+          type="search"
+          aria-label="搜索内容"
+          placeholder="搜索终端输出"
+          value={searchTerm}
+          onChange={updateSearch}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") { event.preventDefault(); closeSearch(); }
+            else if (event.key === "Enter") { event.preventDefault(); runSearch(event.shiftKey ? "previous" : "next"); }
+          }}
+        />
+      </label>
+      <span className={`terminal-search-results${searchTerm && searchResults.resultCount === 0 ? " empty" : ""}`} aria-live="polite">
+        {searchTerm ? searchResults.resultCount > 0 && searchResults.resultIndex >= 0 ? `${searchResults.resultIndex + 1}/${searchResults.resultCount}` : "无结果" : ""}
+      </span>
+      <span className="terminal-search-navigation">
+        <button type="button" aria-label="上一个匹配" disabled={!searchTerm} onClick={() => runSearch("previous")}><Icon name="back" size={12}/></button>
+        <button type="button" aria-label="下一个匹配" disabled={!searchTerm} onClick={() => runSearch("next")}><Icon name="forward" size={12}/></button>
+      </span>
+      <button className="terminal-search-close" type="button" aria-label="关闭搜索" onClick={closeSearch}><Icon name="close" size={12}/></button>
+    </div>}
     {contextMenu && createPortal(<div
       ref={menuRef}
       className="terminal-context-menu"
@@ -286,6 +402,8 @@ export function TerminalPanel({ blockId, sessionKey, visible, local }: { blockId
     >
       <button role="menuitem" disabled={!contextMenu.hasSelection} onClick={() => void copySelection()}><span>复制</span><kbd>{copyShortcutLabel(clipboardPlatform)}</kbd></button>
       <button role="menuitem" disabled={!inputEnabled} onClick={() => void requestPaste()}><span>粘贴</span><kbd>{pasteShortcutLabel(clipboardPlatform)}</kbd></button>
+      <div className="terminal-context-menu-separator" role="separator"/>
+      <button role="menuitem" onClick={openSearch}><span>搜索</span><kbd>{shortcutLabel("searchTerminal", desktopPlatform)}</kbd></button>
       <div className="terminal-context-menu-separator" role="separator"/>
       <button role="menuitem" onClick={selectAll}><span>全选</span></button>
       <div className="terminal-context-menu-separator" role="separator"/>
@@ -381,6 +499,7 @@ function acquireTerminalView(sessionKey: string, container: HTMLElement, windows
     existing.disposeTimer = null;
     if (windowsPty) existing.terminal.options.windowsPty = windowsPty;
     existing.terminal.options.theme = readTerminalTheme();
+    ensureTerminalSearch(existing);
     container.append(existing.element);
     return existing;
   }
@@ -388,6 +507,7 @@ function acquireTerminalView(sessionKey: string, container: HTMLElement, windows
   const typography = terminalTypography();
   const terminal = new Terminal({
     cursorBlink: true,
+    allowProposedApi: true,
     ...typography,
     scrollback: 8000,
     ...(windowsPty ? { windowsPty } : {}),
@@ -416,6 +536,7 @@ function acquireTerminalView(sessionKey: string, container: HTMLElement, windows
     input: { dispose: () => undefined },
     cwdHandler: { dispose: () => undefined },
     onCwd: () => undefined,
+    onSearchResults: () => undefined,
     onKey: () => true,
     write: async () => undefined,
     inputScheduler,
@@ -432,8 +553,21 @@ function acquireTerminalView(sessionKey: string, container: HTMLElement, windows
     if (cwd) view.onCwd(cwd);
     return true;
   });
+  ensureTerminalSearch(view);
   terminalViews.set(sessionKey, view);
   return view;
+}
+
+function terminalSearchOptions(): ISearchOptions {
+  const { matchBackground, activeMatchBackground } = readTerminalSearchColors();
+  return {
+    decorations: {
+      matchBackground,
+      matchOverviewRuler: matchBackground,
+      activeMatchBackground,
+      activeMatchColorOverviewRuler: activeMatchBackground,
+    },
+  };
 }
 
 function terminalTypography(): { fontFamily: string; fontSize: number; lineHeight: number } {
@@ -455,6 +589,7 @@ function scheduleTerminalViewDisposal(sessionKey: string, view: TerminalView) {
     view.input.dispose();
     view.inputScheduler.dispose();
     view.cwdHandler.dispose();
+    view.searchResultsHandler?.dispose();
     view.resizeScheduler.dispose();
     view.themeBinding.dispose();
     view.terminal.dispose();
