@@ -171,6 +171,10 @@ describe("ConnectionDialog", () => {
     const username = screen.getByLabelText("用户名");
     expect(name).toHaveValue("K8S服务器");
     expect(host).toHaveValue("10.100.5.28");
+    expect(username).toHaveAttribute("autocapitalize", "none");
+    expect(username).toHaveAttribute("autocorrect", "off");
+    expect(username).toHaveAttribute("autocomplete", "username");
+    expect(username).toHaveAttribute("spellcheck", "false");
     for (const field of [name, host, port, username]) {
       expect(field).toBeRequired();
       expect(field.closest("label")?.querySelector(".required-field-mark")).toBeInTheDocument();

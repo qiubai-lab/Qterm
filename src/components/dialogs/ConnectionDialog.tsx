@@ -559,7 +559,7 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
               <label className="span-2">分组<select value={editor.groupId ?? ""} onChange={(event) => setEditor({ ...editor, groupId: event.target.value || null })}><option value="">未分组</option>{groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}</select></label>
               <label><RequiredFieldLabel>主机</RequiredFieldLabel><input required value={editor.host} onChange={(event) => setEditor({ ...editor, host: event.target.value })}/></label>
               <label><RequiredFieldLabel>端口</RequiredFieldLabel><input required type="number" min="1" max="65535" value={editor.port} onChange={(event) => setEditor({ ...editor, port: Number(event.target.value) })}/></label>
-              <label className="span-2"><RequiredFieldLabel>用户名</RequiredFieldLabel><input required value={editor.username} onChange={(event) => setEditor({ ...editor, username: event.target.value })}/></label>
+              <label className="span-2"><RequiredFieldLabel>用户名</RequiredFieldLabel><input required autoCapitalize="none" autoCorrect="off" autoComplete="username" spellCheck={false} value={editor.username} onChange={(event) => setEditor({ ...editor, username: event.target.value })}/></label>
             </div>}
             {editorTab === "authentication" && <div className={`form-grid connection-tab-panel connection-auth-panel${tabMotion === "forward" ? " tab-forward" : tabMotion === "backward" ? " tab-backward" : ""}`} role="tabpanel" aria-label="认证方式">
               <label className="span-2">认证方式<select value={editor.authPreference} onChange={(event) => {
