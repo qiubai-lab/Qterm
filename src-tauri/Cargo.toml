@@ -1,6 +1,6 @@
 [package]
 name = "Qterm"
-version = "0.2.10"
+version = "0.2.11"
 description = "A secure cross-platform SSH terminal client"
 authors = ["Qterm contributors"]
 license = "GPL-3.0-only"
