@@ -107,6 +107,12 @@ describe("WorkspaceCanvas terminal actions", () => {
     expect(screen.getByRole("button", { name: "上下分割" })).toBeInTheDocument();
   });
 
+  it("passes workspace entry attention to the local terminal title", () => {
+    render(<WorkspaceCanvas workspace={workspace} visible localTerminalAttention onRequestClose={vi.fn()} onRequestAuthConnection={vi.fn()}/>);
+
+    expect(screen.getByText("本地终端", { selector: ".terminal-target-name" })).toHaveClass("local-terminal-attention");
+  });
+
   it("keeps search in the header action group", async () => {
     const user = userEvent.setup();
     render(<WorkspaceCanvas workspace={workspace} visible onRequestClose={vi.fn()} onRequestAuthConnection={vi.fn()}/>);

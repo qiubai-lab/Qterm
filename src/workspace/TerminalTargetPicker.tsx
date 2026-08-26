@@ -21,6 +21,7 @@ interface TerminalTargetPickerProps {
   ariaContext?: string;
   allowLocal?: boolean;
   hideDetail?: boolean;
+  localAttention?: boolean;
   onRequestDisconnect?: () => void;
   statusAction?: {
     label: string;
@@ -58,7 +59,7 @@ const GROUP_OPEN_DELAY = 100;
 const GROUP_CLOSE_DELAY = 180;
 const SUBMENU_SCROLLBAR_HIDE_DELAY = 1_200;
 
-export function TerminalTargetPicker({ profiles, groups = [], recentProfileIds = [], selectedProfileId, status, detail, onSelect, onManageConnections, icon = "terminal", localName = "本地终端", localDetail = "系统默认 Shell", ariaContext = "终端连接", allowLocal = true, hideDetail = false, onRequestDisconnect, statusAction }: TerminalTargetPickerProps) {
+export function TerminalTargetPicker({ profiles, groups = [], recentProfileIds = [], selectedProfileId, status, detail, onSelect, onManageConnections, icon = "terminal", localName = "本地终端", localDetail = "系统默认 Shell", ariaContext = "终端连接", allowLocal = true, hideDetail = false, localAttention = false, onRequestDisconnect, statusAction }: TerminalTargetPickerProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [position, setPosition] = useState<PickerPosition | null>(null);
@@ -420,7 +421,7 @@ export function TerminalTargetPicker({ profiles, groups = [], recentProfileIds =
       }}
     >
       <Icon name={icon} size={13}/>
-      <span className="terminal-target-name">{name}</span>
+      <span className={`terminal-target-name${localAttention && selectedProfileId === null ? " local-terminal-attention" : ""}`}>{name}</span>
     </button>
     {!hideDetail && (selected && status === "connected"
       ? <HostIdentity profile={selected} label={detail} className="terminal-target-endpoint" dangerAction={onRequestDisconnect ? { label: "断开连接", onSelect: onRequestDisconnect } : undefined}/>

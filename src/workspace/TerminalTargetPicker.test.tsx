@@ -17,6 +17,15 @@ afterEach(() => {
 });
 
 describe("TerminalTargetPicker", () => {
+  it("highlights only the local terminal name when entry attention is requested", () => {
+    const { rerender } = render(<TerminalTargetPicker profiles={profiles} selectedProfileId={null} status="connected" detail="本机" localAttention onSelect={vi.fn()}/>);
+
+    expect(screen.getByText("本地终端", { selector: ".terminal-target-name" })).toHaveClass("local-terminal-attention");
+
+    rerender(<TerminalTargetPicker profiles={profiles} selectedProfileId="profile-1" status="connected" detail="deploy@prod.example" localAttention onSelect={vi.fn()}/>);
+    expect(screen.getByText("Production", { selector: ".terminal-target-name" })).not.toHaveClass("local-terminal-attention");
+  });
+
   it("lists the local shell and saved connection profiles from the terminal name", async () => {
     const user = userEvent.setup();
     const onSelect = vi.fn();

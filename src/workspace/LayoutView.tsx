@@ -27,7 +27,7 @@ function BlockNotice({ message }: { message: string }) {
   return <div className="block-notice" role="alert" aria-live="assertive" aria-atomic="true">{message}</div>;
 }
 
-export function WorkspaceCanvas({ workspace, visible, onRequestClose, onRequestDisconnect, onRequestAuthConnection, onOpenConnectionManager }: { workspace: Workspace; visible: boolean; onRequestClose: (blockId: string) => void; onRequestDisconnect?: (owner: ConnectionOwner, blockId: string, name: string, local: boolean) => void; onRequestAuthConnection: (owner: ConnectionOwner, blockId: string, profile: ConnectionProfile) => void; onOpenConnectionManager?: () => void }) {
+export function WorkspaceCanvas({ workspace, visible, localTerminalAttention = false, onRequestClose, onRequestDisconnect, onRequestAuthConnection, onOpenConnectionManager }: { workspace: Workspace; visible: boolean; localTerminalAttention?: boolean; onRequestClose: (blockId: string) => void; onRequestDisconnect?: (owner: ConnectionOwner, blockId: string, name: string, local: boolean) => void; onRequestAuthConnection: (owner: ConnectionOwner, blockId: string, profile: ConnectionProfile) => void; onOpenConnectionManager?: () => void }) {
   const { dispatch } = useWorkspace();
   const [drag, setDrag] = useState<DragState | null>(null);
   const [liveRatios, setLiveRatios] = useState<Record<string, number>>({});
@@ -103,7 +103,7 @@ export function WorkspaceCanvas({ workspace, visible, onRequestClose, onRequestD
     element.addEventListener("pointercancel", end);
   }
 
-  const blockProps: BlockRenderProps = { workspace, visible, drag, beginDrag, onRequestClose, onRequestDisconnect, onRequestAuthConnection, onOpenConnectionManager };
+  const blockProps: BlockRenderProps = { workspace, visible, localTerminalAttention, drag, beginDrag, onRequestClose, onRequestDisconnect, onRequestAuthConnection, onOpenConnectionManager };
   return <div className="workspace-canvas">
     <div ref={layoutSurfaceRef} className="workspace-layout-surface">
       {geometry.leaves.map(({ node, bounds }) => <div key={node.blockId} className="workspace-block-host" data-workspace-block-host={node.blockId} style={boundsStyle(bounds)}>
@@ -130,6 +130,7 @@ export function WorkspaceCanvas({ workspace, visible, onRequestClose, onRequestD
 interface BlockRenderProps {
   workspace: Workspace;
   visible: boolean;
+  localTerminalAttention: boolean;
   drag: DragState | null;
   beginDrag: (event: ReactPointerEvent<HTMLElement>, blockId: string) => void;
   onRequestClose: (blockId: string) => void;
@@ -213,7 +214,7 @@ function TerminalBlock(props: BlockRenderProps & { blockId: string; profileId: s
     aria-label={`终端 Block ${profile?.name ?? "本地终端"}`}
   >
     <header className="terminal-block-header" onPointerDown={(event) => props.beginDrag(event, props.blockId)}>
-      <TerminalTargetPicker profiles={profiles} groups={profileGroups} recentProfileIds={document?.recentProfileIds ?? []} selectedProfileId={props.profileId} status={status} detail={detail} hideDetail={Boolean(runtime?.connectionProgress)} onSelect={(profileId) => void chooseTarget(profileId)} onManageConnections={props.onOpenConnectionManager} onRequestDisconnect={status === "connected" && props.profileId !== null ? requestDisconnect : undefined} statusAction={statusAction}/>
+      <TerminalTargetPicker profiles={profiles} groups={profileGroups} recentProfileIds={document?.recentProfileIds ?? []} selectedProfileId={props.profileId} status={status} detail={detail} hideDetail={Boolean(runtime?.connectionProgress)} localAttention={props.localTerminalAttention} onSelect={(profileId) => void chooseTarget(profileId)} onManageConnections={props.onOpenConnectionManager} onRequestDisconnect={status === "connected" && props.profileId !== null ? requestDisconnect : undefined} statusAction={statusAction}/>
       <ConnectionRouteProgress progress={runtime?.connectionProgress} endpoint={endpoint} profile={profile} onRequestDisconnect={status === "connected" && props.profileId !== null ? requestDisconnect : undefined} statusAction={runtime?.connectionProgress ? statusAction : undefined}/>
       <div className="block-actions">
         <button aria-label="搜索终端输出" title="搜索终端输出" onClick={() => openTerminalSearch(props.blockId)}><Icon name="search" size={13}/></button>

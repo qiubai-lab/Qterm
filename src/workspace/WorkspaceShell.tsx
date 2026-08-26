@@ -22,7 +22,7 @@ import { resolveConfiguredAuth } from "./configuredAuth";
 import { adjacentBlockId } from "./blockNavigation";
 import { blockIds } from "./layout";
 import { openFileWindowAction } from "./fileWindow";
-import type { Workspace } from "./model";
+import type { LayoutNode, Workspace } from "./model";
 import { openNetworkWindowAction } from "./networkWindow";
 import { useWorkspace } from "./WorkspaceProvider";
 
@@ -40,11 +40,12 @@ const WORKSPACE_DRAG_THRESHOLD_PX = 10;
 const TITLEBAR_DRAG_THRESHOLD_PX = 5;
 const TITLEBAR_DOUBLE_CLICK_DISTANCE_PX = 5;
 const TITLEBAR_DOUBLE_CLICK_MS = 350;
+const LOCAL_TERMINAL_ATTENTION_MS = 2_500;
 
 export function WorkspaceShell() {
   const desktopPlatform = currentDesktopPlatform();
   const usesNativeWindowControls = desktopPlatform === "macos";
-  const { document, activeWorkspace, dispatch, runtimes, fileRuntimes, networkRuntimes, connectBlock, connectFileBlock, connectNetworkBlock, disconnectBlock, disconnectFileBlock, disconnectNetworkBlock, isConnectionTargetCurrent, connectedCount, closeSessions, blocksForWorkspace, acceptBlockHostKey, rejectBlockHostKey, acceptFileHostKey, rejectFileHostKey, acceptNetworkHostKey, rejectNetworkHostKey, storageNotice, dismissStorageNotice } = useWorkspace();
+  const { hydrated, document, activeWorkspace, dispatch, runtimes, fileRuntimes, networkRuntimes, connectBlock, connectFileBlock, connectNetworkBlock, disconnectBlock, disconnectFileBlock, disconnectNetworkBlock, isConnectionTargetCurrent, connectedCount, closeSessions, blocksForWorkspace, acceptBlockHostKey, rejectBlockHostKey, acceptFileHostKey, rejectFileHostKey, acceptNetworkHostKey, rejectNetworkHostKey, storageNotice, dismissStorageNotice } = useWorkspace();
   const [tool, setTool] = useState<Tool | null>(null);
   const [renaming, setRenaming] = useState<{ id: string; value: string } | null>(null);
   const [closeRequest, setCloseRequest] = useState<CloseRequest | null>(null);
@@ -65,6 +66,7 @@ export function WorkspaceShell() {
   const [workspaceDropSettling, setWorkspaceDropSettling] = useState(false);
   const [workspaceTabIndicator, setWorkspaceTabIndicator] = useState({ x: 0, width: 0, ready: false });
   const [workspaceTransition, setWorkspaceTransition] = useState<{ workspaceId: string; direction: WorkspaceTransitionDirection | null }>(() => ({ workspaceId: activeWorkspace.id, direction: null }));
+  const [localTerminalAttentionWorkspaceId, setLocalTerminalAttentionWorkspaceId] = useState<string | null>(null);
   const workspaceTabStripRef = useRef<HTMLElement | null>(null);
   const workspaceTabRefs = useRef(new Map<string, HTMLDivElement>());
   const previousWorkspaceOrderRef = useRef(document.workspaces.map((workspace) => workspace.id));
@@ -82,6 +84,9 @@ export function WorkspaceShell() {
   const vaultLockBusyRef = useRef(false);
   const terminalLastActivityRef = useRef<number | null>(null);
   const previousTerminalLockedRef = useRef(false);
+  const localTerminalAttentionTimerRef = useRef<number | null>(null);
+  const startupAttentionShownRef = useRef(false);
+  const knownWorkspaceIdsRef = useRef(new Set(document.workspaces.map((workspace) => workspace.id)));
   const terminalHostPrompt = Object.entries(runtimes).find(([, runtime]) => runtime.hostKeyPrompt);
   const fileHostPrompt = Object.entries(fileRuntimes).find(([, runtime]) => runtime.hostKeyPrompt);
   const networkHostPrompt = Object.entries(networkRuntimes).find(([, runtime]) => runtime.hostKeyPrompt);
@@ -94,6 +99,38 @@ export function WorkspaceShell() {
         ? { owner: "network" as const, blockId: networkHostPrompt[0], prompt: networkHostPrompt[1].hostKeyPrompt! }
         : null;
   const hostPromptOpen = Boolean(hostPrompt);
+
+  const showLocalTerminalAttention = useCallback((workspaceId: string) => {
+    if (localTerminalAttentionTimerRef.current !== null) window.clearTimeout(localTerminalAttentionTimerRef.current);
+    localTerminalAttentionTimerRef.current = window.setTimeout(() => {
+      setLocalTerminalAttentionWorkspaceId(workspaceId);
+      localTerminalAttentionTimerRef.current = window.setTimeout(() => {
+        setLocalTerminalAttentionWorkspaceId((current) => current === workspaceId ? null : current);
+        localTerminalAttentionTimerRef.current = null;
+      }, LOCAL_TERMINAL_ATTENTION_MS);
+    }, 0);
+  }, []);
+
+  useEffect(() => () => {
+    if (localTerminalAttentionTimerRef.current !== null) window.clearTimeout(localTerminalAttentionTimerRef.current);
+  }, []);
+
+  useEffect(() => {
+    const nextWorkspaceIds = new Set(document.workspaces.map((workspace) => workspace.id));
+    if (!hydrated) {
+      knownWorkspaceIdsRef.current = nextWorkspaceIds;
+      return;
+    }
+    if (!startupAttentionShownRef.current) {
+      startupAttentionShownRef.current = true;
+      knownWorkspaceIdsRef.current = nextWorkspaceIds;
+      if (hasLocalTerminal(activeWorkspace.layout)) showLocalTerminalAttention(activeWorkspace.id);
+      return;
+    }
+    const addedWorkspace = document.workspaces.find((workspace) => !knownWorkspaceIdsRef.current.has(workspace.id));
+    knownWorkspaceIdsRef.current = nextWorkspaceIds;
+    if (addedWorkspace && hasLocalTerminal(addedWorkspace.layout)) showLocalTerminalAttention(addedWorkspace.id);
+  }, [activeWorkspace, document.workspaces, hydrated, showLocalTerminalAttention]);
 
   useLayoutEffect(() => {
     const strip = workspaceTabStripRef.current;
@@ -634,7 +671,7 @@ export function WorkspaceShell() {
           {document.workspaces.map((workspace) => {
             const visible = workspace.id === activeWorkspace.id;
             const transitionDirection = visible && workspaceTransition.workspaceId === workspace.id ? workspaceTransition.direction : null;
-            return <div key={workspace.id} className={`workspace-canvas-stage${visible ? " visible" : ""}${transitionDirection ? ` workspace-transition-${transitionDirection}` : ""}`} aria-hidden={!visible}><WorkspaceCanvas workspace={workspace} visible={visible} onRequestClose={closeBlock} onRequestDisconnect={(owner, blockId, name, local) => setDisconnectRequest({ owner, blockId, name, local })} onRequestAuthConnection={(owner, blockId, profile) => void requestConfiguredConnection(owner, blockId, profile)} onOpenConnectionManager={() => setTool("connections")}/></div>;
+            return <div key={workspace.id} className={`workspace-canvas-stage${visible ? " visible" : ""}${transitionDirection ? ` workspace-transition-${transitionDirection}` : ""}`} aria-hidden={!visible}><WorkspaceCanvas workspace={workspace} visible={visible} localTerminalAttention={localTerminalAttentionWorkspaceId === workspace.id} onRequestClose={closeBlock} onRequestDisconnect={(owner, blockId, name, local) => setDisconnectRequest({ owner, blockId, name, local })} onRequestAuthConnection={(owner, blockId, profile) => void requestConfiguredConnection(owner, blockId, profile)} onOpenConnectionManager={() => setTool("connections")}/></div>;
           })}
         </div>
         <aside className="utility-rail" aria-label="工具">
@@ -756,4 +793,9 @@ function findBlockType(workspace: Workspace, blockId: string): "terminal" | "fil
     ? visit(node.first) ?? visit(node.second)
     : node.blockId === blockId ? node.type : null;
   return visit(workspace.layout);
+}
+
+function hasLocalTerminal(node: LayoutNode): boolean {
+  if (node.type === "split") return hasLocalTerminal(node.first) || hasLocalTerminal(node.second);
+  return node.type === "terminal" && node.profileId === null;
 }
