@@ -15,7 +15,7 @@ use tokio::sync::{mpsc, oneshot};
 use super::{
     HostKeyDecision, PendingHostKey, SessionConnectRequest, SessionEntry, SessionPurpose,
     SessionRouteNode, SshSessionManager, TransferRequest, scan_local_upload_entries,
-    session::initial_terminal_size,
+    session::{initial_terminal_size, shell_integration_target},
 };
 use crate::{
     domain::{
@@ -27,7 +27,10 @@ use crate::{
         },
         transfer::{RemotePath, TransferEvent},
     },
-    infrastructure::persistence::json_known_host_repository::JsonKnownHostRepository,
+    infrastructure::persistence::{
+        json_known_host_repository::JsonKnownHostRepository,
+        json_remote_shell_cache::JsonRemoteShellCache,
+    },
 };
 
 fn route_metadata(host: &str, port: u16) -> RouteNodeMetadata {
@@ -62,6 +65,7 @@ fn connect_request(
         terminal_size: (purpose == SessionPurpose::Terminal)
             .then(|| TerminalSize::new(93, 31).expect("terminal size")),
         terminal_output,
+        remote_shell_integration_enabled: false,
     }
 }
 
@@ -83,11 +87,35 @@ fn terminal_connect_request_keeps_the_initial_pty_size() {
 }
 
 #[test]
+fn shell_integration_is_scoped_to_enabled_terminal_requests() {
+    let mut request = connect_request(
+        HostEndpoint::new("example.test", 22).expect("endpoint"),
+        "user".into(),
+        AuthRequest::SshAgent,
+        SessionPurpose::Terminal,
+        Some("profile-1".into()),
+        Arc::new(|_| {}),
+    );
+    assert_eq!(shell_integration_target(&request), None);
+
+    request.remote_shell_integration_enabled = true;
+    let target = shell_integration_target(&request).expect("integration target");
+    assert_eq!(target.profile_id(), "profile-1");
+    assert_eq!(target.host(), "example.test");
+    assert_eq!(target.port(), 22);
+    assert_eq!(target.username(), "user");
+
+    request.purpose = SessionPurpose::Files;
+    assert_eq!(shell_integration_target(&request), None);
+}
+
+#[test]
 fn unknown_session_controls_are_rejected() {
     let directory = tempdir().expect("temp directory");
-    let manager = Arc::new(SshSessionManager::new(JsonKnownHostRepository::new(
-        directory.path().join("known-hosts.json"),
-    )));
+    let manager = Arc::new(SshSessionManager::new(
+        JsonKnownHostRepository::new(directory.path().join("known-hosts.json")),
+        JsonRemoteShellCache::new(directory.path().join("remote-shells.json")),
+    ));
     assert!(manager.close("missing").is_err());
     assert!(manager.accept_host_key("missing").is_err());
     assert!(manager.reject_host_key("missing").is_err());
@@ -129,9 +157,10 @@ fn closing_during_host_key_confirmation_is_not_reported_as_rejection() {
 #[test]
 fn closes_only_network_sessions_for_a_deleted_profile() {
     let directory = tempdir().expect("temp directory");
-    let manager = SshSessionManager::new(JsonKnownHostRepository::new(
-        directory.path().join("known-hosts.json"),
-    ));
+    let manager = SshSessionManager::new(
+        JsonKnownHostRepository::new(directory.path().join("known-hosts.json")),
+        JsonRemoteShellCache::new(directory.path().join("remote-shells.json")),
+    );
     let entry = |purpose, profile_id: Option<&str>| {
         let (cancel_sender, cancel_receiver) = oneshot::channel();
         let (control_sender, control_receiver) = mpsc::channel(1);
@@ -176,9 +205,10 @@ fn closes_only_network_sessions_for_a_deleted_profile() {
 #[test]
 fn files_sessions_reject_terminal_write_and_resize_controls() {
     let directory = tempdir().expect("temp directory");
-    let manager = SshSessionManager::new(JsonKnownHostRepository::new(
-        directory.path().join("known-hosts.json"),
-    ));
+    let manager = SshSessionManager::new(
+        JsonKnownHostRepository::new(directory.path().join("known-hosts.json")),
+        JsonRemoteShellCache::new(directory.path().join("remote-shells.json")),
+    );
     let (cancel_sender, _cancel_receiver) = oneshot::channel();
     let (control_sender, _control_receiver) = mpsc::channel(1);
     let entry = Arc::new(SessionEntry::new(
@@ -211,9 +241,10 @@ fn files_sessions_reject_terminal_write_and_resize_controls() {
 #[tokio::test]
 async fn network_sessions_reject_rules_from_another_profile() {
     let directory = tempdir().expect("temp directory");
-    let manager = SshSessionManager::new(JsonKnownHostRepository::new(
-        directory.path().join("known-hosts.json"),
-    ));
+    let manager = SshSessionManager::new(
+        JsonKnownHostRepository::new(directory.path().join("known-hosts.json")),
+        JsonRemoteShellCache::new(directory.path().join("remote-shells.json")),
+    );
     let (cancel_sender, _cancel_receiver) = oneshot::channel();
     let (control_sender, _control_receiver) = mpsc::channel(1);
     let entry = Arc::new(SessionEntry::new(
@@ -250,9 +281,10 @@ async fn failed_tcp_connection_emits_a_terminal_failure_and_can_be_closed_again(
     let port = listener.local_addr().expect("local address").port();
     drop(listener);
     let directory = tempdir().expect("temp directory");
-    let manager = Arc::new(SshSessionManager::new(JsonKnownHostRepository::new(
-        directory.path().join("known-hosts.json"),
-    )));
+    let manager = Arc::new(SshSessionManager::new(
+        JsonKnownHostRepository::new(directory.path().join("known-hosts.json")),
+        JsonRemoteShellCache::new(directory.path().join("remote-shells.json")),
+    ));
     let events = Arc::new(Mutex::new(Vec::new()));
     let event_sink = Arc::clone(&events);
     let id = manager.connect(
@@ -381,9 +413,10 @@ fn local_openssh_connects_to_a_target_through_a_jump_profile() {
     wait_for_sshd(&mut jump_server.0, jump_port);
     wait_for_sshd(&mut target_server.0, target_port);
 
-    let manager = Arc::new(SshSessionManager::new(JsonKnownHostRepository::new(
-        directory.path().join("route-known-hosts.json"),
-    )));
+    let manager = Arc::new(SshSessionManager::new(
+        JsonKnownHostRepository::new(directory.path().join("route-known-hosts.json")),
+        JsonRemoteShellCache::new(directory.path().join("remote-shells.json")),
+    ));
     let username = std::env::var("USER").expect("current username");
     let (event_sender, event_receiver) = std::sync::mpsc::channel();
     let (terminal_sender, terminal_receiver) = std::sync::mpsc::channel();
@@ -419,6 +452,7 @@ fn local_openssh_connects_to_a_target_through_a_jump_profile() {
             terminal_output: Arc::new(move |data| {
                 let _ = terminal_sender.send(data);
             }),
+            remote_shell_integration_enabled: false,
         },
         Arc::new(move |event| {
             let _ = event_sender.send(event);
@@ -496,25 +530,28 @@ fn local_openssh_exercises_terminal_transfer_and_file_editing() {
     let mut server = SshdGuard(server);
     wait_for_sshd(&mut server.0, port);
 
-    let manager = Arc::new(SshSessionManager::new(JsonKnownHostRepository::new(
-        directory.path().join("known-hosts.json"),
-    )));
+    let manager = Arc::new(SshSessionManager::new(
+        JsonKnownHostRepository::new(directory.path().join("known-hosts.json")),
+        JsonRemoteShellCache::new(directory.path().join("remote-shells.json")),
+    ));
     let (event_sender, event_receiver) = std::sync::mpsc::channel();
     let (terminal_sender, terminal_receiver) = std::sync::mpsc::channel();
+    let mut terminal_request = connect_request(
+        HostEndpoint::new("127.0.0.1", port.into()).expect("endpoint"),
+        std::env::var("USER").expect("current username"),
+        AuthRequest::PrivateKey {
+            path: client_key.clone(),
+            passphrase: None,
+        },
+        SessionPurpose::Terminal,
+        None,
+        Arc::new(move |data| {
+            let _ = terminal_sender.send(data);
+        }),
+    );
+    terminal_request.remote_shell_integration_enabled = true;
     let session_id = manager.connect(
-        connect_request(
-            HostEndpoint::new("127.0.0.1", port.into()).expect("endpoint"),
-            std::env::var("USER").expect("current username"),
-            AuthRequest::PrivateKey {
-                path: client_key.clone(),
-                passphrase: None,
-            },
-            SessionPurpose::Terminal,
-            None,
-            Arc::new(move |data| {
-                let _ = terminal_sender.send(data);
-            }),
-        ),
+        terminal_request,
         Arc::new(move |event| {
             let _ = event_sender.send(event);
         }),
@@ -544,24 +581,35 @@ fn local_openssh_exercises_terminal_transfer_and_file_editing() {
                 .expect("terminal output"),
         );
     }
+    assert!(
+        output
+            .windows(b"\x1b]7;file://".len())
+            .any(|window| window == b"\x1b]7;file://")
+    );
+    let shell_cache =
+        fs::read_to_string(directory.path().join("remote-shells.json")).expect("shell cache");
+    assert!(shell_cache.contains("\"profileId\": \"profile-1\""));
+    assert!(!shell_cache.contains("MVP_TERMINAL_OK"));
 
     while terminal_receiver.try_recv().is_ok() {}
     let (second_event_sender, second_event_receiver) = std::sync::mpsc::channel();
     let (second_terminal_sender, second_terminal_receiver) = std::sync::mpsc::channel();
+    let mut second_terminal_request = connect_request(
+        HostEndpoint::new("127.0.0.1", port.into()).expect("endpoint"),
+        std::env::var("USER").expect("current username"),
+        AuthRequest::PrivateKey {
+            path: client_key,
+            passphrase: None,
+        },
+        SessionPurpose::Terminal,
+        None,
+        Arc::new(move |data| {
+            let _ = second_terminal_sender.send(data);
+        }),
+    );
+    second_terminal_request.remote_shell_integration_enabled = true;
     let second_session_id = manager.connect(
-        connect_request(
-            HostEndpoint::new("127.0.0.1", port.into()).expect("endpoint"),
-            std::env::var("USER").expect("current username"),
-            AuthRequest::PrivateKey {
-                path: client_key,
-                passphrase: None,
-            },
-            SessionPurpose::Terminal,
-            None,
-            Arc::new(move |data| {
-                let _ = second_terminal_sender.send(data);
-            }),
-        ),
+        second_terminal_request,
         Arc::new(move |event| {
             let _ = second_event_sender.send(event);
         }),
@@ -923,9 +971,10 @@ fn local_openssh_exercises_local_remote_and_socks5_forwarding() {
         }
     });
 
-    let manager = Arc::new(SshSessionManager::new(JsonKnownHostRepository::new(
-        directory.path().join("network-known-hosts.json"),
-    )));
+    let manager = Arc::new(SshSessionManager::new(
+        JsonKnownHostRepository::new(directory.path().join("network-known-hosts.json")),
+        JsonRemoteShellCache::new(directory.path().join("remote-shells.json")),
+    ));
     let (event_sender, event_receiver) = std::sync::mpsc::channel();
     let session_id = manager.connect(
         connect_request(

@@ -53,7 +53,7 @@ import { WorkspaceProvider, useWorkspace } from "./WorkspaceProvider";
 const profile = { id: "profile-1", name: "Server", host: "example.test", port: 22, username: "user", authPreference: "password" as const, credentialId: null, groupId: null };
 
 function Harness() {
-  const { document, activeWorkspace, dispatch, registerWriter, clearBlockBuffer, startLocalBlock, connectBlock, connectFileBlock, disconnectFileBlock, connectNetworkBlock, disconnectNetworkBlock, startNetworkBlockRule, selectBlockTarget, selectFileTarget, selectNetworkTarget, writeBlock, resizeBlock, runtimes, fileRuntimes, networkRuntimes } = useWorkspace();
+  const { document, activeWorkspace, dispatch, registerWriter, clearBlockBuffer, setBlockCwd, startLocalBlock, connectBlock, connectFileBlock, disconnectFileBlock, connectNetworkBlock, disconnectNetworkBlock, startNetworkBlockRule, selectBlockTarget, selectFileTarget, selectNetworkTarget, writeBlock, resizeBlock, runtimes, fileRuntimes, networkRuntimes } = useWorkspace();
   const ids = blockIds(activeWorkspace.layout);
   const activeLeaf = findLeaf(activeWorkspace.layout, activeWorkspace.activeBlockId);
   return <>
@@ -72,6 +72,7 @@ function Harness() {
     <button onClick={() => void writeBlock(ids[0], Uint8Array.from([100, 105, 114, 13]))}>write</button>
     <button onClick={() => void writeBlock(ids[0], Uint8Array.from([27, 91, 49, 59, 49, 82]))}>write-control-response</button>
     <button onClick={() => void resizeBlock(ids[0], 120, 40)}>resize</button>
+    <button onClick={() => setBlockCwd(ids[0], "/srv/reported")}>report-cwd</button>
     <button onClick={() => ids.forEach((id) => void connectBlock(id, profile, { method: "password", password: "ephemeral" }))}>connect</button>
     <button onClick={() => void connectBlock(ids[0], profile, { method: "sshAgent" }, mocks.onFailure)}>connect-with-fallback</button>
     <button onClick={() => dispatch({ type: "openFiles", workspaceId: activeWorkspace.id, anchorBlockId: ids[0], profileId: profile.id, path: "/srv" })}>open-files</button>
@@ -88,6 +89,7 @@ function Harness() {
     <span data-testid="runtime-notice">{runtimes[ids[0]]?.notice}</span>
     <span data-testid="runtime-progress">{runtimes[ids[0]]?.connectionProgress?.phase}:{runtimes[ids[0]]?.connectionProgress?.message}</span>
     <span data-testid="runtime-cwd">{runtimes[ids[0]]?.cwd}</span>
+    <span data-testid="runtime-cwd-source">{runtimes[ids[0]]?.cwdSource ?? "unknown"}</span>
     <span data-testid="file-runtime">{fileRuntimes[activeWorkspace.activeBlockId]?.kind}:{fileRuntimes[activeWorkspace.activeBlockId]?.status}</span>
     <span data-testid="file-progress">{fileRuntimes[activeWorkspace.activeBlockId]?.connectionProgress?.phase}:{fileRuntimes[activeWorkspace.activeBlockId]?.connectionProgress?.message}</span>
     <span data-testid="file-path">{activeLeaf?.type === "files" ? activeLeaf.path : ""}</span>
@@ -206,6 +208,22 @@ describe("WorkspaceProvider multi-session routing", () => {
 
     await waitFor(() => expect(screen.getByTestId("runtime")).toHaveTextContent("local:connected"));
     expect(screen.getByTestId("runtime-cwd")).toHaveTextContent("/Users/tester");
+    expect(screen.getByTestId("runtime-cwd-source")).toHaveTextContent("initial");
+    await user.click(screen.getByRole("button", { name: "report-cwd" }));
+    expect(screen.getByTestId("runtime-cwd")).toHaveTextContent("/srv/reported");
+    expect(screen.getByTestId("runtime-cwd-source")).toHaveTextContent("osc7");
+  });
+
+  it("does not present the remote home fallback as a reported terminal cwd", async () => {
+    mocks.connectSession.mockResolvedValue("ssh-cwd-unknown");
+    const user = userEvent.setup();
+    render(<WorkspaceProvider><Harness/></WorkspaceProvider>);
+
+    await user.click(screen.getByRole("button", { name: "select-remote-target" }));
+    await user.click(screen.getByRole("button", { name: "connect" }));
+
+    expect(screen.getByTestId("runtime-cwd")).toBeEmptyDOMElement();
+    expect(screen.getByTestId("runtime-cwd-source")).toHaveTextContent("unknown");
   });
 
   it("does not let an obsolete SSH request replace the selected local target", async () => {

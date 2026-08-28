@@ -15,6 +15,10 @@ export interface UpdateSettings {
   autoCheckOnStartup: boolean;
 }
 
+export interface TerminalSettings {
+  remoteShellIntegrationEnabled: boolean;
+}
+
 export interface GeneralSettings {
   rootDirectory: string;
   activeRootDirectory: string;
@@ -29,6 +33,7 @@ export interface SettingsSnapshot {
   security: SecuritySettings;
   appearance: AppearanceSettings;
   updates: UpdateSettings;
+  terminal: TerminalSettings;
   warning: "corrupt" | "unsupportedVersion" | "storageUnavailable" | null;
 }
 
@@ -48,3 +53,6 @@ export const updateAppearanceSettings = (appearance: AppearanceSettings): Promis
 
 export const updateUpdateSettings = (updates: UpdateSettings): Promise<SettingsSnapshot> =>
   invoke("settings_update_updates", { input: updates });
+
+export const updateTerminalSettings = (terminal: TerminalSettings): Promise<SettingsSnapshot> =>
+  invoke("settings_update_terminal", { input: terminal });

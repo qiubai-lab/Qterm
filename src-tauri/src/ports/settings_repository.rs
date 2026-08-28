@@ -1,5 +1,6 @@
 use crate::domain::settings::{
-    AppearanceSettings, ConfigurationDirectory, SecuritySettings, SettingsError, UpdateSettings,
+    AppearanceSettings, ConfigurationDirectory, SecuritySettings, SettingsError, TerminalSettings,
+    UpdateSettings,
 };
 
 pub trait AppearanceSettingsRepository: Send + Sync {
@@ -10,6 +11,11 @@ pub trait AppearanceSettingsRepository: Send + Sync {
 pub trait UpdateSettingsRepository: Send + Sync {
     fn load(&self) -> Result<Option<UpdateSettings>, SettingsError>;
     fn save(&self, settings: UpdateSettings) -> Result<(), SettingsError>;
+}
+
+pub trait TerminalSettingsRepository: Send + Sync {
+    fn load(&self) -> Result<Option<TerminalSettings>, SettingsError>;
+    fn save(&self, settings: TerminalSettings) -> Result<(), SettingsError>;
 }
 
 pub trait ConfigurationDirectoryRepository: Send + Sync {

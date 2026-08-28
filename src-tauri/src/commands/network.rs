@@ -174,6 +174,7 @@ pub fn network_session_connect(
         &profile_state,
         SessionPurpose::Network,
         Arc::new(|_| {}),
+        false,
     )?;
     let events = Arc::new(move |event| {
         let _ = on_event.send(SessionEventDto::from(event));

@@ -6,6 +6,22 @@ pub(super) fn initial_terminal_size(request: &SessionConnectRequest) -> Terminal
         .expect("terminal sessions have a validated initial size")
 }
 
+pub(super) fn shell_integration_target(
+    request: &SessionConnectRequest,
+) -> Option<crate::domain::shell_integration::RemoteShellTarget> {
+    if request.purpose != SessionPurpose::Terminal || !request.remote_shell_integration_enabled {
+        return None;
+    }
+    request.route.last().map(|target| {
+        crate::domain::shell_integration::RemoteShellTarget::new(
+            target.profile_id.clone(),
+            target.endpoint.host().to_owned(),
+            target.endpoint.port(),
+            target.username.clone(),
+        )
+    })
+}
+
 async fn connect_route(
     entry: Arc<SessionEntry>,
     host_keys: Arc<KnownHostService>,
@@ -199,10 +215,14 @@ async fn disconnect_handles(handles: &mut Vec<client::Handle<ClientHandler>>) {
 pub(super) async fn run_session(
     entry: Arc<SessionEntry>,
     host_keys: Arc<KnownHostService>,
+    shell_cache: Arc<
+        crate::infrastructure::persistence::json_remote_shell_cache::JsonRemoteShellCache,
+    >,
     mut request: SessionConnectRequest,
     mut cancel: oneshot::Receiver<()>,
     mut controls: mpsc::Receiver<SessionControl>,
 ) {
+    let shell_target = shell_integration_target(&request);
     let remote_forwards = RemoteForwardMap::default();
     let forward_tasks = ForwardTaskRegistry::default();
     let forward_permits = new_forward_permits();
@@ -332,6 +352,13 @@ pub(super) async fn run_session(
         return;
     }
 
+    let remote_shell = match shell_target.as_ref() {
+        Some(target) => {
+            shell_integration::resolve_remote_shell(&handle, shell_cache.as_ref(), target).await
+        }
+        None => None,
+    };
+
     let terminal = match handle.channel_open_session().await {
         Ok(channel) => channel,
         Err(_) => {
@@ -344,6 +371,10 @@ pub(super) async fn run_session(
         }
     };
     let terminal_size = initial_terminal_size(&request);
+    let terminal_modes = remote_shell
+        .filter(|shell| shell.suppress_pty_echo())
+        .map(|_| vec![(russh::Pty::ECHO, 0)])
+        .unwrap_or_default();
     if terminal
         .request_pty(
             false,
@@ -352,11 +383,24 @@ pub(super) async fn run_session(
             terminal_size.rows,
             0,
             0,
-            &[],
+            &terminal_modes,
         )
         .await
         .is_err()
         || terminal.request_shell(false).await.is_err()
+    {
+        entry.fail(SessionFailure::ConnectionFailed);
+        let _ = handle
+            .disconnect(Disconnect::ByApplication, "session failed", "en")
+            .await;
+        disconnect_handles(&mut upstream_handles).await;
+        return;
+    }
+    if let Some(shell) = remote_shell
+        && terminal
+            .data(shell.hook_command().as_bytes())
+            .await
+            .is_err()
     {
         entry.fail(SessionFailure::ConnectionFailed);
         let _ = handle

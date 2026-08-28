@@ -6,6 +6,7 @@ import { FileBrowserPane } from "../files/FileBrowserPane";
 import type { ConnectionProfile } from "../lib/tauri/profiles";
 import { NetworkPane } from "../network/NetworkPane";
 import { TerminalPanel } from "../terminal/TerminalPanel";
+import { TerminalCwdDialog } from "../terminal/TerminalCwdDialog";
 import { openTerminalSearch } from "../terminal/terminalViewRegistry";
 import { terminalBlockIds, type DropPosition } from "./layout";
 import { calculateLayoutGeometry, layoutScalarCss, resolveLayoutBounds, type LayoutBounds, type LayoutDividerGeometry } from "./layoutGeometry";
@@ -27,7 +28,7 @@ function BlockNotice({ message }: { message: string }) {
   return <div className="block-notice" role="alert" aria-live="assertive" aria-atomic="true">{message}</div>;
 }
 
-export function WorkspaceCanvas({ workspace, visible, localTerminalAttention = false, onRequestClose, onRequestDisconnect, onRequestAuthConnection, onOpenConnectionManager }: { workspace: Workspace; visible: boolean; localTerminalAttention?: boolean; onRequestClose: (blockId: string) => void; onRequestDisconnect?: (owner: ConnectionOwner, blockId: string, name: string, local: boolean) => void; onRequestAuthConnection: (owner: ConnectionOwner, blockId: string, profile: ConnectionProfile) => void; onOpenConnectionManager?: () => void }) {
+export function WorkspaceCanvas({ workspace, visible, localTerminalAttention = false, remoteShellIntegrationEnabled = false, onRequestClose, onRequestDisconnect, onRequestAuthConnection, onOpenConnectionManager }: { workspace: Workspace; visible: boolean; localTerminalAttention?: boolean; remoteShellIntegrationEnabled?: boolean; onRequestClose: (blockId: string) => void; onRequestDisconnect?: (owner: ConnectionOwner, blockId: string, name: string, local: boolean) => void; onRequestAuthConnection: (owner: ConnectionOwner, blockId: string, profile: ConnectionProfile) => void; onOpenConnectionManager?: () => void }) {
   const { dispatch } = useWorkspace();
   const [drag, setDrag] = useState<DragState | null>(null);
   const [liveRatios, setLiveRatios] = useState<Record<string, number>>({});
@@ -103,7 +104,7 @@ export function WorkspaceCanvas({ workspace, visible, localTerminalAttention = f
     element.addEventListener("pointercancel", end);
   }
 
-  const blockProps: BlockRenderProps = { workspace, visible, localTerminalAttention, drag, beginDrag, onRequestClose, onRequestDisconnect, onRequestAuthConnection, onOpenConnectionManager };
+  const blockProps: BlockRenderProps = { workspace, visible, localTerminalAttention, remoteShellIntegrationEnabled, drag, beginDrag, onRequestClose, onRequestDisconnect, onRequestAuthConnection, onOpenConnectionManager };
   return <div className="workspace-canvas">
     <div ref={layoutSurfaceRef} className="workspace-layout-surface">
       {geometry.leaves.map(({ node, bounds }) => <div key={node.blockId} className="workspace-block-host" data-workspace-block-host={node.blockId} style={boundsStyle(bounds)}>
@@ -131,6 +132,7 @@ interface BlockRenderProps {
   workspace: Workspace;
   visible: boolean;
   localTerminalAttention: boolean;
+  remoteShellIntegrationEnabled: boolean;
   drag: DragState | null;
   beginDrag: (event: ReactPointerEvent<HTMLElement>, blockId: string) => void;
   onRequestClose: (blockId: string) => void;
@@ -163,6 +165,7 @@ function TerminalBlock(props: BlockRenderProps & { blockId: string; profileId: s
   const endpoint = profile && status === "connected" ? `${profile.username}@${profile.host}` : null;
   const detail = endpoint ?? (profile ? status : status === "connected" ? "本机" : status);
   const requestedProfileRef = useRef<string | null>(null);
+  const [cwdDialogOpen, setCwdDialogOpen] = useState(false);
   const sessionActive = status !== "closed" && status !== "failed";
   const sessionActionLabel = status === "closing"
     ? "正在断开"
@@ -199,6 +202,33 @@ function TerminalBlock(props: BlockRenderProps & { blockId: string; profileId: s
     if (target) requestConnection("terminal", props.blockId, target);
   }
 
+  const reportedCwd = runtime?.cwdSource === "osc7" ? runtime.cwd : null;
+  const osc7TagState = props.remoteShellIntegrationEnabled && props.profileId !== null && status === "connected"
+    ? reportedCwd ? "ready" : "waiting"
+    : null;
+  const osc7TagMessage = osc7TagState === "ready"
+    ? "OSC 7 初始化成功，已开始跟踪当前终端目录。"
+    : "OSC 7 已启用，尚未收到当前会话的目录信息。";
+  const fallbackPath = props.profileId === null && runtime?.cwdSource === "initial" && runtime.cwd ? runtime.cwd : props.profileId === null ? "~" : ".";
+  const cwdButtonTitle = reportedCwd
+    ? `打开 ${reportedCwd}`
+    : props.profileId === null
+      ? `当前目录尚未确认；可从启动目录 ${fallbackPath} 打开`
+      : "当前目录尚未确认；可从远程主目录打开";
+
+  function openTerminalDirectory() {
+    if (reportedCwd) {
+      dispatch({ type: "openFiles", workspaceId: props.workspace.id, anchorBlockId: props.blockId, profileId: props.profileId, path: reportedCwd });
+    } else {
+      setCwdDialogOpen(true);
+    }
+  }
+
+  function openFallbackDirectory(path: string) {
+    setCwdDialogOpen(false);
+    dispatch({ type: "openFiles", workspaceId: props.workspace.id, anchorBlockId: props.blockId, profileId: props.profileId, path });
+  }
+
   useEffect(() => {
     if (!profile || status !== "closed" || requestedProfileRef.current === profile.id) return;
     requestedProfileRef.current = profile.id;
@@ -216,10 +246,11 @@ function TerminalBlock(props: BlockRenderProps & { blockId: string; profileId: s
     <header className="terminal-block-header" onPointerDown={(event) => props.beginDrag(event, props.blockId)}>
       <TerminalTargetPicker profiles={profiles} groups={profileGroups} recentProfileIds={document?.recentProfileIds ?? []} selectedProfileId={props.profileId} status={status} detail={detail} hideDetail={Boolean(runtime?.connectionProgress)} localAttention={props.localTerminalAttention} onSelect={(profileId) => void chooseTarget(profileId)} onManageConnections={props.onOpenConnectionManager} onRequestDisconnect={status === "connected" && props.profileId !== null ? requestDisconnect : undefined} statusAction={statusAction}/>
       <ConnectionRouteProgress progress={runtime?.connectionProgress} endpoint={endpoint} profile={profile} onRequestDisconnect={status === "connected" && props.profileId !== null ? requestDisconnect : undefined} statusAction={runtime?.connectionProgress ? statusAction : undefined}/>
+      {osc7TagState && <abbr className="terminal-osc7-tag" data-state={osc7TagState} aria-label={osc7TagMessage} title={osc7TagMessage}>OSC7</abbr>}
       <div className="block-actions">
         <button aria-label="搜索终端输出" title="搜索终端输出" onClick={() => openTerminalSearch(props.blockId)}><Icon name="search" size={13}/></button>
         <button aria-label="清除终端缓冲区" title="清除终端缓冲区" onClick={() => clearBlockBuffer(props.blockId)}><Icon name="clear" size={13}/></button>
-        <button aria-label="打开当前文件夹" title={runtime?.cwd ? `打开 ${runtime.cwd}` : "打开当前文件夹"} disabled={status !== "connected"} onClick={() => dispatch({ type: "openFiles", workspaceId: props.workspace.id, anchorBlockId: props.blockId, profileId: props.profileId, path: runtime?.cwd ?? (props.profileId === null ? "~" : ".") })}><Icon name="files" size={13}/></button>
+        <button aria-label="打开当前文件夹" title={cwdButtonTitle} disabled={status !== "connected"} onClick={openTerminalDirectory}><Icon name="files" size={13}/></button>
         <button aria-label="打开网络窗口" title={props.profileId ? "使用当前远程连接打开网络窗口" : "本地终端无法创建网络窗口"} disabled={!props.profileId} onClick={() => dispatch({ type: "openNetwork", workspaceId: props.workspace.id, anchorBlockId: props.blockId, profileId: props.profileId })}><Icon name="network" size={13}/></button>
         <button aria-label="左右分割" title="左右分割" onClick={() => dispatch({ type: "splitBlock", workspaceId: props.workspace.id, blockId: props.blockId, direction: "horizontal" })}><Icon name="splitHorizontal" size={13}/></button>
         <button aria-label="上下分割" title="上下分割" onClick={() => dispatch({ type: "splitBlock", workspaceId: props.workspace.id, blockId: props.blockId, direction: "vertical" })}><Icon name="splitVertical" size={13}/></button>
@@ -229,6 +260,13 @@ function TerminalBlock(props: BlockRenderProps & { blockId: string; profileId: s
     <TerminalPanel key={props.profileId ?? "local"} blockId={props.blockId} sessionKey={`${props.blockId}:${props.profileId ?? "local"}`} local={props.profileId === null} visible={props.visible} />
     {runtime?.notice && <BlockNotice message={runtime.notice}/>}
     {drop && <div className={`drop-zone drop-${drop}`} />}
+    {cwdDialogOpen && <TerminalCwdDialog
+      local={props.profileId === null}
+      targetName={profile?.name ?? "本地终端"}
+      fallbackPath={fallbackPath}
+      onClose={() => setCwdDialogOpen(false)}
+      onOpenFallback={openFallbackDirectory}
+    />}
   </section>;
 }
 

@@ -1,10 +1,11 @@
 use crate::{
     domain::settings::{
-        AppearanceSettings, ConfigurationDirectory, SecuritySettings, SettingsError, UpdateSettings,
+        AppearanceSettings, ConfigurationDirectory, SecuritySettings, SettingsError,
+        TerminalSettings, UpdateSettings,
     },
     ports::settings_repository::{
         AppearanceSettingsRepository, ConfigurationDirectoryRepository, SettingsRepository,
-        UpdateSettingsRepository,
+        TerminalSettingsRepository, UpdateSettingsRepository,
     },
 };
 
@@ -22,16 +23,18 @@ pub struct SettingsSnapshot {
     pub security: SecuritySettings,
     pub appearance: AppearanceSettings,
     pub updates: UpdateSettings,
+    pub terminal: TerminalSettings,
     pub warning: Option<SettingsWarning>,
 }
 
-pub struct SettingsService<S, D, A, U> {
+pub struct SettingsService<S, D, A, U, T> {
     security_repository: S,
     configuration_repository: D,
     default_configuration_directory: ConfigurationDirectory,
     active_configuration_directory: ConfigurationDirectory,
     appearance_repository: A,
     update_repository: U,
+    terminal_repository: T,
 }
 
 impl<
@@ -39,7 +42,8 @@ impl<
     D: ConfigurationDirectoryRepository,
     A: AppearanceSettingsRepository,
     U: UpdateSettingsRepository,
-> SettingsService<S, D, A, U>
+    T: TerminalSettingsRepository,
+> SettingsService<S, D, A, U, T>
 {
     pub fn new(
         security_repository: S,
@@ -48,6 +52,7 @@ impl<
         active_configuration_directory: ConfigurationDirectory,
         appearance_repository: A,
         update_repository: U,
+        terminal_repository: T,
     ) -> Self {
         Self {
             security_repository,
@@ -56,6 +61,7 @@ impl<
             active_configuration_directory,
             appearance_repository,
             update_repository,
+            terminal_repository,
         }
     }
 
@@ -83,16 +89,22 @@ impl<
             Ok(value) => (value.unwrap_or_default(), None),
             Err(error) => (UpdateSettings::default(), Some(warning_for(error))),
         };
+        let (terminal, terminal_warning) = match self.terminal_repository.load() {
+            Ok(value) => (value.unwrap_or_default(), None),
+            Err(error) => (TerminalSettings::default(), Some(warning_for(error))),
+        };
         SettingsSnapshot {
             configuration_directory,
             active_configuration_directory: self.active_configuration_directory.clone(),
             security,
             appearance,
             updates,
+            terminal,
             warning: configuration_warning
                 .or(security_warning)
                 .or(appearance_warning)
-                .or(update_warning),
+                .or(update_warning)
+                .or(terminal_warning),
         }
     }
 
@@ -125,6 +137,14 @@ impl<
         settings: UpdateSettings,
     ) -> Result<SettingsSnapshot, SettingsError> {
         self.update_repository.save(settings)?;
+        Ok(self.snapshot())
+    }
+
+    pub fn update_terminal(
+        &self,
+        settings: TerminalSettings,
+    ) -> Result<SettingsSnapshot, SettingsError> {
+        self.terminal_repository.save(settings)?;
         Ok(self.snapshot())
     }
 }

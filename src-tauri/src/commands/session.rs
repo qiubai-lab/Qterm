@@ -5,7 +5,10 @@ use tauri::{State, ipc::Channel};
 
 use crate::{
     application::error::{ApplicationError, ApplicationErrorCode},
-    commands::{credential::CredentialState, error::IpcError, profile::ProfileState},
+    commands::{
+        credential::CredentialState, error::IpcError, profile::ProfileState,
+        settings::SettingsState,
+    },
     domain::{
         auth::{AuthFailure, AuthRequest, SecretText},
         profile::{AuthPreference, ConnectionProfile},
@@ -122,6 +125,7 @@ pub fn session_connect(
     session_state: State<'_, SessionState>,
     credential_state: State<'_, CredentialState>,
     profile_state: State<'_, ProfileState>,
+    settings_state: State<'_, SettingsState>,
 ) -> Result<String, IpcError> {
     let terminal_output = Arc::new(move |data| {
         let _ = on_terminal.send(TerminalDataDto { data });
@@ -132,6 +136,7 @@ pub fn session_connect(
         &profile_state,
         SessionPurpose::Terminal,
         terminal_output,
+        settings_state.terminal().remote_shell_integration_enabled,
     )?;
     let sink = Arc::new(move |event| {
         let _ = on_event.send(SessionEventDto::from(event));
@@ -145,6 +150,7 @@ pub(crate) fn build_connect_request(
     profile_state: &ProfileState,
     purpose: SessionPurpose,
     terminal_output: Arc<dyn Fn(Vec<u8>) + Send + Sync>,
+    remote_shell_integration_enabled: bool,
 ) -> Result<SessionConnectRequest, IpcError> {
     let SessionConnectDto {
         profile_id,
@@ -187,6 +193,8 @@ pub(crate) fn build_connect_request(
         profile_id: Some(profile_id),
         terminal_size,
         terminal_output,
+        remote_shell_integration_enabled: purpose == SessionPurpose::Terminal
+            && remote_shell_integration_enabled,
     })
 }
 

@@ -23,7 +23,7 @@ const profiles = [
   { id: "password-profile", name: "Password Server", host: "password.example", port: 22, username: "root", authPreference: "password" as const, credentialId: null, groupId: null },
   { id: "key-profile", name: "Key Server", host: "key.example", port: 22, username: "deploy", authPreference: "privateKey" as const, credentialId: null, groupId: null },
 ];
-const connectedLocalRuntime = { sessionId: "local-1", kind: "local" as const, status: "connected" as const, hostKeyPrompt: null, notice: "", connectionProgress: null, cwd: "C:/work" };
+const connectedLocalRuntime = { sessionId: "local-1", kind: "local" as const, status: "connected" as const, hostKeyPrompt: null, notice: "", connectionProgress: null, cwd: "C:/work", cwdSource: "osc7" as const };
 let terminalRuntimes: Record<string, TerminalRuntime> = { "block-1": connectedLocalRuntime };
 let fileRuntimes: Record<string, FileRuntime> = {};
 let networkRuntimes: Record<string, NetworkRuntime> = {};
@@ -216,13 +216,55 @@ describe("WorkspaceCanvas terminal actions", () => {
     expect(dispatch).toHaveBeenCalledWith({ type: "openFiles", workspaceId: "workspace-1", anchorBlockId: "block-1", profileId: null, path: "C:/work" });
   });
 
-  it("opens the local home fallback instead of the application working directory before OSC 7", () => {
-    terminalRuntimes = { "block-1": { ...connectedLocalRuntime, cwd: null } };
+  it("explains a local launch-directory fallback before opening it", async () => {
+    terminalRuntimes = { "block-1": { ...connectedLocalRuntime, cwdSource: "initial" } };
+    const user = userEvent.setup();
     const view = render(<WorkspaceCanvas workspace={workspace} visible onRequestClose={vi.fn()} onRequestAuthConnection={vi.fn()}/>);
 
-    within(view.container).getByRole("button", { name: "打开当前文件夹" }).click();
+    expect(within(view.container).getByRole("button", { name: "打开当前文件夹" })).toHaveAttribute("title", "当前目录尚未确认；可从启动目录 C:/work 打开");
+    await user.click(within(view.container).getByRole("button", { name: "打开当前文件夹" }));
+    expect(screen.getByRole("dialog", { name: "未检测到终端当前目录" })).toBeInTheDocument();
+    expect(dispatch).not.toHaveBeenCalledWith(expect.objectContaining({ type: "openFiles" }));
+    await user.click(screen.getByRole("button", { name: "从启动目录打开" }));
 
-    expect(dispatch).toHaveBeenCalledWith({ type: "openFiles", workspaceId: "workspace-1", anchorBlockId: "block-1", profileId: null, path: "~" });
+    expect(dispatch).toHaveBeenCalledWith({ type: "openFiles", workspaceId: "workspace-1", anchorBlockId: "block-1", profileId: null, path: "C:/work" });
+  });
+
+  it("explains the remote-home fallback when the shell has not reported OSC 7", async () => {
+    const remoteWorkspace: Workspace = { ...workspace, layout: { type: "terminal", blockId: "block-1", profileId: "password-profile" } };
+    terminalRuntimes = { "block-1": { ...connectedLocalRuntime, kind: "ssh", cwd: null, cwdSource: null } };
+    const user = userEvent.setup();
+    const view = render(<WorkspaceCanvas workspace={remoteWorkspace} visible onRequestClose={vi.fn()} onRequestAuthConnection={vi.fn()}/>);
+
+    expect(within(view.container).getByRole("button", { name: "打开当前文件夹" })).toHaveAttribute("title", "当前目录尚未确认；可从远程主目录打开");
+    await user.click(within(view.container).getByRole("button", { name: "打开当前文件夹" }));
+    await user.click(screen.getByRole("button", { name: "从远程主目录打开" }));
+
+    expect(dispatch).toHaveBeenCalledWith({ type: "openFiles", workspaceId: "workspace-1", anchorBlockId: "block-1", profileId: "password-profile", path: "." });
+  });
+
+  it("shows the enabled OSC 7 tag after the remote host and highlights it only after a directory report", () => {
+    const remoteWorkspace: Workspace = { ...workspace, layout: { type: "terminal", blockId: "block-1", profileId: "password-profile" } };
+    terminalRuntimes = { "block-1": { ...connectedLocalRuntime, kind: "ssh", cwd: null, cwdSource: null } };
+    const renderCanvas = () => <WorkspaceCanvas workspace={remoteWorkspace} visible remoteShellIntegrationEnabled onRequestClose={vi.fn()} onRequestAuthConnection={vi.fn()}/>;
+    const view = render(renderCanvas());
+
+    const waiting = screen.getByLabelText("OSC 7 已启用，尚未收到当前会话的目录信息。");
+    const endpoint = view.container.querySelector(".terminal-target-endpoint");
+    expect(waiting).toHaveTextContent("OSC7");
+    expect(waiting).toHaveAttribute("data-state", "waiting");
+    expect(waiting).toHaveAttribute("title", "OSC 7 已启用，尚未收到当前会话的目录信息。");
+    if (!endpoint) throw new Error("remote endpoint should be rendered");
+    expect(endpoint.compareDocumentPosition(waiting) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    terminalRuntimes = { "block-1": { ...terminalRuntimes["block-1"], cwd: "/srv/app", cwdSource: "osc7" } };
+    view.rerender(renderCanvas());
+    const ready = screen.getByLabelText("OSC 7 初始化成功，已开始跟踪当前终端目录。");
+    expect(ready).toHaveAttribute("data-state", "ready");
+    expect(ready).toHaveAttribute("title", "OSC 7 初始化成功，已开始跟踪当前终端目录。");
+
+    view.rerender(<WorkspaceCanvas workspace={remoteWorkspace} visible remoteShellIntegrationEnabled={false} onRequestClose={vi.fn()} onRequestAuthConnection={vi.fn()}/>);
+    expect(screen.queryByText("OSC7")).not.toBeInTheDocument();
   });
 
   it("allows only a remote terminal to create a network leaf inheriting its profile", async () => {

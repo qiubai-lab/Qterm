@@ -13,7 +13,7 @@ import { MasterPasswordDialog, type MasterPasswordMode } from "../components/dia
 import { TerminalLockChoiceDialog, TerminalLockScreen } from "../components/dialogs/TerminalLockDialogs";
 import { getVaultStatus, lockVault, onVaultStatusChanged, type VaultStatus } from "../lib/tauri/credentials";
 import { getProfileRouteRequirements, type ConnectionProfile } from "../lib/tauri/profiles";
-import { getSettings, updateUpdateSettings, type SecuritySettings, type UpdateSettings } from "../lib/tauri/settings";
+import { getSettings, updateUpdateSettings, type SecuritySettings, type TerminalSettings, type UpdateSettings } from "../lib/tauri/settings";
 import { checkForUpdateOnStartupOnce } from "../lib/updateCheck";
 import { closeCurrentWindow, currentDesktopPlatform, isCurrentWindowAlwaysOnTop, minimizeCurrentWindow, setCurrentWindowAlwaysOnTop, startDraggingCurrentWindow, toggleMaximizeCurrentWindow } from "../lib/tauri/window";
 import { focusTerminalBlock, openTerminalSearch } from "../terminal/terminalViewRegistry";
@@ -58,6 +58,7 @@ export function WorkspaceShell() {
   const [lockChoiceOpen, setLockChoiceOpen] = useState(false);
   const [terminalLocked, setTerminalLocked] = useState(false);
   const [securitySettings, setSecuritySettings] = useState<SecuritySettings | null>(null);
+  const [remoteShellIntegrationEnabled, setRemoteShellIntegrationEnabled] = useState(false);
   const [updateSettings, setUpdateSettings] = useState<UpdateSettings | null>(null);
   const [availableUpdateVersion, setAvailableUpdateVersion] = useState<string | null>(null);
   const [windowAlwaysOnTop, setWindowAlwaysOnTop] = useState(false);
@@ -394,6 +395,7 @@ export function WorkspaceShell() {
     void getSettings().then(async (snapshot) => {
       if (disposed) return;
       setSecuritySettings(snapshot.security);
+      setRemoteShellIntegrationEnabled(snapshot.terminal?.remoteShellIntegrationEnabled ?? false);
       setUpdateSettings(snapshot.updates);
       if (!snapshot.updates.autoCheckOnStartup) return;
       const result = await checkForUpdateOnStartupOnce();
@@ -671,7 +673,7 @@ export function WorkspaceShell() {
           {document.workspaces.map((workspace) => {
             const visible = workspace.id === activeWorkspace.id;
             const transitionDirection = visible && workspaceTransition.workspaceId === workspace.id ? workspaceTransition.direction : null;
-            return <div key={workspace.id} className={`workspace-canvas-stage${visible ? " visible" : ""}${transitionDirection ? ` workspace-transition-${transitionDirection}` : ""}`} aria-hidden={!visible}><WorkspaceCanvas workspace={workspace} visible={visible} localTerminalAttention={localTerminalAttentionWorkspaceId === workspace.id} onRequestClose={closeBlock} onRequestDisconnect={(owner, blockId, name, local) => setDisconnectRequest({ owner, blockId, name, local })} onRequestAuthConnection={(owner, blockId, profile) => void requestConfiguredConnection(owner, blockId, profile)} onOpenConnectionManager={() => setTool("connections")}/></div>;
+            return <div key={workspace.id} className={`workspace-canvas-stage${visible ? " visible" : ""}${transitionDirection ? ` workspace-transition-${transitionDirection}` : ""}`} aria-hidden={!visible}><WorkspaceCanvas workspace={workspace} visible={visible} localTerminalAttention={localTerminalAttentionWorkspaceId === workspace.id} remoteShellIntegrationEnabled={remoteShellIntegrationEnabled} onRequestClose={closeBlock} onRequestDisconnect={(owner, blockId, name, local) => setDisconnectRequest({ owner, blockId, name, local })} onRequestAuthConnection={(owner, blockId, profile) => void requestConfiguredConnection(owner, blockId, profile)} onOpenConnectionManager={() => setTool("connections")}/></div>;
           })}
         </div>
         <aside className="utility-rail" aria-label="工具">
@@ -718,7 +720,7 @@ export function WorkspaceShell() {
       setVaultUnlockRequest(null);
       void requestConfiguredConnection(request.owner, request.blockId, request.profile);
     }}/>}
-    {tool === "settings" && <SettingsDialog onClose={() => setTool(null)} onSecuritySettingsChanged={setSecuritySettings}/>}
+    {tool === "settings" && <SettingsDialog onClose={() => setTool(null)} onSecuritySettingsChanged={setSecuritySettings} onTerminalSettingsChanged={(settings: TerminalSettings) => setRemoteShellIntegrationEnabled(settings.remoteShellIntegrationEnabled)}/>}
     {tool === "help" && <HelpDialog
       onClose={() => setTool(null)}
       autoCheckOnStartup={updateSettings?.autoCheckOnStartup ?? false}

@@ -23,6 +23,19 @@ pub struct UpdateSettings {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TerminalSettings {
+    pub remote_shell_integration_enabled: bool,
+}
+
+impl Default for TerminalSettings {
+    fn default() -> Self {
+        Self {
+            remote_shell_integration_enabled: true,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SecuritySettings {
     pub credential_auto_lock_after_seconds: Option<u32>,
     pub terminal_auto_lock_after_seconds: Option<u32>,
@@ -106,13 +119,14 @@ mod tests {
     use super::{
         AppTheme, AppearanceSettings, ConfigurationDirectory, DEFAULT_CREDENTIAL_AUTO_LOCK_SECONDS,
         MAX_AUTO_LOCK_SECONDS, MIN_AUTO_LOCK_SECONDS, SecuritySettings, SettingsError,
-        UpdateSettings,
+        TerminalSettings, UpdateSettings,
     };
 
     #[test]
     fn defaults_are_secure() {
         assert_eq!(AppearanceSettings::default().theme, AppTheme::Dark);
         assert!(!UpdateSettings::default().auto_check_on_startup);
+        assert!(TerminalSettings::default().remote_shell_integration_enabled);
         assert_eq!(
             SecuritySettings::default(),
             SecuritySettings {

@@ -120,6 +120,12 @@ describe("application layout styles", () => {
     expect(styles).toContain(".connection-context-menu,.file-context-menu,.network-context-menu,.terminal-context-menu,.terminal-target-menu,.terminal-target-submenu,.dialog-frame{background:var(--raised)}");
   });
 
+  it("keeps terminal cwd integration commands readable inside the compact dialog", () => {
+    expect(declarations(".terminal-cwd-dialog .dialog-content")).toContain("overflow:hidden");
+    expect(declarations(".terminal-cwd-body")).toContain("display:flex");
+    expect(declarations(".terminal-cwd-fallback code")).toContain("text-overflow:ellipsis");
+  });
+
   it("collapses the connected endpoint before persistent route status", () => {
     expect(declarations(".terminal-block")).toContain("container-type:inline-size");
     expect(declarations(".connection-route-progress")).not.toContain("position:absolute");
@@ -132,9 +138,22 @@ describe("application layout styles", () => {
     expect(declarations(".connection-route-endpoint")).toContain("text-overflow:ellipsis");
     expect(declarations(".connection-route-endpoint")).toContain("flex:0 100 auto");
     expect(styles).not.toMatch(/@container terminal-block[^}]+\.connection-route-endpoint\{display:none\}/);
-    expect(styles).toMatch(/@container terminal-block \(max-width:390px\)\{\.terminal-target>small,\.terminal-target-endpoint\{display:none\}\}/);
+    expect(styles).toMatch(/@container terminal-block \(max-width:390px\)\{\.terminal-target>small,\.terminal-target-endpoint,\.terminal-osc7-tag\{display:none\}\}/);
     expect(styles).not.toContain(".connection-route-progress{display:none}");
     expect(declarations(".block-actions")).toContain("flex:none");
+  });
+
+  it("uses neutral and theme-highlighted states for the OSC 7 tag", () => {
+    const tag = declarations(".terminal-osc7-tag");
+    const ready = declarations('.terminal-osc7-tag[data-state="ready"]');
+    expect(tag).toContain("color:var(--dim)");
+    expect(tag).toContain("flex:none");
+    expect(tag).toContain("height:12px");
+    expect(tag).toContain("padding:0 3px");
+    expect(tag).toContain("border-radius:3px");
+    expect(tag).toContain("background:transparent");
+    expect(ready).toContain("color:var(--selection-marker)");
+    expect(ready).toContain("background:color-mix(in srgb,var(--selection-surface) 72%,transparent)");
   });
 
   it("keeps route node details in a compact two-line tooltip", () => {

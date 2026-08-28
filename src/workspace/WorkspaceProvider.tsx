@@ -356,7 +356,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     pendingTerminalOutput.current.delete(blockId);
     const key = epochKey(blockId, epoch);
     finishedEpochs.current.delete(key);
-    updateRuntime(blockId, () => ({ ...defaultRuntime, kind: "local", status: "connecting", cwd: "~" }));
+    updateRuntime(blockId, () => ({ ...defaultRuntime, kind: "local", status: "connecting" }));
     let startedSessionId: string | null = null;
     try {
       const connection = await connectLocalSession(
@@ -387,7 +387,14 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         activeLocalSessions.current.set(blockId, sessionId);
         const pending = pendingLocalInput.current.get(blockId) ?? [];
         while (pending.length > 0) await writeLocalSession(sessionId, pending.shift()!);
-        updateRuntime(blockId, (runtime) => ({ ...runtime, sessionId, kind: "local", status: "connected", cwd: connection.cwd }));
+        updateRuntime(blockId, (runtime) => ({
+          ...runtime,
+          sessionId,
+          kind: "local",
+          status: "connected",
+          cwd: runtime.cwdSource === "osc7" ? runtime.cwd : connection.cwd,
+          cwdSource: runtime.cwdSource === "osc7" ? "osc7" : "initial",
+        }));
         pendingLocalInput.current.delete(blockId);
       }
     } catch (error) {
@@ -414,7 +421,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     const key = epochKey(blockId, epoch);
     finishedEpochs.current.delete(key);
     const terminalSize = terminalSizeReaders.current.get(blockId)?.() ?? { columns: 80, rows: 24 };
-    updateRuntime(blockId, () => ({ ...defaultRuntime, kind: "ssh", status: "connecting", connectionProgress: initialConnectionProgress(profile.jumpProfileIds?.length ?? 0), cwd: "." }));
+    updateRuntime(blockId, () => ({ ...defaultRuntime, kind: "ssh", status: "connecting", connectionProgress: initialConnectionProgress(profile.jumpProfileIds?.length ?? 0) }));
     try {
       const sessionId = await connectSession(
         { profileId: profile.id, auth, terminalSize },
@@ -628,7 +635,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     };
   }, []);
   const setBlockCwd = useCallback((blockId: string, cwd: string) => {
-    updateRuntime(blockId, (runtime) => ({ ...runtime, cwd }));
+    updateRuntime(blockId, (runtime) => ({ ...runtime, cwd, cwdSource: "osc7" }));
   }, [updateRuntime]);
 
   const blocksForWorkspace = useCallback((workspace: Workspace) => blockIds(workspace.layout), []);

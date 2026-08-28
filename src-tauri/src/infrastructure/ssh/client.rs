@@ -1,6 +1,7 @@
 mod handler;
 mod network;
 mod session;
+mod shell_integration;
 mod transfer;
 
 use handler::ClientHandler;
@@ -44,7 +45,10 @@ use crate::{
         transfer::{RemotePath, TransferEvent},
     },
     infrastructure::{
-        persistence::json_known_host_repository::JsonKnownHostRepository,
+        persistence::{
+            json_known_host_repository::JsonKnownHostRepository,
+            json_remote_shell_cache::JsonRemoteShellCache,
+        },
         ssh::{
             auth::authenticate,
             forwarding::{
@@ -69,6 +73,7 @@ pub struct SessionConnectRequest {
     pub profile_id: Option<String>,
     pub terminal_size: Option<TerminalSize>,
     pub terminal_output: Arc<dyn Fn(Vec<u8>) + Send + Sync>,
+    pub remote_shell_integration_enabled: bool,
 }
 
 pub struct SessionRouteNode {
@@ -109,14 +114,16 @@ type KnownHostService = HostKeyService<JsonKnownHostRepository>;
 
 pub struct SshSessionManager {
     host_keys: Arc<KnownHostService>,
+    shell_cache: Arc<JsonRemoteShellCache>,
     sessions: Mutex<HashMap<String, Arc<SessionEntry>>>,
     finished: Mutex<VecDeque<String>>,
 }
 
 impl SshSessionManager {
-    pub fn new(repository: JsonKnownHostRepository) -> Self {
+    pub fn new(repository: JsonKnownHostRepository, shell_cache: JsonRemoteShellCache) -> Self {
         Self {
             host_keys: Arc::new(HostKeyService::new(repository)),
+            shell_cache: Arc::new(shell_cache),
             sessions: Mutex::new(HashMap::new()),
             finished: Mutex::new(VecDeque::new()),
         }
@@ -146,10 +153,19 @@ impl SshSessionManager {
             .insert(id.clone(), Arc::clone(&entry));
 
         let host_keys = Arc::clone(&self.host_keys);
+        let shell_cache = Arc::clone(&self.shell_cache);
         let manager = Arc::clone(self);
         let task_id = id.clone();
         tauri::async_runtime::spawn(async move {
-            run_session(entry, host_keys, request, cancel_receiver, control_receiver).await;
+            run_session(
+                entry,
+                host_keys,
+                shell_cache,
+                request,
+                cancel_receiver,
+                control_receiver,
+            )
+            .await;
             manager.finish(&task_id);
         });
         id

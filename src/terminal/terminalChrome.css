@@ -20,6 +20,8 @@
 .terminal-target-status-action[data-tone="danger"]:hover,.terminal-target-status-action[data-tone="danger"]:focus-visible { color:var(--danger);background:var(--danger-soft); }
 .terminal-target-status-action:disabled { color:var(--text-disabled);background:transparent;cursor:not-allowed;transform:none; }
 .terminal-block.active .terminal-target[data-remote="true"][data-status="connected"] .terminal-target-endpoint { color:var(--block-active-endpoint-text); }
+.terminal-osc7-tag { display:inline-flex; height:12px; flex:none; align-items:center; padding:0 3px; border:1px solid var(--border); border-radius:3px; color:var(--dim); background:transparent; cursor:help; font:700 7px/1 "SFMono-Regular",Consolas,monospace; letter-spacing:0; text-decoration:none; transition:color 140ms ease,border-color 140ms ease,background-color 140ms ease; }
+.terminal-osc7-tag[data-state="ready"] { border-color:color-mix(in srgb,var(--selection-marker) 42%,var(--border)); color:var(--selection-marker); background:color-mix(in srgb,var(--selection-surface) 72%,transparent); }
 .terminal-target-menu { position:fixed; z-index:90; display:flex; min-height:0; flex-direction:column; overflow:hidden; padding:4px; border:1px solid var(--floating-border); border-radius:8px; background:var(--floating-material); box-shadow:0 16px 42px var(--shadow-strong),inset 0 1px 0 color-mix(in srgb,var(--text) 7%,transparent); backdrop-filter:blur(18px) saturate(112%); -webkit-backdrop-filter:blur(18px) saturate(112%); transform-origin:top left; animation:terminal-target-menu-in 140ms cubic-bezier(.16,1,.3,1); }
 .terminal-target-menu[data-placement="above"] { transform-origin:bottom left; }
 @keyframes terminal-target-menu-in { from{opacity:0;transform:translateY(-3px) scale(.98)} to{opacity:1;transform:translateY(0) scale(1)} }
@@ -71,3 +73,12 @@
 .block-actions { display:flex; flex:none; margin-left:auto; opacity:1; }
 .block-actions button { display:grid; width:25px; height:23px; place-items:center; padding:0; border:0; border-radius:4px; color:var(--icon); background:transparent; }.block-actions button:hover{color:var(--icon-hover);background:var(--control-hover)}.block-actions button[aria-label^="关闭"]:hover{color:var(--danger);background:var(--danger-bg)}.block-actions button[aria-label^="关闭"]:active{color:var(--danger);background:color-mix(in srgb,var(--danger) 22%,var(--danger-bg))}
 .block-actions button[aria-label^="断开"]:hover,.block-actions button[aria-label^="停止"]:hover{color:var(--danger);background:var(--danger-bg)}
+
+.terminal-cwd-dialog .dialog-content { overflow:hidden; padding:0; }
+.terminal-cwd-body { display:flex; min-width:0; flex-direction:column; gap:11px; padding:16px 16px 12px; }
+.terminal-cwd-intro { display:grid; min-width:0; grid-template-columns:29px minmax(0,1fr); gap:9px; align-items:start; }
+.terminal-cwd-intro>span { display:grid; width:29px; height:29px; place-items:center; border:1px solid color-mix(in srgb,var(--accent) 28%,var(--border)); border-radius:7px; color:var(--accent); background:var(--accent-bg); }
+.terminal-cwd-intro p,.terminal-cwd-fallback { margin:0; color:var(--muted); font-size:9px; line-height:1.55; }
+.terminal-cwd-fallback { display:flex; min-width:0; gap:6px; align-items:center; }
+.terminal-cwd-fallback code { min-width:0; overflow:hidden; color:var(--text); font:9px "SFMono-Regular",Consolas,monospace; text-overflow:ellipsis; white-space:nowrap; }
+.terminal-cwd-footer { border-top:1px solid var(--subtle); }

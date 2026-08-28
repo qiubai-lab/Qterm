@@ -11,26 +11,35 @@ const mocks = vi.hoisted(() => ({
   updateConfigurationDirectory: vi.fn(),
   updateSecuritySettings: vi.fn(),
   updateAppearanceSettings: vi.fn(),
+  updateTerminalSettings: vi.fn(),
 }));
 vi.mock("../../lib/tauri/settings", () => mocks);
 
 beforeEach(() => {
   mocks.getSettings.mockResolvedValue({
     general: storageLayout(),
-    security: { credentialAutoLockAfterSeconds: 3600, terminalAutoLockAfterSeconds: null }, appearance: { theme: "dark" }, warning: null,
+    security: { credentialAutoLockAfterSeconds: 3600, terminalAutoLockAfterSeconds: null }, appearance: { theme: "dark" }, terminal: { remoteShellIntegrationEnabled: true }, warning: null,
   });
   mocks.updateConfigurationDirectory.mockImplementation(async ({ path }: { path: string }) => ({
     general: { ...storageLayout(), rootDirectory: path, dataDirectory: `${path}\\data`, deviceDirectory: `${path}\\device`, cacheDirectory: `${path}\\cache`, restartRequired: true },
-    security: { credentialAutoLockAfterSeconds: 3600, terminalAutoLockAfterSeconds: null }, appearance: { theme: "dark" }, warning: null,
+    security: { credentialAutoLockAfterSeconds: 3600, terminalAutoLockAfterSeconds: null }, appearance: { theme: "dark" }, terminal: { remoteShellIntegrationEnabled: true }, warning: null,
   }));
   mocks.updateSecuritySettings.mockImplementation(async (security) => ({
     general: storageLayout(),
-    security, appearance: { theme: "dark" }, warning: null,
+    security, appearance: { theme: "dark" }, terminal: { remoteShellIntegrationEnabled: true }, warning: null,
   }));
   mocks.updateAppearanceSettings.mockImplementation(async (appearance) => ({
     general: storageLayout(),
     security: { credentialAutoLockAfterSeconds: 3600, terminalAutoLockAfterSeconds: null },
     appearance,
+    terminal: { remoteShellIntegrationEnabled: true },
+    warning: null,
+  }));
+  mocks.updateTerminalSettings.mockImplementation(async (terminal) => ({
+    general: storageLayout(),
+    security: { credentialAutoLockAfterSeconds: 3600, terminalAutoLockAfterSeconds: null },
+    appearance: { theme: "dark" },
+    terminal,
     warning: null,
   }));
 });
@@ -47,8 +56,8 @@ function storageLayout() {
   };
 }
 
-function renderSettings(onClose = vi.fn()) {
-  return render(<AppThemeProvider><SettingsDialog onClose={onClose}/></AppThemeProvider>);
+function renderSettings(onClose = vi.fn(), onTerminalSettingsChanged = vi.fn()) {
+  return render(<AppThemeProvider><SettingsDialog onClose={onClose} onTerminalSettingsChanged={onTerminalSettingsChanged}/></AppThemeProvider>);
 }
 
 describe("SettingsDialog", () => {
@@ -57,6 +66,7 @@ describe("SettingsDialog", () => {
     const navigation = screen.getByRole("navigation", { name: "设置分类" });
     expect(within(navigation).getByRole("button", { name: /通用/ })).toHaveAttribute("aria-current", "page");
     expect(within(navigation).getByRole("button", { name: /安全/ })).not.toHaveAttribute("aria-current");
+    expect(within(navigation).getByRole("button", { name: /高级/ })).not.toHaveAttribute("aria-current");
     await userEvent.click(within(navigation).getByRole("button", { name: /安全/ }));
     const securityPanel = await screen.findByRole("region", { name: "安全" });
     expect(await within(securityPanel).findByRole("switch", { name: "启用凭证库有效期" })).toBeInTheDocument();
@@ -70,6 +80,9 @@ describe("SettingsDialog", () => {
     mocks.selectConfigurationDirectory.mockResolvedValue("D:\\Qterm");
     renderSettings();
 
+    const generalPanel = await screen.findByRole("region", { name: "通用" });
+    expect(within(generalPanel).getByText("配置 Qterm 数据根目录与存储路径。")).toBeInTheDocument();
+    expect(within(generalPanel).queryByRole("switch", { name: "自动获取远程终端目录" })).not.toBeInTheDocument();
     const directorySettings = await screen.findByRole("group", { name: "配置目录设置" });
     const pathOverview = screen.getByRole("group", { name: "配置路径" });
     const input = within(directorySettings).getByRole("textbox", { name: "Qterm 配置目录" });
@@ -91,6 +104,43 @@ describe("SettingsDialog", () => {
     const status = await screen.findByRole("status");
     expect(status).toHaveTextContent("重启 Qterm 后生效");
     expect(status.closest("footer")).not.toBeNull();
+  });
+
+  it("defaults remote directory integration on and confirms only when re-enabling it", async () => {
+    const user = userEvent.setup();
+    const onTerminalSettingsChanged = vi.fn();
+    renderSettings(vi.fn(), onTerminalSettingsChanged);
+    const navigation = screen.getByRole("navigation", { name: "设置分类" });
+    const generalPanel = await screen.findByRole("region", { name: "通用" });
+    expect(within(generalPanel).queryByRole("switch", { name: "自动获取远程终端目录" })).not.toBeInTheDocument();
+
+    await user.click(within(navigation).getByRole("button", { name: /高级/ }));
+    const advancedPanel = await screen.findByRole("region", { name: "高级" });
+    const toggle = within(advancedPanel).getByRole("switch", { name: "自动获取远程终端目录" });
+    expect(toggle).toBeChecked();
+    expect(within(advancedPanel).queryByRole("button", { name: "保存设置" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "开启远程目录自动检测" })).not.toBeInTheDocument();
+
+    await user.click(toggle);
+    await waitFor(() => expect(mocks.updateTerminalSettings).toHaveBeenCalledWith({ remoteShellIntegrationEnabled: false }));
+    expect(onTerminalSettingsChanged).toHaveBeenLastCalledWith({ remoteShellIntegrationEnabled: false });
+    expect(toggle).not.toBeChecked();
+    expect(screen.getByRole("status")).toHaveTextContent("高级设置已保存。");
+
+    await user.click(toggle);
+    const confirmation = screen.getByRole("dialog", { name: "开启远程目录自动检测" });
+    expect(within(confirmation).getByText(/不会修改远程/)).toBeInTheDocument();
+    expect(within(confirmation).getByText(/不保存命令输出或凭据/)).toBeInTheDocument();
+    expect(within(confirmation).getByText(/自动重试一次.*普通终端连接/)).toBeInTheDocument();
+    await user.click(within(confirmation).getByRole("button", { name: "取消" }));
+    expect(toggle).not.toBeChecked();
+    expect(mocks.updateTerminalSettings).toHaveBeenCalledTimes(1);
+
+    await user.click(toggle);
+    await user.click(within(screen.getByRole("dialog", { name: "开启远程目录自动检测" })).getByRole("button", { name: "确认开启" }));
+    await waitFor(() => expect(mocks.updateTerminalSettings).toHaveBeenLastCalledWith({ remoteShellIntegrationEnabled: true }));
+    expect(onTerminalSettingsChanged).toHaveBeenLastCalledWith({ remoteShellIntegrationEnabled: true });
+    expect(toggle).toBeChecked();
   });
 
   it("restores the default root while derived paths remain read-only", async () => {
@@ -186,7 +236,7 @@ describe("SettingsDialog", () => {
   it("surfaces safe-default fallback warnings", async () => {
     mocks.getSettings.mockResolvedValue({
       general: storageLayout(),
-      security: { credentialAutoLockAfterSeconds: 3600, terminalAutoLockAfterSeconds: null }, appearance: { theme: "dark" }, warning: "corrupt",
+      security: { credentialAutoLockAfterSeconds: 3600, terminalAutoLockAfterSeconds: null }, appearance: { theme: "dark" }, terminal: { remoteShellIntegrationEnabled: true }, warning: "corrupt",
     });
     renderSettings();
     expect(await screen.findByRole("alert")).toHaveTextContent("不会覆盖原文件");

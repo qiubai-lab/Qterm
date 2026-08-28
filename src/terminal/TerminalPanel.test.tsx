@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
     loadAddon: ReturnType<typeof vi.fn>;
     keyHandler: ((event: KeyboardEvent) => boolean) | null;
     dataHandler: ((data: string) => void) | null;
+    osc7Handler: ((data: string) => boolean) | null;
   }>,
   fits: [] as Array<{ fit: ReturnType<typeof vi.fn>; proposeDimensions: ReturnType<typeof vi.fn> }>,
   searches: [] as Array<{
@@ -89,7 +90,11 @@ vi.mock("@xterm/xterm", () => ({
     hasSelection = vi.fn(() => false);
     getSelection = vi.fn(() => "");
     keyHandler: ((event: KeyboardEvent) => boolean) | null = null;
-    parser = { registerOscHandler: vi.fn(() => ({ dispose: vi.fn() })) };
+    osc7Handler: ((data: string) => boolean) | null = null;
+    parser = { registerOscHandler: vi.fn((identifier: number, handler: (data: string) => boolean) => {
+      if (identifier === 7) this.osc7Handler = handler;
+      return { dispose: vi.fn() };
+    }) };
 
     options: Record<string, unknown>;
 
@@ -151,6 +156,7 @@ describe("TerminalPanel view lifetime", () => {
     mocks.fits.length = 0;
     mocks.searches.length = 0;
     mocks.registerWriter.mockClear();
+    mocks.setBlockCwd.mockClear();
     mocks.startLocalBlock.mockClear();
     mocks.writeBlock.mockClear();
     mocks.resizeBlock.mockClear();
@@ -636,5 +642,18 @@ describe("OSC 7 working directory parsing", () => {
     expect(parseOsc7Cwd("file://localhost/C:/Users/Test/project")).toBe("C:/Users/Test/project");
     expect(parseOsc7Cwd("https://example.com/tmp")).toBeNull();
     expect(parseOsc7Cwd("not a uri")).toBeNull();
+  });
+
+  it("submits only valid OSC 7 paths to the workspace runtime", () => {
+    vi.stubGlobal("ResizeObserver", ResizeObserverMock);
+    const view = render(<TerminalPanel blockId="block-cwd" sessionKey="block-cwd:ssh" local={false} visible/>);
+    const terminal = mocks.terminals[mocks.terminals.length - 1];
+
+    expect(terminal.osc7Handler?.("https://example.com/tmp")).toBe(true);
+    expect(mocks.setBlockCwd).not.toHaveBeenCalled();
+    expect(terminal.osc7Handler?.("file://server/srv/app")).toBe(true);
+    expect(mocks.setBlockCwd).toHaveBeenCalledWith("block-cwd", "/srv/app");
+    view.unmount();
+    vi.unstubAllGlobals();
   });
 });

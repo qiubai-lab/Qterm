@@ -41,7 +41,7 @@ use commands::session::{
 use commands::settings::{
     SettingsState, settings_get, settings_select_configuration_directory,
     settings_update_appearance, settings_update_configuration_directory, settings_update_security,
-    settings_update_updates,
+    settings_update_terminal, settings_update_updates,
 };
 use commands::transfer::{
     TransferState, transfer_cancel, transfer_download, transfer_select_download_directory,
@@ -56,9 +56,11 @@ use infrastructure::persistence::json_credential_vault::JsonCredentialVault;
 use infrastructure::persistence::json_known_host_repository::JsonKnownHostRepository;
 use infrastructure::persistence::json_network_repository::JsonNetworkRepository;
 use infrastructure::persistence::json_profile_repository::JsonProfileRepository;
+use infrastructure::persistence::json_remote_shell_cache::JsonRemoteShellCache;
 use infrastructure::persistence::json_settings_repository::{
     JsonConfigurationDirectoryRepository, JsonSettingsRepository,
 };
+use infrastructure::persistence::json_terminal_settings_repository::JsonTerminalSettingsRepository;
 use infrastructure::persistence::json_update_settings_repository::JsonUpdateSettingsRepository;
 use infrastructure::persistence::json_workspace_repository::JsonWorkspaceRepository;
 use infrastructure::ssh::client::SshSessionManager;
@@ -86,6 +88,8 @@ struct DataPaths {
     settings: std::path::PathBuf,
     appearance: std::path::PathBuf,
     updates: std::path::PathBuf,
+    terminal: std::path::PathBuf,
+    remote_shells: std::path::PathBuf,
     browser_profiles: std::path::PathBuf,
 }
 
@@ -103,6 +107,8 @@ impl DataPaths {
             settings: device.join("settings.json"),
             appearance: device.join("appearance.json"),
             updates: device.join("updates.json"),
+            terminal: device.join("terminal.json"),
+            remote_shells: cache.join("remote-shells.json"),
             browser_profiles: cache.join("browser-profiles"),
             root,
             data,
@@ -158,6 +164,7 @@ pub fn run() {
                 active_configuration,
                 JsonAppearanceSettingsRepository::new(paths.appearance.clone()),
                 JsonUpdateSettingsRepository::new(paths.updates.clone()),
+                JsonTerminalSettingsRepository::new(paths.terminal.clone()),
             ));
             app.manage(ProfileState::new(JsonProfileRepository::new(
                 paths.profiles,
@@ -173,6 +180,7 @@ pub fn run() {
             )));
             app.manage(SessionState::new(SshSessionManager::new(
                 JsonKnownHostRepository::new(paths.known_hosts),
+                JsonRemoteShellCache::new(paths.remote_shells),
             )));
             app.manage(LocalSessionState::new(LocalSessionManager::default()));
             Ok(())
@@ -226,6 +234,7 @@ pub fn run() {
             settings_update_security,
             settings_update_appearance,
             settings_update_updates,
+            settings_update_terminal,
             session_connect,
             session_accept_host_key,
             session_reject_host_key,
@@ -289,6 +298,8 @@ mod tests {
         assert_eq!(paths.workspaces, device.join("workspaces.json"));
         assert_eq!(paths.settings, device.join("settings.json"));
         assert_eq!(paths.appearance, device.join("appearance.json"));
+        assert_eq!(paths.terminal, device.join("terminal.json"));
+        assert_eq!(paths.remote_shells, cache.join("remote-shells.json"));
         assert_eq!(paths.browser_profiles, cache.join("browser-profiles"));
     }
 
@@ -329,7 +340,9 @@ mod tests {
         assert_eq!(paths.known_hosts, custom.join("device/known-hosts.json"));
         assert_eq!(paths.settings, custom.join("device/settings.json"));
         assert_eq!(paths.appearance, custom.join("device/appearance.json"));
+        assert_eq!(paths.terminal, custom.join("device/terminal.json"));
         assert_eq!(paths.cache, custom.join("cache"));
+        assert_eq!(paths.remote_shells, custom.join("cache/remote-shells.json"));
     }
 
     #[test]

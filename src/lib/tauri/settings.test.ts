@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const { invoke } = vi.hoisted(() => ({ invoke: vi.fn() }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
 
-import { getSettings, selectConfigurationDirectory, updateAppearanceSettings, updateConfigurationDirectory, updateSecuritySettings, updateUpdateSettings } from "./settings";
+import { getSettings, selectConfigurationDirectory, updateAppearanceSettings, updateConfigurationDirectory, updateSecuritySettings, updateTerminalSettings, updateUpdateSettings } from "./settings";
 
 describe("settings IPC client", () => {
   beforeEach(() => invoke.mockReset());
@@ -28,6 +28,8 @@ describe("settings IPC client", () => {
     expect(invoke).toHaveBeenLastCalledWith("settings_update_appearance", { input: { theme: "light" } });
     await updateUpdateSettings({ autoCheckOnStartup: true });
     expect(invoke).toHaveBeenLastCalledWith("settings_update_updates", { input: { autoCheckOnStartup: true } });
-    expect(invoke).toHaveBeenCalledTimes(6);
+    await updateTerminalSettings({ remoteShellIntegrationEnabled: false });
+    expect(invoke).toHaveBeenLastCalledWith("settings_update_terminal", { input: { remoteShellIntegrationEnabled: false } });
+    expect(invoke).toHaveBeenCalledTimes(7);
   });
 });

@@ -8,12 +8,14 @@ use crate::{
     application::settings_service::{SettingsService, SettingsSnapshot, SettingsWarning},
     commands::{error::IpcError, native_dialog},
     domain::settings::{
-        AppTheme, AppearanceSettings, ConfigurationDirectory, SecuritySettings, UpdateSettings,
+        AppTheme, AppearanceSettings, ConfigurationDirectory, SecuritySettings, TerminalSettings,
+        UpdateSettings,
     },
     infrastructure::persistence::json_appearance_settings_repository::JsonAppearanceSettingsRepository,
     infrastructure::persistence::json_settings_repository::{
         JsonConfigurationDirectoryRepository, JsonSettingsRepository,
     },
+    infrastructure::persistence::json_terminal_settings_repository::JsonTerminalSettingsRepository,
     infrastructure::persistence::json_update_settings_repository::JsonUpdateSettingsRepository,
 };
 
@@ -23,6 +25,7 @@ pub struct SettingsState {
         JsonConfigurationDirectoryRepository,
         JsonAppearanceSettingsRepository,
         JsonUpdateSettingsRepository,
+        JsonTerminalSettingsRepository,
     >,
 }
 
@@ -34,6 +37,7 @@ impl SettingsState {
         active_configuration_directory: ConfigurationDirectory,
         appearance_repository: JsonAppearanceSettingsRepository,
         update_repository: JsonUpdateSettingsRepository,
+        terminal_repository: JsonTerminalSettingsRepository,
     ) -> Self {
         Self {
             service: SettingsService::new(
@@ -43,12 +47,17 @@ impl SettingsState {
                 active_configuration_directory,
                 appearance_repository,
                 update_repository,
+                terminal_repository,
             ),
         }
     }
 
     pub(crate) fn security(&self) -> SecuritySettings {
         self.service.snapshot().security
+    }
+
+    pub(crate) fn terminal(&self) -> TerminalSettings {
+        self.service.snapshot().terminal
     }
 }
 
@@ -69,6 +78,12 @@ pub struct AppearanceSettingsDto {
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct UpdateSettingsDto {
     auto_check_on_startup: bool,
+}
+
+#[derive(Clone, Copy, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct TerminalSettingsDto {
+    remote_shell_integration_enabled: bool,
 }
 
 #[derive(Clone, Copy, Deserialize, Serialize)]
@@ -92,6 +107,7 @@ pub struct SettingsSnapshotDto {
     security: SecuritySettingsOutputDto,
     appearance: AppearanceSettingsOutputDto,
     updates: UpdateSettingsOutputDto,
+    terminal: TerminalSettingsOutputDto,
     warning: Option<&'static str>,
 }
 
@@ -123,6 +139,12 @@ struct AppearanceSettingsOutputDto {
 #[serde(rename_all = "camelCase")]
 struct UpdateSettingsOutputDto {
     auto_check_on_startup: bool,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TerminalSettingsOutputDto {
+    remote_shell_integration_enabled: bool,
 }
 
 #[tauri::command]
@@ -209,6 +231,20 @@ pub fn settings_update_updates(
     Ok(SettingsSnapshotDto::new(snapshot))
 }
 
+#[tauri::command]
+pub fn settings_update_terminal(
+    input: TerminalSettingsDto,
+    state: State<'_, SettingsState>,
+) -> Result<SettingsSnapshotDto, IpcError> {
+    let snapshot = state
+        .service
+        .update_terminal(TerminalSettings {
+            remote_shell_integration_enabled: input.remote_shell_integration_enabled,
+        })
+        .map_err(IpcError::from)?;
+    Ok(SettingsSnapshotDto::new(snapshot))
+}
+
 impl SettingsSnapshotDto {
     fn new(value: SettingsSnapshot) -> Self {
         let root = value.configuration_directory.path();
@@ -233,6 +269,9 @@ impl SettingsSnapshotDto {
             },
             updates: UpdateSettingsOutputDto {
                 auto_check_on_startup: value.updates.auto_check_on_startup,
+            },
+            terminal: TerminalSettingsOutputDto {
+                remote_shell_integration_enabled: value.terminal.remote_shell_integration_enabled,
             },
             warning: value.warning.map(|warning| match warning {
                 SettingsWarning::Corrupt => "corrupt",
@@ -271,7 +310,7 @@ fn display_path(path: &std::path::Path) -> String {
 mod tests {
     use super::{
         AppearanceSettingsDto, ConfigurationDirectorySettingsDto, SecuritySettingsDto,
-        SettingsSnapshotDto, UpdateSettingsDto,
+        SettingsSnapshotDto, TerminalSettingsDto, UpdateSettingsDto,
     };
     use crate::{
         application::settings_service::SettingsService,
@@ -280,6 +319,7 @@ mod tests {
         infrastructure::persistence::json_settings_repository::{
             JsonConfigurationDirectoryRepository, JsonSettingsRepository,
         },
+        infrastructure::persistence::json_terminal_settings_repository::JsonTerminalSettingsRepository,
         infrastructure::persistence::json_update_settings_repository::JsonUpdateSettingsRepository,
     };
     use serde_json::json;
@@ -295,6 +335,19 @@ mod tests {
                 "autoCheckOnStartup": true
             }))
             .is_ok()
+        );
+        assert!(
+            serde_json::from_value::<TerminalSettingsDto>(json!({
+                "remoteShellIntegrationEnabled": true
+            }))
+            .is_ok()
+        );
+        assert!(
+            serde_json::from_value::<TerminalSettingsDto>(json!({
+                "remoteShellIntegrationEnabled": true,
+                "command": "forbidden"
+            }))
+            .is_err()
         );
         assert!(
             serde_json::from_value::<UpdateSettingsDto>(json!({
@@ -348,6 +401,7 @@ mod tests {
             active_root,
             JsonAppearanceSettingsRepository::new(root.join("device/appearance.json")),
             JsonUpdateSettingsRepository::new(root.join("device/updates.json")),
+            JsonTerminalSettingsRepository::new(root.join("device/terminal.json")),
         );
 
         let value = serde_json::to_value(SettingsSnapshotDto::new(service.snapshot()))
@@ -395,6 +449,7 @@ mod tests {
         assert_eq!(updated["general"]["restartRequired"], true);
         assert_eq!(updated["appearance"]["theme"], "dark");
         assert_eq!(updated["updates"]["autoCheckOnStartup"], false);
+        assert_eq!(updated["terminal"]["remoteShellIntegrationEnabled"], true);
     }
 
     fn display(path: &std::path::Path) -> String {
