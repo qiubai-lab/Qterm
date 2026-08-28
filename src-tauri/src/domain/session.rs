@@ -1,5 +1,25 @@
 use std::fmt;
 
+pub const MAX_INITIAL_DIRECTORY_BYTES: usize = 4 * 1024;
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct InitialDirectory(String);
+
+impl InitialDirectory {
+    pub fn new(value: String) -> Option<Self> {
+        (!value.is_empty() && value.len() <= MAX_INITIAL_DIRECTORY_BYTES && !value.contains('\0'))
+            .then_some(Self(value))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    pub fn into_string(self) -> String {
+        self.0
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct HostEndpoint {
     host: String,
@@ -248,7 +268,8 @@ impl fmt::Display for InvalidSessionTransition {
 #[cfg(test)]
 mod tests {
     use super::{
-        HostKeyCheck, PresentedHostKey, SessionState, SessionStateMachine, classify_host_key,
+        HostKeyCheck, InitialDirectory, MAX_INITIAL_DIRECTORY_BYTES, PresentedHostKey,
+        SessionState, SessionStateMachine, classify_host_key,
     };
 
     fn key(encoded: &str, fingerprint: &str) -> PresentedHostKey {
@@ -336,6 +357,19 @@ mod tests {
         assert!(super::TerminalSize::new(80, 24).is_ok());
         assert!(super::TerminalSize::new(0, 24).is_err());
         assert!(super::TerminalSize::new(80, 1001).is_err());
+    }
+
+    #[test]
+    fn initial_directory_is_bounded_and_rejects_empty_or_nul_input() {
+        assert_eq!(
+            InitialDirectory::new("/srv/project with spaces".into())
+                .expect("valid path")
+                .as_str(),
+            "/srv/project with spaces"
+        );
+        assert!(InitialDirectory::new(String::new()).is_none());
+        assert!(InitialDirectory::new("/srv/has\0nul".into()).is_none());
+        assert!(InitialDirectory::new("x".repeat(MAX_INITIAL_DIRECTORY_BYTES + 1)).is_none());
     }
 
     fn path_to(state: SessionState) -> Vec<SessionState> {

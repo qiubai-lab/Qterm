@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 use portable_pty::PtySize;
 use serde::Serialize;
@@ -7,7 +7,7 @@ use tauri::{State, ipc::Channel};
 use crate::{
     application::error::{ApplicationError, ApplicationErrorCode},
     commands::error::IpcError,
-    domain::session::TerminalSize,
+    domain::session::{InitialDirectory, TerminalSize},
     infrastructure::local::pty::{
         LocalSessionError, LocalSessionEvent, LocalSessionManager, terminal_capabilities,
     },
@@ -76,6 +76,7 @@ pub fn local_terminal_capabilities() -> LocalTerminalCapabilitiesDto {
 pub fn local_session_connect(
     columns: u32,
     rows: u32,
+    initial_directory: Option<String>,
     on_event: Channel<LocalSessionEventDto>,
     on_terminal: Channel<LocalTerminalDataDto>,
     state: State<'_, LocalSessionState>,
@@ -93,7 +94,15 @@ pub fn local_session_connect(
     });
     let connection = state
         .manager
-        .connect(size, output, events)
+        .connect(
+            size,
+            initial_directory
+                .and_then(InitialDirectory::new)
+                .map(InitialDirectory::into_string)
+                .map(PathBuf::from),
+            output,
+            events,
+        )
         .map_err(local_error)?;
     Ok(LocalSessionConnectionDto {
         session_id: connection.session_id,

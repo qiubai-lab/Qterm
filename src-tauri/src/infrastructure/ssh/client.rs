@@ -38,9 +38,9 @@ use crate::{
         files::{DirectoryListing, FileDocument, FileEntry, content_revision},
         network::ForwardRuleKind,
         session::{
-            HostEndpoint, HostKeyCheck, PresentedHostKey, RouteNodeMetadata, RouteNodeRole,
-            RouteStage, SessionEvent, SessionFailure, SessionState, SessionStateMachine,
-            TerminalSize,
+            HostEndpoint, HostKeyCheck, InitialDirectory, PresentedHostKey, RouteNodeMetadata,
+            RouteNodeRole, RouteStage, SessionEvent, SessionFailure, SessionState,
+            SessionStateMachine, TerminalSize,
         },
         transfer::{RemotePath, TransferEvent},
     },
@@ -72,6 +72,7 @@ pub struct SessionConnectRequest {
     pub purpose: SessionPurpose,
     pub profile_id: Option<String>,
     pub terminal_size: Option<TerminalSize>,
+    pub initial_directory: Option<InitialDirectory>,
     pub terminal_output: Arc<dyn Fn(Vec<u8>) + Send + Sync>,
     pub remote_shell_integration_enabled: bool,
 }

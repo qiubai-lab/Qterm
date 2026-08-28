@@ -7,6 +7,7 @@ import type { Workspace } from "./model";
 
 const mocks = vi.hoisted(() => ({
   dispatch: vi.fn(),
+  splitTerminalBlock: vi.fn(),
   connectBlock: vi.fn().mockResolvedValue(undefined),
   connectFileBlock: vi.fn().mockResolvedValue(undefined),
   connectNetworkBlock: vi.fn().mockResolvedValue(undefined),
@@ -42,7 +43,7 @@ vi.mock("./configuredAuth", () => ({ resolveConfiguredAuth: mocks.resolveConfigu
 vi.mock("./LayoutView", () => ({ WorkspaceCanvas: ({ workspace: renderedWorkspace, localTerminalAttention, remoteShellIntegrationEnabled, onRequestAuthConnection, onRequestDisconnect, onOpenConnectionManager }: { workspace: Workspace; localTerminalAttention?: boolean; remoteShellIntegrationEnabled?: boolean; onRequestAuthConnection: (owner: "terminal", blockId: string, profile: typeof requestedProfile) => void; onRequestDisconnect: (owner: "terminal" | "files" | "network", blockId: string, name: string, local: boolean) => void; onOpenConnectionManager: () => void }) => <div data-testid={`workspace-canvas-${renderedWorkspace.id}`} data-local-terminal-attention={localTerminalAttention || undefined} data-remote-shell-integration={remoteShellIntegrationEnabled || undefined}><div className="terminal-surface"><textarea className="xterm-helper-textarea" aria-label="终端输入"/></div><button onClick={() => onRequestAuthConnection("terminal", "block-1", requestedProfile)}>请求远程连接</button><button onClick={() => onRequestDisconnect("terminal", "block-1", "Server", false)}>请求断开连接</button><button onClick={() => onRequestDisconnect("files", "files-1", "Server Files", false)}>请求断开文件连接</button><button onClick={() => onRequestDisconnect("network", "network-1", "Server Network", false)}>请求断开网络连接</button><button onClick={onOpenConnectionManager}>从连接选择器管理连接</button></div> }));
 vi.mock("./WorkspaceProvider", () => ({ useWorkspace: () => ({
   hydrated: true, document: { schemaVersion: 6, activeWorkspaceId: workspace.id, recentProfileIds: [], workspaces }, activeWorkspace: workspace,
-  dispatch: mocks.dispatch, runtimes: {}, fileRuntimes: {}, networkRuntimes: {}, connectBlock: mocks.connectBlock, connectFileBlock: mocks.connectFileBlock, connectNetworkBlock: mocks.connectNetworkBlock, disconnectBlock: mocks.disconnectBlock, disconnectFileBlock: mocks.disconnectFileBlock, disconnectNetworkBlock: mocks.disconnectNetworkBlock,
+  dispatch: mocks.dispatch, runtimes: {}, fileRuntimes: {}, networkRuntimes: {}, splitTerminalBlock: mocks.splitTerminalBlock, connectBlock: mocks.connectBlock, connectFileBlock: mocks.connectFileBlock, connectNetworkBlock: mocks.connectNetworkBlock, disconnectBlock: mocks.disconnectBlock, disconnectFileBlock: mocks.disconnectFileBlock, disconnectNetworkBlock: mocks.disconnectNetworkBlock,
   isConnectionTargetCurrent: mocks.isConnectionTargetCurrent,
   connectedCount: vi.fn().mockReturnValue(0), closeSessions: vi.fn().mockResolvedValue(undefined), blocksForWorkspace: vi.fn().mockReturnValue(["block-1"]),
   acceptBlockHostKey: vi.fn(), rejectBlockHostKey: vi.fn(), acceptFileHostKey: vi.fn(), rejectFileHostKey: vi.fn(), acceptNetworkHostKey: vi.fn(), rejectNetworkHostKey: vi.fn(), storageNotice: "", dismissStorageNotice: vi.fn(),
@@ -67,6 +68,7 @@ import { WorkspaceShell } from "./WorkspaceShell";
 beforeEach(() => {
   workspace = initialWorkspace;
   workspaces = [initialWorkspace];
+  mocks.splitTerminalBlock.mockClear();
   mocks.getVaultStatus.mockResolvedValue({ initialized: true, unlocked: true });
   mocks.getProfileRouteRequirements.mockImplementation(async () => ({
     usesCredential: requestedProfile.authPreference === "password" || requestedProfile.authPreference === "privateKey",
@@ -416,7 +418,7 @@ describe("WorkspaceShell utility rail", () => {
     fireEvent.keyDown(window, { key: "1", ctrlKey: true, shiftKey: true });
     expect(mocks.dispatch).toHaveBeenCalledWith({ type: "selectWorkspace", workspaceId: "workspace-1" });
     fireEvent.keyDown(window, { key: "d", ctrlKey: true, shiftKey: true });
-    expect(mocks.dispatch).not.toHaveBeenCalledWith(expect.objectContaining({ type: "splitBlock" }));
+    expect(mocks.splitTerminalBlock).not.toHaveBeenCalled();
 
     await user.type(screen.getByLabelText("主密码"), "correct-password");
     await user.click(screen.getByRole("button", { name: "解锁终端和凭证" }));
@@ -452,9 +454,7 @@ describe("WorkspaceShell utility rail", () => {
     });
 
     await user.click(screen.getByRole("button", { name: "打开终端" }));
-    expect(mocks.dispatch).toHaveBeenCalledWith({
-      type: "splitBlock", workspaceId: "workspace-1", blockId: "block-1", direction: "horizontal",
-    });
+    expect(mocks.splitTerminalBlock).toHaveBeenCalledWith("workspace-1", "block-1", "horizontal");
   });
 
   it("handles terminal-safe shortcuts while xterm has focus and preserves control keys", () => {
@@ -463,9 +463,9 @@ describe("WorkspaceShell utility rail", () => {
 
     mocks.dispatch.mockClear();
     fireEvent.keyDown(terminalInput, { key: "d", ctrlKey: true });
-    expect(mocks.dispatch).not.toHaveBeenCalledWith(expect.objectContaining({ type: "splitBlock" }));
+    expect(mocks.splitTerminalBlock).not.toHaveBeenCalled();
     fireEvent.keyDown(terminalInput, { key: "d", ctrlKey: true, shiftKey: true });
-    expect(mocks.dispatch).toHaveBeenCalledWith({ type: "splitBlock", workspaceId: "workspace-1", blockId: "block-1", direction: "horizontal" });
+    expect(mocks.splitTerminalBlock).toHaveBeenCalledWith("workspace-1", "block-1", "horizontal");
     fireEvent.keyDown(terminalInput, { key: "f", ctrlKey: true, shiftKey: true });
     expect(mocks.openTerminalSearch).toHaveBeenCalledWith("block-1");
   });

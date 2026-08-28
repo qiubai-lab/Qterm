@@ -77,13 +77,12 @@ impl LocalSessionManager {
     pub fn connect(
         &self,
         size: PtySize,
+        initial_directory: Option<PathBuf>,
         terminal_output: OutputSink,
         events: EventSink,
     ) -> Result<LocalSessionConnection, LocalSessionError> {
-        let cwd = dirs::home_dir()
-            .and_then(|home| std::fs::canonicalize(home).ok())
-            .map(|home| dunce::simplified(&home).to_path_buf())
-            .ok_or(LocalSessionError::StartFailed)?;
+        let cwd =
+            resolve_start_directory(initial_directory).ok_or(LocalSessionError::StartFailed)?;
         let pair = native_pty_system()
             .openpty(size)
             .map_err(|_| LocalSessionError::StartFailed)?;
@@ -212,13 +211,39 @@ impl LocalSessionManager {
     }
 }
 
+fn resolve_start_directory(initial_directory: Option<PathBuf>) -> Option<PathBuf> {
+    initial_directory
+        .filter(|path| path.is_absolute() && path.is_dir())
+        .and_then(|path| std::fs::canonicalize(path).ok())
+        .or_else(|| dirs::home_dir().and_then(|home| std::fs::canonicalize(home).ok()))
+        .map(|path| dunce::simplified(&path).to_path_buf())
+}
+
 #[cfg(test)]
 mod tests {
     use std::{sync::mpsc, time::Duration};
 
     use portable_pty::PtySize;
+    use tempfile::tempdir;
 
-    use super::{LocalSessionEvent, LocalSessionManager};
+    use super::{LocalSessionEvent, LocalSessionManager, resolve_start_directory};
+
+    #[test]
+    fn inherited_working_directory_is_resolved_or_falls_back_to_home() {
+        let inherited = std::env::temp_dir();
+        let resolved = resolve_start_directory(Some(inherited.clone())).expect("resolved temp dir");
+        assert_eq!(
+            resolved,
+            dunce::canonicalize(inherited).expect("canonical temp dir")
+        );
+
+        let fixture = tempdir().expect("temporary parent");
+        let unavailable = fixture.path().join("missing");
+        let fallback = resolve_start_directory(Some(unavailable)).expect("home fallback");
+        let home =
+            dunce::canonicalize(dirs::home_dir().expect("home dir")).expect("canonical home");
+        assert_eq!(fallback, home);
+    }
 
     #[test]
     fn default_shell_routes_terminal_io_and_can_be_closed() {
@@ -233,6 +258,7 @@ mod tests {
                     pixel_width: 0,
                     pixel_height: 0,
                 },
+                None,
                 Arc::new(move |data| {
                     let _ = output_tx.send(data);
                 }),

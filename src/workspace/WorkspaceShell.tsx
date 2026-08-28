@@ -45,7 +45,7 @@ const LOCAL_TERMINAL_ATTENTION_MS = 2_500;
 export function WorkspaceShell() {
   const desktopPlatform = currentDesktopPlatform();
   const usesNativeWindowControls = desktopPlatform === "macos";
-  const { hydrated, document, activeWorkspace, dispatch, runtimes, fileRuntimes, networkRuntimes, connectBlock, connectFileBlock, connectNetworkBlock, disconnectBlock, disconnectFileBlock, disconnectNetworkBlock, isConnectionTargetCurrent, connectedCount, closeSessions, blocksForWorkspace, acceptBlockHostKey, rejectBlockHostKey, acceptFileHostKey, rejectFileHostKey, acceptNetworkHostKey, rejectNetworkHostKey, storageNotice, dismissStorageNotice } = useWorkspace();
+  const { hydrated, document, activeWorkspace, dispatch, runtimes, fileRuntimes, networkRuntimes, splitTerminalBlock, connectBlock, connectFileBlock, connectNetworkBlock, disconnectBlock, disconnectFileBlock, disconnectNetworkBlock, isConnectionTargetCurrent, connectedCount, closeSessions, blocksForWorkspace, acceptBlockHostKey, rejectBlockHostKey, acceptFileHostKey, rejectFileHostKey, acceptNetworkHostKey, rejectNetworkHostKey, storageNotice, dismissStorageNotice } = useWorkspace();
   const [tool, setTool] = useState<Tool | null>(null);
   const [renaming, setRenaming] = useState<{ id: string; value: string } | null>(null);
   const [closeRequest, setCloseRequest] = useState<CloseRequest | null>(null);
@@ -504,7 +504,7 @@ export function WorkspaceShell() {
       let handled = true;
       if (command.type === "newWorkspace") dispatch({ type: "addWorkspace" });
       else if (command.type === "openConnections") setTool("connections");
-      else if (command.type === "splitBlock") dispatch({ type: "splitBlock", workspaceId: activeWorkspace.id, blockId: activeWorkspace.activeBlockId, direction: command.direction });
+      else if (command.type === "splitBlock") splitTerminalBlock(activeWorkspace.id, activeWorkspace.activeBlockId, command.direction);
       else if (command.type === "focusBlock") {
         const blockId = adjacentBlockId(activeWorkspace.layout, activeWorkspace.activeBlockId, command.direction);
         if (blockId) dispatch({ type: "selectBlock", workspaceId: activeWorkspace.id, blockId });
@@ -534,7 +534,7 @@ export function WorkspaceShell() {
     };
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [activeWorkspace.activeBlockId, activeWorkspace.id, activeWorkspace.layout, authRequest, closeRequest, desktopPlatform, disconnectRequest, dispatch, document.workspaces, hostPromptOpen, lockChoiceOpen, terminalLocked, tool, vaultUnlockRequest]);
+  }, [activeWorkspace.activeBlockId, activeWorkspace.id, activeWorkspace.layout, authRequest, closeRequest, desktopPlatform, disconnectRequest, dispatch, document.workspaces, hostPromptOpen, lockChoiceOpen, splitTerminalBlock, terminalLocked, tool, vaultUnlockRequest]);
 
   useEffect(() => {
     if (terminalLocked) return;
@@ -681,7 +681,7 @@ export function WorkspaceShell() {
           <RailButton tool="credentials" icon="key" label="凭证管理" active={tool === "credentials"} onClick={setTool}/>
           <RailActionButton icon="files" label="文件管理" onClick={() => dispatch(openFileWindowAction(activeWorkspace))}/>
           <RailActionButton icon="network" label="网络管理" onClick={() => dispatch(openNetworkWindowAction(activeWorkspace))}/>
-          <RailActionButton icon="terminal" label="打开终端" onClick={() => dispatch({ type: "splitBlock", workspaceId: activeWorkspace.id, blockId: activeWorkspace.activeBlockId, direction: "horizontal" })}/>
+          <RailActionButton icon="terminal" label="打开终端" onClick={() => splitTerminalBlock(activeWorkspace.id, activeWorkspace.activeBlockId, "horizontal")}/>
           <span className="rail-spacer"/>
           <RailActionButton icon="lock" label="锁定终端" accessibleLabel={terminalLockLabel} title={terminalLockLabel} disabled={!vaultStatus?.initialized || vaultStatus.legacy || vaultLockBusy} onClick={() => { setVaultLockError(""); setLockChoiceOpen(true); }}/>
           <RailButton tool="settings" icon="settings" label="系统设置" active={tool === "settings"} onClick={setTool}/>

@@ -61,6 +61,21 @@ describe("SSH session IPC client", () => {
     expect(onTerminalData).toHaveBeenCalledWith(Uint8Array.from([27, 91, 109]));
   });
 
+  it("passes a one-time initial directory with a terminal connection", async () => {
+    mocks.invoke.mockResolvedValue("session-2");
+
+    await connectSession({
+      profileId: "profile-1",
+      auth: { method: "sshAgent" },
+      terminalSize: { columns: 80, rows: 24 },
+      initialDirectory: "/srv/project",
+    }, vi.fn(), vi.fn());
+
+    expect(mocks.invoke).toHaveBeenCalledWith("session_connect", expect.objectContaining({
+      input: expect.objectContaining({ initialDirectory: "/srv/project" }),
+    }));
+  });
+
   it("sends binary terminal input and resize requests", async () => {
     mocks.invoke.mockResolvedValue(undefined);
     await writeSession("session-1", Uint8Array.from([108, 115, 13]));

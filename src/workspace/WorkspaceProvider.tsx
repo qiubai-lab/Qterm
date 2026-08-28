@@ -9,7 +9,7 @@ import { acceptHostKey, closeSession, connectSession, rejectHostKey, resizeSessi
 import { loadWorkspaces, saveWorkspaces } from "../lib/tauri/workspaces";
 import { completeConnectionProgress, connectionProgressFromRouteEvent, failConnectionProgress, initialConnectionProgress } from "./connectionProgress";
 import { blockIds, findLeaf } from "./layout";
-import { createWorkspaceDocument, type Workspace, type WorkspaceDocument } from "./model";
+import { createId, createWorkspaceDocument, type SplitDirection, type Workspace, type WorkspaceDocument } from "./model";
 import { workspaceReducer, type WorkspaceAction } from "./reducer";
 import {
   MAX_PENDING_TERMINAL_OUTPUT,
@@ -49,6 +49,7 @@ interface WorkspaceContextValue {
   registerWriter: (blockId: string, writer: (data: Uint8Array) => void, clearer: (reset: boolean) => void, readSize: () => TerminalSizeInput) => () => void;
   clearBlockBuffer: (blockId: string, reset?: boolean) => void;
   setBlockCwd: (blockId: string, cwd: string) => void;
+  splitTerminalBlock: (workspaceId: string, blockId: string, direction: SplitDirection) => void;
   startLocalBlock: (blockId: string, columns: number, rows: number) => Promise<void>;
   restartLocalBlock: (blockId: string) => Promise<void>;
   selectBlockTarget: (workspaceId: string, blockId: string, profileId: string | null) => Promise<void>;
@@ -105,6 +106,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const startingLocal = useRef(new Map<string, number>());
   const activeLocalSessions = useRef(new Map<string, string>());
   const pendingLocalInput = useRef(new Map<string, Uint8Array[]>());
+  const pendingInitialDirectories = useRef(new Map<string, string>());
   const connectionFailureHandlers = useRef(new Map<string, () => void>());
 
   useEffect(() => { runtimesRef.current = runtimes; }, [runtimes]);
@@ -229,7 +231,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           : event.state === "failed" ? failConnectionProgress(runtime.connectionProgress, null, "连接失败")
             : event.state === "closed" ? null : runtime.connectionProgress,
       }));
-      if (event.state === "connected") connectionFailureHandlers.current.delete(terminalFailureKey(blockId, epoch));
+      if (event.state === "connected") {
+        pendingInitialDirectories.current.delete(blockId);
+        connectionFailureHandlers.current.delete(terminalFailureKey(blockId, epoch));
+      }
     } else if (event.type === "routeProgress") {
       updateRuntime(blockId, (runtime) => ({ ...runtime, notice: "", connectionProgress: connectionProgressFromRouteEvent(event, runtime.connectionProgress) }));
     } else if (event.type === "hostKeyConfirmationRequired") {
@@ -343,6 +348,21 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     await closeCurrentNetworkSession(blockId);
   }, [closeCurrentNetworkSession]);
 
+  const splitTerminalBlock = useCallback((workspaceId: string, blockId: string, direction: SplitDirection) => {
+    const workspace = documentRef.current.workspaces.find((candidate) => candidate.id === workspaceId);
+    const anchor = workspace ? findLeaf(workspace.layout, blockId) : null;
+    if (!anchor) return;
+    const newBlockId = createId("block");
+    if (anchor.type === "terminal") {
+      const runtime = runtimesRef.current[blockId];
+      const cwd = runtime?.cwd;
+      if (runtime?.status === "connected" && runtime.cwdSource === "osc7" && cwd?.trim()) {
+        pendingInitialDirectories.current.set(newBlockId, cwd);
+      }
+    }
+    dispatch({ type: "splitBlock", workspaceId, blockId, direction, newBlockId, splitId: createId("split") });
+  }, []);
+
   const startLocalBlock = useCallback(async (blockId: string, columns: number, rows: number) => {
     if (!isTauriRuntime() || startingLocal.current.has(blockId)) return;
     if (!connectionIntentAllows(connectionTargetIntents.current, "terminal", blockId, null)) return;
@@ -378,6 +398,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         (data) => {
           if (isCurrentEpoch(blockId, epoch)) deliverTerminalOutput(blockId, data);
         },
+        pendingInitialDirectories.current.get(blockId),
       );
       const { sessionId } = connection;
       startedSessionId = sessionId;
@@ -395,6 +416,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           cwd: runtime.cwdSource === "osc7" ? runtime.cwd : connection.cwd,
           cwdSource: runtime.cwdSource === "osc7" ? "osc7" : "initial",
         }));
+        pendingInitialDirectories.current.delete(blockId);
         pendingLocalInput.current.delete(blockId);
       }
     } catch (error) {
@@ -424,7 +446,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     updateRuntime(blockId, () => ({ ...defaultRuntime, kind: "ssh", status: "connecting", connectionProgress: initialConnectionProgress(profile.jumpProfileIds?.length ?? 0) }));
     try {
       const sessionId = await connectSession(
-        { profileId: profile.id, auth, terminalSize },
+        { profileId: profile.id, auth, terminalSize, initialDirectory: pendingInitialDirectories.current.get(blockId) },
         (event) => onSessionEvent(blockId, epoch, event),
         (data) => { if (isCurrentEpoch(blockId, epoch)) deliverTerminalOutput(blockId, data); },
       );
@@ -451,6 +473,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   }, [closeCurrentSession]);
 
   const selectBlockTarget = useCallback(async (workspaceId: string, blockId: string, profileId: string | null) => {
+    pendingInitialDirectories.current.delete(blockId);
     connectionTargetIntents.current.set(connectionIntentKey("terminal", blockId), profileId);
     dispatch({ type: "recordRecentProfile", profileId });
     dispatch({ type: "setBlockProfile", workspaceId, blockId, profileId });
@@ -651,6 +674,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       terminalSizeReaders.current.delete(id);
       writerOwners.current.delete(id);
       pendingTerminalOutput.current.delete(id);
+      pendingInitialDirectories.current.delete(id);
       connectionTargetIntents.current.delete(connectionIntentKey("terminal", id));
       connectionTargetIntents.current.delete(connectionIntentKey("files", id));
       connectionTargetIntents.current.delete(connectionIntentKey("network", id));
@@ -678,13 +702,13 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const activeWorkspace = document.workspaces.find((workspace) => workspace.id === document.activeWorkspaceId) ?? document.workspaces[0];
   const value = useMemo<WorkspaceContextValue>(() => ({
     hydrated, document, dispatch, profiles, profileGroups, refreshProfiles, runtimes, fileRuntimes, networkRuntimes, localTerminalCapabilities, activeWorkspace,
-    activeBlockId: activeWorkspace.activeBlockId, registerWriter, clearBlockBuffer, setBlockCwd, startLocalBlock, restartLocalBlock, selectBlockTarget, connectBlock, disconnectBlock,
+    activeBlockId: activeWorkspace.activeBlockId, registerWriter, clearBlockBuffer, setBlockCwd, splitTerminalBlock, startLocalBlock, restartLocalBlock, selectBlockTarget, connectBlock, disconnectBlock,
     selectFileTarget, connectFileBlock, disconnectFileBlock, selectNetworkTarget, connectNetworkBlock, disconnectNetworkBlock, startNetworkBlockRule, stopNetworkBlockRule, writeBlock, resizeBlock,
     isConnectionTargetCurrent,
     acceptBlockHostKey, rejectBlockHostKey, acceptFileHostKey, rejectFileHostKey, acceptNetworkHostKey, rejectNetworkHostKey, connectedCount,
     closeSessions, blocksForWorkspace,
     storageNotice, dismissStorageNotice,
-  }), [hydrated, document, profiles, profileGroups, refreshProfiles, runtimes, fileRuntimes, networkRuntimes, localTerminalCapabilities, activeWorkspace, registerWriter, clearBlockBuffer, setBlockCwd, startLocalBlock, restartLocalBlock, selectBlockTarget, connectBlock, disconnectBlock, selectFileTarget, connectFileBlock, disconnectFileBlock, selectNetworkTarget, connectNetworkBlock, disconnectNetworkBlock, startNetworkBlockRule, stopNetworkBlockRule, writeBlock, resizeBlock, acceptBlockHostKey, rejectBlockHostKey, acceptFileHostKey, rejectFileHostKey, acceptNetworkHostKey, rejectNetworkHostKey, isConnectionTargetCurrent, connectedCount, closeSessions, blocksForWorkspace, storageNotice, dismissStorageNotice]);
+  }), [hydrated, document, profiles, profileGroups, refreshProfiles, runtimes, fileRuntimes, networkRuntimes, localTerminalCapabilities, activeWorkspace, registerWriter, clearBlockBuffer, setBlockCwd, splitTerminalBlock, startLocalBlock, restartLocalBlock, selectBlockTarget, connectBlock, disconnectBlock, selectFileTarget, connectFileBlock, disconnectFileBlock, selectNetworkTarget, connectNetworkBlock, disconnectNetworkBlock, startNetworkBlockRule, stopNetworkBlockRule, writeBlock, resizeBlock, acceptBlockHostKey, rejectBlockHostKey, acceptFileHostKey, rejectFileHostKey, acceptNetworkHostKey, rejectNetworkHostKey, isConnectionTargetCurrent, connectedCount, closeSessions, blocksForWorkspace, storageNotice, dismissStorageNotice]);
 
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;
 }

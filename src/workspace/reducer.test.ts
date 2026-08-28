@@ -40,9 +40,28 @@ describe("workspace reducer", () => {
   it("splits and closes a block while preserving a valid active block", () => {
     const initial = createWorkspaceDocument();
     const workspace = initial.workspaces[0];
-    const split = workspaceReducer(initial, { type: "splitBlock", workspaceId: workspace.id, blockId: workspace.activeBlockId, direction: "horizontal" });
+    const profiled = workspaceReducer(initial, { type: "setBlockProfile", workspaceId: workspace.id, blockId: workspace.activeBlockId, profileId: "profile-1" });
+    const split = workspaceReducer(profiled, {
+      type: "splitBlock",
+      workspaceId: workspace.id,
+      blockId: workspace.activeBlockId,
+      direction: "horizontal",
+      newBlockId: "block-child",
+      splitId: "split-child",
+    });
     const splitWorkspace = split.workspaces[0];
     expect(blockIds(splitWorkspace.layout)).toHaveLength(2);
+    expect(splitWorkspace.activeBlockId).toBe("block-child");
+    expect(splitWorkspace.layout).toMatchObject({ id: "split-child", second: { type: "terminal", blockId: "block-child", profileId: "profile-1" } });
+
+    expect(workspaceReducer(profiled, {
+      type: "splitBlock",
+      workspaceId: workspace.id,
+      blockId: "missing-block",
+      direction: "horizontal",
+      newBlockId: "orphan-block",
+      splitId: "orphan-split",
+    })).toEqual(profiled);
     const closed = workspaceReducer(split, { type: "closeBlock", workspaceId: workspace.id, blockId: splitWorkspace.activeBlockId });
     const closedWorkspace = closed.workspaces[0];
     expect(blockIds(closedWorkspace.layout)).toHaveLength(1);

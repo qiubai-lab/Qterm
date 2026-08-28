@@ -49,8 +49,8 @@ export function createId(prefix: string): string {
   return `${prefix}-${crypto.randomUUID()}`;
 }
 
-export function createTerminalNode(profileId: string | null = null): TerminalNode {
-  return { type: "terminal", blockId: createId("block"), profileId };
+export function createTerminalNode(profileId: string | null = null, blockId = createId("block")): TerminalNode {
+  return { type: "terminal", blockId, profileId };
 }
 
 export function createFilesNode(profileId: string | null, path: string): FilesNode {

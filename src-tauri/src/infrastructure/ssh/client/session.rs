@@ -398,7 +398,11 @@ pub(super) async fn run_session(
     }
     if let Some(shell) = remote_shell
         && terminal
-            .data(shell.hook_command().as_bytes())
+            .data(
+                shell
+                    .initialization_command(request.initial_directory.as_ref())
+                    .as_bytes(),
+            )
             .await
             .is_err()
     {

@@ -64,6 +64,7 @@ fn connect_request(
         profile_id,
         terminal_size: (purpose == SessionPurpose::Terminal)
             .then(|| TerminalSize::new(93, 31).expect("terminal size")),
+        initial_directory: None,
         terminal_output,
         remote_shell_integration_enabled: false,
     }
@@ -449,6 +450,7 @@ fn local_openssh_connects_to_a_target_through_a_jump_profile() {
             purpose: SessionPurpose::Terminal,
             profile_id: Some("target-profile".into()),
             terminal_size: Some(TerminalSize::new(101, 37).expect("terminal size")),
+            initial_directory: None,
             terminal_output: Arc::new(move |data| {
                 let _ = terminal_sender.send(data);
             }),

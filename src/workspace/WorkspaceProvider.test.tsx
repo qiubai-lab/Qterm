@@ -53,19 +53,21 @@ import { WorkspaceProvider, useWorkspace } from "./WorkspaceProvider";
 const profile = { id: "profile-1", name: "Server", host: "example.test", port: 22, username: "user", authPreference: "password" as const, credentialId: null, groupId: null };
 
 function Harness() {
-  const { document, activeWorkspace, dispatch, registerWriter, clearBlockBuffer, setBlockCwd, startLocalBlock, connectBlock, connectFileBlock, disconnectFileBlock, connectNetworkBlock, disconnectNetworkBlock, startNetworkBlockRule, selectBlockTarget, selectFileTarget, selectNetworkTarget, writeBlock, resizeBlock, runtimes, fileRuntimes, networkRuntimes } = useWorkspace();
+  const { document, activeWorkspace, dispatch, splitTerminalBlock, registerWriter, clearBlockBuffer, setBlockCwd, startLocalBlock, connectBlock, connectFileBlock, disconnectFileBlock, connectNetworkBlock, disconnectNetworkBlock, startNetworkBlockRule, selectBlockTarget, selectFileTarget, selectNetworkTarget, writeBlock, resizeBlock, runtimes, fileRuntimes, networkRuntimes } = useWorkspace();
   const ids = blockIds(activeWorkspace.layout);
   const activeLeaf = findLeaf(activeWorkspace.layout, activeWorkspace.activeBlockId);
   return <>
     <output>{ids.length}</output>
     <output data-testid="recent-profiles">{document.recentProfileIds.join(",")}</output>
-    <button onClick={() => dispatch({ type: "splitBlock", workspaceId: activeWorkspace.id, blockId: activeWorkspace.activeBlockId, direction: "horizontal" })}>split</button>
+    <output data-testid="workspace-json">{JSON.stringify(document)}</output>
+    <button onClick={() => splitTerminalBlock(activeWorkspace.id, activeWorkspace.activeBlockId, "horizontal")}>split</button>
     <button onClick={() => ids.forEach((id, index) => registerWriter(id, mocks.writers[index], mocks.clearers[index], () => mocks.terminalSizes[index]))}>register</button>
     <button onClick={() => mocks.unregisterWriters.push(registerWriter(ids[0], mocks.writers[0], mocks.clearers[0], () => mocks.terminalSizes[0]))}>register-old-writer</button>
     <button onClick={() => mocks.unregisterWriters.push(registerWriter(ids[0], mocks.writers[1], mocks.clearers[1], () => mocks.terminalSizes[1]))}>register-new-writer</button>
     <button onClick={() => mocks.unregisterWriters[0]?.()}>unregister-old-writer</button>
     <button onClick={() => clearBlockBuffer(ids[0])}>clear-buffer</button>
     <button onClick={() => void startLocalBlock(ids[0], 100, 30)}>local</button>
+    <button onClick={() => void startLocalBlock(activeWorkspace.activeBlockId, 100, 30)}>local-active</button>
     <button onClick={() => void selectBlockTarget(activeWorkspace.id, ids[0], profile.id)}>select-remote-target</button>
     <button onClick={() => void selectBlockTarget(activeWorkspace.id, ids[0], null)}>select-local-target</button>
     <button onClick={() => void (async () => { await selectBlockTarget(activeWorkspace.id, ids[0], null); await startLocalBlock(ids[0], 100, 30); })()}>switch-to-local</button>
@@ -90,6 +92,7 @@ function Harness() {
     <span data-testid="runtime-progress">{runtimes[ids[0]]?.connectionProgress?.phase}:{runtimes[ids[0]]?.connectionProgress?.message}</span>
     <span data-testid="runtime-cwd">{runtimes[ids[0]]?.cwd}</span>
     <span data-testid="runtime-cwd-source">{runtimes[ids[0]]?.cwdSource ?? "unknown"}</span>
+    <span data-testid="active-profile">{activeLeaf?.profileId ?? "local"}</span>
     <span data-testid="file-runtime">{fileRuntimes[activeWorkspace.activeBlockId]?.kind}:{fileRuntimes[activeWorkspace.activeBlockId]?.status}</span>
     <span data-testid="file-progress">{fileRuntimes[activeWorkspace.activeBlockId]?.connectionProgress?.phase}:{fileRuntimes[activeWorkspace.activeBlockId]?.connectionProgress?.message}</span>
     <span data-testid="file-path">{activeLeaf?.type === "files" ? activeLeaf.path : ""}</span>
@@ -180,7 +183,7 @@ describe("WorkspaceProvider multi-session routing", () => {
     await user.click(screen.getByRole("button", { name: "register" }));
     await user.click(screen.getByRole("button", { name: "local" }));
     await waitFor(() => expect(screen.getByTestId("runtime")).toHaveTextContent("local:connected"));
-    expect(mocks.connectLocalSession).toHaveBeenCalledWith(100, 30, expect.any(Function), expect.any(Function));
+    expect(mocks.connectLocalSession).toHaveBeenCalledWith(100, 30, expect.any(Function), expect.any(Function), undefined);
 
     act(() => mocks.localConnections[0].terminal(Uint8Array.from([76])));
     expect(mocks.writers[0]).toHaveBeenCalledWith(Uint8Array.from([76]));
@@ -212,6 +215,79 @@ describe("WorkspaceProvider multi-session routing", () => {
     await user.click(screen.getByRole("button", { name: "report-cwd" }));
     expect(screen.getByTestId("runtime-cwd")).toHaveTextContent("/srv/reported");
     expect(screen.getByTestId("runtime-cwd-source")).toHaveTextContent("osc7");
+  });
+
+  it("inherits the anchor profile and routes its OSC 7 directory only to the new terminal", async () => {
+    mocks.connectSession.mockImplementation(async (_input, event, terminal) => {
+      mocks.connections.push({ event, terminal });
+      event({ type: "stateChanged", state: "connected" });
+      return `ssh-${mocks.connections.length}`;
+    });
+    const user = userEvent.setup();
+    render(<WorkspaceProvider><Harness/></WorkspaceProvider>);
+
+    await user.click(screen.getByRole("button", { name: "select-remote-target" }));
+    await user.click(screen.getByRole("button", { name: "connect" }));
+    await waitFor(() => expect(screen.getByTestId("runtime")).toHaveTextContent("ssh:connected"));
+    await user.click(screen.getByRole("button", { name: "report-cwd" }));
+    await user.click(screen.getByRole("button", { name: "split" }));
+
+    expect(screen.getByTestId("active-profile")).toHaveTextContent("profile-1");
+    expect(screen.getByText("2", { selector: "output" })).toBeInTheDocument();
+
+    mocks.connectSession.mockClear();
+    await user.click(screen.getByRole("button", { name: "connect" }));
+    await waitFor(() => expect(mocks.connectSession).toHaveBeenCalledTimes(2));
+    const childInput = mocks.connectSession.mock.calls.find(([input]) => input.initialDirectory === "/srv/reported")?.[0];
+    expect(childInput).toMatchObject({ profileId: "profile-1", initialDirectory: "/srv/reported" });
+    expect(document.querySelector("[data-testid='active-profile']")).toHaveTextContent("profile-1");
+    expect(screen.getByTestId("workspace-json")).not.toHaveTextContent("initialDirectory");
+    expect(screen.getByTestId("workspace-json")).not.toHaveTextContent("/srv/reported");
+
+    mocks.connectSession.mockClear();
+    await user.click(screen.getByRole("button", { name: "connect" }));
+    await waitFor(() => expect(mocks.connectSession).toHaveBeenCalledTimes(2));
+    expect(mocks.connectSession.mock.calls.every(([input]) => input.initialDirectory === undefined)).toBe(true);
+  });
+
+  it("does not inherit a reported directory from a disconnected source", async () => {
+    mocks.connectSession.mockResolvedValue("ssh-normal-directory");
+    const user = userEvent.setup();
+    render(<WorkspaceProvider><Harness/></WorkspaceProvider>);
+
+    await user.click(screen.getByRole("button", { name: "select-remote-target" }));
+    await user.click(screen.getByRole("button", { name: "report-cwd" }));
+    await user.click(screen.getByRole("button", { name: "split" }));
+    await user.click(screen.getByRole("button", { name: "connect" }));
+
+    await waitFor(() => expect(mocks.connectSession).toHaveBeenCalledTimes(2));
+    expect(mocks.connectSession.mock.calls.every(([input]) => input.initialDirectory === undefined)).toBe(true);
+  });
+
+  it("passes a connected local source OSC 7 directory to only the child PTY", async () => {
+    Object.defineProperty(window, "__TAURI_INTERNALS__", { configurable: true, value: {} });
+    mocks.connectLocalSession.mockImplementation(async (_columns, _rows, event, terminal) => {
+      mocks.localConnections.push({ event, terminal });
+      event({ type: "stateChanged", state: "connected" });
+      return { sessionId: `local-${mocks.localConnections.length}`, cwd: "C:/Users/tester" };
+    });
+    const user = userEvent.setup();
+    render(<WorkspaceProvider><Harness/></WorkspaceProvider>);
+
+    await user.click(screen.getByRole("button", { name: "local" }));
+    await waitFor(() => expect(screen.getByTestId("runtime")).toHaveTextContent("local:connected"));
+    await user.click(screen.getByRole("button", { name: "report-cwd" }));
+    await user.click(screen.getByRole("button", { name: "split" }));
+    await user.click(screen.getByRole("button", { name: "local-active" }));
+
+    await waitFor(() => expect(mocks.connectLocalSession).toHaveBeenCalledTimes(2));
+    expect(mocks.connectLocalSession).toHaveBeenLastCalledWith(
+      100,
+      30,
+      expect.any(Function),
+      expect.any(Function),
+      "/srv/reported",
+    );
   });
 
   it("does not present the remote home fallback as a reported terminal cwd", async () => {

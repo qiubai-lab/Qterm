@@ -8,6 +8,7 @@ import type { FileRuntime, NetworkRuntime, TerminalRuntime } from "./WorkspacePr
 import { moveTerminal } from "./layout";
 
 const dispatch = vi.fn();
+const splitTerminalBlock = vi.fn();
 const selectBlockTarget = vi.fn().mockResolvedValue(undefined);
 const selectFileTarget = vi.fn().mockResolvedValue(undefined);
 const selectNetworkTarget = vi.fn().mockResolvedValue(undefined);
@@ -54,6 +55,7 @@ vi.mock("../network/NetworkPane", () => ({
 vi.mock("./WorkspaceProvider", () => ({
   useWorkspace: () => ({
     dispatch,
+    splitTerminalBlock,
     runtimes: terminalRuntimes,
     fileRuntimes,
     networkRuntimes,
@@ -83,6 +85,7 @@ const workspace: Workspace = {
 describe("WorkspaceCanvas terminal actions", () => {
   beforeEach(() => {
     dispatch.mockClear();
+    splitTerminalBlock.mockClear();
     selectBlockTarget.mockClear();
     selectFileTarget.mockClear();
     selectNetworkTarget.mockClear();
@@ -228,6 +231,17 @@ describe("WorkspaceCanvas terminal actions", () => {
     await user.click(screen.getByRole("button", { name: "从启动目录打开" }));
 
     expect(dispatch).toHaveBeenCalledWith({ type: "openFiles", workspaceId: "workspace-1", anchorBlockId: "block-1", profileId: null, path: "C:/work" });
+  });
+
+  it("routes both split buttons through the context-aware terminal operation", async () => {
+    const user = userEvent.setup();
+    render(<WorkspaceCanvas workspace={workspace} visible onRequestClose={vi.fn()} onRequestAuthConnection={vi.fn()}/>);
+
+    await user.click(screen.getByRole("button", { name: "左右分割" }));
+    await user.click(screen.getByRole("button", { name: "上下分割" }));
+
+    expect(splitTerminalBlock).toHaveBeenNthCalledWith(1, "workspace-1", "block-1", "horizontal");
+    expect(splitTerminalBlock).toHaveBeenNthCalledWith(2, "workspace-1", "block-1", "vertical");
   });
 
   it("explains the remote-home fallback when the shell has not reported OSC 7", async () => {

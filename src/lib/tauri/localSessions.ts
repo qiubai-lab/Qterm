@@ -24,12 +24,14 @@ export function connectLocalSession(
   rows: number,
   onEvent: (event: LocalSessionEvent) => void,
   onTerminalData: (data: Uint8Array) => void,
+  initialDirectory?: string,
 ): Promise<LocalSessionConnection> {
   const eventChannel = new Channel<LocalSessionEvent>(onEvent);
   const terminalChannel = new Channel<{ data: number[] }>((message) => onTerminalData(Uint8Array.from(message.data)));
   return invoke<LocalSessionConnection>("local_session_connect", {
     columns,
     rows,
+    ...(initialDirectory === undefined ? {} : { initialDirectory }),
     onEvent: eventChannel,
     onTerminal: terminalChannel,
   });

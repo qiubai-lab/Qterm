@@ -155,7 +155,7 @@ function BlockView(props: BlockRenderProps & { node: LayoutLeaf }) {
 }
 
 function TerminalBlock(props: BlockRenderProps & { blockId: string; profileId: string | null }) {
-  const { document, dispatch, runtimes, profiles, profileGroups = [], selectBlockTarget, clearBlockBuffer, disconnectBlock, restartLocalBlock } = useWorkspace();
+  const { document, dispatch, runtimes, profiles, profileGroups = [], splitTerminalBlock, selectBlockTarget, clearBlockBuffer, disconnectBlock, restartLocalBlock } = useWorkspace();
   const requestConnection = props.onRequestAuthConnection;
   const runtime = runtimes[props.blockId];
   const active = props.workspace.activeBlockId === props.blockId;
@@ -252,8 +252,8 @@ function TerminalBlock(props: BlockRenderProps & { blockId: string; profileId: s
         <button aria-label="清除终端缓冲区" title="清除终端缓冲区" onClick={() => clearBlockBuffer(props.blockId)}><Icon name="clear" size={13}/></button>
         <button aria-label="打开当前文件夹" title={cwdButtonTitle} disabled={status !== "connected"} onClick={openTerminalDirectory}><Icon name="files" size={13}/></button>
         <button aria-label="打开网络窗口" title={props.profileId ? "使用当前远程连接打开网络窗口" : "本地终端无法创建网络窗口"} disabled={!props.profileId} onClick={() => dispatch({ type: "openNetwork", workspaceId: props.workspace.id, anchorBlockId: props.blockId, profileId: props.profileId })}><Icon name="network" size={13}/></button>
-        <button aria-label="左右分割" title="左右分割" onClick={() => dispatch({ type: "splitBlock", workspaceId: props.workspace.id, blockId: props.blockId, direction: "horizontal" })}><Icon name="splitHorizontal" size={13}/></button>
-        <button aria-label="上下分割" title="上下分割" onClick={() => dispatch({ type: "splitBlock", workspaceId: props.workspace.id, blockId: props.blockId, direction: "vertical" })}><Icon name="splitVertical" size={13}/></button>
+        <button aria-label="左右分割" title="左右分割" onClick={() => splitTerminalBlock(props.workspace.id, props.blockId, "horizontal")}><Icon name="splitHorizontal" size={13}/></button>
+        <button aria-label="上下分割" title="上下分割" onClick={() => splitTerminalBlock(props.workspace.id, props.blockId, "vertical")}><Icon name="splitVertical" size={13}/></button>
         <button aria-label="关闭终端" title="关闭" disabled={terminalBlockIds(props.workspace.layout).length === 1} onClick={() => props.onRequestClose(props.blockId)}><Icon name="close" size={13}/></button>
       </div>
     </header>

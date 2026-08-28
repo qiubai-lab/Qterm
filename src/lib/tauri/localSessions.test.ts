@@ -41,6 +41,16 @@ describe("local terminal IPC client", () => {
     expect(onTerminalData).toHaveBeenCalledWith(Uint8Array.from([65, 66]));
   });
 
+  it("passes an inherited working directory only when one is supplied", async () => {
+    mocks.invoke.mockResolvedValue({ sessionId: "local-2", cwd: "C:/work/project" });
+
+    await connectLocalSession(80, 24, vi.fn(), vi.fn(), "C:/work/project");
+
+    expect(mocks.invoke).toHaveBeenCalledWith("local_session_connect", expect.objectContaining({
+      initialDirectory: "C:/work/project",
+    }));
+  });
+
   it("routes input, resize, and close to local session commands", async () => {
     mocks.invoke.mockResolvedValue(undefined);
     await writeLocalSession("local-1", Uint8Array.from([100, 105, 114, 13]));

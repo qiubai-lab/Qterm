@@ -10,7 +10,7 @@ export type WorkspaceAction =
   | { type: "closeWorkspace"; workspaceId: string }
   | { type: "reorderWorkspace"; workspaceId: string; targetWorkspaceId: string }
   | { type: "selectBlock"; workspaceId: string; blockId: string }
-  | { type: "splitBlock"; workspaceId: string; blockId: string; direction: SplitDirection }
+  | { type: "splitBlock"; workspaceId: string; blockId: string; direction: SplitDirection; newBlockId: string; splitId: string }
   | { type: "openFiles"; workspaceId: string; anchorBlockId: string; profileId: string | null; path: string }
   | { type: "openNetwork"; workspaceId: string; anchorBlockId: string; profileId: string | null }
   | { type: "closeBlock"; workspaceId: string; blockId: string }
@@ -47,8 +47,10 @@ export function workspaceReducer(state: WorkspaceDocument, action: WorkspaceActi
     case "reorderWorkspace": return reorderWorkspace(state, action.workspaceId, action.targetWorkspaceId);
     case "selectBlock": return mapWorkspace(state, action.workspaceId, (workspace) => blockIds(workspace.layout).includes(action.blockId) ? { ...workspace, activeBlockId: action.blockId } : workspace);
     case "splitBlock": return mapWorkspace(state, action.workspaceId, (workspace) => {
-      const terminal = createTerminalNode();
-      return { ...workspace, activeBlockId: terminal.blockId, layout: splitTerminal(workspace.layout, action.blockId, action.direction, terminal, createId("split")) };
+      const anchor = findLeaf(workspace.layout, action.blockId);
+      if (!anchor) return workspace;
+      const terminal = createTerminalNode(anchor.profileId, action.newBlockId);
+      return { ...workspace, activeBlockId: terminal.blockId, layout: splitTerminal(workspace.layout, action.blockId, action.direction, terminal, action.splitId) };
     });
     case "openFiles": return mapWorkspace(state, action.workspaceId, (workspace) => {
       const files = createFilesNode(action.profileId, action.path);

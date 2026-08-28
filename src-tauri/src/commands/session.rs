@@ -13,8 +13,9 @@ use crate::{
         auth::{AuthFailure, AuthRequest, SecretText},
         profile::{AuthPreference, ConnectionProfile},
         session::{
-            HostEndpoint, RouteNodeMetadata, RouteNodeRole, RouteStage, SessionEvent,
-            SessionFailure, SessionState as DomainSessionState, TerminalSize, validate_username,
+            HostEndpoint, InitialDirectory, RouteNodeMetadata, RouteNodeRole, RouteStage,
+            SessionEvent, SessionFailure, SessionState as DomainSessionState, TerminalSize,
+            validate_username,
         },
     },
     infrastructure::ssh::client::{
@@ -45,6 +46,7 @@ pub struct SessionConnectDto {
     profile_id: String,
     auth: SessionAuthDto,
     terminal_size: Option<TerminalSizeDto>,
+    initial_directory: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -156,6 +158,7 @@ pub(crate) fn build_connect_request(
         profile_id,
         auth,
         terminal_size: requested_terminal_size,
+        initial_directory,
     } = input;
     let terminal_size = terminal_size(requested_terminal_size, purpose)?;
     let target_auth = match auth {
@@ -192,6 +195,11 @@ pub(crate) fn build_connect_request(
         purpose,
         profile_id: Some(profile_id),
         terminal_size,
+        initial_directory: if purpose == SessionPurpose::Terminal {
+            initial_directory.and_then(InitialDirectory::new)
+        } else {
+            None
+        },
         terminal_output,
         remote_shell_integration_enabled: purpose == SessionPurpose::Terminal
             && remote_shell_integration_enabled,

@@ -14,8 +14,8 @@
 - `src/app/theme/AppThemeProvider.tsx`：应用级主题唯一状态 owner，负责 bootstrap、preview/commit/restore，以及 DOM、xterm 和原生窗口同步；不进入 Workspace persistence，也不允许任意主题值。
 - `src/app/App.tsx`：前端组合入口，只装配 App theme、Workspace provider 与 shell；不直接调用底层 SSH 库。
 - `src/workspace/WorkspaceShell.tsx`：顶部 Workspace 标签、工具轨、Terminal/Files/Network 认证路由、route 凭证库解锁、关闭编排、快捷键与一次性启动更新提示入口；不请求任意更新地址、解析跳板图、布局树或 SSH 协议。
-- `src/workspace/model.ts`、`layout.ts`、`reducer.ts`：可持久化工作区契约、纯布局树变换与低频结构状态；不持有 session、xterm 或凭据。
-- `src/workspace/WorkspaceProvider.tsx`：Workspace 持久化与按 `blockId` 隔离的 Terminal/File/Network runtime 编排边界，并展示结构化 route 节点事件；Files 与 Network 远程 session 独立于终端，且不持久化活动转发状态。
+- `src/workspace/model.ts`、`layout.ts`、`reducer.ts`：可持久化工作区契约、使用调用方提供稳定 ID 并从锚点派生 profile 的纯布局树变换与低频结构状态；不持有 session、xterm、一次性启动目录或凭据。
+- `src/workspace/WorkspaceProvider.tsx`：Workspace 持久化与按 `blockId` 隔离的 Terminal/File/Network runtime 编排边界；统一创建上下文感知终端分屏，并将 OSC 7 目录快照作为目标 Block 的一次性启动上下文；Files 与 Network 远程 session 独立于终端，且运行时目录和活动转发状态均不持久化。
 - `src/workspace/workspaceRuntime.ts`：Workspace runtime 类型、默认值、epoch/failure key、connection intent 与 route notice 纯规则；不持有 React state 或可变全局单例。
 - `src/workspace/connectionProgress.ts`、`src/components/ConnectionRouteProgress.tsx`：三类 SSH Block 共用的 route 事件展示状态映射与悬浮进度组件；`src/components/HostIdentity.tsx` 统一直连/route 完成态的主机概要、视口浮层和地址复制；这些组件不管理 session、认证、凭证或持久化。
 - `src/components/Button.tsx`、`button.css`：共享文本按钮、图标按钮与非交互状态标签的语义、尺寸、主题和可访问契约；不拥有 feature 事件、tabs、菜单项、列表行或选择卡片行为。
@@ -35,7 +35,7 @@
 - `src/lib/tauri/credentials.ts`：密码/私钥凭证库的窄 IPC 契约；不实现 KDF、加密或 JSON 访问。
 - `src/lib/tauri/settings.ts`：配置根选择、派生存储布局快照，以及设备安全、外观、更新和远程终端集成偏好的窄 IPC 契约；不开放分区路径写入、Shell cache 或执行锁定/探测策略。
 - `src/lib/updateCheck.ts`：固定 GitHub Latest Release 的超时请求、稳定 SemVer 比较、进程内启动单次去重与固定 Releases opener；不持久化偏好、自动安装或接受任意 URL。
-- `src/lib/tauri/sessions.ts`：以目标 profile ID 建连的 SSH 会话命令与带节点/阶段的有序状态 Channel 契约；不解析 route、主机密钥规则或协议状态机。
+- `src/lib/tauri/sessions.ts`、`localSessions.ts`：远程/本地终端建连、可选一次性初始目录与有序状态 Channel 的窄 IPC 契约；不解析 route、验证文件系统路径、拼接 Shell 命令或持久化启动上下文。
 - `src/lib/tauri/transfers.ts`：单文件 SFTP 选择、启动、进度和取消 IPC 契约；不直接访问本地或远程文件系统。
 - `src/lib/tauri/files.ts`：本地/远程目录、受限文件读取、带修订保存与 Files-only SSH connect IPC 契约；不执行文件系统或 SFTP 操作。
 - `src/lib/tauri/network.ts`：Network 规则 CRUD、独立 SSH session 与规则启停的窄 IPC 契约；TCP 字节不经过 WebView。
@@ -48,11 +48,11 @@
 - `src-tauri/src/domain/auth.rs`：短期凭据包装、可执行认证请求与稳定认证失败；不表达 profile 的 `manual` 策略，也不依赖 `russh` 或 Tauri。
 - `src-tauri/src/domain/credential.rs`、`ports/credential_vault.rs`、`application/credential_service.rs`：vault 领域语义、外部存储端口与用例边界；不依赖具体密码学文件格式或 UI。
 - `src-tauri/src/domain/settings.rs`、`ports/settings_repository.rs`、`application/settings_service.rs`：安全、外观、更新与终端集成设置的默认值、范围、存储端口与用例；不依赖 JSON、Tauri、SSH 或 Windows API。
-- `src-tauri/src/domain/shell_integration.rs`、`ports/remote_shell_cache.rs`：受支持远程 Shell、目标签名、固定探测输出解析、当前会话 Hook 与可丢弃 cache 契约；不依赖 russh、JSON、Tauri 或用户输入命令。
+- `src-tauri/src/domain/shell_integration.rs`、`ports/remote_shell_cache.rs`：受支持远程 Shell、目标签名、固定探测输出解析、当前会话 Hook、Shell 专属初始目录字面量编码与可丢弃 cache 契约；不依赖 russh、JSON 或 Tauri。
 - `src-tauri/src/application/credential_lifecycle.rs`：统一拥有凭证解锁时间、deadline generation、锁定原因与 data-key 生命周期编排；不依赖 Tokio timer、Tauri event 或 Win32 类型。
 - `src-tauri/src/application/credential_workflow.rs`：恢复重置与私钥草稿的 opaque pending 状态、替换、完成和取消语义；secret bytes 保持 zeroizing 且不进入 DTO。
 - `src-tauri/src/application/ssh_config_import.rs`：SSH Config preview 生命周期、候选重复判断、唯一命名与无分组 profile input 映射；不依赖 Tauri 对话框或 command DTO。
-- `src-tauri/src/domain/session.rs`：主机密钥比较、route 节点/阶段事件和多跳会话状态迁移；不执行网络连接或文件读写。
+- `src-tauri/src/domain/session.rs`：主机密钥比较、route 节点/阶段事件、多跳会话状态迁移和有界一次性初始目录值；不执行网络连接或文件读写。
 - `src-tauri/src/domain/transfer.rs`：远程路径边界和稳定传输事件；不依赖 SFTP、Tauri 或本地文件 API。
 - `src-tauri/src/domain/files.rs`：稳定目录列表、文件条目与排序/数量边界；不依赖文件系统、SFTP 或 Tauri。
 - `src-tauri/src/application/file_service.rs`：本地文件预览限制、UTF-8 校验、内容修订与原子保存用例；不依赖 Tauri UI 或 SFTP 类型。
@@ -66,7 +66,8 @@
 - `src-tauri/src/infrastructure/persistence/json_remote_shell_cache.rs`：`cache/remote-shells.json` 的严格、原子、可丢弃适配器；只保存目标签名和 Shell 枚举，不保存探测输出、Hook、终端内容或凭据。
 - `src-tauri/src/infrastructure/ssh/forwarding.rs`：本地 listener、SOCKS5 CONNECT、Remote target 路由、有界转发任务与 TCP/SSH 双向数据泵；第三方 channel 类型不得离开 infrastructure。
 - `src-tauri/src/ports/profile_repository.rs`：应用层拥有的连接配置 repository 契约；不规定文件格式。
-- `src-tauri/src/infrastructure/ssh/client.rs`、`client/{handler,session,shell_integration,network,transfer}.rs`：稳定 `SshSessionManager` façade 与内部 route/host-key handler、session runner、有界 Shell 探测/临时 Hook、forward runtime、SFTP/transfer 实现；第三方 russh/SFTP 类型只在该 infrastructure 子树内，测试位于 `client/tests.rs`。
+- `src-tauri/src/infrastructure/local/pty.rs`：本地 PTY 创建与进程 I/O owner；在 spawn 时解析一次性工作目录并对无效/失效路径回退到规范化 home，不解释远程 Shell 语法。
+- `src-tauri/src/infrastructure/ssh/client.rs`、`client/{handler,session,shell_integration,network,transfer}.rs`：稳定 `SshSessionManager` façade 与内部 route/host-key handler、session runner、有界 Shell 探测、初始目录/临时 Hook 载荷、forward runtime、SFTP/transfer 实现；第三方 russh/SFTP 类型只在该 infrastructure 子树内，测试位于 `client/tests.rs`。
 - `src-tauri/tauri.conf.json`、`tauri.macos.conf.json`：通用无边框桌面窗口与 macOS 原生 Overlay 标题栏的分层配置，以及构建和打包入口；不承载 Workspace 或 SSH 规则。
 - `src-tauri/capabilities/default.json`：主窗口最小 Tauri 权限清单。
 - `package.json`、`src-tauri/Cargo.toml`：前端与 Rust 的直接依赖及质量命令入口。

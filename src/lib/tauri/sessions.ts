@@ -55,6 +55,7 @@ export interface TerminalSizeInput {
 
 export interface TerminalSessionConnectInput extends SessionConnectInput {
   terminalSize: TerminalSizeInput;
+  initialDirectory?: string;
 }
 
 export function connectSession(
