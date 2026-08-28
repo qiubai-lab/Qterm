@@ -143,17 +143,25 @@ describe("application layout styles", () => {
     expect(declarations(".block-actions")).toContain("flex:none");
   });
 
-  it("uses neutral and theme-highlighted states for the OSC 7 tag", () => {
+  it("reserves the full OSC 7 theme highlight for the active terminal", () => {
     const tag = declarations(".terminal-osc7-tag");
     const ready = declarations('.terminal-osc7-tag[data-state="ready"]');
+    const inactiveHover = declarations('.terminal-block:not(.active) .terminal-osc7-tag[data-state="ready"]:hover');
+    const activeReady = declarations('.terminal-block.active .terminal-osc7-tag[data-state="ready"]');
     expect(tag).toContain("color:var(--dim)");
     expect(tag).toContain("flex:none");
     expect(tag).toContain("height:12px");
     expect(tag).toContain("padding:0 3px");
     expect(tag).toContain("border-radius:3px");
+    expect(tag).toContain('font:700 7px/10px "SFMono-Regular",Consolas,monospace');
     expect(tag).toContain("background:transparent");
-    expect(ready).toContain("color:var(--selection-marker)");
-    expect(ready).toContain("background:color-mix(in srgb,var(--selection-surface) 72%,transparent)");
+    expect(ready).toContain("--osc7-tag-border:color-mix(in srgb,var(--selection-marker) 20%,var(--border))");
+    expect(ready).toContain("--osc7-tag-text:color-mix(in srgb,var(--selection-marker) 55%,var(--dim))");
+    expect(ready).toContain("--osc7-tag-surface:transparent");
+    expect(ready).toContain("border-color:var(--osc7-tag-border)");
+    expect(inactiveHover).toContain("--osc7-tag-text:color-mix(in srgb,var(--selection-marker) 78%,var(--dim))");
+    expect(activeReady).toContain("--osc7-tag-text:var(--selection-marker)");
+    expect(activeReady).toContain("--osc7-tag-surface:color-mix(in srgb,var(--selection-surface) 72%,transparent)");
   });
 
   it("keeps route node details in a compact two-line tooltip", () => {
