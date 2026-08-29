@@ -24,6 +24,7 @@ export function connectLocalSession(
   rows: number,
   onEvent: (event: LocalSessionEvent) => void,
   onTerminalData: (data: Uint8Array) => void,
+  osc7Enabled: boolean,
   initialDirectory?: string,
 ): Promise<LocalSessionConnection> {
   const eventChannel = new Channel<LocalSessionEvent>(onEvent);
@@ -31,6 +32,7 @@ export function connectLocalSession(
   return invoke<LocalSessionConnection>("local_session_connect", {
     columns,
     rows,
+    osc7Enabled,
     ...(initialDirectory === undefined ? {} : { initialDirectory }),
     onEvent: eventChannel,
     onTerminal: terminalChannel,

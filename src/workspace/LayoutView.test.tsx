@@ -183,7 +183,7 @@ describe("WorkspaceCanvas terminal actions", () => {
     terminalRuntimes = { "block-1": { ...connectedLocalRuntime, sessionId: null, status: "closed" } };
     view.rerender(<WorkspaceCanvas workspace={workspace} visible onRequestClose={vi.fn()} onRequestDisconnect={onRequestDisconnect} onRequestAuthConnection={vi.fn()}/>);
     await user.click(screen.getByRole("button", { name: "启动本地终端" }));
-    expect(restartLocalBlock).toHaveBeenCalledWith("block-1");
+    expect(restartLocalBlock).toHaveBeenCalledWith("block-1", false);
   });
 
   it("reconnects a closed remote terminal through configured authentication", async () => {

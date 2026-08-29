@@ -325,17 +325,17 @@ describe("TerminalPanel view lifetime", () => {
     mocks.hydrated = true;
     view.rerender(<TerminalPanel blockId="block-hydrated" sessionKey="block-hydrated:local" local visible/>);
 
-    expect(mocks.startLocalBlock).toHaveBeenCalledWith("block-hydrated", 80, 24);
+    expect(mocks.startLocalBlock).toHaveBeenCalledWith("block-hydrated", 80, 24, true);
     view.unmount();
   });
 
   it("waits for terminal settings before starting a local shell", () => {
-    const view = render(<TerminalPanel blockId="block-settings" sessionKey="block-settings:local" local visible terminalSettingsReady={false}/>);
+    const view = render(<TerminalPanel blockId="block-settings" sessionKey="block-settings:local" local visible osc7Enabled={false} terminalSettingsReady={false}/>);
     expect(mocks.startLocalBlock).not.toHaveBeenCalled();
 
-    view.rerender(<TerminalPanel blockId="block-settings" sessionKey="block-settings:local" local visible terminalSettingsReady/>);
+    view.rerender(<TerminalPanel blockId="block-settings" sessionKey="block-settings:local" local visible osc7Enabled={false} terminalSettingsReady/>);
 
-    expect(mocks.startLocalBlock).toHaveBeenCalledWith("block-settings", 80, 24);
+    expect(mocks.startLocalBlock).toHaveBeenCalledWith("block-settings", 80, 24, false);
     view.unmount();
   });
 

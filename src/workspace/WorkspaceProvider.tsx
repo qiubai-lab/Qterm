@@ -51,8 +51,8 @@ interface WorkspaceContextValue {
   setBlockCwd: (blockId: string, cwd: string) => void;
   clearTerminalOsc7State: () => void;
   splitTerminalBlock: (workspaceId: string, blockId: string, direction: SplitDirection, inheritCurrentDirectory?: boolean) => void;
-  startLocalBlock: (blockId: string, columns: number, rows: number) => Promise<void>;
-  restartLocalBlock: (blockId: string) => Promise<void>;
+  startLocalBlock: (blockId: string, columns: number, rows: number, osc7Enabled: boolean) => Promise<void>;
+  restartLocalBlock: (blockId: string, osc7Enabled: boolean) => Promise<void>;
   selectBlockTarget: (workspaceId: string, blockId: string, profileId: string | null) => Promise<void>;
   connectBlock: (blockId: string, profile: ConnectionProfile, auth: SessionAuth, onFailure?: () => void) => Promise<void>;
   selectFileTarget: (workspaceId: string, blockId: string, profileId: string | null) => Promise<void>;
@@ -364,7 +364,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     dispatch({ type: "splitBlock", workspaceId, blockId, direction, newBlockId, splitId: createId("split") });
   }, []);
 
-  const startLocalBlock = useCallback(async (blockId: string, columns: number, rows: number) => {
+  const startLocalBlock = useCallback(async (blockId: string, columns: number, rows: number, osc7Enabled: boolean) => {
     if (!isTauriRuntime() || startingLocal.current.has(blockId)) return;
     if (!connectionIntentAllows(connectionTargetIntents.current, "terminal", blockId, null)) return;
     const current = runtimesRef.current[blockId];
@@ -399,6 +399,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         (data) => {
           if (isCurrentEpoch(blockId, epoch)) deliverTerminalOutput(blockId, data);
         },
+        osc7Enabled,
         pendingInitialDirectories.current.get(blockId),
       );
       const { sessionId } = connection;
@@ -465,9 +466,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     }
   }, [clearBlockBuffer, closeCurrentSession, deliverTerminalOutput, isCurrentEpoch, nextEpoch, onSessionEvent, updateRuntime]);
 
-  const restartLocalBlock = useCallback(async (blockId: string) => {
+  const restartLocalBlock = useCallback(async (blockId: string, osc7Enabled: boolean) => {
     const size = terminalSizeReaders.current.get(blockId)?.() ?? { columns: 80, rows: 24 };
-    await startLocalBlock(blockId, size.columns, size.rows);
+    await startLocalBlock(blockId, size.columns, size.rows, osc7Enabled);
   }, [startLocalBlock]);
 
   const disconnectBlock = useCallback(async (blockId: string) => {

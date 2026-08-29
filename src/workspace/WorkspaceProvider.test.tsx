@@ -68,11 +68,12 @@ function Harness() {
     <button onClick={() => mocks.unregisterWriters.push(registerWriter(ids[0], mocks.writers[1], mocks.clearers[1], () => mocks.terminalSizes[1]))}>register-new-writer</button>
     <button onClick={() => mocks.unregisterWriters[0]?.()}>unregister-old-writer</button>
     <button onClick={() => clearBlockBuffer(ids[0])}>clear-buffer</button>
-    <button onClick={() => void startLocalBlock(ids[0], 100, 30)}>local</button>
-    <button onClick={() => void startLocalBlock(activeWorkspace.activeBlockId, 100, 30)}>local-active</button>
+    <button onClick={() => void startLocalBlock(ids[0], 100, 30, true)}>local</button>
+    <button onClick={() => void startLocalBlock(activeWorkspace.activeBlockId, 100, 30, true)}>local-active</button>
+    <button onClick={() => void startLocalBlock(activeWorkspace.activeBlockId, 100, 30, false)}>local-active-without-osc7</button>
     <button onClick={() => void selectBlockTarget(activeWorkspace.id, ids[0], profile.id)}>select-remote-target</button>
     <button onClick={() => void selectBlockTarget(activeWorkspace.id, ids[0], null)}>select-local-target</button>
-    <button onClick={() => void (async () => { await selectBlockTarget(activeWorkspace.id, ids[0], null); await startLocalBlock(ids[0], 100, 30); })()}>switch-to-local</button>
+    <button onClick={() => void (async () => { await selectBlockTarget(activeWorkspace.id, ids[0], null); await startLocalBlock(ids[0], 100, 30, true); })()}>switch-to-local</button>
     <button onClick={() => void writeBlock(ids[0], Uint8Array.from([100, 105, 114, 13]))}>write</button>
     <button onClick={() => void writeBlock(ids[0], Uint8Array.from([27, 91, 49, 59, 49, 82]))}>write-control-response</button>
     <button onClick={() => void resizeBlock(ids[0], 120, 40)}>resize</button>
@@ -186,7 +187,7 @@ describe("WorkspaceProvider multi-session routing", () => {
     await user.click(screen.getByRole("button", { name: "register" }));
     await user.click(screen.getByRole("button", { name: "local" }));
     await waitFor(() => expect(screen.getByTestId("runtime")).toHaveTextContent("local:connected"));
-    expect(mocks.connectLocalSession).toHaveBeenCalledWith(100, 30, expect.any(Function), expect.any(Function), undefined);
+    expect(mocks.connectLocalSession).toHaveBeenCalledWith(100, 30, expect.any(Function), expect.any(Function), true, undefined);
 
     act(() => mocks.localConnections[0].terminal(Uint8Array.from([76])));
     expect(mocks.writers[0]).toHaveBeenCalledWith(Uint8Array.from([76]));
@@ -291,6 +292,7 @@ describe("WorkspaceProvider multi-session routing", () => {
       30,
       expect.any(Function),
       expect.any(Function),
+      true,
       "/srv/reported",
     );
   });
@@ -316,13 +318,14 @@ describe("WorkspaceProvider multi-session routing", () => {
     expect(screen.getByTestId("runtime-cwd-source")).toHaveTextContent("initial");
 
     await user.click(screen.getByRole("button", { name: "split-without-osc7" }));
-    await user.click(screen.getByRole("button", { name: "local-active" }));
+    await user.click(screen.getByRole("button", { name: "local-active-without-osc7" }));
     await waitFor(() => expect(mocks.connectLocalSession).toHaveBeenCalledTimes(2));
     expect(mocks.connectLocalSession).toHaveBeenLastCalledWith(
       100,
       30,
       expect.any(Function),
       expect.any(Function),
+      false,
       undefined,
     );
   });

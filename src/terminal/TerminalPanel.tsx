@@ -252,7 +252,7 @@ export function TerminalPanel({ blockId, sessionKey, visible, local, osc7Enabled
   useEffect(() => {
     if (!hydrated || !local || !terminalSettingsReady) return;
     const view = viewRef.current;
-    if (view) void startLocalRef.current(blockId, view.terminal.cols, view.terminal.rows);
+    if (view) void startLocalRef.current(blockId, view.terminal.cols, view.terminal.rows, osc7EnabledRef.current);
   }, [blockId, hydrated, local, terminalSettingsReady]);
 
   useEffect(() => {

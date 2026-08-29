@@ -77,6 +77,7 @@ impl LocalSessionManager {
     pub fn connect(
         &self,
         size: PtySize,
+        osc7_enabled: bool,
         initial_directory: Option<PathBuf>,
         terminal_output: OutputSink,
         events: EventSink,
@@ -89,28 +90,7 @@ impl LocalSessionManager {
         let mut command = CommandBuilder::new_default_prog();
         command.cwd(&cwd);
         command.env("TERM", "xterm-256color");
-        #[cfg(windows)]
-        command.env(
-            "PROMPT",
-            format!(
-                "$E]7;file://localhost/$P$E\\{}",
-                std::env::var("PROMPT").unwrap_or_else(|_| "$P$G".into())
-            ),
-        );
-        #[cfg(unix)]
-        {
-            let integration =
-                "printf '\\033]7;file://%s%s\\033\\\\' \"${HOSTNAME:-localhost}\" \"$PWD\"";
-            let existing = std::env::var("PROMPT_COMMAND").unwrap_or_default();
-            command.env(
-                "PROMPT_COMMAND",
-                if existing.is_empty() {
-                    integration.into()
-                } else {
-                    format!("{integration};{existing}")
-                },
-            );
-        }
+        configure_osc7_integration(&mut command, osc7_enabled);
         let mut child = pair
             .slave
             .spawn_command(command)
@@ -211,6 +191,51 @@ impl LocalSessionManager {
     }
 }
 
+fn configure_osc7_integration(command: &mut CommandBuilder, osc7_enabled: bool) {
+    #[cfg(target_os = "macos")]
+    {
+        // macOS ships the OSC 7 implementation used by Terminal.app in
+        // /etc/zshrc_Apple_Terminal and /etc/bashrc_Apple_Terminal. Advertising
+        // that compatibility loads the native precmd/PROMPT_COMMAND hook for the
+        // system default shells without modifying the user's shell files.
+        // TERM_SESSION_ID must not be inherited: it would also enable Apple's
+        // unrelated session-history/resume behavior with the parent terminal ID.
+        command.env_remove("TERM_SESSION_ID");
+        command.env_remove("TERM_PROGRAM_VERSION");
+        if osc7_enabled {
+            command.env("TERM_PROGRAM", "Apple_Terminal");
+        } else {
+            command.env_remove("TERM_PROGRAM");
+        }
+    }
+
+    #[cfg(all(unix, not(target_os = "macos")))]
+    if osc7_enabled {
+        let integration =
+            "printf '\\033]7;file://%s%s\\033\\\\' \"${HOSTNAME:-localhost}\" \"$PWD\"";
+        let existing = std::env::var("PROMPT_COMMAND").unwrap_or_default();
+        command.env(
+            "PROMPT_COMMAND",
+            if existing.is_empty() {
+                integration.into()
+            } else {
+                format!("{integration};{existing}")
+            },
+        );
+    }
+
+    #[cfg(windows)]
+    if osc7_enabled {
+        command.env(
+            "PROMPT",
+            format!(
+                "$E]7;file://localhost/$P$E\\{}",
+                std::env::var("PROMPT").unwrap_or_else(|_| "$P$G".into())
+            ),
+        );
+    }
+}
+
 fn resolve_start_directory(initial_directory: Option<PathBuf>) -> Option<PathBuf> {
     initial_directory
         .filter(|path| path.is_absolute() && path.is_dir())
@@ -226,7 +251,39 @@ mod tests {
     use portable_pty::PtySize;
     use tempfile::tempdir;
 
-    use super::{LocalSessionEvent, LocalSessionManager, resolve_start_directory};
+    use super::{
+        LocalSessionEvent, LocalSessionManager, configure_osc7_integration, resolve_start_directory,
+    };
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn macos_osc7_uses_apple_terminal_shell_hook_without_session_resume() {
+        let mut command = portable_pty::CommandBuilder::new_default_prog();
+        command.env("TERM_SESSION_ID", "inherited-session");
+        command.env("TERM_PROGRAM_VERSION", "inherited-version");
+
+        configure_osc7_integration(&mut command, true);
+
+        assert_eq!(
+            command.get_env("TERM_PROGRAM"),
+            Some(std::ffi::OsStr::new("Apple_Terminal"))
+        );
+        assert_eq!(command.get_env("TERM_SESSION_ID"), None);
+        assert_eq!(command.get_env("TERM_PROGRAM_VERSION"), None);
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn macos_disabled_osc7_does_not_inherit_apple_terminal_hook() {
+        let mut command = portable_pty::CommandBuilder::new_default_prog();
+        command.env("TERM_PROGRAM", "Apple_Terminal");
+        command.env("TERM_SESSION_ID", "inherited-session");
+
+        configure_osc7_integration(&mut command, false);
+
+        assert_eq!(command.get_env("TERM_PROGRAM"), None);
+        assert_eq!(command.get_env("TERM_SESSION_ID"), None);
+    }
 
     #[test]
     fn inherited_working_directory_is_resolved_or_falls_back_to_home() {
@@ -258,6 +315,7 @@ mod tests {
                     pixel_width: 0,
                     pixel_height: 0,
                 },
+                true,
                 None,
                 Arc::new(move |data| {
                     let _ = output_tx.send(data);
@@ -337,6 +395,14 @@ mod tests {
         assert!(
             String::from_utf8_lossy(&output).contains("qterm-local-ready"),
             "local shell output was: {:?}",
+            String::from_utf8_lossy(&output)
+        );
+        #[cfg(target_os = "macos")]
+        assert!(
+            output
+                .windows(b"\x1b]7;file://".len())
+                .any(|window| window == b"\x1b]7;file://"),
+            "macOS default shell did not emit OSC 7: {:?}",
             String::from_utf8_lossy(&output)
         );
         #[cfg(windows)]

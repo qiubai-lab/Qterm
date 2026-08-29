@@ -310,7 +310,7 @@ function TerminalBlock(props: BlockRenderProps & { blockId: string; profileId: s
       else void disconnectBlock(props.blockId);
       return;
     }
-    if (props.profileId === null) void restartLocalBlock(props.blockId);
+    if (props.profileId === null) void restartLocalBlock(props.blockId, props.remoteShellIntegrationEnabled);
     else if (profile) requestConnection("terminal", props.blockId, profile);
   }
 

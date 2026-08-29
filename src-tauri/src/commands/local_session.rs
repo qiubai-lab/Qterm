@@ -76,6 +76,7 @@ pub fn local_terminal_capabilities() -> LocalTerminalCapabilitiesDto {
 pub fn local_session_connect(
     columns: u32,
     rows: u32,
+    osc7_enabled: bool,
     initial_directory: Option<String>,
     on_event: Channel<LocalSessionEventDto>,
     on_terminal: Channel<LocalTerminalDataDto>,
@@ -96,6 +97,7 @@ pub fn local_session_connect(
         .manager
         .connect(
             size,
+            osc7_enabled,
             initial_directory
                 .and_then(InitialDirectory::new)
                 .map(InitialDirectory::into_string)
