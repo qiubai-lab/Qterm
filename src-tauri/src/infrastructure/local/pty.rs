@@ -251,9 +251,9 @@ mod tests {
     use portable_pty::PtySize;
     use tempfile::tempdir;
 
-    use super::{
-        LocalSessionEvent, LocalSessionManager, configure_osc7_integration, resolve_start_directory,
-    };
+    #[cfg(target_os = "macos")]
+    use super::configure_osc7_integration;
+    use super::{LocalSessionEvent, LocalSessionManager, resolve_start_directory};
 
     #[cfg(target_os = "macos")]
     #[test]
