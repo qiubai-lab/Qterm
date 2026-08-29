@@ -324,9 +324,12 @@ pub(super) async fn run_session(
                             _ => { let _ = reply.send(Err(SessionControlError::FileUnavailable)); }
                         }
                     }
-                    Some(SessionControl::StoreClipboardImage { upload_id, reply, .. }) => {
+                    Some(SessionControl::StoreTerminalStaging { upload_id, sources, events, .. }) => {
                         entry.finish_clipboard_upload(&upload_id);
-                        let _ = reply.send(Err(RemoteClipboardImageError::TerminalUnavailable));
+                        for source in sources.into_iter().filter(|source| source.cleanup_after) {
+                            let _ = std::fs::remove_file(source.path);
+                        }
+                        events(TerminalStagingEvent::Failed);
                     }
                     Some(SessionControl::Write(_) | SessionControl::Resize(_) | SessionControl::StartNetworkRule { .. } | SessionControl::StopNetworkRule { .. }) => {}
                     None => {
@@ -435,31 +438,33 @@ pub(super) async fn run_session(
                         entry.fail(SessionFailure::ConnectionFailed);
                     }
                 }
-                Some(SessionControl::StoreClipboardImage { upload_id, session_token, png, cancel, reply }) => {
+                Some(SessionControl::StoreTerminalStaging { upload_id, session_token, sources, events, cancel }) => {
                     match handle.channel_open_session().await {
                         Ok(channel) if channel.request_subsystem(true, "sftp").await.is_ok() => {
                             let clipboard_entry = Arc::clone(&entry);
                             let registered = entry.clipboard_directories();
                             tauri::async_runtime::spawn(async move {
-                                let result = store_clipboard_image(
+                                let directory = run_terminal_staging(
                                     channel.into_stream(),
                                     &session_token,
-                                    png,
+                                    sources,
                                     &registered,
+                                    events,
                                     cancel,
                                 )
                                 .await;
-                                let result = result.map(|stored| {
-                                    clipboard_entry.register_clipboard_directory(stored.directory);
-                                    stored.remote_path
-                                });
+                                if let Some(directory) = directory {
+                                    clipboard_entry.register_clipboard_directory(directory);
+                                }
                                 clipboard_entry.finish_clipboard_upload(&upload_id);
-                                let _ = reply.send(result);
                             });
                         }
                         _ => {
+                            for source in sources.into_iter().filter(|source| source.cleanup_after) {
+                                let _ = std::fs::remove_file(source.path);
+                            }
+                            events(TerminalStagingEvent::Failed);
                             entry.finish_clipboard_upload(&upload_id);
-                            let _ = reply.send(Err(RemoteClipboardImageError::SftpUnavailable));
                         }
                     }
                 }

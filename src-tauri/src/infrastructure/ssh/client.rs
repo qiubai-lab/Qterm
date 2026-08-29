@@ -11,7 +11,7 @@ use session::run_session;
 use transfer::scan_local_upload_entries;
 use transfer::{
     cleanup_clipboard_directories, list_remote_directory, mutate_remote_entry, read_remote_file,
-    run_transfer, store_clipboard_image, write_remote_text_file,
+    run_terminal_staging, run_transfer, write_remote_text_file,
 };
 
 use std::{
@@ -35,13 +35,16 @@ use crate::{
     application::host_key_service::HostKeyService,
     domain::{
         auth::AuthRequest,
-        clipboard_image::{CLIPBOARD_DIRECTORY_MODE, CLIPBOARD_FILE_MODE, CLIPBOARD_HOME_TTL_SECS},
         files::{DirectoryListing, FileDocument, FileEntry, content_revision},
         network::ForwardRuleKind,
         session::{
             HostEndpoint, HostKeyCheck, InitialDirectory, PresentedHostKey, RouteNodeMetadata,
             RouteNodeRole, RouteStage, SessionEvent, SessionFailure, SessionState,
             SessionStateMachine, TerminalSize,
+        },
+        terminal_staging::{
+            STAGING_DIRECTORY_MODE, STAGING_FILE_MODE, STAGING_HOME_TTL_SECS, TerminalStagingError,
+            TerminalStagingEvent,
         },
         transfer::{RemotePath, TransferEvent},
     },
@@ -61,8 +64,8 @@ use crate::{
             },
         },
     },
-    ports::clipboard_image::{
-        ClipboardImageFuture, RemoteClipboardImageError, RemoteClipboardImageStore,
+    ports::terminal_staging::{
+        RemoteTerminalStagingStore, StagingSourceEntry, TerminalStagingSink,
     },
 };
 
@@ -295,41 +298,51 @@ impl SshSessionManager {
             .map_err(|_| SessionControlError::ControlQueueUnavailable)
     }
 
-    async fn upload_clipboard_image(
+    fn start_terminal_staging(
         &self,
         id: &str,
-        png: Vec<u8>,
-    ) -> Result<String, RemoteClipboardImageError> {
+        sources: Vec<StagingSourceEntry>,
+        events: TerminalStagingSink,
+    ) -> Result<String, TerminalStagingError> {
         let entry = self
             .entry(id)
-            .map_err(|_| RemoteClipboardImageError::SessionNotFound)?;
+            .map_err(|_| TerminalStagingError::SessionNotFound)?;
         if entry.purpose != SessionPurpose::Terminal {
-            return Err(RemoteClipboardImageError::TerminalUnavailable);
+            return Err(TerminalStagingError::TerminalUnavailable);
         }
         if entry.state() != SessionState::Connected {
-            return Err(RemoteClipboardImageError::SessionNotConnected);
+            return Err(TerminalStagingError::SessionNotConnected);
         }
-        let (reply, response) = oneshot::channel();
+        if entry.has_clipboard_uploads() {
+            return Err(TerminalStagingError::UploadFailed);
+        }
         let upload_id = Uuid::new_v4().to_string();
         let (cancel_sender, cancel) = oneshot::channel();
         entry.register_clipboard_upload(upload_id.clone(), cancel_sender);
+        let cleanup_paths = sources
+            .iter()
+            .filter(|source| source.cleanup_after)
+            .map(|source| source.path.clone())
+            .collect::<Vec<_>>();
         if entry
             .control
-            .try_send(SessionControl::StoreClipboardImage {
+            .try_send(SessionControl::StoreTerminalStaging {
                 upload_id: upload_id.clone(),
                 session_token: id.to_owned(),
-                png,
+                sources,
+                events,
                 cancel,
-                reply,
             })
             .is_err()
         {
             entry.cancel_clipboard_upload(&upload_id);
-            return Err(RemoteClipboardImageError::UploadFailed);
+            entry.finish_clipboard_upload(&upload_id);
+            for path in cleanup_paths {
+                let _ = std::fs::remove_file(path);
+            }
+            return Err(TerminalStagingError::UploadFailed);
         }
-        response
-            .await
-            .map_err(|_| RemoteClipboardImageError::UploadFailed)?
+        Ok(upload_id)
     }
 
     pub async fn start_network_rule(
@@ -579,13 +592,25 @@ impl SshSessionManager {
     }
 }
 
-impl RemoteClipboardImageStore for SshSessionManager {
-    fn store_image<'a>(
-        &'a self,
-        session_id: &'a str,
-        png: Vec<u8>,
-    ) -> ClipboardImageFuture<'a, Result<String, RemoteClipboardImageError>> {
-        Box::pin(async move { self.upload_clipboard_image(session_id, png).await })
+impl RemoteTerminalStagingStore for SshSessionManager {
+    fn start(
+        &self,
+        session_id: &str,
+        entries: Vec<StagingSourceEntry>,
+        events: TerminalStagingSink,
+    ) -> Result<String, TerminalStagingError> {
+        self.start_terminal_staging(session_id, entries, events)
+    }
+
+    fn cancel(&self, session_id: &str, task_id: &str) -> Result<(), TerminalStagingError> {
+        let entry = self
+            .entry(session_id)
+            .map_err(|_| TerminalStagingError::SessionNotFound)?;
+        if entry.cancel_clipboard_upload(task_id) {
+            Ok(())
+        } else {
+            Err(TerminalStagingError::TaskNotFound)
+        }
     }
 }
 
@@ -636,7 +661,7 @@ struct SessionEntry {
     control: mpsc::Sender<SessionControl>,
     transfers: Mutex<HashMap<String, oneshot::Sender<()>>>,
     clipboard_directories: Mutex<HashSet<String>>,
-    clipboard_uploads: Mutex<HashMap<String, oneshot::Sender<()>>>,
+    clipboard_uploads: Mutex<HashMap<String, Option<oneshot::Sender<()>>>>,
     events: EventSink,
 }
 
@@ -734,7 +759,9 @@ impl SessionEntry {
                 .unwrap_or_else(|poisoned| poisoned.into_inner()),
         );
         for (_, cancel) in clipboard_uploads {
-            let _ = cancel.send(());
+            if let Some(cancel) = cancel {
+                let _ = cancel.send(());
+            }
         }
     }
 
@@ -794,18 +821,29 @@ impl SessionEntry {
         self.clipboard_uploads
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .insert(id, cancel);
+            .insert(id, Some(cancel));
     }
 
-    fn cancel_clipboard_upload(&self, id: &str) {
-        if let Some(cancel) = self
+    fn has_clipboard_uploads(&self) -> bool {
+        !self
             .clipboard_uploads
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .remove(id)
-        {
+            .is_empty()
+    }
+
+    fn cancel_clipboard_upload(&self, id: &str) -> bool {
+        let mut uploads = self
+            .clipboard_uploads
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let Some(cancel) = uploads.get_mut(id) else {
+            return false;
+        };
+        if let Some(cancel) = cancel.take() {
             let _ = cancel.send(());
         }
+        true
     }
 
     fn finish_clipboard_upload(&self, id: &str) {
@@ -833,12 +871,12 @@ enum HostKeyDecision {
 enum SessionControl {
     Write(Vec<u8>),
     Resize(TerminalSize),
-    StoreClipboardImage {
+    StoreTerminalStaging {
         upload_id: String,
         session_token: String,
-        png: Vec<u8>,
+        sources: Vec<StagingSourceEntry>,
+        events: TerminalStagingSink,
         cancel: oneshot::Receiver<()>,
-        reply: oneshot::Sender<Result<String, RemoteClipboardImageError>>,
     },
     StartTransfer {
         id: String,

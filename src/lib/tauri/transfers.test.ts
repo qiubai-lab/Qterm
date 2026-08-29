@@ -20,7 +20,10 @@ import {
   downloadFile,
   selectDownloadDirectory,
   selectDownloadPath,
+  selectUploadFiles,
+  selectUploadFolder,
   selectUploadFile,
+  uploadSelectedEntries,
   uploadFile,
   uploadDroppedEntries,
 } from "./transfers";
@@ -102,5 +105,26 @@ describe("SFTP IPC client", () => {
       input: { sessionId: "session-1", localPaths: ["/tmp/a.txt", "/tmp/folder"], remoteDirectory: "/srv" },
       onEvent: expect.any(Object),
     });
+  });
+
+  it("selects files or a folder and uploads the selected entries as one transfer", async () => {
+    mocks.invoke
+      .mockResolvedValueOnce(["/tmp/a.txt", "/tmp/b.txt"])
+      .mockResolvedValueOnce("/tmp/folder")
+      .mockResolvedValueOnce("transfer-selected");
+
+    expect(await selectUploadFiles()).toEqual(["/tmp/a.txt", "/tmp/b.txt"]);
+    expect(await selectUploadFolder()).toBe("/tmp/folder");
+    const onEvent = vi.fn();
+    await uploadSelectedEntries("session-1", ["/tmp/a.txt", "/tmp/b.txt"], "/srv", onEvent);
+
+    expect(mocks.invoke).toHaveBeenNthCalledWith(1, "transfer_select_upload_files");
+    expect(mocks.invoke).toHaveBeenNthCalledWith(2, "transfer_select_upload_folder");
+    expect(mocks.invoke).toHaveBeenNthCalledWith(3, "transfer_upload_selected", {
+      input: { sessionId: "session-1", localPaths: ["/tmp/a.txt", "/tmp/b.txt"], remoteDirectory: "/srv" },
+      onEvent: expect.any(Object),
+    });
+    mocks.handlers[0]?.({ type: "completed" });
+    expect(onEvent).toHaveBeenCalledWith({ type: "completed" });
   });
 });

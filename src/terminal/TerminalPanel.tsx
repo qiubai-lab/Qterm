@@ -10,7 +10,11 @@ import { resolveAppShortcut, shortcutLabel } from "../app/shortcuts";
 import { DialogFrame } from "../components/dialogs/DialogFrame";
 import { Icon } from "../components/Icon";
 import { currentDesktopPlatform } from "../lib/tauri/window";
-import { pasteRemoteClipboardImage } from "../lib/tauri/sessions";
+import {
+  cancelTerminalClipboardStaging,
+  startTerminalClipboardStaging,
+  type TerminalStagingEvent,
+} from "../lib/tauri/sessions";
 import { useWorkspace } from "../workspace/WorkspaceProvider";
 import { parseOsc7Cwd } from "./osc7";
 import { createResizeScheduler, type ResizeScheduler } from "./resizeScheduler";
@@ -18,6 +22,10 @@ import { createTerminalInputScheduler, type TerminalInputScheduler } from "./ter
 import { ensureTerminalSearch, type TerminalSearchHost } from "./terminalSearch";
 import { bindTerminalTheme, readTerminalSearchColors, readTerminalTheme } from "./terminalTheme";
 import { registerTerminalController } from "./terminalViewRegistry";
+import {
+  TerminalStagingStatus,
+  type TerminalStagingStatusState,
+} from "./TerminalStagingStatus";
 
 interface TerminalView extends TerminalSearchHost {
   fit: FitAddon;
@@ -40,7 +48,8 @@ type ClipboardPlatform = "mac" | "windows" | "linux";
 type ContextMenuState = { anchorX: number; anchorY: number; x: number; y: number; placement: "above" | "below"; hasSelection: boolean };
 type PendingPaste = { text: string; lines: number; characters: number };
 type SearchResults = { resultIndex: number; resultCount: number };
-type PasteOperation = { text: string; tone: "busy" | "success" | "error" };
+type ActiveStagingTask = { sessionId: string; taskId: string };
+type StagingCompletion = { kind: "completed"; remotePaths: string[] } | { kind: "cancelled" } | { kind: "failed" };
 
 const terminalViews = new Map<string, TerminalView>();
 const CLEAR_SCREEN_INPUT = "\x1bcls\r";
@@ -49,6 +58,10 @@ const FALLBACK_TERMINAL_FONT_SIZE = 13;
 const FALLBACK_TERMINAL_LINE_HEIGHT = 1.22;
 const LONG_PASTE_THRESHOLD = 1000;
 const SEARCH_EXIT_DURATION_MS = 110;
+const STAGING_RESULT_DURATION_MS = 2_200;
+const STAGING_ERROR_DURATION_MS = 5_000;
+const STAGING_EXIT_DURATION_MS = 120;
+const IDLE_TERMINAL_STAGING_STATUS: TerminalStagingStatusState = { phase: "idle" };
 
 export function TerminalPanel({ blockId, sessionKey, visible, local, osc7Enabled = true, terminalSettingsReady = true }: { blockId: string; sessionKey: string; visible: boolean; local: boolean; osc7Enabled?: boolean; terminalSettingsReady?: boolean }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -62,13 +75,17 @@ export function TerminalPanel({ blockId, sessionKey, visible, local, osc7Enabled
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [searchResults, setSearchResults] = useState<SearchResults>({ resultIndex: 0, resultCount: 0 });
-  const [pasteOperation, setPasteOperation] = useState<PasteOperation | null>(null);
+  const [stagingStatus, setStagingStatus] = useState<TerminalStagingStatusState>(IDLE_TERMINAL_STAGING_STATUS);
+  const [stagingSessionId, setStagingSessionId] = useState<string | null>(null);
+  const [stagingClosing, setStagingClosing] = useState(false);
+  const [activeStagingTask, setActiveStagingTask] = useState<ActiveStagingTask | null>(null);
   const { hydrated = true, localTerminalCapabilities, registerWriter, setBlockCwd, startLocalBlock, writeBlock, resizeBlock, clearBlockBuffer, runtimes } = useWorkspace();
   const windowsPty = local ? localTerminalCapabilities?.windowsPty ?? undefined : undefined;
   const inputEnabled = runtimes[blockId]?.status === "connected";
   const connectedSessionId = runtimes[blockId]?.sessionId ?? null;
   const connectedSessionIdRef = useRef(connectedSessionId);
   const pasteRequestIdRef = useRef(0);
+  const activeStagingTaskRef = useRef<ActiveStagingTask | null>(null);
   const clipboardPlatform = terminalClipboardPlatform();
   const desktopPlatform = currentDesktopPlatform();
   const writeRef = useRef(writeBlock);
@@ -79,14 +96,25 @@ export function TerminalPanel({ blockId, sessionKey, visible, local, osc7Enabled
   useEffect(() => { resizeRef.current = resizeBlock; }, [resizeBlock]);
   useEffect(() => { startLocalRef.current = startLocalBlock; }, [startLocalBlock]);
   useEffect(() => { connectedSessionIdRef.current = connectedSessionId; }, [connectedSessionId]);
+  useEffect(() => { activeStagingTaskRef.current = activeStagingTask; }, [activeStagingTask]);
   useEffect(() => {
-    if (!pasteOperation || pasteOperation.tone === "busy") return;
-    const duration = pasteOperation.tone === "error" ? 4_200 : 1_800;
-    const timeout = window.setTimeout(() => {
-      setPasteOperation((current) => current === pasteOperation ? null : current);
+    if (stagingStatus.phase !== "uploaded" && stagingStatus.phase !== "pasted" && stagingStatus.phase !== "cancelled" && stagingStatus.phase !== "failed") return;
+    const duration = stagingStatus.phase === "failed" ? STAGING_ERROR_DURATION_MS : STAGING_RESULT_DURATION_MS;
+    const closeTimer = window.setTimeout(() => setStagingClosing(true), duration - STAGING_EXIT_DURATION_MS);
+    const hideTimer = window.setTimeout(() => {
+      setStagingStatus(IDLE_TERMINAL_STAGING_STATUS);
+      setStagingSessionId(null);
+      setStagingClosing(false);
     }, duration);
-    return () => window.clearTimeout(timeout);
-  }, [pasteOperation]);
+    return () => {
+      window.clearTimeout(closeTimer);
+      window.clearTimeout(hideTimer);
+    };
+  }, [stagingSessionId, stagingStatus.phase]);
+  useEffect(() => () => {
+    const task = activeStagingTaskRef.current;
+    if (task) void cancelTerminalClipboardStaging(task.sessionId, task.taskId).catch(() => undefined);
+  }, []);
   useEffect(() => {
     osc7EnabledRef.current = osc7Enabled;
     if (viewRef.current) viewRef.current.osc7Enabled = osc7Enabled;
@@ -114,42 +142,106 @@ export function TerminalPanel({ blockId, sessionKey, visible, local, osc7Enabled
     const view = viewRef.current;
     if (!view) return;
     await view.inputScheduler.runExclusive(async (capture) => {
-      let text = "";
-      try { text = await readClipboardText(); }
-      catch { /* A native image can still be present when text lookup is unavailable. */ }
-      if (viewRef.current !== view) return;
       closeContextMenu(false);
-      if (text && isGuardedPaste(text)) {
-        setPendingPaste({ text, lines: pasteLineCount(text), characters: text.length });
-        return;
-      }
-      if (text) {
-        await capture(() => view.terminal.paste(text));
+      if (local) {
+        let text = "";
+        try { text = await readClipboardText(); }
+        catch { /* Local clipboard failures do not reach terminal input. */ }
+        if (viewRef.current !== view) return;
+        if (text && isGuardedPaste(text)) {
+          setPendingPaste({ text, lines: pasteLineCount(text), characters: text.length });
+          return;
+        }
+        if (text) await capture(() => view.terminal.paste(text));
         restoreTerminalFocus();
         return;
       }
       const sessionId = connectedSessionIdRef.current;
-      if (local || !sessionId) { restoreTerminalFocus(); return; }
+      if (!sessionId) { restoreTerminalFocus(); return; }
       const pasteRequestId = ++pasteRequestIdRef.current;
-      setPasteOperation({ text: "正在上传剪贴板图片…", tone: "busy" });
+      let settleCompletion: (completion: StagingCompletion) => void = () => undefined;
+      const completion = new Promise<StagingCompletion>((resolve) => { settleCompletion = resolve; });
+      const updateFromEvent = (event: TerminalStagingEvent) => {
+        if (event.type === "completed") settleCompletion({ kind: "completed", remotePaths: event.remotePaths });
+        else if (event.type === "cancelled") settleCompletion({ kind: "cancelled" });
+        else if (event.type === "failed") settleCompletion({ kind: "failed" });
+        if (pasteRequestIdRef.current !== pasteRequestId || viewRef.current !== view || connectedSessionIdRef.current !== sessionId) return;
+        if (event.type !== "preparing") {
+          setStagingSessionId(sessionId);
+          setStagingClosing(false);
+        }
+        switch (event.type) {
+          case "preparing": break;
+          case "scanning": setStagingStatus({ phase: "scanning", itemCount: event.itemCount }); break;
+          case "started": setStagingStatus({ phase: "uploading", displayName: event.displayName, itemCount: event.itemCount, transferredBytes: 0, totalBytes: event.totalBytes }); break;
+          case "progress": setStagingStatus((current) => ({ ...current, phase: "uploading", transferredBytes: event.transferredBytes, totalBytes: event.totalBytes })); break;
+          case "completed":
+            setStagingStatus((current) => ({ ...current, phase: "uploaded", transferredBytes: current.totalBytes }));
+            break;
+          case "cancelled":
+            setStagingStatus((current) => ({ ...current, phase: "cancelled" }));
+            break;
+          case "failed":
+            setStagingStatus((current) => ({ ...current, phase: "failed", message: "文件上传失败，请重试" }));
+            break;
+        }
+      };
       try {
-        const result = await pasteRemoteClipboardImage(sessionId);
+        const result = await startTerminalClipboardStaging(sessionId, updateFromEvent);
         if (viewRef.current !== view || connectedSessionIdRef.current !== sessionId) {
-          if (pasteRequestIdRef.current === pasteRequestId) setPasteOperation(null);
           return;
         }
-        await capture(() => view.terminal.paste(result.remotePath));
-        if (pasteRequestIdRef.current === pasteRequestId) {
-          setPasteOperation({ text: "图片路径已粘贴", tone: "success" });
+        if (result.kind === "empty") {
+          setStagingStatus(IDLE_TERMINAL_STAGING_STATUS);
+          setStagingSessionId(null);
+          restoreTerminalFocus();
+          return;
+        }
+        if (result.kind === "text") {
+          setStagingStatus(IDLE_TERMINAL_STAGING_STATUS);
+          setStagingSessionId(null);
+          if (isGuardedPaste(result.text)) {
+            setPendingPaste({ text: result.text, lines: pasteLineCount(result.text), characters: result.text.length });
+            return;
+          }
+          await capture(() => view.terminal.paste(result.text));
+          restoreTerminalFocus();
+          return;
+        }
+        const task = { sessionId, taskId: result.taskId };
+        setActiveStagingTask(task);
+        const final = await completion;
+        setActiveStagingTask(null);
+        if (final.kind !== "completed" || viewRef.current !== view || connectedSessionIdRef.current !== sessionId) return;
+        const pastedPaths = final.remotePaths.join(" ");
+        if (pastedPaths) {
+          await capture(() => view.terminal.paste(pastedPaths));
+          setStagingStatus((current) => ({ ...current, phase: "pasted" }));
         }
       } catch (reason) {
         if (viewRef.current === view && connectedSessionIdRef.current === sessionId && pasteRequestIdRef.current === pasteRequestId) {
-          setPasteOperation({ text: clipboardImagePasteErrorMessage(reason), tone: "error" });
+          setActiveStagingTask(null);
+          setStagingSessionId(sessionId);
+          setStagingClosing(false);
+          setStagingStatus({ phase: "failed", message: terminalStagingErrorMessage(reason) });
         }
       }
       restoreTerminalFocus();
     });
   }, [closeContextMenu, inputEnabled, local, restoreTerminalFocus]);
+
+  const stopStaging = useCallback(() => {
+    const task = activeStagingTaskRef.current;
+    if (!task) return;
+    setStagingStatus((current) => ({ ...current, phase: "stopping" }));
+    setStagingClosing(false);
+    void cancelTerminalClipboardStaging(task.sessionId, task.taskId).catch((reason) => {
+      setActiveStagingTask(null);
+      setStagingSessionId(task.sessionId);
+      setStagingClosing(false);
+      setStagingStatus((current) => ({ ...current, phase: "failed", message: terminalStagingErrorMessage(reason) }));
+    });
+  }, []);
 
   const selectAll = useCallback(() => {
     viewRef.current?.terminal.selectAll();
@@ -400,7 +492,7 @@ export function TerminalPanel({ blockId, sessionKey, visible, local, osc7Enabled
 
   return <>
     <div className="terminal-surface" ref={containerRef} aria-label={`终端 ${blockId}`} onContextMenu={openContextMenu} onKeyDown={openKeyboardContextMenu}/>
-    {pasteOperation && <div className="terminal-paste-operation" data-tone={pasteOperation.tone} role="status" aria-label="终端粘贴状态" aria-live="polite">{pasteOperation.text}</div>}
+    {stagingStatus.phase !== "idle" && stagingSessionId === connectedSessionId && <TerminalStagingStatus state={stagingStatus} closing={stagingClosing} canStop={activeStagingTask !== null} onStop={stopStaging}/>}
     {searchMounted && <div
       className="terminal-search"
       data-state={searchOpen ? "open" : "closing"}
@@ -509,13 +601,13 @@ function pasteShortcutLabel(platform: ClipboardPlatform): string {
   return platform === "mac" ? "⌘V" : platform === "windows" ? "Ctrl+V" : "Ctrl+Shift+V";
 }
 
-function clipboardImagePasteErrorMessage(reason: unknown): string {
+function terminalStagingErrorMessage(reason: unknown): string {
   if (reason && typeof reason === "object" && "message" in reason) {
     const message = String((reason as { message?: unknown }).message ?? "").trim();
-    if (message) return `粘贴图片失败：${message}`;
+    if (message) return message;
   }
-  if (reason instanceof Error && reason.message.trim()) return `粘贴图片失败：${reason.message}`;
-  return "粘贴图片失败，请重试";
+  if (reason instanceof Error && reason.message.trim()) return reason.message;
+  return "文件上传失败，请重试";
 }
 
 function isGuardedPaste(text: string): boolean {

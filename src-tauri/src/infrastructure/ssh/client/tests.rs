@@ -4,7 +4,7 @@ use std::{
     net::{TcpListener, TcpStream},
     path::Path,
     process::{Child, Command, Stdio},
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, mpsc as std_mpsc},
     thread,
     time::Duration,
 };
@@ -25,13 +25,14 @@ use crate::{
             HostEndpoint, PresentedHostKey, RouteNodeMetadata, RouteNodeRole, SessionEvent,
             SessionFailure, SessionState, TerminalSize,
         },
+        terminal_staging::{TerminalStagingError, TerminalStagingEvent},
         transfer::{RemotePath, TransferEvent},
     },
     infrastructure::persistence::{
         json_known_host_repository::JsonKnownHostRepository,
         json_remote_shell_cache::JsonRemoteShellCache,
     },
-    ports::clipboard_image::{RemoteClipboardImageError, RemoteClipboardImageStore},
+    ports::terminal_staging::{RemoteTerminalStagingStore, StagingSourceEntry},
 };
 
 fn route_metadata(host: &str, port: u16) -> RouteNodeMetadata {
@@ -239,13 +240,35 @@ fn files_sessions_reject_terminal_write_and_resize_controls() {
         Err(super::SessionControlError::TerminalUnavailable)
     );
     assert_eq!(
-        tauri::async_runtime::block_on(manager.store_image("files-1", vec![1, 2, 3])),
-        Err(RemoteClipboardImageError::TerminalUnavailable)
+        manager.start("files-1", Vec::new(), Arc::new(|_| {})),
+        Err(TerminalStagingError::TerminalUnavailable)
     );
     assert_eq!(
-        tauri::async_runtime::block_on(manager.store_image("missing", vec![1, 2, 3])),
-        Err(RemoteClipboardImageError::SessionNotFound)
+        manager.start("missing", Vec::new(), Arc::new(|_| {})),
+        Err(TerminalStagingError::SessionNotFound)
     );
+}
+
+#[test]
+fn cancelled_staging_remains_active_until_the_worker_finishes() {
+    let (session_cancel, _session_cancel_receiver) = oneshot::channel();
+    let (control, _controls) = mpsc::channel(1);
+    let entry = SessionEntry::new(
+        route_metadata("example.com", 22),
+        SessionPurpose::Terminal,
+        None,
+        Arc::new(|_| {}),
+        session_cancel,
+        control,
+    );
+    let (upload_cancel, mut upload_cancel_receiver) = oneshot::channel();
+    entry.register_clipboard_upload("task-1".into(), upload_cancel);
+
+    assert!(entry.cancel_clipboard_upload("task-1"));
+    assert!(entry.has_clipboard_uploads());
+    assert!(upload_cancel_receiver.try_recv().is_ok());
+    entry.finish_clipboard_upload("task-1");
+    assert!(!entry.has_clipboard_uploads());
 }
 
 #[tokio::test]
@@ -931,21 +954,51 @@ fn local_openssh_exercises_terminal_transfer_and_file_editing() {
         b"upload-child"
     );
 
-    let first_clipboard_image = tauri::async_runtime::block_on(
-        manager.upload_clipboard_image(&session_id, b"first-png-payload".to_vec()),
-    )
-    .expect("upload first clipboard image");
-    let second_clipboard_image = tauri::async_runtime::block_on(
-        manager.upload_clipboard_image(&session_id, b"second-png-payload".to_vec()),
-    )
-    .expect("upload second clipboard image");
-    assert_ne!(first_clipboard_image, second_clipboard_image);
-    assert!(first_clipboard_image.starts_with(&format!("/tmp/.qterm-clipboard-{session_id}/")));
+    let clipboard_sources = directory.path().join("clipboard-sources");
+    fs::create_dir(&clipboard_sources).expect("clipboard sources");
+    let first_source = clipboard_sources.join("first.png");
+    let second_source = clipboard_sources.join("second.png");
+    fs::write(&first_source, b"first-png-payload").expect("first source");
+    fs::write(&second_source, b"second-png-payload").expect("second source");
+    let start_staging = |source: &Path, display_name: &str| {
+        let (sender, receiver) = std_mpsc::channel();
+        manager
+            .start(
+                &session_id,
+                vec![StagingSourceEntry {
+                    path: source.to_path_buf(),
+                    display_name: display_name.into(),
+                    extension: Some("png".into()),
+                    cleanup_after: false,
+                }],
+                Arc::new(move |event| {
+                    let _ = sender.send(event);
+                }),
+            )
+            .expect("start clipboard staging");
+        loop {
+            match receiver
+                .recv_timeout(Duration::from_secs(10))
+                .expect("clipboard staging event")
+            {
+                TerminalStagingEvent::Completed { remote_paths } => {
+                    break remote_paths.into_iter().next().expect("remote path");
+                }
+                TerminalStagingEvent::Failed => panic!("clipboard staging failed"),
+                TerminalStagingEvent::Cancelled => panic!("clipboard staging cancelled"),
+                _ => {}
+            }
+        }
+    };
+    let first_staged_file = start_staging(&first_source, "first.png");
+    let second_staged_file = start_staging(&second_source, "second.png");
+    assert_ne!(first_staged_file, second_staged_file);
+    assert!(first_staged_file.starts_with(&format!("/tmp/.qterm-clipboard-{session_id}/")));
     assert_eq!(
-        fs::read(&first_clipboard_image).expect("first clipboard image"),
+        fs::read(&first_staged_file).expect("first staged file"),
         b"first-png-payload"
     );
-    let clipboard_directory = Path::new(&first_clipboard_image)
+    let clipboard_directory = Path::new(&first_staged_file)
         .parent()
         .expect("clipboard directory")
         .to_path_buf();
@@ -956,7 +1009,7 @@ fn local_openssh_exercises_terminal_transfer_and_file_editing() {
         .expect("clipboard directory mode");
     let file_mode = Command::new("stat")
         .args(["-c", "%a"])
-        .arg(&first_clipboard_image)
+        .arg(&first_staged_file)
         .output()
         .expect("clipboard file mode");
     assert_eq!(

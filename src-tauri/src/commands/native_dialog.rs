@@ -6,6 +6,10 @@ pub async fn pick_file<R: Runtime>(dialog: FileDialogBuilder<R>) -> Option<FileP
     wait_for_result(move |complete| dialog.pick_file(complete)).await
 }
 
+pub async fn pick_files<R: Runtime>(dialog: FileDialogBuilder<R>) -> Option<Vec<FilePath>> {
+    wait_for_result(move |complete| dialog.pick_files(complete)).await
+}
+
 pub async fn pick_folder<R: Runtime>(dialog: FileDialogBuilder<R>) -> Option<FilePath> {
     wait_for_result(move |complete| dialog.pick_folder(complete)).await
 }

@@ -7,7 +7,7 @@ import { Button, StatusBadge } from "../components/Button";
 import { DialogActionStatus, DialogFrame } from "../components/dialogs/DialogFrame";
 import { copyImageUrlToClipboard } from "../lib/tauri/clipboard";
 import { copyFile, createEntry, deleteEntry, listLocalDirectory, listLocalRoots, listRemoteDirectory, readBinaryFile, readTextFile, renameEntry, writeTextFile, type DirectoryListing, type FileEntry, type LocalRoot } from "../lib/tauri/files";
-import { cancelTransfer, downloadDirectory, downloadFile, selectDownloadDirectory, selectDownloadPath, uploadDroppedEntries, type TransferEvent } from "../lib/tauri/transfers";
+import { cancelTransfer, downloadDirectory, downloadFile, selectDownloadDirectory, selectDownloadPath, selectUploadFiles, selectUploadFolder, uploadDroppedEntries, uploadSelectedEntries, type TransferEvent } from "../lib/tauri/transfers";
 import type { FileRuntime } from "../workspace/WorkspaceProvider";
 import { FileList, FileSortHeader } from "./FileList";
 import { FILE_LIST_PADDING, FILE_ROW_HEIGHT, FILE_VIRTUAL_FALLBACK_ROWS, FILE_VIRTUAL_OVERSCAN, copyName, fileErrorMessage, fileListAnchor, fileVirtualRange, fitContextMenu, formatSize, imageMime, previewKindFor, sortEntries, type PreviewKind, type SortKey, type SortState, type VirtualRange } from "./fileBrowserModel";
@@ -19,6 +19,7 @@ type TransferState = { transferId: string; status: "starting" | "running" | "com
 type NameOperation = { kind: "copy" | "rename" | "createFile" | "createDirectory"; entry: FileEntry | null; value: string; error: string; busy: boolean };
 type DeleteOperation = { entries: FileEntry[]; error: string; busy: boolean };
 type ContextMenuState = { entry: FileEntry; anchorX: number; anchorY: number; x: number; y: number; placement: "above" | "below" };
+type UploadMenuState = { anchorRight: number; anchorY: number; x: number; y: number; placement: "above" | "below" };
 type DirectoryLocation = { scrollTop: number; selectedPath: string | null; anchorPath: string | null; anchorOffset: number };
 type PendingDirectoryLocation = { key: string; location: DirectoryLocation };
 
@@ -57,6 +58,8 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
   const [nameOperation, setNameOperation] = useState<NameOperation | null>(null);
   const [deleteOperation, setDeleteOperation] = useState<DeleteOperation | null>(null);
   const [dropActive, setDropActive] = useState(false);
+  const [uploadMenu, setUploadMenu] = useState<UploadMenuState | null>(null);
+  const [selectingUpload, setSelectingUpload] = useState(false);
   const request = useRef(0);
   const previewRequest = useRef(0);
   const listScroll = useRef<HTMLDivElement>(null);
@@ -70,9 +73,12 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
   const showLocalRootsRef = useRef(showLocalRoots);
   const savedScroll = useRef(0);
   const menuRef = useRef<HTMLDivElement>(null);
+  const uploadMenuRef = useRef<HTMLDivElement>(null);
+  const uploadButtonRef = useRef<HTMLButtonElement>(null);
   const kind = runtime?.kind;
   const sessionId = runtime?.sessionId;
   const status = runtime?.status;
+  const sessionIdRef = useRef(sessionId);
   const connectionError = kind === "sftp" && status === "failed" ? runtime.notice.trim() || "文件连接失败" : "";
   const displayedEntries = useMemo(() => sortEntries(listing?.entries ?? [], sort), [listing, sort]);
   const rootEntries = useMemo<FileEntry[]>(() => localRoots.map((root) => ({
@@ -96,6 +102,7 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
   selectedPathRef.current = selectedPath;
   showLocalRootsRef.current = showLocalRoots;
   activeEntriesRef.current = activeEntries;
+  sessionIdRef.current = sessionId;
 
   const updateVirtualRange = useCallback((container: HTMLElement, entryCount: number) => {
     const next = fileVirtualRange(container.scrollTop, container.clientHeight, entryCount);
@@ -224,6 +231,37 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
     window.addEventListener("pointerdown", close); window.addEventListener("keydown", keydown);
     return () => { window.removeEventListener("pointerdown", close); window.removeEventListener("keydown", keydown); };
   }, [contextMenu]);
+
+  useEffect(() => {
+    if (!uploadMenu) return;
+    const frame = requestAnimationFrame(() => uploadMenuRef.current?.querySelector<HTMLElement>("[role='menuitem']")?.focus());
+    const close = (event: globalThis.PointerEvent) => {
+      if (event.target instanceof Element && (event.target.closest(".file-upload-menu") || event.target.closest("[data-file-upload-trigger]"))) return;
+      setUploadMenu(null);
+      requestAnimationFrame(() => uploadButtonRef.current?.focus());
+    };
+    const keydown = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      setUploadMenu(null);
+      requestAnimationFrame(() => uploadButtonRef.current?.focus());
+    };
+    window.addEventListener("pointerdown", close);
+    window.addEventListener("keydown", keydown);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("pointerdown", close);
+      window.removeEventListener("keydown", keydown);
+    };
+  }, [uploadMenu]);
+
+  useLayoutEffect(() => {
+    if (!uploadMenu || !uploadMenuRef.current) return;
+    const rect = uploadMenuRef.current.getBoundingClientRect();
+    const fitted = fitContextMenu(uploadMenu.anchorRight - rect.width, uploadMenu.anchorY, rect.width, rect.height, window.innerWidth, window.innerHeight);
+    if (uploadMenu.x === fitted.x && uploadMenu.y === fitted.y && uploadMenu.placement === fitted.placement) return;
+    setUploadMenu((current) => current ? { ...current, ...fitted } : current);
+  }, [uploadMenu]);
 
   useLayoutEffect(() => {
     if (!contextMenu || !menuRef.current) return;
@@ -356,6 +394,7 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
   }
 
   function showContextMenu(entry: FileEntry, anchorX: number, anchorY: number) {
+    setUploadMenu(null);
     setContextMenu({ entry, anchorX, anchorY, x: anchorX, y: anchorY, placement: "below" });
   }
 
@@ -418,6 +457,44 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
       setTransfer((current) => current ? { ...current, transferId } : current);
     } catch (reason) {
       setTransfer({ transferId: "", status: "failed", transferred: 0, total: 0, message: fileErrorMessage(reason), direction: "download" });
+    }
+  }
+
+  function toggleUploadMenu() {
+    if (uploadMenu) {
+      setUploadMenu(null);
+      return;
+    }
+    const rect = uploadButtonRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setContextMenu(null);
+    setEditingPath(false);
+    setUploadMenu({ anchorRight: rect.right, anchorY: rect.bottom + 4, x: rect.right - 164, y: rect.bottom + 4, placement: "below" });
+  }
+
+  async function startSelectedUpload(selection: "files" | "folder") {
+    if (kind !== "sftp" || status !== "connected" || !sessionId) return;
+    const targetPath = pathRef.current;
+    const targetSessionId = sessionId;
+    setUploadMenu(null);
+    setSelectingUpload(true);
+    setOperationMessage("");
+    try {
+      const paths = selection === "files"
+        ? await selectUploadFiles()
+        : await selectUploadFolder().then((folder) => folder ? [folder] : []);
+      if (paths.length === 0) return;
+      setTransfer({ transferId: "", status: "starting", transferred: 0, total: 0, message: "正在扫描本地文件…", direction: "upload" });
+      const transferId = await uploadSelectedEntries(targetSessionId, paths, targetPath, (event) => {
+        updateTransfer(event, "upload");
+        if (event.type === "completed" && pathRef.current === targetPath && sessionIdRef.current === targetSessionId) void load(targetPath);
+      });
+      setTransfer((current) => current ? { ...current, transferId } : current);
+    } catch (reason) {
+      setTransfer({ transferId: "", status: "failed", transferred: 0, total: 0, message: fileErrorMessage(reason), direction: "upload" });
+    } finally {
+      setSelectingUpload(false);
+      requestAnimationFrame(() => uploadButtonRef.current?.focus());
     }
   }
 
@@ -572,7 +649,7 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
   const transferActive = transfer?.status === "starting" || transfer?.status === "running";
 
   return <div className="file-browser">
-    <nav className="file-browser-navigation" aria-label="文件夹导航">
+    <nav className="file-browser-navigation" data-upload-action={kind === "sftp" || undefined} aria-label="文件夹导航">
       <button aria-label="返回上级文件夹" title="返回上级" disabled={showLocalRoots || (!parent && !driveRoot) || loading} onClick={() => void navigateUp()}><Icon name="back" size={14}/></button>
       <button aria-label="前进到下一目录" title={forwardPath ? `前进到 ${kind === "local" ? displayLocalPath(forwardPath) : forwardPath}` : "没有可前进的目录"} disabled={!forwardPath || loading} onClick={() => void navigateForward()}><Icon name="forward" size={14}/></button>
       <div className="file-browser-path-shell" data-editing={editingPath || undefined}>
@@ -582,6 +659,7 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
       </div>
       <button aria-label="创建文件" title="创建文件" disabled={showLocalRoots || loading || (kind === "sftp" && status !== "connected")} onClick={() => requestCreate("createFile")}><Icon name="filePlus" size={14}/></button>
       <button aria-label="创建文件夹" title="创建文件夹" disabled={showLocalRoots || loading || (kind === "sftp" && status !== "connected")} onClick={() => requestCreate("createDirectory")}><Icon name="folderPlus" size={14}/></button>
+      {kind === "sftp" && <button ref={uploadButtonRef} data-file-upload-trigger aria-label="上传到当前目录" aria-haspopup="menu" aria-expanded={Boolean(uploadMenu)} aria-busy={selectingUpload || undefined} title="上传到当前目录" disabled={status !== "connected" || loading || selectingUpload || transferActive} onClick={toggleUploadMenu}><Icon name="upload" size={14}/></button>}
       <button aria-label={showLocalRoots ? "刷新本机位置" : "刷新文件夹"} aria-busy={loading || undefined} title="刷新" disabled={loading} onClick={() => showLocalRoots ? void openLocalRoots() : void load(path)}><Icon name="refresh" size={14}/></button>
     </nav>
     {!connectionError && error && (listing || (showLocalRoots && localRoots.length > 0)) && <div className="file-browser-inline-error" role="alert">{error}</div>}
@@ -602,6 +680,10 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
       {!showLocalRoots && listing && <FileList entries={displayedEntries} range={virtualRange} ariaLabel={`文件夹 ${listing.path}`} selectedPaths={selectedPaths} onSelect={selectEntry} onOpen={(entry) => entry.isDirectory ? void navigateTo(entry.path) : void openFile(entry, "preview")} onContextMenu={openContextMenu} onContextMenuKey={openContextMenuFromKeyboard}/>}
       {!showLocalRoots && dropActive && <div className="file-upload-drop-overlay" role="status"><Icon name="upload" size={24}/><strong>上传到当前目录</strong><span>{visiblePath}</span><small>释放鼠标以上传文件或文件夹</small></div>}
     </div>
+    {uploadMenu && <div ref={uploadMenuRef} className="file-context-menu file-upload-menu" data-placement={uploadMenu.placement} role="menu" aria-label="选择上传内容" style={{ left: uploadMenu.x, top: uploadMenu.y }} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setUploadMenu(null); }} onKeyDown={handleContextMenuKeyDown} onContextMenu={(event) => event.preventDefault()}>
+      <button role="menuitem" onClick={() => void startSelectedUpload("files")}><Icon name="file" size={13}/><span>上传文件…</span></button>
+      <button role="menuitem" onClick={() => void startSelectedUpload("folder")}><Icon name="files" size={13}/><span>上传文件夹…</span></button>
+    </div>}
     {contextMenu && <div ref={menuRef} className="file-context-menu" data-placement={contextMenu.placement} role="menu" aria-label={contextEntries.length > 1 ? `${contextEntries.length} 个已选项目菜单` : `${contextMenu.entry.name} 文件菜单`} style={{ left: contextMenu.x, top: contextMenu.y }} onKeyDown={handleContextMenuKeyDown} onContextMenu={(event) => event.preventDefault()}>
       {contextEntries.length === 1 && contextMenu.entry.isDirectory && <button role="menuitem" onClick={() => { setContextMenu(null); void navigateTo(contextMenu.entry.path); }}><Icon name="files" size={13}/><span>打开</span></button>}
       {contextEntries.length === 1 && !contextMenu.entry.isDirectory && !contextMenu.entry.isSymlink && <button role="menuitem" onClick={() => { setContextMenu(null); void openFile(contextMenu.entry, "preview"); }}><Icon name="eye" size={13}/><span>预览</span></button>}

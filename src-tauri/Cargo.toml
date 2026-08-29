@@ -43,6 +43,8 @@ portable-pty = "=0.9.0"
 tauri-plugin-clipboard-manager = "2.3.2"
 tauri-plugin-opener = "=2.5.4"
 image = { version = "=0.25.10", default-features = false, features = ["png"] }
+arboard = { version = "=3.6.1", default-features = false, features = ["image-data", "wayland-data-control"] }
+tempfile = "=3.27.0"
 
 [target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
 tauri-plugin-window-state = "=2.4.1"
@@ -56,6 +58,3 @@ block2 = "0.6.2"
 objc2 = "0.6.2"
 objc2-app-kit = { version = "0.3.2", default-features = false, features = ["NSRunningApplication", "NSWorkspace", "block2"] }
 objc2-foundation = { version = "0.3.2", default-features = false, features = ["NSArray", "NSString", "NSURL"] }
-
-[dev-dependencies]
-tempfile = "3.27.0"

@@ -39,7 +39,8 @@ const mocks = vi.hoisted(() => ({
   clearBlockBuffer: vi.fn(),
   writeClipboardText: vi.fn().mockResolvedValue(undefined),
   readClipboardText: vi.fn().mockResolvedValue(""),
-  pasteRemoteClipboardImage: vi.fn(),
+  startTerminalClipboardStaging: vi.fn(),
+  cancelTerminalClipboardStaging: vi.fn().mockResolvedValue(undefined),
   runtimes: {} as Record<string, { status: string; sessionId?: string | null }>,
 }));
 
@@ -49,7 +50,8 @@ vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({
 }));
 
 vi.mock("../lib/tauri/sessions", () => ({
-  pasteRemoteClipboardImage: mocks.pasteRemoteClipboardImage,
+  startTerminalClipboardStaging: mocks.startTerminalClipboardStaging,
+  cancelTerminalClipboardStaging: mocks.cancelTerminalClipboardStaging,
 }));
 
 vi.mock("@xterm/addon-fit", () => ({
@@ -168,7 +170,8 @@ describe("TerminalPanel view lifetime", () => {
     mocks.clearBlockBuffer.mockClear();
     mocks.writeClipboardText.mockClear();
     mocks.readClipboardText.mockReset().mockResolvedValue("");
-    mocks.pasteRemoteClipboardImage.mockReset();
+    mocks.startTerminalClipboardStaging.mockReset().mockResolvedValue({ kind: "empty" });
+    mocks.cancelTerminalClipboardStaging.mockReset().mockResolvedValue(undefined);
     mocks.runtimes = {};
     mocks.hydrated = true;
     mocks.localTerminalCapabilities = { windowsPty: { backend: "conpty", buildNumber: 26100 } };
@@ -429,8 +432,9 @@ describe("TerminalPanel clipboard interaction", () => {
     mocks.clearBlockBuffer.mockClear();
     mocks.writeClipboardText.mockClear();
     mocks.readClipboardText.mockReset().mockResolvedValue("");
-    mocks.pasteRemoteClipboardImage.mockReset();
-    mocks.runtimes = { "block-menu": { status: "connected" }, "block-keys": { status: "connected" } };
+    mocks.startTerminalClipboardStaging.mockReset().mockResolvedValue({ kind: "empty" });
+    mocks.cancelTerminalClipboardStaging.mockReset().mockResolvedValue(undefined);
+    mocks.runtimes = { "block-menu": { status: "connected", sessionId: "ssh-menu" }, "block-keys": { status: "connected", sessionId: "ssh-keys" } };
     vi.useFakeTimers();
     vi.stubGlobal("ResizeObserver", ResizeObserverMock);
   });
@@ -461,7 +465,9 @@ describe("TerminalPanel clipboard interaction", () => {
   });
 
   it("pastes single-line clipboard text directly and confirms multi-line text without exposing it", async () => {
-    mocks.readClipboardText.mockResolvedValueOnce("echo safe").mockResolvedValueOnce("secret one\nsecret two");
+    mocks.startTerminalClipboardStaging
+      .mockResolvedValueOnce({ kind: "text", text: "echo safe" })
+      .mockResolvedValueOnce({ kind: "text", text: "secret one\nsecret two" });
     const view = render(<TerminalPanel blockId="block-menu" sessionKey="block-menu:local" local={false} visible/>);
     const terminal = mocks.terminals[0];
     const surface = screen.getByLabelText("终端 block-menu");
@@ -524,7 +530,7 @@ describe("TerminalPanel clipboard interaction", () => {
 
   it("uses Windows desktop clipboard shortcuts without swallowing Ctrl+C when there is no selection", async () => {
     vi.stubGlobal("navigator", { platform: "Win32", userAgent: "Windows" });
-    mocks.readClipboardText.mockResolvedValue("from outside");
+    mocks.startTerminalClipboardStaging.mockResolvedValue({ kind: "text", text: "from outside" });
     const view = render(<TerminalPanel blockId="block-keys" sessionKey="block-keys:local" local={false} visible/>);
     const terminal = mocks.terminals[0];
 
@@ -545,8 +551,8 @@ describe("TerminalPanel clipboard interaction", () => {
 
   it("keeps a control key pressed during clipboard IPC behind the pasted text", async () => {
     vi.stubGlobal("navigator", { platform: "Win32", userAgent: "Windows" });
-    let resolveClipboard: ((text: string) => void) | null = null;
-    mocks.readClipboardText.mockReturnValue(new Promise<string>((resolve) => { resolveClipboard = resolve; }));
+    let resolveClipboard: ((value: { kind: "text"; text: string }) => void) | null = null;
+    mocks.startTerminalClipboardStaging.mockReturnValue(new Promise((resolve) => { resolveClipboard = resolve; }));
     const view = render(<TerminalPanel blockId="block-keys" sessionKey="block-keys:paste-order" local={false} visible/>);
     const terminal = mocks.terminals[0];
 
@@ -555,7 +561,7 @@ describe("TerminalPanel clipboard interaction", () => {
     expect(mocks.writeBlock).not.toHaveBeenCalled();
 
     await act(async () => {
-      resolveClipboard?.("/data/models/Qwen");
+      resolveClipboard?.({ kind: "text", text: "/data/models/Qwen" });
       await Promise.resolve();
       await Promise.resolve();
       await Promise.resolve();
@@ -566,42 +572,73 @@ describe("TerminalPanel clipboard interaction", () => {
     view.unmount();
   });
 
-  it("uploads an image only for an empty remote clipboard and pastes its path before later input", async () => {
+  it("uploads clipboard files with progress and pastes every remote path before later input", async () => {
     vi.stubGlobal("navigator", { platform: "Win32", userAgent: "Windows" });
     mocks.runtimes = { "block-keys": { status: "connected", sessionId: "ssh-1" } };
-    let resolveImage: ((value: { remotePath: string; width: number; height: number }) => void) | null = null;
-    mocks.readClipboardText.mockResolvedValue("");
-    mocks.pasteRemoteClipboardImage.mockReturnValue(new Promise((resolve) => { resolveImage = resolve; }));
+    mocks.startTerminalClipboardStaging.mockResolvedValue({ kind: "transfer", taskId: "task-1" });
     const view = render(<TerminalPanel blockId="block-keys" sessionKey="block-keys:image-paste" local={false} visible/>);
     const terminal = mocks.terminals[0];
+    expect(screen.queryByRole("status", { name: "终端文件上传状态" })).not.toBeInTheDocument();
 
     expect(terminal.keyHandler?.(new KeyboardEvent("keydown", { key: "v", ctrlKey: true }))).toBe(false);
     await act(async () => Promise.resolve());
-    expect(mocks.pasteRemoteClipboardImage).toHaveBeenCalledWith("ssh-1");
-    expect(screen.getByRole("status", { name: "终端粘贴状态" })).toHaveTextContent("正在上传剪贴板图片");
+    expect(mocks.startTerminalClipboardStaging).toHaveBeenCalledWith("ssh-1", expect.any(Function));
+    const onEvent = mocks.startTerminalClipboardStaging.mock.calls[0]?.[1] as (event: unknown) => void;
+    act(() => {
+      onEvent({ type: "started", totalBytes: 1024, itemCount: 2, displayName: "2 个项目" });
+      onEvent({ type: "progress", transferredBytes: 512, totalBytes: 1024 });
+    });
+    const stagingStatus = screen.getByRole("status", { name: "终端文件上传状态" });
+    expect(stagingStatus.querySelector(".terminal-staging-status-copy")).toHaveTextContent("正在上传2 个项目");
+    expect(stagingStatus.querySelector(".terminal-staging-metrics")).toHaveTextContent("512 B / 1.0 KB");
     terminal.dataHandler?.("x");
     expect(mocks.writeBlock).not.toHaveBeenCalled();
 
     await act(async () => {
-      resolveImage?.({ remotePath: "/tmp/.qterm-clipboard-ssh/image.png", width: 120, height: 80 });
+      onEvent({ type: "completed", remotePaths: ["/tmp/.qterm-clipboard-ssh/one.png", "/tmp/.qterm-clipboard-ssh/two.txt"] });
       await Promise.resolve();
       await Promise.resolve();
       await Promise.resolve();
     });
 
-    expect(terminal.paste).toHaveBeenCalledWith("/tmp/.qterm-clipboard-ssh/image.png");
+    const pasted = "/tmp/.qterm-clipboard-ssh/one.png /tmp/.qterm-clipboard-ssh/two.txt";
+    expect(terminal.paste).toHaveBeenCalledWith(pasted);
     expect(mocks.writeBlock.mock.calls.map(([, data]) => new TextDecoder().decode(data))).toEqual([
-      "/tmp/.qterm-clipboard-ssh/image.png",
+      pasted,
       "x",
     ]);
-    expect(screen.getByRole("status", { name: "终端粘贴状态" })).toHaveTextContent("图片路径已粘贴");
+    expect(screen.getByRole("status", { name: "终端文件上传状态" })).toHaveTextContent("路径已粘贴");
+    act(() => vi.advanceTimersByTime(2_500));
+    expect(screen.queryByRole("status", { name: "终端文件上传状态" })).not.toBeInTheDocument();
     view.unmount();
   });
 
-  it("keeps text paste preferred when the clipboard also has an image", async () => {
+  it("stops the active staging task and keeps the cancelled state visible", async () => {
     vi.stubGlobal("navigator", { platform: "Win32", userAgent: "Windows" });
     mocks.runtimes = { "block-keys": { status: "connected", sessionId: "ssh-1" } };
-    mocks.readClipboardText.mockResolvedValue("prompt text");
+    mocks.startTerminalClipboardStaging.mockResolvedValue({ kind: "transfer", taskId: "task-stop" });
+    const view = render(<TerminalPanel blockId="block-keys" sessionKey="block-keys:cancel" local={false} visible/>);
+    const terminal = mocks.terminals[0];
+
+    expect(terminal.keyHandler?.(new KeyboardEvent("keydown", { key: "v", ctrlKey: true }))).toBe(false);
+    await act(async () => Promise.resolve());
+    const onEvent = mocks.startTerminalClipboardStaging.mock.calls[0]?.[1] as (event: unknown) => void;
+    act(() => onEvent({ type: "started", totalBytes: 4096, itemCount: 1, displayName: "archive.zip" }));
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "停止上传" })); });
+    expect(mocks.cancelTerminalClipboardStaging).toHaveBeenCalledWith("ssh-1", "task-stop");
+    expect(screen.getByRole("status", { name: "终端文件上传状态" })).toHaveTextContent("正在停止");
+
+    act(() => onEvent({ type: "cancelled" }));
+    await act(async () => Promise.resolve());
+    expect(screen.getByRole("status", { name: "终端文件上传状态" })).toHaveTextContent("上传已停止");
+    expect(terminal.paste).not.toHaveBeenCalled();
+    view.unmount();
+  });
+
+  it("uses the native clipboard precedence result for remote text", async () => {
+    vi.stubGlobal("navigator", { platform: "Win32", userAgent: "Windows" });
+    mocks.runtimes = { "block-keys": { status: "connected", sessionId: "ssh-1" } };
+    mocks.startTerminalClipboardStaging.mockResolvedValue({ kind: "text", text: "prompt text" });
     const view = render(<TerminalPanel blockId="block-keys" sessionKey="block-keys:text-first" local={false} visible/>);
     const terminal = mocks.terminals[0];
 
@@ -609,7 +646,7 @@ describe("TerminalPanel clipboard interaction", () => {
     await act(async () => undefined);
 
     expect(terminal.paste).toHaveBeenCalledWith("prompt text");
-    expect(mocks.pasteRemoteClipboardImage).not.toHaveBeenCalled();
+    expect(mocks.readClipboardText).not.toHaveBeenCalled();
     view.unmount();
   });
 
@@ -623,56 +660,54 @@ describe("TerminalPanel clipboard interaction", () => {
     expect(terminal.keyHandler?.(new KeyboardEvent("keydown", { key: "v", ctrlKey: true }))).toBe(false);
     await act(async () => undefined);
 
-    expect(mocks.pasteRemoteClipboardImage).not.toHaveBeenCalled();
+    expect(mocks.startTerminalClipboardStaging).not.toHaveBeenCalled();
     expect(terminal.paste).not.toHaveBeenCalled();
     view.unmount();
   });
 
-  it("reports image upload failure without sending terminal input", async () => {
+  it("reports staging failure without sending terminal input", async () => {
     vi.stubGlobal("navigator", { platform: "Win32", userAgent: "Windows" });
     mocks.runtimes = { "block-keys": { status: "connected", sessionId: "ssh-1" } };
-    mocks.readClipboardText.mockRejectedValue(new Error("text unavailable"));
-    mocks.pasteRemoteClipboardImage.mockRejectedValue({ message: "远程服务器未提供可用的 SFTP 子系统" });
+    mocks.startTerminalClipboardStaging.mockRejectedValue({ message: "远程服务器未提供可用的 SFTP 子系统" });
     const view = render(<TerminalPanel blockId="block-keys" sessionKey="block-keys:image-error" local={false} visible/>);
     const terminal = mocks.terminals[0];
 
     expect(terminal.keyHandler?.(new KeyboardEvent("keydown", { key: "v", ctrlKey: true }))).toBe(false);
     await act(async () => undefined);
 
-    expect(screen.getByRole("status", { name: "终端粘贴状态" })).toHaveTextContent("粘贴图片失败：远程服务器未提供可用的 SFTP 子系统");
+    expect(screen.getByRole("status", { name: "终端文件上传状态" })).toHaveTextContent("上传失败远程服务器未提供可用的 SFTP 子系统");
     expect(terminal.paste).not.toHaveBeenCalled();
     expect(mocks.writeBlock).not.toHaveBeenCalled();
     view.unmount();
   });
 
-  it("drops a late image path after the terminal session changes", async () => {
+  it("drops late remote paths after the terminal session changes", async () => {
     vi.stubGlobal("navigator", { platform: "Win32", userAgent: "Windows" });
     mocks.runtimes = { "block-keys": { status: "connected", sessionId: "ssh-1" } };
-    let resolveImage: ((value: { remotePath: string; width: number; height: number }) => void) | null = null;
-    mocks.readClipboardText.mockResolvedValue("");
-    mocks.pasteRemoteClipboardImage.mockReturnValue(new Promise((resolve) => { resolveImage = resolve; }));
+    mocks.startTerminalClipboardStaging.mockResolvedValue({ kind: "transfer", taskId: "task-old" });
     const view = render(<TerminalPanel blockId="block-keys" sessionKey="block-keys:ssh-1" local={false} visible/>);
     const previousTerminal = mocks.terminals[0];
 
     expect(previousTerminal.keyHandler?.(new KeyboardEvent("keydown", { key: "v", ctrlKey: true }))).toBe(false);
     await act(async () => Promise.resolve());
+    const onEvent = mocks.startTerminalClipboardStaging.mock.calls[0]?.[1] as (event: unknown) => void;
     mocks.runtimes = { "block-keys": { status: "connected", sessionId: "ssh-2" } };
     view.rerender(<TerminalPanel blockId="block-keys" sessionKey="block-keys:ssh-2" local={false} visible/>);
 
     await act(async () => {
-      resolveImage?.({ remotePath: "/tmp/.qterm-clipboard-old/image.png", width: 12, height: 8 });
+      onEvent({ type: "completed", remotePaths: ["/tmp/.qterm-clipboard-old/image.png"] });
       await Promise.resolve();
       await Promise.resolve();
     });
 
     expect(previousTerminal.paste).not.toHaveBeenCalled();
-    expect(screen.queryByRole("status", { name: "终端粘贴状态" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("status", { name: "终端文件上传状态" })).not.toBeInTheDocument();
     view.unmount();
   });
 
   it("preserves plain Ctrl+V for Linux terminal programs while supporting Ctrl+Shift+V", async () => {
     vi.stubGlobal("navigator", { platform: "Linux x86_64", userAgent: "Linux" });
-    mocks.readClipboardText.mockResolvedValue("clipboard");
+    mocks.startTerminalClipboardStaging.mockResolvedValue({ kind: "text", text: "clipboard" });
     const view = render(<TerminalPanel blockId="block-keys" sessionKey="block-keys:local" local={false} visible/>);
     const terminal = mocks.terminals[0];
 

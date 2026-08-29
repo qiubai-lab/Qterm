@@ -58,11 +58,19 @@ export interface TerminalSessionConnectInput extends SessionConnectInput {
   initialDirectory?: string;
 }
 
-export interface ClipboardImagePasteResult {
-  remotePath: string;
-  width: number;
-  height: number;
-}
+export type TerminalStagingEvent =
+  | { type: "preparing" }
+  | { type: "scanning"; itemCount: number }
+  | { type: "started"; totalBytes: number; itemCount: number; displayName: string }
+  | { type: "progress"; transferredBytes: number; totalBytes: number }
+  | { type: "completed"; remotePaths: string[] }
+  | { type: "cancelled" }
+  | { type: "failed" };
+
+export type TerminalClipboardPasteStart =
+  | { kind: "empty" }
+  | { kind: "text"; text: string }
+  | { kind: "transfer"; taskId: string };
 
 export function connectSession(
   input: TerminalSessionConnectInput,
@@ -104,6 +112,16 @@ export function closeSession(sessionId: string): Promise<void> {
   return invoke("session_close", { sessionId });
 }
 
-export function pasteRemoteClipboardImage(sessionId: string): Promise<ClipboardImagePasteResult> {
-  return invoke("session_paste_clipboard_image", { sessionId });
+export function startTerminalClipboardStaging(
+  sessionId: string,
+  onEvent: (event: TerminalStagingEvent) => void,
+): Promise<TerminalClipboardPasteStart> {
+  return invoke("session_start_clipboard_staging", {
+    sessionId,
+    onEvent: new Channel<TerminalStagingEvent>(onEvent),
+  });
+}
+
+export function cancelTerminalClipboardStaging(sessionId: string, taskId: string): Promise<void> {
+  return invoke("session_cancel_clipboard_staging", { sessionId, taskId });
 }

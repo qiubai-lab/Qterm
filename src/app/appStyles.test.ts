@@ -936,7 +936,9 @@ describe("application layout styles", () => {
 
   it("keeps path editing inline and anchors refresh to the far edge", () => {
     expect(declarations(".file-browser-navigation")).toContain("display:grid");
-    expect(declarations(".file-browser-navigation")).toContain("grid-template-columns:25px 25px minmax(0,1fr) 25px 25px 25px");
+    expect(declarations(".file-browser-navigation")).toContain("grid-template-columns:25px 25px minmax(0,1fr) 25px 25px 25px 25px");
+    expect(declarations(".file-browser-navigation:not([data-upload-action])")).toContain("grid-template-columns:25px 25px minmax(0,1fr) 25px 25px 25px");
+    expect(declarations(".file-upload-menu")).toContain("width:164px");
     expect(declarations(".file-browser-path-shell")).toContain("min-width:0");
     expect(declarations(".file-browser-path-form input")).toContain("border:0");
     expect(declarations(".file-browser-path-form input")).toContain("background:transparent");

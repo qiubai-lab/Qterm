@@ -11,6 +11,14 @@ export function selectUploadFile(): Promise<string | null> {
   return invoke<string | null>("transfer_select_upload_file");
 }
 
+export function selectUploadFiles(): Promise<string[]> {
+  return invoke<string[]>("transfer_select_upload_files");
+}
+
+export function selectUploadFolder(): Promise<string | null> {
+  return invoke<string | null>("transfer_select_upload_folder");
+}
+
 export function selectDownloadPath(name?: string): Promise<string | null> {
   return invoke<string | null>("transfer_select_download_path", { name: name ?? null });
 }
@@ -53,6 +61,19 @@ export function uploadDroppedEntries(
 ): Promise<string> {
   const channel = new Channel<TransferEvent>(onEvent);
   return invoke<string>("transfer_upload_dropped", {
+    input: { sessionId, localPaths, remoteDirectory },
+    onEvent: channel,
+  });
+}
+
+export function uploadSelectedEntries(
+  sessionId: string,
+  localPaths: string[],
+  remoteDirectory: string,
+  onEvent: (event: TransferEvent) => void,
+): Promise<string> {
+  const channel = new Channel<TransferEvent>(onEvent);
+  return invoke<string>("transfer_upload_selected", {
     input: { sessionId, localPaths, remoteDirectory },
     onEvent: channel,
   });

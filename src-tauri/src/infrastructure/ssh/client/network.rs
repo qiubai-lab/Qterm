@@ -78,7 +78,7 @@ pub(super) async fn run_network_session(
                     };
                     let _ = reply.send(result);
                 }
-                Some(SessionControl::Write(_) | SessionControl::Resize(_) | SessionControl::StoreClipboardImage { .. } | SessionControl::StartTransfer { .. } | SessionControl::ListDirectory { .. } | SessionControl::ReadFile { .. } | SessionControl::WriteTextFile { .. } | SessionControl::MutateEntry { .. }) => {}
+                Some(SessionControl::Write(_) | SessionControl::Resize(_) | SessionControl::StoreTerminalStaging { .. } | SessionControl::StartTransfer { .. } | SessionControl::ListDirectory { .. } | SessionControl::ReadFile { .. } | SessionControl::WriteTextFile { .. } | SessionControl::MutateEntry { .. }) => {}
                 None => { entry.transition(SessionState::Closing); }
             },
             connection = runtime.direct_receiver.recv() => {

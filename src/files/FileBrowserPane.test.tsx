@@ -1,10 +1,10 @@
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { useState } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { TransferEvent } from "../lib/tauri/transfers";
 
-const { listLocalDirectory, listLocalRoots, listRemoteDirectory, readTextFile, readBinaryFile, writeTextFile, writeClipboardText, copyImageUrlToClipboard, copyFile, createEntry, renameEntry, deleteEntry, selectDownloadDirectory, selectDownloadPath, downloadDirectory, downloadFile, uploadDroppedEntries, cancelTransfer, dragDrop } = vi.hoisted(() => ({
+const { listLocalDirectory, listLocalRoots, listRemoteDirectory, readTextFile, readBinaryFile, writeTextFile, writeClipboardText, copyImageUrlToClipboard, copyFile, createEntry, renameEntry, deleteEntry, selectDownloadDirectory, selectDownloadPath, selectUploadFiles, selectUploadFolder, downloadDirectory, downloadFile, uploadDroppedEntries, uploadSelectedEntries, cancelTransfer, dragDrop } = vi.hoisted(() => ({
   listLocalDirectory: vi.fn(),
   listLocalRoots: vi.fn(),
   listRemoteDirectory: vi.fn(),
@@ -19,9 +19,12 @@ const { listLocalDirectory, listLocalRoots, listRemoteDirectory, readTextFile, r
   deleteEntry: vi.fn(),
   selectDownloadDirectory: vi.fn(),
   selectDownloadPath: vi.fn(),
+  selectUploadFiles: vi.fn(),
+  selectUploadFolder: vi.fn(),
   downloadDirectory: vi.fn(),
   downloadFile: vi.fn(),
   uploadDroppedEntries: vi.fn(),
+  uploadSelectedEntries: vi.fn(),
   cancelTransfer: vi.fn(),
   dragDrop: { handler: null as null | ((event: { payload: Record<string, unknown> }) => void) },
 }));
@@ -30,7 +33,7 @@ vi.mock("@tauri-apps/api/webview", () => ({ getCurrentWebview: () => ({ onDragDr
 vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({ writeText: writeClipboardText }));
 vi.mock("../lib/tauri/clipboard", () => ({ copyImageUrlToClipboard }));
 vi.mock("../lib/tauri/files", () => ({ listLocalDirectory, listLocalRoots, listRemoteDirectory, readTextFile, readBinaryFile, writeTextFile, copyFile, createEntry, renameEntry, deleteEntry }));
-vi.mock("../lib/tauri/transfers", () => ({ selectDownloadDirectory, selectDownloadPath, downloadDirectory, downloadFile, uploadDroppedEntries, cancelTransfer }));
+vi.mock("../lib/tauri/transfers", () => ({ selectDownloadDirectory, selectDownloadPath, selectUploadFiles, selectUploadFolder, downloadDirectory, downloadFile, uploadDroppedEntries, uploadSelectedEntries, cancelTransfer }));
 vi.mock("./CodeEditor", () => ({ CodeEditor: ({ value, readOnly, onChange, onSave }: { value: string; readOnly?: boolean; onChange: (value: string) => void; onSave: () => void }) => <textarea aria-label={readOnly ? "文件只读预览" : "文件编辑器"} readOnly={readOnly} value={value} onChange={(event) => onChange(event.target.value)} onKeyDown={(event) => { if (!readOnly && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") { event.preventDefault(); onSave(); } }}/>}));
 vi.mock("./MarkdownPreview", () => ({ MarkdownPreview: ({ content }: { content: string }) => <h1>{content.replace(/^#\s*/, "")}</h1> }));
 
@@ -40,12 +43,14 @@ import { displayLocalPath, isWindowsDriveRoot, parentPath } from "./path";
 const localRuntime = { sessionId: null, kind: "local" as const, status: "connected" as const, hostKeyPrompt: null, notice: "", connectionProgress: null };
 
 describe("FileBrowserPane", () => {
+  afterEach(() => cleanup());
+
   beforeEach(() => {
     listLocalDirectory.mockReset();
     listLocalRoots.mockReset();
     listRemoteDirectory.mockReset();
     readTextFile.mockReset(); readBinaryFile.mockReset(); writeTextFile.mockReset(); writeClipboardText.mockReset(); copyImageUrlToClipboard.mockReset(); copyFile.mockReset(); createEntry.mockReset(); renameEntry.mockReset(); deleteEntry.mockReset();
-    selectDownloadDirectory.mockReset(); selectDownloadPath.mockReset(); downloadDirectory.mockReset(); downloadFile.mockReset(); uploadDroppedEntries.mockReset(); cancelTransfer.mockReset();
+    selectDownloadDirectory.mockReset(); selectDownloadPath.mockReset(); selectUploadFiles.mockReset(); selectUploadFolder.mockReset(); downloadDirectory.mockReset(); downloadFile.mockReset(); uploadDroppedEntries.mockReset(); uploadSelectedEntries.mockReset(); cancelTransfer.mockReset();
     dragDrop.handler = null;
   });
 
@@ -942,6 +947,7 @@ describe("FileBrowserPane", () => {
     fireEvent.click(ui.getByRole("menuitem", { name: "删除" }));
     fireEvent.click(within(screen.getByRole("dialog", { name: "删除文件夹？" })).getByRole("button", { name: "确认删除" }));
     await waitFor(() => expect(deleteEntry).toHaveBeenCalledWith(null, entry.path));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "删除文件夹？" })).not.toBeInTheDocument());
   });
 
   it("shows a native drop overlay only over the remote file area and uploads to the current path", async () => {
@@ -950,7 +956,6 @@ describe("FileBrowserPane", () => {
     uploadDroppedEntries.mockResolvedValue("transfer-drop");
     const view = render(<FileBrowserPane initialPath="/srv" runtime={runtime} onPathChange={vi.fn()}/>);
     await waitFor(() => expect(dragDrop.handler).toBeTypeOf("function"));
-    document.querySelectorAll(".dialog-scrim").forEach((element) => element.remove());
     const content = view.container.querySelector(".file-browser-content")!;
     vi.spyOn(content, "getBoundingClientRect").mockReturnValue({ left: 0, top: 0, right: 500, bottom: 400, width: 500, height: 400, x: 0, y: 0, toJSON: () => ({}) });
 
@@ -969,6 +974,72 @@ describe("FileBrowserPane", () => {
     act(() => dragDrop.handler?.({ payload: { type: "drop", paths: ["C:/drop/key"], position: { x: 100, y: 100 } } }));
     expect(uploadDroppedEntries).not.toHaveBeenCalled();
     modalScrim.remove();
+  });
+
+  it("shows an upload action only for remote files and exposes both native picker choices", async () => {
+    listLocalDirectory.mockResolvedValue({ path: "C:/work", entries: [] });
+    const view = render(<FileBrowserPane initialPath="C:/work" runtime={localRuntime} onPathChange={vi.fn()}/>);
+    await waitFor(() => expect(listLocalDirectory).toHaveBeenCalled());
+    expect(within(view.container).queryByRole("button", { name: "上传到当前目录" })).not.toBeInTheDocument();
+
+    listRemoteDirectory.mockResolvedValue({ path: "/srv", entries: [] });
+    view.rerender(<FileBrowserPane initialPath="/srv" runtime={{ ...localRuntime, kind: "sftp", sessionId: "session-1" }} onPathChange={vi.fn()}/>);
+    const ui = within(view.container);
+    const upload = await ui.findByRole("button", { name: "上传到当前目录" });
+    expect(upload).toHaveAttribute("title", "上传到当前目录");
+    fireEvent.click(upload);
+    const menu = ui.getByRole("menu", { name: "选择上传内容" });
+    expect(within(menu).getAllByRole("menuitem").map((item) => item.textContent)).toEqual(["上传文件…", "上传文件夹…"]);
+    await waitFor(() => expect(within(menu).getByRole("menuitem", { name: "上传文件…" })).toHaveFocus());
+    fireEvent.keyDown(menu, { key: "ArrowDown" });
+    expect(within(menu).getByRole("menuitem", { name: "上传文件夹…" })).toHaveFocus();
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(ui.queryByRole("menu", { name: "选择上传内容" })).not.toBeInTheDocument();
+    await waitFor(() => expect(upload).toHaveFocus());
+  });
+
+  it("uploads selected files to the captured remote path and refreshes only that active directory", async () => {
+    const entries = [{ name: "child", path: "/srv/child", isDirectory: true, isSymlink: false, size: 0, modifiedAt: null, permissionMode: 0o755 }];
+    listRemoteDirectory
+      .mockResolvedValueOnce({ path: "/srv", entries })
+      .mockResolvedValueOnce({ path: "/srv/child", entries: [] });
+    let resolveSelection!: (paths: string[]) => void;
+    selectUploadFiles.mockReturnValue(new Promise<string[]>((resolve) => { resolveSelection = resolve; }));
+    uploadSelectedEntries.mockResolvedValue("transfer-selected");
+    const view = render(<FileBrowserPane initialPath="/srv" runtime={{ ...localRuntime, kind: "sftp", sessionId: "session-1" }} onPathChange={vi.fn()}/>);
+    const ui = within(view.container);
+
+    fireEvent.click(await ui.findByRole("button", { name: "上传到当前目录" }));
+    fireEvent.click(ui.getByRole("menuitem", { name: "上传文件…" }));
+    expect(ui.getByRole("button", { name: "上传到当前目录" })).toBeDisabled();
+    fireEvent.doubleClick(await ui.findByRole("listitem", { name: /child/ }));
+    await waitFor(() => expect(listRemoteDirectory).toHaveBeenLastCalledWith("session-1", "/srv/child"));
+    resolveSelection(["C:/upload/a.txt", "C:/upload/b.txt"]);
+    await waitFor(() => expect(uploadSelectedEntries).toHaveBeenCalledWith("session-1", ["C:/upload/a.txt", "C:/upload/b.txt"], "/srv", expect.any(Function)));
+    const update = uploadSelectedEntries.mock.calls[0][3] as (event: TransferEvent) => void;
+    act(() => update({ type: "completed" }));
+    expect(listRemoteDirectory).toHaveBeenCalledTimes(2);
+    expect(ui.getByText("上传完成")).toBeInTheDocument();
+  });
+
+  it("treats picker cancellation as a no-op and uploads a selected folder", async () => {
+    listRemoteDirectory.mockResolvedValue({ path: "/srv", entries: [] });
+    selectUploadFiles.mockResolvedValue([]);
+    selectUploadFolder.mockResolvedValue("C:/upload/folder");
+    uploadSelectedEntries.mockResolvedValue("transfer-folder");
+    const view = render(<FileBrowserPane initialPath="/srv" runtime={{ ...localRuntime, kind: "sftp", sessionId: "session-1" }} onPathChange={vi.fn()}/>);
+    const ui = within(view.container);
+    const upload = await ui.findByRole("button", { name: "上传到当前目录" });
+
+    fireEvent.click(upload);
+    fireEvent.click(ui.getByRole("menuitem", { name: "上传文件…" }));
+    await waitFor(() => expect(selectUploadFiles).toHaveBeenCalled());
+    expect(uploadSelectedEntries).not.toHaveBeenCalled();
+    expect(ui.queryByText("上传失败")).not.toBeInTheDocument();
+
+    fireEvent.click(upload);
+    fireEvent.click(ui.getByRole("menuitem", { name: "上传文件夹…" }));
+    await waitFor(() => expect(uploadSelectedEntries).toHaveBeenCalledWith("session-1", ["C:/upload/folder"], "/srv", expect.any(Function)));
   });
 });
 

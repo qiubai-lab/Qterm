@@ -5,7 +5,7 @@ mod infrastructure;
 mod ports;
 
 use commands::browser::{BrowserProxyState, browser_proxy_launch, browser_proxy_list};
-use commands::clipboard::session_paste_clipboard_image;
+use commands::clipboard::{session_cancel_clipboard_staging, session_start_clipboard_staging};
 use commands::credential::{
     CredentialState, credential_cancel_private_key, credential_commit_private_key,
     credential_create_password, credential_delete, credential_list,
@@ -46,8 +46,9 @@ use commands::settings::{
 };
 use commands::transfer::{
     TransferState, transfer_cancel, transfer_download, transfer_select_download_directory,
-    transfer_select_download_path, transfer_select_upload_file, transfer_upload,
-    transfer_upload_dropped,
+    transfer_select_download_path, transfer_select_upload_file, transfer_select_upload_files,
+    transfer_select_upload_folder, transfer_upload, transfer_upload_dropped,
+    transfer_upload_selected,
 };
 use commands::workspace::{WorkspaceState, workspace_load, workspace_save};
 use domain::settings::ConfigurationDirectory;
@@ -242,7 +243,8 @@ pub fn run() {
             session_close,
             session_write,
             session_resize,
-            session_paste_clipboard_image,
+            session_start_clipboard_staging,
+            session_cancel_clipboard_staging,
             local_terminal_capabilities,
             local_session_connect,
             local_session_write,
@@ -260,10 +262,13 @@ pub fn run() {
             files_delete_entry,
             files_session_connect,
             transfer_select_upload_file,
+            transfer_select_upload_files,
+            transfer_select_upload_folder,
             transfer_select_download_path,
             transfer_select_download_directory,
             transfer_upload,
             transfer_upload_dropped,
+            transfer_upload_selected,
             transfer_download,
             transfer_cancel,
             workspace_load,

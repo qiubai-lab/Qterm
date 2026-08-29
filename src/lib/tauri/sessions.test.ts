@@ -18,9 +18,10 @@ import {
   acceptHostKey,
   closeSession,
   connectSession,
-  pasteRemoteClipboardImage,
+  cancelTerminalClipboardStaging,
   rejectHostKey,
   resizeSession,
+  startTerminalClipboardStaging,
   writeSession,
 } from "./sessions";
 
@@ -110,22 +111,24 @@ describe("SSH session IPC client", () => {
     });
   });
 
-  it("uses a narrow session-only IPC request for remote clipboard images", async () => {
-    mocks.invoke.mockResolvedValue({
-      remotePath: "/tmp/.qterm-clipboard-session/image.png",
-      width: 120,
-      height: 80,
-    });
+  it("uses an event channel and opaque task id for terminal clipboard staging", async () => {
+    mocks.invoke.mockResolvedValue({ kind: "transfer", taskId: "task-1" });
+    const onEvent = vi.fn();
 
-    const result = await pasteRemoteClipboardImage("session-1");
+    const result = await startTerminalClipboardStaging("session-1", onEvent);
 
-    expect(mocks.invoke).toHaveBeenCalledWith("session_paste_clipboard_image", {
+    expect(mocks.invoke).toHaveBeenCalledWith("session_start_clipboard_staging", {
       sessionId: "session-1",
+      onEvent: expect.any(Object),
     });
-    expect(result).toEqual({
-      remotePath: "/tmp/.qterm-clipboard-session/image.png",
-      width: 120,
-      height: 80,
+    mocks.handlers[0]?.({ type: "progress", transferredBytes: 21, totalBytes: 42 });
+    expect(onEvent).toHaveBeenCalledWith({ type: "progress", transferredBytes: 21, totalBytes: 42 });
+    expect(result).toEqual({ kind: "transfer", taskId: "task-1" });
+
+    await cancelTerminalClipboardStaging("session-1", "task-1");
+    expect(mocks.invoke).toHaveBeenLastCalledWith("session_cancel_clipboard_staging", {
+      sessionId: "session-1",
+      taskId: "task-1",
     });
   });
 });

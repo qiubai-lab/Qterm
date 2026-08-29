@@ -29,13 +29,13 @@
 - `src/components/dialogs/ConnectionDialog.tsx`：连接、分组、凭证引用、显式跃点编辑和不兼容配置清除确认入口；展示后端候选与原因，不拥有 route 校验或文件删除授权。
 - `src/components/dialogs/connection/`、`credential/`：Connection jump/反馈展示、纯 profile 模型与 Credential 浮层/安全提示局部模块；父 dialog 继续拥有 draft、选择和 nested dialog 生命周期。
 - `src/components/dialogs/SshConfigImportDialog.tsx`：SSH Config 文件选择、连接信息/凭证双 Tab 与批量导入界面；负责默认未分组、连接选择和逐项私钥授权，不接收设备路径或私钥正文。
-- `src/terminal/TerminalPanel.tsx`、`terminalTheme.ts`：每个 Block 的 xterm 生命周期、直接输出 writer、文本优先的远程图片路径粘贴、OSC 工作目录、PTY 尺寸适配与 semantic token palette registry；不读取图片像素、选择远端临时目录、管理连接配置、布局树或 theme selection。
+- `src/terminal/TerminalPanel.tsx`、`TerminalStagingStatus.tsx`、`terminalTheme.ts`：每个 Block 的 xterm 生命周期、直接输出 writer、远程剪贴板暂存任务/有序路径粘贴、按任务挂载的右下角悬浮上传卡片、OSC 工作目录、PTY 尺寸适配与 semantic token palette registry；悬浮卡片不占用 xterm 布局高度；该层不读取本机文件路径/图片像素、选择远端临时目录、管理连接配置、布局树或 theme selection。
 - `src/files/FileBrowserPane.tsx`、`FileList.tsx`、`fileBrowserModel.ts`、`CodeEditor.tsx`、`MarkdownPreview.tsx`：内部文件窗口的目录导航、虚拟列表/排序纯规则、下载、瞬时预览编辑状态与按需编辑/渲染组件；不依赖 TerminalRuntime，不直接读取本地文件或实现 SFTP。
 - `src/lib/tauri/profiles.ts`：连接配置、有序跃点候选/route 要求、不兼容存储清除与 SSH Config 导入 IPC 客户端契约；不包含配置路径、私钥路径、强制删除参数或领域校验。
 - `src/lib/tauri/credentials.ts`：密码/私钥凭证库的窄 IPC 契约；不实现 KDF、加密或 JSON 访问。
 - `src/lib/tauri/settings.ts`：配置根选择、派生存储布局快照，以及设备安全、外观、更新和远程终端集成偏好的窄 IPC 契约；不开放分区路径写入、Shell cache 或执行锁定/探测策略。
 - `src/lib/updateCheck.ts`：固定 GitHub Latest Release 的超时请求、稳定 SemVer 比较、进程内启动单次去重与固定 Releases opener；不持久化偏好、自动安装或接受任意 URL。
-- `src/lib/tauri/sessions.ts`、`localSessions.ts`：远程/本地终端建连、可选一次性初始目录、远程剪贴板图片路径结果与有序状态 Channel 的窄 IPC 契约；不传输图片字节、解析 route、验证文件系统路径、拼接 Shell 命令或持久化启动上下文。
+- `src/lib/tauri/sessions.ts`、`localSessions.ts`：远程/本地终端建连、可选一次性初始目录、远程剪贴板暂存 opaque task/progress/cancel 与有序状态 Channel 的窄 IPC 契约；不传输本机路径或文件字节、解析 route、验证文件系统路径、拼接 Shell 命令或持久化启动上下文。
 - `src/lib/tauri/transfers.ts`：单文件 SFTP 选择、启动、进度和取消 IPC 契约；不直接访问本地或远程文件系统。
 - `src/lib/tauri/files.ts`：本地/远程目录、受限文件读取、带修订保存与 Files-only SSH connect IPC 契约；不执行文件系统或 SFTP 操作。
 - `src/lib/tauri/network.ts`：Network 规则 CRUD、独立 SSH session 与规则启停的窄 IPC 契约；TCP 字节不经过 WebView。
@@ -54,13 +54,13 @@
 - `src-tauri/src/application/ssh_config_import.rs`：SSH Config preview 生命周期、候选重复判断、唯一命名与无分组 profile input 映射；不依赖 Tauri 对话框或 command DTO。
 - `src-tauri/src/domain/session.rs`：主机密钥比较、route 节点/阶段事件、多跳会话状态迁移和有界一次性初始目录值；不执行网络连接或文件读写。
 - `src-tauri/src/domain/transfer.rs`：远程路径边界和稳定传输事件；不依赖 SFTP、Tauri 或本地文件 API。
-- `src-tauri/src/domain/clipboard_image.rs`、`ports/clipboard_image.rs`、`application/clipboard_image_service.rs`：剪贴板图片尺寸/像素/PNG 上限、原生图片来源与远端临时存储端口，以及“读取后上传并仅返回路径和尺寸”的用例；不依赖 Tauri Image、剪贴板插件、russh-sftp 或 WebView DTO。
+- `src-tauri/src/domain/terminal_staging.rs`、`ports/terminal_staging.rs`、`application/terminal_staging_service.rs`：file list/text/raw-image 优先级、无敏感进度事件、原生剪贴板来源与 Terminal-only 远端暂存/取消端口，以及 opaque task 启动用例；不依赖 arboard、Tauri Channel、russh-sftp 或 WebView DTO。
 - `src-tauri/src/domain/files.rs`：稳定目录列表、文件条目与排序/数量边界；不依赖文件系统、SFTP 或 Tauri。
 - `src-tauri/src/application/file_service.rs`：本地文件预览限制、UTF-8 校验、内容修订与原子保存用例；不依赖 Tauri UI 或 SFTP 类型。
 - `src-tauri/src/domain/workspace.rs`：Workspace/split tree 不变量与资源上限；不依赖前端状态、Tauri 或 JSON 格式。
 - `src-tauri/src/domain/network.rs`、`ports/network_repository.rs`、`application/network_service.rs`：转发规则、不变量、profile 引用与配置用例边界；不包含 socket、SSH channel、运行状态或持久化格式。
 - `src-tauri/src/commands/network.rs`：Network 严格 DTO、profile-bound session 建连和规则启停 IPC；不实现 SOCKS5 或 TCP 数据泵。
-- `src-tauri/src/commands/clipboard.rs`：只接收当前 SSH session ID、调用剪贴板图片用例并映射稳定错误；不接收图片字节、远端路径策略或权限参数。
+- `src-tauri/src/commands/clipboard.rs`：只接收当前 SSH session ID/opaque task ID，调用剪贴板暂存启动/取消用例并桥接无本机路径事件；不接收本机路径、文件字节、远端路径策略或权限参数。
 - `src-tauri/src/commands/browser.rs`：Chrome/Edge 白名单 DTO、SOCKS5 规则类型复核与浏览器 adapter 调用；不接受可执行路径、命令参数或实现平台探测。
 - `src-tauri/src/infrastructure/browser/`：共享 SOCKS5 greeting、固定 Chromium 参数和机器本地隔离 Profile，并以 Windows、macOS、Linux adapter 受限探测和无 Shell 启动 Chrome/Edge；不修改系统代理、支持沙箱化 Linux 浏览器、复用日常 Profile 或管理浏览器退出。
 - `src-tauri/src/infrastructure/persistence/json_network_repository.rs`：`network-forwards.json` schema v1 的严格、无敏感字段、原子持久化适配器。
@@ -69,8 +69,8 @@
 - `src-tauri/src/infrastructure/ssh/forwarding.rs`：本地 listener、SOCKS5 CONNECT、Remote target 路由、有界转发任务与 TCP/SSH 双向数据泵；第三方 channel 类型不得离开 infrastructure。
 - `src-tauri/src/ports/profile_repository.rs`：应用层拥有的连接配置 repository 契约；不规定文件格式。
 - `src-tauri/src/infrastructure/local/pty.rs`：本地 PTY 创建与进程 I/O owner；在 spawn 时解析一次性工作目录并对无效/失效路径回退到规范化 home，不解释远程 Shell 语法。
-- `src-tauri/src/infrastructure/clipboard.rs`：在阻塞工作线程通过原生剪贴板读取 RGBA、校验并编码 PNG；不向 WebView 返回图片资源或字节。
-- `src-tauri/src/infrastructure/ssh/client.rs`、`client/{handler,session,shell_integration,network,transfer}.rs`：稳定 `SshSessionManager` façade 与内部 route/host-key handler、session runner、有界 Shell 探测、初始目录/临时 Hook 载荷、forward runtime、SFTP/transfer 及私有剪贴板图片临时目录实现；第三方 russh/SFTP 类型只在该 infrastructure 子树内，测试位于 `client/tests.rs`。
+- `src-tauri/src/infrastructure/clipboard.rs`：在阻塞工作线程读取原生 file list/text/RGBA；文件路径只生成 Rust 内部一次性来源，RGBA 校验后流式编码到私有本机临时 PNG，不向 WebView 返回路径、图片资源或字节。
+- `src-tauri/src/infrastructure/ssh/client.rs`、`client/{handler,session,shell_integration,network,transfer}.rs`：稳定 `SshSessionManager` façade 与内部 route/host-key handler、session runner、有界 Shell 探测、初始目录/临时 Hook 载荷、forward runtime、SFTP/transfer 及私有 Terminal 暂存目录/进度/取消/清理实现；第三方 russh/SFTP 类型只在该 infrastructure 子树内，测试位于 `client/tests.rs`。
 - `src-tauri/tauri.conf.json`、`tauri.macos.conf.json`：通用无边框桌面窗口与 macOS 原生 Overlay 标题栏的分层配置，以及构建和打包入口；不承载 Workspace 或 SSH 规则。
 - `src-tauri/capabilities/default.json`：主窗口最小 Tauri 权限清单。
 - `package.json`、`src-tauri/Cargo.toml`：前端与 Rust 的直接依赖及质量命令入口。
