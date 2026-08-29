@@ -123,18 +123,23 @@ describe("application layout styles", () => {
   it("collapses the connected endpoint before persistent route status", () => {
     expect(declarations(".terminal-block")).toContain("container-type:inline-size");
     expect(declarations(".connection-route-progress")).not.toContain("position:absolute");
-    expect(declarations(".connection-route-progress")).toContain("display:contents");
+    expect(declarations(".connection-route-progress")).toContain("display:flex");
+    expect(declarations(".connection-route-progress")).toContain("min-width:0");
+    expect(declarations(".connection-route-progress")).toContain("overflow:hidden");
     expect(declarations(".connection-route-dots")).toContain("flex:none");
     expect(declarations(".terminal-target")).toContain("min-width:0");
+    expect(declarations(".terminal-target")).toContain("flex:0 1 auto");
     expect(declarations(".terminal-target-trigger")).toContain("flex:0 1 auto");
     expect(declarations('.terminal-block.active .terminal-target[data-remote="true"][data-status="connected"] .terminal-target-endpoint')).toContain("color:var(--block-active-endpoint-text)");
     expect(declarations(".terminal-block.active .connection-route-progress.connected .connection-route-endpoint")).toContain("color:var(--block-active-endpoint-text)");
     expect(declarations(".connection-route-endpoint")).toContain("text-overflow:ellipsis");
-    expect(declarations(".connection-route-endpoint")).toContain("flex:0 100 auto");
-    expect(styles).not.toMatch(/@container terminal-block[^}]+\.connection-route-endpoint\{display:none\}/);
-    expect(styles).toMatch(/@container terminal-block \(max-width:390px\)\{\.terminal-target>small,\.terminal-target-endpoint,\.terminal-osc7-tag\{display:none\}\}/);
+    expect(declarations(".connection-route-endpoint")).toContain("flex:0 1 auto");
+    expect(styles).toMatch(/@container terminal-block \(max-width:390px\)\{\.terminal-target>small,\.terminal-target-endpoint,\.connection-route-endpoint,\.terminal-osc7-tag\{display:none\}\}/);
     expect(styles).not.toContain(".connection-route-progress{display:none}");
     expect(declarations(".block-actions")).toContain("flex:none");
+    expect(declarations(".terminal-header-secondary-actions")).toContain("display:flex");
+    expect(declarations(".block-actions .terminal-header-more")).toContain("display:none");
+    expect(styles).toMatch(/@container terminal-block \(max-width:300px\)\{\.terminal-header-secondary-actions\{display:none\}\.block-actions \.terminal-header-more\{display:grid\}\}/);
   });
 
   it("keeps local-terminal attention in the terminal title's current theme color", () => {
@@ -574,6 +579,12 @@ describe("application layout styles", () => {
     expect(notice).toContain("position:absolute");
     expect(notice).toContain("right:8px");
     expect(notice).toContain("bottom:8px");
+    expect(notice).toContain("box-sizing:border-box");
+    expect(notice).toContain("width:calc(100% - 16px)");
+    expect(notice).toContain("max-height:min(160px,40%)");
+    expect(notice).toContain("overflow-y:auto");
+    expect(notice).toContain("overflow-wrap:anywhere");
+    expect(notice).toContain("word-break:break-word");
     expect(notice).toContain("color:var(--danger)");
     expect(notice).toContain("var(--danger-bg)");
     expect(notice).toContain("var(--shadow-strong)");
@@ -581,6 +592,9 @@ describe("application layout styles", () => {
 
   it("keeps terminal and files block actions visible without hover", () => {
     expect(declarations(".block-actions")).toContain("opacity:1");
+    expect(declarations(".terminal-header-close")).toContain("flex:none");
+    expect(declarations(".terminal-header-menu")).toContain("position:fixed");
+    expect(declarations(".terminal-header-menu")).toContain("z-index:120");
     expect(styles).not.toContain(".terminal-block:hover .block-actions,.terminal-block.active .block-actions");
     expect(declarations('.block-actions button[aria-label^="关闭"]:hover')).toContain("color:var(--danger)");
     expect(declarations('.block-actions button[aria-label^="关闭"]:hover')).toContain("background:var(--danger-bg)");

@@ -691,7 +691,7 @@ export function WorkspaceShell() {
         <aside className="utility-rail" aria-label="工具">
           <RailButton tool="connections" icon="connections" label="链接管理" active={tool === "connections"} onClick={setTool}/>
           <RailButton tool="credentials" icon="key" label="凭证管理" active={tool === "credentials"} onClick={setTool}/>
-          <RailActionButton icon="files" label="文件管理" onClick={() => dispatch(openFileWindowAction(activeWorkspace))}/>
+          <RailActionButton icon="files" label="文件管理" onClick={() => dispatch(openFileWindowAction(activeWorkspace, runtimes, remoteShellIntegrationEnabled))}/>
           <RailActionButton icon="network" label="网络管理" onClick={() => dispatch(openNetworkWindowAction(activeWorkspace))}/>
           <RailActionButton icon="terminal" label="打开终端" onClick={() => splitTerminalBlock(activeWorkspace.id, activeWorkspace.activeBlockId, "horizontal", remoteShellIntegrationEnabled)}/>
           <span className="rail-spacer"/>

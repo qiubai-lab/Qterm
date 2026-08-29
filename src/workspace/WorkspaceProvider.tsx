@@ -414,6 +414,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           sessionId,
           kind: "local",
           status: "connected",
+          initialCwd: connection.cwd,
           cwd: runtime.cwdSource === "osc7" ? runtime.cwd : connection.cwd,
           cwdSource: runtime.cwdSource === "osc7" ? "osc7" : "initial",
         }));
@@ -665,11 +666,16 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     pendingInitialDirectories.current.clear();
     setRuntimes((current) => {
       let changed = false;
-      const next = Object.fromEntries(Object.entries(current).map(([blockId, runtime]) => {
-        if (runtime.cwdSource !== "osc7") return [blockId, runtime];
+      const next = { ...current };
+      for (const [blockId, runtime] of Object.entries(current)) {
+        if (runtime.cwdSource !== "osc7") continue;
         changed = true;
-        return [blockId, { ...runtime, cwd: null, cwdSource: null }];
-      }));
+        next[blockId] = {
+          ...runtime,
+          cwd: runtime.initialCwd,
+          cwdSource: runtime.initialCwd ? "initial" : null,
+        };
+      }
       if (!changed) return current;
       runtimesRef.current = next;
       return next;

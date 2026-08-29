@@ -6,6 +6,7 @@
 .active-block-indicator.ready { transition:left 300ms cubic-bezier(.22,1,.36,1),top 300ms cubic-bezier(.22,1,.36,1),width 300ms cubic-bezier(.22,1,.36,1),height 300ms cubic-bezier(.22,1,.36,1),opacity 140ms ease; }
 .terminal-target { position:relative; display:flex; min-width:0; flex:0 1 auto; gap:4px; align-items:center; overflow:hidden; }
 .terminal-target-trigger { display:flex; min-width:0; max-width:190px; height:23px; flex:0 1 auto; gap:5px; align-items:center; padding:0 3px; border:0; border-radius:4px; color:var(--text); background:transparent; font-size:10px; font-weight:600; cursor:pointer; transition:transform 120ms cubic-bezier(.16,1,.3,1),color 120ms ease,background-color 120ms ease; }
+.terminal-target-trigger>svg { flex:none; }
 .terminal-target-trigger:hover,.terminal-target-trigger[aria-expanded="true"] { color:var(--text-strong); background:var(--control-hover); }
 .terminal-target-trigger:active { transform:scale(.98); }
 .terminal-target-name { min-width:0; overflow:hidden; text-align:left; text-overflow:ellipsis; white-space:nowrap; }
@@ -76,6 +77,19 @@
 .terminal-target-submenu[data-placement="left"] { animation-name:terminal-target-submenu-left-in; }
 @keyframes terminal-target-submenu-left-in { from{opacity:0;transform:translateX(3px) scale(.98)} to{opacity:1;transform:none} }
 .connection-dot { width:6px; height:6px; flex:none; border-radius:50%; background:#5c626b; }.connection-dot.connected{background:#59d8bd;box-shadow:0 0 0 3px #59d8bd18}.connection-dot.connecting,.connection-dot.authenticating{background:#e7b65e}.connection-dot.failed{background:var(--danger)}
-.block-actions { display:flex; flex:none; margin-left:auto; opacity:1; }
+.block-actions { display:flex; flex:none; align-items:center; margin-left:auto; opacity:1; }
+.terminal-header-secondary-actions { display:flex; flex:none; }
+.block-actions .terminal-header-more { display:none; }
+.terminal-header-close { flex:none; }
 .block-actions button { display:grid; width:25px; height:23px; place-items:center; padding:0; border:0; border-radius:4px; color:var(--icon); background:transparent; }.block-actions button:hover{color:var(--icon-hover);background:var(--control-hover)}.block-actions button[aria-label^="关闭"]:hover{color:var(--danger);background:var(--danger-bg)}.block-actions button[aria-label^="关闭"]:active{color:var(--danger);background:color-mix(in srgb,var(--danger) 22%,var(--danger-bg))}
 .block-actions button[aria-label^="断开"]:hover,.block-actions button[aria-label^="停止"]:hover{color:var(--danger);background:var(--danger-bg)}
+.terminal-header-menu { position:fixed; z-index:120; box-sizing:border-box; width:184px; padding:4px; border:1px solid var(--floating-border); border-radius:7px; background:var(--floating-material); box-shadow:0 14px 38px var(--shadow-strong); backdrop-filter:blur(16px) saturate(112%); -webkit-backdrop-filter:blur(16px) saturate(112%); transform-origin:top right; animation:terminal-header-menu-in 130ms cubic-bezier(.16,1,.3,1); }
+.terminal-header-menu[data-placement="above"] { transform-origin:bottom right; }
+.terminal-header-menu button { display:grid; width:100%; height:27px; grid-template-columns:16px minmax(0,1fr); gap:8px; align-items:center; padding:0 8px; border:0; border-radius:5px; color:var(--menu-text); background:transparent; font-size:9px; text-align:left; }
+.terminal-header-menu button>svg { color:var(--menu-secondary-text); }
+.terminal-header-menu button>span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.terminal-header-menu button:hover:not(:disabled),.terminal-header-menu button:focus-visible { color:var(--menu-hover-text); background:var(--menu-hover-background); outline:none; }
+.terminal-header-menu button:hover:not(:disabled)>svg,.terminal-header-menu button:focus-visible>svg { color:currentColor; }
+.terminal-header-menu button:disabled { color:var(--menu-disabled-text); background:transparent; cursor:not-allowed; }
+.terminal-header-menu button:disabled>svg { color:currentColor; }
+@keyframes terminal-header-menu-in { from{opacity:0;transform:translateY(-3px) scale(.97)} to{opacity:1;transform:none} }

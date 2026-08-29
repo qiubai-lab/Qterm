@@ -17,6 +17,7 @@ export interface TerminalRuntime {
   hostKeyPrompt: HostKeyPrompt | null;
   notice: string;
   connectionProgress: ConnectionRouteProgressState | null;
+  initialCwd: string | null;
   cwd: string | null;
   cwdSource: "initial" | "osc7" | null;
 }
@@ -39,7 +40,7 @@ export interface NetworkRuntime {
   ruleStates: Record<string, NetworkRuleRuntimeState>;
 }
 
-export const defaultRuntime: TerminalRuntime = { sessionId: null, kind: null, status: "closed", hostKeyPrompt: null, notice: "", connectionProgress: null, cwd: null, cwdSource: null };
+export const defaultRuntime: TerminalRuntime = { sessionId: null, kind: null, status: "closed", hostKeyPrompt: null, notice: "", connectionProgress: null, initialCwd: null, cwd: null, cwdSource: null };
 export const defaultFileRuntime: FileRuntime = { sessionId: null, kind: "local", status: "connected", hostKeyPrompt: null, notice: "", connectionProgress: null };
 export const defaultNetworkRuntime: NetworkRuntime = { sessionId: null, status: "closed", hostKeyPrompt: null, notice: "", connectionProgress: null, ruleStates: {} };
 export const MAX_PENDING_TERMINAL_OUTPUT = 256 * 1024;

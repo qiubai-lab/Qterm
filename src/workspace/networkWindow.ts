@@ -1,13 +1,15 @@
-import { blockIds } from "./layout";
+import { blockIds, findLeaf } from "./layout";
 import type { Workspace } from "./model";
 import type { WorkspaceAction } from "./reducer";
 
-export function openNetworkWindowAction(workspace: Workspace, profileId: string | null = null): WorkspaceAction {
+export function openNetworkWindowAction(workspace: Workspace): WorkspaceAction {
   const ids = blockIds(workspace.layout);
+  const anchorBlockId = ids.includes(workspace.activeBlockId) ? workspace.activeBlockId : ids[0];
+  const anchor = findLeaf(workspace.layout, anchorBlockId);
   return {
     type: "openNetwork",
     workspaceId: workspace.id,
-    anchorBlockId: ids.includes(workspace.activeBlockId) ? workspace.activeBlockId : ids[0],
-    profileId,
+    anchorBlockId,
+    profileId: anchor?.profileId ?? null,
   };
 }

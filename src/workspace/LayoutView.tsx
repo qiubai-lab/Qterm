@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { createPortal } from "react-dom";
 
-import { Icon } from "../components/Icon";
+import { Icon, type IconName } from "../components/Icon";
 import { ConnectionRouteProgress } from "../components/ConnectionRouteProgress";
 import { FileBrowserPane } from "../files/FileBrowserPane";
 import type { ConnectionProfile } from "../lib/tauri/profiles";
@@ -26,6 +27,130 @@ interface DragState {
 
 function BlockNotice({ message }: { message: string }) {
   return <div className="block-notice" role="alert" aria-live="assertive" aria-atomic="true">{message}</div>;
+}
+
+interface TerminalHeaderAction {
+  label: string;
+  title?: string;
+  icon: IconName;
+  disabled?: boolean;
+  onSelect: () => void;
+}
+
+interface HeaderMenuPosition {
+  left: number;
+  top: number;
+  placement: "above" | "below";
+}
+
+function fitHeaderMenu(anchor: DOMRect, width: number, height: number): HeaderMenuPosition {
+  const gutter = 8;
+  const offset = 4;
+  const left = Math.max(gutter, Math.min(anchor.right - width, window.innerWidth - width - gutter));
+  const below = anchor.bottom + offset;
+  if (below + height <= window.innerHeight - gutter) return { left, top: below, placement: "below" };
+  return { left, top: Math.max(gutter, anchor.top - height - offset), placement: "above" };
+}
+
+function TerminalHeaderActions({ actions, closeDisabled, onClose }: { actions: TerminalHeaderAction[]; closeDisabled: boolean; onClose: () => void }) {
+  const moreButtonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [menuPosition, setMenuPosition] = useState<HeaderMenuPosition | null>(null);
+
+  const closeMenu = useCallback((restoreFocus = true) => {
+    setMenuPosition(null);
+    if (restoreFocus) window.setTimeout(() => moreButtonRef.current?.focus(), 0);
+  }, []);
+
+  function openMenu() {
+    const anchor = moreButtonRef.current?.getBoundingClientRect();
+    if (!anchor) return;
+    setMenuPosition(fitHeaderMenu(anchor, 184, 170));
+  }
+
+  useLayoutEffect(() => {
+    if (!menuPosition || !menuRef.current || !moreButtonRef.current) return;
+    const next = fitHeaderMenu(
+      moreButtonRef.current.getBoundingClientRect(),
+      menuRef.current.offsetWidth,
+      menuRef.current.offsetHeight,
+    );
+    if (next.left !== menuPosition.left || next.top !== menuPosition.top || next.placement !== menuPosition.placement) setMenuPosition(next);
+  }, [menuPosition]);
+
+  useEffect(() => {
+    if (!menuPosition) return;
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!(event.target instanceof Element) || !event.target.closest(".terminal-header-menu")) closeMenu(false);
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeMenu();
+    };
+    const closeWithoutFocus = () => closeMenu(false);
+    document.addEventListener("pointerdown", handlePointerDown);
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("resize", closeWithoutFocus);
+    window.addEventListener("scroll", closeWithoutFocus, true);
+    window.setTimeout(() => menuRef.current?.querySelector<HTMLButtonElement>("[role='menuitem']:not(:disabled)")?.focus(), 0);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("resize", closeWithoutFocus);
+      window.removeEventListener("scroll", closeWithoutFocus, true);
+    };
+  }, [closeMenu, menuPosition]);
+
+  function handleMenuKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+    const items = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>("[role='menuitem']:not(:disabled)"));
+    if (items.length === 0) return;
+    const index = items.indexOf(document.activeElement as HTMLButtonElement);
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      const offset = event.key === "ArrowDown" ? 1 : -1;
+      items[(index + offset + items.length) % items.length]?.focus();
+    } else if (event.key === "Home" || event.key === "End") {
+      event.preventDefault();
+      items[event.key === "Home" ? 0 : items.length - 1]?.focus();
+    } else if (event.key === "Tab") {
+      closeMenu(false);
+    }
+  }
+
+  function runAction(action: TerminalHeaderAction) {
+    closeMenu(false);
+    action.onSelect();
+  }
+
+  return <>
+    <div className="block-actions terminal-header-actions">
+      <div className="terminal-header-secondary-actions">
+        {actions.map((action) => <button key={action.label} type="button" aria-label={action.label} title={action.title ?? action.label} disabled={action.disabled} onClick={action.onSelect}><Icon name={action.icon} size={13}/></button>)}
+      </div>
+      <button
+        ref={moreButtonRef}
+        type="button"
+        className="terminal-header-more"
+        aria-label="更多终端操作"
+        title="更多终端操作"
+        aria-haspopup="menu"
+        aria-expanded={Boolean(menuPosition)}
+        onClick={() => menuPosition ? closeMenu() : openMenu()}
+      ><Icon name="more" size={13}/></button>
+      <button type="button" className="terminal-header-close" aria-label="关闭终端" title="关闭" disabled={closeDisabled} onClick={onClose}><Icon name="close" size={13}/></button>
+    </div>
+    {menuPosition && createPortal(<div
+      ref={menuRef}
+      className="terminal-header-menu"
+      data-placement={menuPosition.placement}
+      role="menu"
+      aria-label="终端更多操作"
+      style={{ left: menuPosition.left, top: menuPosition.top }}
+      onContextMenu={(event) => event.preventDefault()}
+      onKeyDown={handleMenuKeyDown}
+    >
+      {actions.map((action) => <button key={action.label} type="button" role="menuitem" disabled={action.disabled} onClick={() => runAction(action)}><Icon name={action.icon} size={13}/><span>{action.label}</span></button>)}
+    </div>, document.body)}
+  </>;
 }
 
 export function WorkspaceCanvas({ workspace, visible, localTerminalAttention = false, remoteShellIntegrationEnabled = false, terminalSettingsReady = true, onRequestClose, onRequestDisconnect, onRequestAuthConnection, onOpenConnectionManager }: { workspace: Workspace; visible: boolean; localTerminalAttention?: boolean; remoteShellIntegrationEnabled?: boolean; terminalSettingsReady?: boolean; onRequestClose: (blockId: string) => void; onRequestDisconnect?: (owner: ConnectionOwner, blockId: string, name: string, local: boolean) => void; onRequestAuthConnection: (owner: ConnectionOwner, blockId: string, profile: ConnectionProfile) => void; onOpenConnectionManager?: () => void }) {
@@ -207,6 +332,9 @@ function TerminalBlock(props: BlockRenderProps & { blockId: string; profileId: s
   }
 
   const reportedCwd = props.remoteShellIntegrationEnabled && runtime?.cwdSource === "osc7" ? runtime.cwd : null;
+  const localFallbackCwd = runtime?.initialCwd ?? (runtime?.cwdSource === "initial" ? runtime.cwd : null) ?? "~";
+  const fallbackCwd = props.profileId === null ? localFallbackCwd : ".";
+  const fileBrowserPath = reportedCwd ?? fallbackCwd;
   const sessionIdentity = `${props.profileId ?? "local"}:${runtime?.sessionId ?? "none"}`;
   const osc7AttentionActive = osc7Attention?.sessionIdentity === sessionIdentity;
   const osc7TagState = props.remoteShellIntegrationEnabled && status === "connected"
@@ -214,16 +342,18 @@ function TerminalBlock(props: BlockRenderProps & { blockId: string; profileId: s
     : null;
   const osc7TagMessage = osc7TagState === "attention"
     ? props.profileId === null
-      ? "未检测到本地终端的 OSC 7 当前目录，无法打开当前文件夹。"
-      : "未检测到远程终端的 OSC 7 当前目录，无法打开当前文件夹。"
+      ? "未检测到本地终端的 OSC 7 当前目录，文件管理将自动回退到启动目录。"
+      : "未检测到远程终端的 OSC 7 当前目录，文件管理将自动回退到远程主目录。"
     : osc7TagState === "ready"
       ? "OSC 7 初始化成功，已开始跟踪当前终端目录。"
       : "OSC 7 已启用，尚未收到当前会话的目录信息。";
-  const cwdButtonTitle = !props.remoteShellIntegrationEnabled
-    ? "启用 OSC 7 终端目录跟踪后可打开当前文件夹"
+  const cwdButtonTitle = status !== "connected"
+    ? "连接终端后打开终端文件夹"
     : reportedCwd
-    ? `打开 ${reportedCwd}`
-    : "当前目录尚未确认；点击查看 OSC 7 状态";
+      ? `打开当前目录 ${reportedCwd}`
+      : props.profileId === null
+        ? `打开启动目录 ${localFallbackCwd}`
+        : "打开远程主目录";
 
   const showOsc7Attention = useCallback(() => {
     if (!props.remoteShellIntegrationEnabled) return;
@@ -243,11 +373,8 @@ function TerminalBlock(props: BlockRenderProps & { blockId: string; profileId: s
   }, [props.remoteShellIntegrationEnabled, sessionIdentity]);
 
   function openTerminalDirectory() {
-    if (reportedCwd) {
-      dispatch({ type: "openFiles", workspaceId: props.workspace.id, anchorBlockId: props.blockId, profileId: props.profileId, path: reportedCwd });
-    } else {
-      showOsc7Attention();
-    }
+    if (props.remoteShellIntegrationEnabled && !reportedCwd) showOsc7Attention();
+    dispatch({ type: "openFiles", workspaceId: props.workspace.id, anchorBlockId: props.blockId, profileId: props.profileId, path: fileBrowserPath });
   }
 
   useEffect(() => {
@@ -302,15 +429,18 @@ function TerminalBlock(props: BlockRenderProps & { blockId: string; profileId: s
       <TerminalTargetPicker profiles={profiles} groups={profileGroups} recentProfileIds={document?.recentProfileIds ?? []} selectedProfileId={props.profileId} status={status} detail={detail} hideDetail={Boolean(runtime?.connectionProgress)} localAttention={props.localTerminalAttention} onSelect={(profileId) => void chooseTarget(profileId)} onManageConnections={props.onOpenConnectionManager} onRequestDisconnect={status === "connected" && props.profileId !== null ? requestDisconnect : undefined} statusAction={statusAction}/>
       <ConnectionRouteProgress progress={runtime?.connectionProgress} endpoint={endpoint} profile={profile} onRequestDisconnect={status === "connected" && props.profileId !== null ? requestDisconnect : undefined} statusAction={runtime?.connectionProgress ? statusAction : undefined}/>
       {osc7TagState && <abbr key={osc7TagState === "attention" ? osc7Attention?.sequence : "stable"} className="terminal-osc7-tag" data-state={osc7TagState} aria-label={osc7TagMessage} aria-live="polite" title={osc7TagMessage}><span aria-hidden="true">OSC7</span></abbr>}
-      <div className="block-actions">
-        <button aria-label="搜索终端输出" title="搜索终端输出" onClick={() => openTerminalSearch(props.blockId)}><Icon name="search" size={13}/></button>
-        <button aria-label="清除终端缓冲区" title="清除终端缓冲区" onClick={() => clearBlockBuffer(props.blockId)}><Icon name="clear" size={13}/></button>
-        <button aria-label="打开当前文件夹" title={cwdButtonTitle} disabled={status !== "connected" || !props.remoteShellIntegrationEnabled} onClick={openTerminalDirectory}><Icon name="files" size={13}/></button>
-        <button aria-label="打开网络窗口" title={props.profileId ? "使用当前远程连接打开网络窗口" : "本地终端无法创建网络窗口"} disabled={!props.profileId} onClick={() => dispatch({ type: "openNetwork", workspaceId: props.workspace.id, anchorBlockId: props.blockId, profileId: props.profileId })}><Icon name="network" size={13}/></button>
-        <button aria-label="左右分割" title="左右分割" onClick={() => splitTerminalBlock(props.workspace.id, props.blockId, "horizontal", props.remoteShellIntegrationEnabled)}><Icon name="splitHorizontal" size={13}/></button>
-        <button aria-label="上下分割" title="上下分割" onClick={() => splitTerminalBlock(props.workspace.id, props.blockId, "vertical", props.remoteShellIntegrationEnabled)}><Icon name="splitVertical" size={13}/></button>
-        <button aria-label="关闭终端" title="关闭" disabled={terminalBlockIds(props.workspace.layout).length === 1} onClick={() => props.onRequestClose(props.blockId)}><Icon name="close" size={13}/></button>
-      </div>
+      <TerminalHeaderActions
+        closeDisabled={terminalBlockIds(props.workspace.layout).length === 1}
+        onClose={() => props.onRequestClose(props.blockId)}
+        actions={[
+          { label: "搜索终端输出", icon: "search", onSelect: () => openTerminalSearch(props.blockId) },
+          { label: "清除终端缓冲区", icon: "clear", onSelect: () => clearBlockBuffer(props.blockId) },
+          { label: "打开终端文件夹", title: cwdButtonTitle, icon: "files", disabled: status !== "connected", onSelect: openTerminalDirectory },
+          { label: "打开网络窗口", title: props.profileId ? "使用当前远程连接打开网络窗口" : "本地终端无法创建网络窗口", icon: "network", disabled: !props.profileId, onSelect: () => dispatch({ type: "openNetwork", workspaceId: props.workspace.id, anchorBlockId: props.blockId, profileId: props.profileId }) },
+          { label: "左右分割", icon: "splitHorizontal", onSelect: () => splitTerminalBlock(props.workspace.id, props.blockId, "horizontal", props.remoteShellIntegrationEnabled) },
+          { label: "上下分割", icon: "splitVertical", onSelect: () => splitTerminalBlock(props.workspace.id, props.blockId, "vertical", props.remoteShellIntegrationEnabled) },
+        ]}
+      />
     </header>
     <TerminalPanel key={props.profileId ?? "local"} blockId={props.blockId} sessionKey={`${props.blockId}:${props.profileId ?? "local"}`} local={props.profileId === null} visible={props.visible} osc7Enabled={props.remoteShellIntegrationEnabled} terminalSettingsReady={props.terminalSettingsReady}/>
     {runtime?.notice && <BlockNotice message={runtime.notice}/>}

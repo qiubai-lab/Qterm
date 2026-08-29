@@ -93,6 +93,7 @@ function Harness() {
     <span data-testid="runtime-notice">{runtimes[ids[0]]?.notice}</span>
     <span data-testid="runtime-progress">{runtimes[ids[0]]?.connectionProgress?.phase}:{runtimes[ids[0]]?.connectionProgress?.message}</span>
     <span data-testid="runtime-cwd">{runtimes[ids[0]]?.cwd}</span>
+    <span data-testid="runtime-initial-cwd">{runtimes[ids[0]]?.initialCwd}</span>
     <span data-testid="runtime-cwd-source">{runtimes[ids[0]]?.cwdSource ?? "unknown"}</span>
     <span data-testid="active-profile">{activeLeaf?.profileId ?? "local"}</span>
     <span data-testid="file-runtime">{fileRuntimes[activeWorkspace.activeBlockId]?.kind}:{fileRuntimes[activeWorkspace.activeBlockId]?.status}</span>
@@ -213,9 +214,11 @@ describe("WorkspaceProvider multi-session routing", () => {
 
     await waitFor(() => expect(screen.getByTestId("runtime")).toHaveTextContent("local:connected"));
     expect(screen.getByTestId("runtime-cwd")).toHaveTextContent("/Users/tester");
+    expect(screen.getByTestId("runtime-initial-cwd")).toHaveTextContent("/Users/tester");
     expect(screen.getByTestId("runtime-cwd-source")).toHaveTextContent("initial");
     await user.click(screen.getByRole("button", { name: "report-cwd" }));
     expect(screen.getByTestId("runtime-cwd")).toHaveTextContent("/srv/reported");
+    expect(screen.getByTestId("runtime-initial-cwd")).toHaveTextContent("/Users/tester");
     expect(screen.getByTestId("runtime-cwd-source")).toHaveTextContent("osc7");
   });
 
@@ -292,7 +295,7 @@ describe("WorkspaceProvider multi-session routing", () => {
     );
   });
 
-  it("clears reported directories and does not inherit them when OSC 7 is disabled", async () => {
+  it("restores the local launch directory and does not inherit OSC 7 when disabled", async () => {
     Object.defineProperty(window, "__TAURI_INTERNALS__", { configurable: true, value: {} });
     mocks.connectLocalSession.mockImplementation(async (_columns, _rows, event, terminal) => {
       mocks.localConnections.push({ event, terminal });
@@ -308,8 +311,9 @@ describe("WorkspaceProvider multi-session routing", () => {
     expect(screen.getByTestId("runtime-cwd-source")).toHaveTextContent("osc7");
 
     await user.click(screen.getByRole("button", { name: "disable-osc7" }));
-    expect(screen.getByTestId("runtime-cwd")).toBeEmptyDOMElement();
-    expect(screen.getByTestId("runtime-cwd-source")).toHaveTextContent("unknown");
+    expect(screen.getByTestId("runtime-cwd")).toHaveTextContent("/Users/tester");
+    expect(screen.getByTestId("runtime-initial-cwd")).toHaveTextContent("/Users/tester");
+    expect(screen.getByTestId("runtime-cwd-source")).toHaveTextContent("initial");
 
     await user.click(screen.getByRole("button", { name: "split-without-osc7" }));
     await user.click(screen.getByRole("button", { name: "local-active" }));

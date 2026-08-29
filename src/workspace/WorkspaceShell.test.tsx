@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ConnectionProfile } from "../lib/tauri/profiles";
 import type { Workspace } from "./model";
+import { defaultRuntime, type TerminalRuntime } from "./workspaceRuntime";
 
 const mocks = vi.hoisted(() => ({
   dispatch: vi.fn(),
@@ -40,12 +41,13 @@ let requestedProfile: ConnectionProfile = connectionProfile;
 const initialWorkspace: Workspace = { id: "workspace-1", name: "Workspace 1", activeBlockId: "block-1", layout: { type: "terminal", blockId: "block-1", profileId: null } };
 let workspace = initialWorkspace;
 let workspaces = [initialWorkspace];
+let terminalRuntimes: Record<string, TerminalRuntime> = {};
 
 vi.mock("./configuredAuth", () => ({ resolveConfiguredAuth: mocks.resolveConfiguredAuth }));
 vi.mock("./LayoutView", () => ({ WorkspaceCanvas: ({ workspace: renderedWorkspace, localTerminalAttention, remoteShellIntegrationEnabled, terminalSettingsReady, onRequestAuthConnection, onRequestDisconnect, onOpenConnectionManager }: { workspace: Workspace; localTerminalAttention?: boolean; remoteShellIntegrationEnabled?: boolean; terminalSettingsReady?: boolean; onRequestAuthConnection: (owner: "terminal", blockId: string, profile: typeof requestedProfile) => void; onRequestDisconnect: (owner: "terminal" | "files" | "network", blockId: string, name: string, local: boolean) => void; onOpenConnectionManager: () => void }) => <div data-testid={`workspace-canvas-${renderedWorkspace.id}`} data-local-terminal-attention={localTerminalAttention || undefined} data-remote-shell-integration={remoteShellIntegrationEnabled || undefined} data-terminal-settings-ready={terminalSettingsReady || undefined}><div className="terminal-surface"><textarea className="xterm-helper-textarea" aria-label="终端输入"/></div><button onClick={() => onRequestAuthConnection("terminal", "block-1", requestedProfile)}>请求远程连接</button><button onClick={() => onRequestDisconnect("terminal", "block-1", "Server", false)}>请求断开连接</button><button onClick={() => onRequestDisconnect("files", "files-1", "Server Files", false)}>请求断开文件连接</button><button onClick={() => onRequestDisconnect("network", "network-1", "Server Network", false)}>请求断开网络连接</button><button onClick={onOpenConnectionManager}>从连接选择器管理连接</button></div> }));
 vi.mock("./WorkspaceProvider", () => ({ useWorkspace: () => ({
   hydrated: true, document: { schemaVersion: 6, activeWorkspaceId: workspace.id, recentProfileIds: [], workspaces }, activeWorkspace: workspace,
-  dispatch: mocks.dispatch, runtimes: {}, fileRuntimes: {}, networkRuntimes: {}, clearTerminalOsc7State: mocks.clearTerminalOsc7State, splitTerminalBlock: mocks.splitTerminalBlock, connectBlock: mocks.connectBlock, connectFileBlock: mocks.connectFileBlock, connectNetworkBlock: mocks.connectNetworkBlock, disconnectBlock: mocks.disconnectBlock, disconnectFileBlock: mocks.disconnectFileBlock, disconnectNetworkBlock: mocks.disconnectNetworkBlock,
+  dispatch: mocks.dispatch, runtimes: terminalRuntimes, fileRuntimes: {}, networkRuntimes: {}, clearTerminalOsc7State: mocks.clearTerminalOsc7State, splitTerminalBlock: mocks.splitTerminalBlock, connectBlock: mocks.connectBlock, connectFileBlock: mocks.connectFileBlock, connectNetworkBlock: mocks.connectNetworkBlock, disconnectBlock: mocks.disconnectBlock, disconnectFileBlock: mocks.disconnectFileBlock, disconnectNetworkBlock: mocks.disconnectNetworkBlock,
   isConnectionTargetCurrent: mocks.isConnectionTargetCurrent,
   connectedCount: vi.fn().mockReturnValue(0), closeSessions: vi.fn().mockResolvedValue(undefined), blocksForWorkspace: vi.fn().mockReturnValue(["block-1"]),
   acceptBlockHostKey: vi.fn(), rejectBlockHostKey: vi.fn(), acceptFileHostKey: vi.fn(), rejectFileHostKey: vi.fn(), acceptNetworkHostKey: vi.fn(), rejectNetworkHostKey: vi.fn(), storageNotice: "", dismissStorageNotice: vi.fn(),
@@ -71,6 +73,7 @@ import { WorkspaceShell } from "./WorkspaceShell";
 beforeEach(() => {
   workspace = initialWorkspace;
   workspaces = [initialWorkspace];
+  terminalRuntimes = {};
   mocks.splitTerminalBlock.mockClear();
   mocks.clearTerminalOsc7State.mockClear();
   mocks.getVaultStatus.mockResolvedValue({ initialized: true, unlocked: true });
@@ -482,6 +485,50 @@ describe("WorkspaceShell utility rail", () => {
 
     await user.click(screen.getByRole("button", { name: "打开终端" }));
     expect(mocks.splitTerminalBlock).toHaveBeenCalledWith("workspace-1", "block-1", "horizontal", true);
+  });
+
+  it("opens files with the active remote terminal profile and OSC 7 directory", async () => {
+    workspace = { id: "workspace-remote", name: "Remote", activeBlockId: "remote-terminal", layout: { type: "terminal", blockId: "remote-terminal", profileId: "agent-profile" } };
+    workspaces = [workspace];
+    terminalRuntimes = {
+      "remote-terminal": {
+        ...defaultRuntime,
+        sessionId: "session-remote",
+        kind: "ssh",
+        status: "connected",
+        cwd: "/tmp",
+        cwdSource: "osc7",
+      },
+    };
+    const user = userEvent.setup();
+    render(<WorkspaceShell/>);
+    await waitFor(() => expect(screen.getByTestId("workspace-canvas-workspace-remote")).toHaveAttribute("data-remote-shell-integration", "true"));
+
+    await user.click(screen.getByRole("button", { name: "文件管理" }));
+
+    expect(mocks.dispatch).toHaveBeenCalledWith({
+      type: "openFiles",
+      workspaceId: "workspace-remote",
+      anchorBlockId: "remote-terminal",
+      profileId: "agent-profile",
+      path: "/tmp",
+    });
+  });
+
+  it("opens network management with the active remote connection", async () => {
+    workspace = { id: "workspace-remote", name: "Remote", activeBlockId: "remote-terminal", layout: { type: "terminal", blockId: "remote-terminal", profileId: "agent-profile" } };
+    workspaces = [workspace];
+    const user = userEvent.setup();
+    render(<WorkspaceShell/>);
+
+    await user.click(screen.getByRole("button", { name: "网络管理" }));
+
+    expect(mocks.dispatch).toHaveBeenCalledWith({
+      type: "openNetwork",
+      workspaceId: "workspace-remote",
+      anchorBlockId: "remote-terminal",
+      profileId: "agent-profile",
+    });
   });
 
   it("handles terminal-safe shortcuts while xterm has focus and preserves control keys", async () => {
