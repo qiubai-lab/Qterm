@@ -39,12 +39,17 @@ const mocks = vi.hoisted(() => ({
   clearBlockBuffer: vi.fn(),
   writeClipboardText: vi.fn().mockResolvedValue(undefined),
   readClipboardText: vi.fn().mockResolvedValue(""),
+  pasteRemoteClipboardImage: vi.fn(),
   runtimes: {} as Record<string, { status: string; sessionId?: string | null }>,
 }));
 
 vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({
   readText: mocks.readClipboardText,
   writeText: mocks.writeClipboardText,
+}));
+
+vi.mock("../lib/tauri/sessions", () => ({
+  pasteRemoteClipboardImage: mocks.pasteRemoteClipboardImage,
 }));
 
 vi.mock("@xterm/addon-fit", () => ({
@@ -163,6 +168,7 @@ describe("TerminalPanel view lifetime", () => {
     mocks.clearBlockBuffer.mockClear();
     mocks.writeClipboardText.mockClear();
     mocks.readClipboardText.mockReset().mockResolvedValue("");
+    mocks.pasteRemoteClipboardImage.mockReset();
     mocks.runtimes = {};
     mocks.hydrated = true;
     mocks.localTerminalCapabilities = { windowsPty: { backend: "conpty", buildNumber: 26100 } };
@@ -423,6 +429,7 @@ describe("TerminalPanel clipboard interaction", () => {
     mocks.clearBlockBuffer.mockClear();
     mocks.writeClipboardText.mockClear();
     mocks.readClipboardText.mockReset().mockResolvedValue("");
+    mocks.pasteRemoteClipboardImage.mockReset();
     mocks.runtimes = { "block-menu": { status: "connected" }, "block-keys": { status: "connected" } };
     vi.useFakeTimers();
     vi.stubGlobal("ResizeObserver", ResizeObserverMock);
@@ -556,6 +563,110 @@ describe("TerminalPanel clipboard interaction", () => {
 
     expect(terminal.paste).toHaveBeenCalledWith("/data/models/Qwen");
     expect(mocks.writeBlock.mock.calls.map(([, data]) => new TextDecoder().decode(data))).toEqual(["/data/models/Qwen", "\x03"]);
+    view.unmount();
+  });
+
+  it("uploads an image only for an empty remote clipboard and pastes its path before later input", async () => {
+    vi.stubGlobal("navigator", { platform: "Win32", userAgent: "Windows" });
+    mocks.runtimes = { "block-keys": { status: "connected", sessionId: "ssh-1" } };
+    let resolveImage: ((value: { remotePath: string; width: number; height: number }) => void) | null = null;
+    mocks.readClipboardText.mockResolvedValue("");
+    mocks.pasteRemoteClipboardImage.mockReturnValue(new Promise((resolve) => { resolveImage = resolve; }));
+    const view = render(<TerminalPanel blockId="block-keys" sessionKey="block-keys:image-paste" local={false} visible/>);
+    const terminal = mocks.terminals[0];
+
+    expect(terminal.keyHandler?.(new KeyboardEvent("keydown", { key: "v", ctrlKey: true }))).toBe(false);
+    await act(async () => Promise.resolve());
+    expect(mocks.pasteRemoteClipboardImage).toHaveBeenCalledWith("ssh-1");
+    expect(screen.getByRole("status", { name: "终端粘贴状态" })).toHaveTextContent("正在上传剪贴板图片");
+    terminal.dataHandler?.("x");
+    expect(mocks.writeBlock).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolveImage?.({ remotePath: "/tmp/.qterm-clipboard-ssh/image.png", width: 120, height: 80 });
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(terminal.paste).toHaveBeenCalledWith("/tmp/.qterm-clipboard-ssh/image.png");
+    expect(mocks.writeBlock.mock.calls.map(([, data]) => new TextDecoder().decode(data))).toEqual([
+      "/tmp/.qterm-clipboard-ssh/image.png",
+      "x",
+    ]);
+    expect(screen.getByRole("status", { name: "终端粘贴状态" })).toHaveTextContent("图片路径已粘贴");
+    view.unmount();
+  });
+
+  it("keeps text paste preferred when the clipboard also has an image", async () => {
+    vi.stubGlobal("navigator", { platform: "Win32", userAgent: "Windows" });
+    mocks.runtimes = { "block-keys": { status: "connected", sessionId: "ssh-1" } };
+    mocks.readClipboardText.mockResolvedValue("prompt text");
+    const view = render(<TerminalPanel blockId="block-keys" sessionKey="block-keys:text-first" local={false} visible/>);
+    const terminal = mocks.terminals[0];
+
+    expect(terminal.keyHandler?.(new KeyboardEvent("keydown", { key: "v", ctrlKey: true }))).toBe(false);
+    await act(async () => undefined);
+
+    expect(terminal.paste).toHaveBeenCalledWith("prompt text");
+    expect(mocks.pasteRemoteClipboardImage).not.toHaveBeenCalled();
+    view.unmount();
+  });
+
+  it("does not request remote image upload for a local terminal", async () => {
+    vi.stubGlobal("navigator", { platform: "Win32", userAgent: "Windows" });
+    mocks.runtimes = { "block-keys": { status: "connected", sessionId: "local-1" } };
+    mocks.readClipboardText.mockResolvedValue("");
+    const view = render(<TerminalPanel blockId="block-keys" sessionKey="block-keys:local-image" local visible/>);
+    const terminal = mocks.terminals[0];
+
+    expect(terminal.keyHandler?.(new KeyboardEvent("keydown", { key: "v", ctrlKey: true }))).toBe(false);
+    await act(async () => undefined);
+
+    expect(mocks.pasteRemoteClipboardImage).not.toHaveBeenCalled();
+    expect(terminal.paste).not.toHaveBeenCalled();
+    view.unmount();
+  });
+
+  it("reports image upload failure without sending terminal input", async () => {
+    vi.stubGlobal("navigator", { platform: "Win32", userAgent: "Windows" });
+    mocks.runtimes = { "block-keys": { status: "connected", sessionId: "ssh-1" } };
+    mocks.readClipboardText.mockRejectedValue(new Error("text unavailable"));
+    mocks.pasteRemoteClipboardImage.mockRejectedValue({ message: "远程服务器未提供可用的 SFTP 子系统" });
+    const view = render(<TerminalPanel blockId="block-keys" sessionKey="block-keys:image-error" local={false} visible/>);
+    const terminal = mocks.terminals[0];
+
+    expect(terminal.keyHandler?.(new KeyboardEvent("keydown", { key: "v", ctrlKey: true }))).toBe(false);
+    await act(async () => undefined);
+
+    expect(screen.getByRole("status", { name: "终端粘贴状态" })).toHaveTextContent("粘贴图片失败：远程服务器未提供可用的 SFTP 子系统");
+    expect(terminal.paste).not.toHaveBeenCalled();
+    expect(mocks.writeBlock).not.toHaveBeenCalled();
+    view.unmount();
+  });
+
+  it("drops a late image path after the terminal session changes", async () => {
+    vi.stubGlobal("navigator", { platform: "Win32", userAgent: "Windows" });
+    mocks.runtimes = { "block-keys": { status: "connected", sessionId: "ssh-1" } };
+    let resolveImage: ((value: { remotePath: string; width: number; height: number }) => void) | null = null;
+    mocks.readClipboardText.mockResolvedValue("");
+    mocks.pasteRemoteClipboardImage.mockReturnValue(new Promise((resolve) => { resolveImage = resolve; }));
+    const view = render(<TerminalPanel blockId="block-keys" sessionKey="block-keys:ssh-1" local={false} visible/>);
+    const previousTerminal = mocks.terminals[0];
+
+    expect(previousTerminal.keyHandler?.(new KeyboardEvent("keydown", { key: "v", ctrlKey: true }))).toBe(false);
+    await act(async () => Promise.resolve());
+    mocks.runtimes = { "block-keys": { status: "connected", sessionId: "ssh-2" } };
+    view.rerender(<TerminalPanel blockId="block-keys" sessionKey="block-keys:ssh-2" local={false} visible/>);
+
+    await act(async () => {
+      resolveImage?.({ remotePath: "/tmp/.qterm-clipboard-old/image.png", width: 12, height: 8 });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(previousTerminal.paste).not.toHaveBeenCalled();
+    expect(screen.queryByRole("status", { name: "终端粘贴状态" })).not.toBeInTheDocument();
     view.unmount();
   });
 

@@ -131,6 +131,15 @@ fn error_code(code: ApplicationErrorCode) -> &'static str {
         ApplicationErrorCode::SessionNotConnected => "sessionNotConnected",
         ApplicationErrorCode::InvalidTerminalInput => "invalidTerminalInput",
         ApplicationErrorCode::TerminalBusy => "terminalBusy",
+        ApplicationErrorCode::ClipboardImageUnavailable => "clipboardImageUnavailable",
+        ApplicationErrorCode::ClipboardImageInvalid => "clipboardImageInvalid",
+        ApplicationErrorCode::ClipboardImageTooLarge => "clipboardImageTooLarge",
+        ApplicationErrorCode::ClipboardImageEncodingFailed => "clipboardImageEncodingFailed",
+        ApplicationErrorCode::ClipboardImageSftpUnavailable => "clipboardImageSftpUnavailable",
+        ApplicationErrorCode::ClipboardImageTemporaryDirectoryUnavailable => {
+            "clipboardImageTemporaryDirectoryUnavailable"
+        }
+        ApplicationErrorCode::ClipboardImageUploadFailed => "clipboardImageUploadFailed",
         ApplicationErrorCode::InvalidTransferPath => "invalidTransferPath",
         ApplicationErrorCode::TransferPathNotSelected => "transferPathNotSelected",
         ApplicationErrorCode::TransferNotFound => "transferNotFound",

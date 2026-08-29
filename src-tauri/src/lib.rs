@@ -5,6 +5,7 @@ mod infrastructure;
 mod ports;
 
 use commands::browser::{BrowserProxyState, browser_proxy_launch, browser_proxy_list};
+use commands::clipboard::session_paste_clipboard_image;
 use commands::credential::{
     CredentialState, credential_cancel_private_key, credential_commit_private_key,
     credential_create_password, credential_delete, credential_list,
@@ -241,6 +242,7 @@ pub fn run() {
             session_close,
             session_write,
             session_resize,
+            session_paste_clipboard_image,
             local_terminal_capabilities,
             local_session_connect,
             local_session_write,

@@ -18,6 +18,7 @@ import {
   acceptHostKey,
   closeSession,
   connectSession,
+  pasteRemoteClipboardImage,
   rejectHostKey,
   resizeSession,
   writeSession,
@@ -106,6 +107,25 @@ describe("SSH session IPC client", () => {
     });
     expect(mocks.invoke).toHaveBeenNthCalledWith(3, "session_close", {
       sessionId: "session-3",
+    });
+  });
+
+  it("uses a narrow session-only IPC request for remote clipboard images", async () => {
+    mocks.invoke.mockResolvedValue({
+      remotePath: "/tmp/.qterm-clipboard-session/image.png",
+      width: 120,
+      height: 80,
+    });
+
+    const result = await pasteRemoteClipboardImage("session-1");
+
+    expect(mocks.invoke).toHaveBeenCalledWith("session_paste_clipboard_image", {
+      sessionId: "session-1",
+    });
+    expect(result).toEqual({
+      remotePath: "/tmp/.qterm-clipboard-session/image.png",
+      width: 120,
+      height: 80,
     });
   });
 });

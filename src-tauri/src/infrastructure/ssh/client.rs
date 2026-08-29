@@ -10,12 +10,12 @@ use session::run_session;
 #[cfg(test)]
 use transfer::scan_local_upload_entries;
 use transfer::{
-    list_remote_directory, mutate_remote_entry, read_remote_file, run_transfer,
-    write_remote_text_file,
+    cleanup_clipboard_directories, list_remote_directory, mutate_remote_entry, read_remote_file,
+    run_transfer, store_clipboard_image, write_remote_text_file,
 };
 
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::{HashMap, HashSet, VecDeque},
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
     time::Duration,
@@ -35,6 +35,7 @@ use crate::{
     application::host_key_service::HostKeyService,
     domain::{
         auth::AuthRequest,
+        clipboard_image::{CLIPBOARD_DIRECTORY_MODE, CLIPBOARD_FILE_MODE, CLIPBOARD_HOME_TTL_SECS},
         files::{DirectoryListing, FileDocument, FileEntry, content_revision},
         network::ForwardRuleKind,
         session::{
@@ -59,6 +60,9 @@ use crate::{
                 start_listener,
             },
         },
+    },
+    ports::clipboard_image::{
+        ClipboardImageFuture, RemoteClipboardImageError, RemoteClipboardImageStore,
     },
 };
 
@@ -289,6 +293,43 @@ impl SshSessionManager {
             .control
             .try_send(SessionControl::Resize(size))
             .map_err(|_| SessionControlError::ControlQueueUnavailable)
+    }
+
+    async fn upload_clipboard_image(
+        &self,
+        id: &str,
+        png: Vec<u8>,
+    ) -> Result<String, RemoteClipboardImageError> {
+        let entry = self
+            .entry(id)
+            .map_err(|_| RemoteClipboardImageError::SessionNotFound)?;
+        if entry.purpose != SessionPurpose::Terminal {
+            return Err(RemoteClipboardImageError::TerminalUnavailable);
+        }
+        if entry.state() != SessionState::Connected {
+            return Err(RemoteClipboardImageError::SessionNotConnected);
+        }
+        let (reply, response) = oneshot::channel();
+        let upload_id = Uuid::new_v4().to_string();
+        let (cancel_sender, cancel) = oneshot::channel();
+        entry.register_clipboard_upload(upload_id.clone(), cancel_sender);
+        if entry
+            .control
+            .try_send(SessionControl::StoreClipboardImage {
+                upload_id: upload_id.clone(),
+                session_token: id.to_owned(),
+                png,
+                cancel,
+                reply,
+            })
+            .is_err()
+        {
+            entry.cancel_clipboard_upload(&upload_id);
+            return Err(RemoteClipboardImageError::UploadFailed);
+        }
+        response
+            .await
+            .map_err(|_| RemoteClipboardImageError::UploadFailed)?
     }
 
     pub async fn start_network_rule(
@@ -538,6 +579,16 @@ impl SshSessionManager {
     }
 }
 
+impl RemoteClipboardImageStore for SshSessionManager {
+    fn store_image<'a>(
+        &'a self,
+        session_id: &'a str,
+        png: Vec<u8>,
+    ) -> ClipboardImageFuture<'a, Result<String, RemoteClipboardImageError>> {
+        Box::pin(async move { self.upload_clipboard_image(session_id, png).await })
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SessionControlError {
     SessionNotFound,
@@ -584,6 +635,8 @@ struct SessionEntry {
     cancel: Mutex<Option<oneshot::Sender<()>>>,
     control: mpsc::Sender<SessionControl>,
     transfers: Mutex<HashMap<String, oneshot::Sender<()>>>,
+    clipboard_directories: Mutex<HashSet<String>>,
+    clipboard_uploads: Mutex<HashMap<String, oneshot::Sender<()>>>,
     events: EventSink,
 }
 
@@ -605,6 +658,8 @@ impl SessionEntry {
             cancel: Mutex::new(Some(cancel)),
             control,
             transfers: Mutex::new(HashMap::new()),
+            clipboard_directories: Mutex::new(HashSet::new()),
+            clipboard_uploads: Mutex::new(HashMap::new()),
             events,
         }
     }
@@ -672,6 +727,15 @@ impl SessionEntry {
         for (_, cancel) in transfers {
             let _ = cancel.send(());
         }
+        let clipboard_uploads = std::mem::take(
+            &mut *self
+                .clipboard_uploads
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner()),
+        );
+        for (_, cancel) in clipboard_uploads {
+            let _ = cancel.send(());
+        }
     }
 
     fn set_pending(&self, pending: PendingHostKey) {
@@ -711,6 +775,45 @@ impl SessionEntry {
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .remove(id);
     }
+
+    fn clipboard_directories(&self) -> HashSet<String> {
+        self.clipboard_directories
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone()
+    }
+
+    fn register_clipboard_directory(&self, directory: String) {
+        self.clipboard_directories
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .insert(directory);
+    }
+
+    fn register_clipboard_upload(&self, id: String, cancel: oneshot::Sender<()>) {
+        self.clipboard_uploads
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .insert(id, cancel);
+    }
+
+    fn cancel_clipboard_upload(&self, id: &str) {
+        if let Some(cancel) = self
+            .clipboard_uploads
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .remove(id)
+        {
+            let _ = cancel.send(());
+        }
+    }
+
+    fn finish_clipboard_upload(&self, id: &str) {
+        self.clipboard_uploads
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .remove(id);
+    }
 }
 
 struct PendingHostKey {
@@ -730,6 +833,13 @@ enum HostKeyDecision {
 enum SessionControl {
     Write(Vec<u8>),
     Resize(TerminalSize),
+    StoreClipboardImage {
+        upload_id: String,
+        session_token: String,
+        png: Vec<u8>,
+        cancel: oneshot::Receiver<()>,
+        reply: oneshot::Sender<Result<String, RemoteClipboardImageError>>,
+    },
     StartTransfer {
         id: String,
         request: TransferRequest,

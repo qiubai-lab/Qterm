@@ -31,6 +31,7 @@ use crate::{
         json_known_host_repository::JsonKnownHostRepository,
         json_remote_shell_cache::JsonRemoteShellCache,
     },
+    ports::clipboard_image::{RemoteClipboardImageError, RemoteClipboardImageStore},
 };
 
 fn route_metadata(host: &str, port: u16) -> RouteNodeMetadata {
@@ -236,6 +237,14 @@ fn files_sessions_reject_terminal_write_and_resize_controls() {
             crate::domain::session::TerminalSize::new(80, 24).expect("size")
         ),
         Err(super::SessionControlError::TerminalUnavailable)
+    );
+    assert_eq!(
+        tauri::async_runtime::block_on(manager.store_image("files-1", vec![1, 2, 3])),
+        Err(RemoteClipboardImageError::TerminalUnavailable)
+    );
+    assert_eq!(
+        tauri::async_runtime::block_on(manager.store_image("missing", vec![1, 2, 3])),
+        Err(RemoteClipboardImageError::SessionNotFound)
     );
 }
 
@@ -921,10 +930,58 @@ fn local_openssh_exercises_terminal_transfer_and_file_editing() {
         fs::read(remote_uploads.join("bundle/nested/child.txt")).expect("uploaded child"),
         b"upload-child"
     );
+
+    let first_clipboard_image = tauri::async_runtime::block_on(
+        manager.upload_clipboard_image(&session_id, b"first-png-payload".to_vec()),
+    )
+    .expect("upload first clipboard image");
+    let second_clipboard_image = tauri::async_runtime::block_on(
+        manager.upload_clipboard_image(&session_id, b"second-png-payload".to_vec()),
+    )
+    .expect("upload second clipboard image");
+    assert_ne!(first_clipboard_image, second_clipboard_image);
+    assert!(first_clipboard_image.starts_with(&format!("/tmp/.qterm-clipboard-{session_id}/")));
+    assert_eq!(
+        fs::read(&first_clipboard_image).expect("first clipboard image"),
+        b"first-png-payload"
+    );
+    let clipboard_directory = Path::new(&first_clipboard_image)
+        .parent()
+        .expect("clipboard directory")
+        .to_path_buf();
+    let directory_mode = Command::new("stat")
+        .args(["-c", "%a"])
+        .arg(&clipboard_directory)
+        .output()
+        .expect("clipboard directory mode");
+    let file_mode = Command::new("stat")
+        .args(["-c", "%a"])
+        .arg(&first_clipboard_image)
+        .output()
+        .expect("clipboard file mode");
+    assert_eq!(
+        String::from_utf8_lossy(&directory_mode.stdout).trim(),
+        "700"
+    );
+    assert_eq!(String::from_utf8_lossy(&file_mode.stdout).trim(), "600");
+
+    manager.close(&session_id).expect("close session");
+    loop {
+        match event_receiver
+            .recv_timeout(Duration::from_secs(10))
+            .expect("clipboard cleanup session event")
+        {
+            SessionEvent::StateChanged(SessionState::Closed) => break,
+            SessionEvent::Failed { failure, .. } => {
+                panic!("session failed during clipboard cleanup: {failure:?}")
+            }
+            _ => {}
+        }
+    }
+    assert!(!clipboard_directory.exists());
     manager
         .close(&second_session_id)
         .expect("close second session");
-    manager.close(&session_id).expect("close session");
 }
 
 #[test]

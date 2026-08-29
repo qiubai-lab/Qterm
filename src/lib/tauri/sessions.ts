@@ -58,6 +58,12 @@ export interface TerminalSessionConnectInput extends SessionConnectInput {
   initialDirectory?: string;
 }
 
+export interface ClipboardImagePasteResult {
+  remotePath: string;
+  width: number;
+  height: number;
+}
+
 export function connectSession(
   input: TerminalSessionConnectInput,
   onEvent: (event: SessionEvent) => void,
@@ -96,4 +102,8 @@ export function rejectHostKey(sessionId: string): Promise<void> {
 
 export function closeSession(sessionId: string): Promise<void> {
   return invoke("session_close", { sessionId });
+}
+
+export function pasteRemoteClipboardImage(sessionId: string): Promise<ClipboardImagePasteResult> {
+  return invoke("session_paste_clipboard_image", { sessionId });
 }

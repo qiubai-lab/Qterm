@@ -10,6 +10,7 @@ import { resolveAppShortcut, shortcutLabel } from "../app/shortcuts";
 import { DialogFrame } from "../components/dialogs/DialogFrame";
 import { Icon } from "../components/Icon";
 import { currentDesktopPlatform } from "../lib/tauri/window";
+import { pasteRemoteClipboardImage } from "../lib/tauri/sessions";
 import { useWorkspace } from "../workspace/WorkspaceProvider";
 import { parseOsc7Cwd } from "./osc7";
 import { createResizeScheduler, type ResizeScheduler } from "./resizeScheduler";
@@ -39,6 +40,7 @@ type ClipboardPlatform = "mac" | "windows" | "linux";
 type ContextMenuState = { anchorX: number; anchorY: number; x: number; y: number; placement: "above" | "below"; hasSelection: boolean };
 type PendingPaste = { text: string; lines: number; characters: number };
 type SearchResults = { resultIndex: number; resultCount: number };
+type PasteOperation = { text: string; tone: "busy" | "success" | "error" };
 
 const terminalViews = new Map<string, TerminalView>();
 const CLEAR_SCREEN_INPUT = "\x1bcls\r";
@@ -60,10 +62,13 @@ export function TerminalPanel({ blockId, sessionKey, visible, local, osc7Enabled
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [searchResults, setSearchResults] = useState<SearchResults>({ resultIndex: 0, resultCount: 0 });
+  const [pasteOperation, setPasteOperation] = useState<PasteOperation | null>(null);
   const { hydrated = true, localTerminalCapabilities, registerWriter, setBlockCwd, startLocalBlock, writeBlock, resizeBlock, clearBlockBuffer, runtimes } = useWorkspace();
   const windowsPty = local ? localTerminalCapabilities?.windowsPty ?? undefined : undefined;
   const inputEnabled = runtimes[blockId]?.status === "connected";
   const connectedSessionId = runtimes[blockId]?.sessionId ?? null;
+  const connectedSessionIdRef = useRef(connectedSessionId);
+  const pasteRequestIdRef = useRef(0);
   const clipboardPlatform = terminalClipboardPlatform();
   const desktopPlatform = currentDesktopPlatform();
   const writeRef = useRef(writeBlock);
@@ -73,6 +78,15 @@ export function TerminalPanel({ blockId, sessionKey, visible, local, osc7Enabled
   useEffect(() => { writeRef.current = writeBlock; }, [writeBlock]);
   useEffect(() => { resizeRef.current = resizeBlock; }, [resizeBlock]);
   useEffect(() => { startLocalRef.current = startLocalBlock; }, [startLocalBlock]);
+  useEffect(() => { connectedSessionIdRef.current = connectedSessionId; }, [connectedSessionId]);
+  useEffect(() => {
+    if (!pasteOperation || pasteOperation.tone === "busy") return;
+    const duration = pasteOperation.tone === "error" ? 4_200 : 1_800;
+    const timeout = window.setTimeout(() => {
+      setPasteOperation((current) => current === pasteOperation ? null : current);
+    }, duration);
+    return () => window.clearTimeout(timeout);
+  }, [pasteOperation]);
   useEffect(() => {
     osc7EnabledRef.current = osc7Enabled;
     if (viewRef.current) viewRef.current.osc7Enabled = osc7Enabled;
@@ -100,20 +114,42 @@ export function TerminalPanel({ blockId, sessionKey, visible, local, osc7Enabled
     const view = viewRef.current;
     if (!view) return;
     await view.inputScheduler.runExclusive(async (capture) => {
-      let text: string;
+      let text = "";
       try { text = await readClipboardText(); }
-      catch { closeContextMenu(); return; }
+      catch { /* A native image can still be present when text lookup is unavailable. */ }
       if (viewRef.current !== view) return;
       closeContextMenu(false);
-      if (!text) { restoreTerminalFocus(); return; }
-      if (isGuardedPaste(text)) {
+      if (text && isGuardedPaste(text)) {
         setPendingPaste({ text, lines: pasteLineCount(text), characters: text.length });
         return;
       }
-      await capture(() => view.terminal.paste(text));
+      if (text) {
+        await capture(() => view.terminal.paste(text));
+        restoreTerminalFocus();
+        return;
+      }
+      const sessionId = connectedSessionIdRef.current;
+      if (local || !sessionId) { restoreTerminalFocus(); return; }
+      const pasteRequestId = ++pasteRequestIdRef.current;
+      setPasteOperation({ text: "正在上传剪贴板图片…", tone: "busy" });
+      try {
+        const result = await pasteRemoteClipboardImage(sessionId);
+        if (viewRef.current !== view || connectedSessionIdRef.current !== sessionId) {
+          if (pasteRequestIdRef.current === pasteRequestId) setPasteOperation(null);
+          return;
+        }
+        await capture(() => view.terminal.paste(result.remotePath));
+        if (pasteRequestIdRef.current === pasteRequestId) {
+          setPasteOperation({ text: "图片路径已粘贴", tone: "success" });
+        }
+      } catch (reason) {
+        if (viewRef.current === view && connectedSessionIdRef.current === sessionId && pasteRequestIdRef.current === pasteRequestId) {
+          setPasteOperation({ text: clipboardImagePasteErrorMessage(reason), tone: "error" });
+        }
+      }
       restoreTerminalFocus();
     });
-  }, [closeContextMenu, inputEnabled, restoreTerminalFocus]);
+  }, [closeContextMenu, inputEnabled, local, restoreTerminalFocus]);
 
   const selectAll = useCallback(() => {
     viewRef.current?.terminal.selectAll();
@@ -364,6 +400,7 @@ export function TerminalPanel({ blockId, sessionKey, visible, local, osc7Enabled
 
   return <>
     <div className="terminal-surface" ref={containerRef} aria-label={`终端 ${blockId}`} onContextMenu={openContextMenu} onKeyDown={openKeyboardContextMenu}/>
+    {pasteOperation && <div className="terminal-paste-operation" data-tone={pasteOperation.tone} role="status" aria-label="终端粘贴状态" aria-live="polite">{pasteOperation.text}</div>}
     {searchMounted && <div
       className="terminal-search"
       data-state={searchOpen ? "open" : "closing"}
@@ -470,6 +507,15 @@ function copyShortcutLabel(platform: ClipboardPlatform): string {
 
 function pasteShortcutLabel(platform: ClipboardPlatform): string {
   return platform === "mac" ? "⌘V" : platform === "windows" ? "Ctrl+V" : "Ctrl+Shift+V";
+}
+
+function clipboardImagePasteErrorMessage(reason: unknown): string {
+  if (reason && typeof reason === "object" && "message" in reason) {
+    const message = String((reason as { message?: unknown }).message ?? "").trim();
+    if (message) return `粘贴图片失败：${message}`;
+  }
+  if (reason instanceof Error && reason.message.trim()) return `粘贴图片失败：${reason.message}`;
+  return "粘贴图片失败，请重试";
 }
 
 function isGuardedPaste(text: string): boolean {

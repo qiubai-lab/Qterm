@@ -1,6 +1,7 @@
 //! Stable SSH client rules and domain types.
 
 pub mod auth;
+pub mod clipboard_image;
 pub mod credential;
 pub mod files;
 pub mod network;

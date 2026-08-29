@@ -1,5 +1,6 @@
 .terminal-surface,.file-browser,.network-pane { background:transparent; }
 .terminal-surface { min-width:0; min-height:0; flex:1; overflow:hidden; }
+.terminal-paste-operation{position:absolute;z-index:20;right:10px;bottom:9px;max-width:calc(100% - 20px);padding:6px 9px;border:1px solid color-mix(in srgb,var(--accent) 35%,var(--floating-border));border-radius:6px;overflow:hidden;color:var(--text);background:var(--floating-material);box-shadow:0 8px 24px var(--shadow-strong);font-size:9px;line-height:1.35;text-overflow:ellipsis;white-space:nowrap;pointer-events:none;animation:terminal-paste-operation-in 140ms ease-out}.terminal-paste-operation[data-tone="busy"]{color:var(--accent)}.terminal-paste-operation[data-tone="error"]{border-color:color-mix(in srgb,var(--danger) 42%,var(--floating-border));color:var(--danger);background:var(--danger-bg)}@keyframes terminal-paste-operation-in{from{opacity:0;transform:translateY(2px)}to{opacity:1;transform:none}}
 .terminal-surface>.xterm { width:100%; height:100%; padding:4px 3px 2px 7px; }
 .terminal-surface .xterm-viewport { color:transparent; background-color:transparent; transition:color 180ms cubic-bezier(.23,1,.32,1); }
 .terminal-surface:hover .xterm-viewport,.terminal-surface:has(.xterm-helper-textarea:focus-visible) .xterm-viewport { color:var(--scrollbar-thumb); }
@@ -40,6 +41,6 @@
 @container terminal-block (max-width:300px){.terminal-header-secondary-actions{display:none}.block-actions .terminal-header-more{display:grid}}
 @container terminal-block (max-width:260px){.terminal-search{grid-template-columns:16px minmax(54px,1fr) 23px 23px 23px}.terminal-search-results{display:none}}
 .terminal-context-menu{border:1px solid var(--floating-border);background:var(--floating-material);box-shadow:0 14px 38px var(--shadow-strong)}
-@media(prefers-reduced-motion:reduce){.terminal-search[data-state="open"]{animation:terminal-search-fade-in .001ms linear}.terminal-search[data-state="closing"]{animation:terminal-search-fade-out .001ms linear forwards}}
+@media(prefers-reduced-motion:reduce){.terminal-search[data-state="open"]{animation:terminal-search-fade-in .001ms linear}.terminal-search[data-state="closing"]{animation:terminal-search-fade-out .001ms linear forwards}.terminal-paste-operation{animation:none}}
 @media(prefers-reduced-transparency:reduce){.terminal-search{background:var(--raised);backdrop-filter:none;-webkit-backdrop-filter:none}}
 @media(prefers-contrast:more){.terminal-search{border-color:var(--focus);background:var(--raised)}.terminal-search-field{border-color:var(--border)}}

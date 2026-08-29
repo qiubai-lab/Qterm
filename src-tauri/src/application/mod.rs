@@ -1,5 +1,6 @@
 //! Use-case orchestration and lifecycle ownership.
 
+pub mod clipboard_image_service;
 pub mod credential_lifecycle;
 pub mod credential_service;
 pub mod credential_workflow;

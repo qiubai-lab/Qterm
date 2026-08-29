@@ -1,5 +1,329 @@
 use super::*;
 
+pub(super) struct StoredClipboardImage {
+    pub(super) remote_path: String,
+    pub(super) directory: String,
+}
+
+pub(super) async fn store_clipboard_image<S>(
+    stream: S,
+    session_token: &str,
+    png: Vec<u8>,
+    registered_directories: &HashSet<String>,
+    mut cancel: oneshot::Receiver<()>,
+) -> Result<StoredClipboardImage, RemoteClipboardImageError>
+where
+    S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
+{
+    if Uuid::parse_str(session_token).is_err() {
+        return Err(RemoteClipboardImageError::TemporaryDirectoryUnavailable);
+    }
+    let sftp = SftpSession::new(stream)
+        .await
+        .map_err(|_| RemoteClipboardImageError::SftpUnavailable)?;
+    let result = async {
+        let (directory, directory_created) =
+            prepare_clipboard_directory(&sftp, session_token, registered_directories).await?;
+        let image_id = Uuid::new_v4();
+        let target = format!("{directory}/{image_id}.png");
+        let temporary = format!("{directory}/.{image_id}.png.part");
+        if sftp
+            .try_exists(&target)
+            .await
+            .map_err(|_| RemoteClipboardImageError::UploadFailed)?
+            || sftp
+                .try_exists(&temporary)
+                .await
+                .map_err(|_| RemoteClipboardImageError::UploadFailed)?
+        {
+            return Err(RemoteClipboardImageError::UploadFailed);
+        }
+        let mut file = sftp
+            .open_with_flags_and_attributes(
+                &temporary,
+                russh_sftp::protocol::OpenFlags::CREATE
+                    | russh_sftp::protocol::OpenFlags::EXCLUDE
+                    | russh_sftp::protocol::OpenFlags::WRITE,
+                FileAttributes {
+                    permissions: Some(CLIPBOARD_FILE_MODE),
+                    ..FileAttributes::default()
+                },
+            )
+            .await
+            .map_err(|_| RemoteClipboardImageError::UploadFailed)?;
+        let upload = async {
+            file.set_metadata(FileAttributes {
+                permissions: Some(CLIPBOARD_FILE_MODE),
+                ..FileAttributes::default()
+            })
+            .await
+            .map_err(|_| RemoteClipboardImageError::UploadFailed)?;
+            for chunk in png.chunks(64 * 1024) {
+                tokio::select! {
+                    _ = &mut cancel => return Err(RemoteClipboardImageError::UploadFailed),
+                    result = file.write_all(chunk) => {
+                        result.map_err(|_| RemoteClipboardImageError::UploadFailed)?;
+                    }
+                }
+            }
+            file.shutdown()
+                .await
+                .map_err(|_| RemoteClipboardImageError::UploadFailed)?;
+            sftp.rename(&temporary, &target)
+                .await
+                .map_err(|_| RemoteClipboardImageError::UploadFailed)?;
+            Ok(StoredClipboardImage {
+                remote_path: target,
+                directory: directory.clone(),
+            })
+        }
+        .await;
+        if upload.is_err() {
+            let _ = file.shutdown().await;
+            let _ = sftp.remove_file(&temporary).await;
+            if directory_created {
+                cleanup_one_clipboard_directory(&sftp, &directory, None).await;
+            }
+        }
+        upload
+    }
+    .await;
+    let _ = sftp.close().await;
+    result
+}
+
+async fn prepare_clipboard_directory(
+    sftp: &SftpSession,
+    session_token: &str,
+    registered_directories: &HashSet<String>,
+) -> Result<(String, bool), RemoteClipboardImageError> {
+    let preferred = format!("/tmp/.qterm-clipboard-{session_token}");
+    if let Ok(created) = prepare_private_directory(
+        sftp,
+        &preferred,
+        registered_directories.contains(&preferred),
+    )
+    .await
+    {
+        return Ok((preferred, created));
+    }
+
+    let home = sftp
+        .canonicalize(".")
+        .await
+        .map_err(|_| RemoteClipboardImageError::TemporaryDirectoryUnavailable)?;
+    if !home.starts_with('/') {
+        return Err(RemoteClipboardImageError::TemporaryDirectoryUnavailable);
+    }
+    let home_metadata = sftp
+        .symlink_metadata(&home)
+        .await
+        .map_err(|_| RemoteClipboardImageError::TemporaryDirectoryUnavailable)?;
+    if !home_metadata.is_dir() || home_metadata.is_symlink() {
+        return Err(RemoteClipboardImageError::TemporaryDirectoryUnavailable);
+    }
+    let cache = remote_child(&home, ".cache");
+    ensure_directory(sftp, &cache, home_metadata.uid, false).await?;
+    let qterm = remote_child(&cache, "qterm");
+    ensure_directory(sftp, &qterm, home_metadata.uid, true).await?;
+    let clipboard = remote_child(&qterm, "clipboard");
+    ensure_directory(sftp, &clipboard, home_metadata.uid, true).await?;
+    cleanup_expired_home_directories(sftp, &clipboard, home_metadata.uid).await;
+    let fallback = remote_child(&clipboard, session_token);
+    let created =
+        prepare_private_directory(sftp, &fallback, registered_directories.contains(&fallback))
+            .await?;
+    Ok((fallback, created))
+}
+
+async fn prepare_private_directory(
+    sftp: &SftpSession,
+    path: &str,
+    registered: bool,
+) -> Result<bool, RemoteClipboardImageError> {
+    let exists = sftp
+        .try_exists(path)
+        .await
+        .map_err(|_| RemoteClipboardImageError::TemporaryDirectoryUnavailable)?;
+    if exists && !registered {
+        return Err(RemoteClipboardImageError::TemporaryDirectoryUnavailable);
+    }
+    let created = !exists;
+    if created {
+        sftp.create_dir(path)
+            .await
+            .map_err(|_| RemoteClipboardImageError::TemporaryDirectoryUnavailable)?;
+    }
+    let outcome = async {
+        sftp.set_metadata(
+            path,
+            FileAttributes {
+                permissions: Some(CLIPBOARD_DIRECTORY_MODE),
+                ..FileAttributes::default()
+            },
+        )
+        .await
+        .map_err(|_| RemoteClipboardImageError::TemporaryDirectoryUnavailable)?;
+        let metadata = sftp
+            .symlink_metadata(path)
+            .await
+            .map_err(|_| RemoteClipboardImageError::TemporaryDirectoryUnavailable)?;
+        if !metadata.is_dir()
+            || metadata.is_symlink()
+            || metadata.permissions.map(|mode| mode & 0o777) != Some(CLIPBOARD_DIRECTORY_MODE)
+        {
+            return Err(RemoteClipboardImageError::TemporaryDirectoryUnavailable);
+        }
+        Ok(created)
+    }
+    .await;
+    if outcome.is_err() && created {
+        let _ = sftp.remove_dir(path).await;
+    }
+    outcome
+}
+
+async fn ensure_directory(
+    sftp: &SftpSession,
+    path: &str,
+    expected_uid: Option<u32>,
+    private: bool,
+) -> Result<(), RemoteClipboardImageError> {
+    if !sftp
+        .try_exists(path)
+        .await
+        .map_err(|_| RemoteClipboardImageError::TemporaryDirectoryUnavailable)?
+    {
+        sftp.create_dir(path)
+            .await
+            .map_err(|_| RemoteClipboardImageError::TemporaryDirectoryUnavailable)?;
+    }
+    let metadata = sftp
+        .symlink_metadata(path)
+        .await
+        .map_err(|_| RemoteClipboardImageError::TemporaryDirectoryUnavailable)?;
+    if !metadata.is_dir()
+        || metadata.is_symlink()
+        || (expected_uid.is_some() && metadata.uid != expected_uid)
+    {
+        return Err(RemoteClipboardImageError::TemporaryDirectoryUnavailable);
+    }
+    if private {
+        sftp.set_metadata(
+            path,
+            FileAttributes {
+                permissions: Some(CLIPBOARD_DIRECTORY_MODE),
+                ..FileAttributes::default()
+            },
+        )
+        .await
+        .map_err(|_| RemoteClipboardImageError::TemporaryDirectoryUnavailable)?;
+    }
+    Ok(())
+}
+
+async fn cleanup_expired_home_directories(
+    sftp: &SftpSession,
+    parent: &str,
+    expected_uid: Option<u32>,
+) {
+    let Ok(entries) = sftp.read_dir(parent).await else {
+        return;
+    };
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_secs())
+        .unwrap_or(0);
+    for entry in entries {
+        let name = entry.file_name();
+        let metadata = entry.metadata();
+        let expired = metadata
+            .mtime
+            .map(u64::from)
+            .is_some_and(|modified| clipboard_directory_expired(now, modified));
+        if Uuid::parse_str(&name).is_ok()
+            && expired
+            && metadata.is_dir()
+            && !metadata.is_symlink()
+            && (expected_uid.is_none() || metadata.uid == expected_uid)
+        {
+            cleanup_one_clipboard_directory(sftp, &entry.path(), expected_uid).await;
+        }
+    }
+}
+
+pub(super) async fn cleanup_clipboard_directories<S>(stream: S, directories: HashSet<String>)
+where
+    S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
+{
+    let Ok(sftp) = SftpSession::new(stream).await else {
+        return;
+    };
+    for directory in directories {
+        cleanup_one_clipboard_directory(&sftp, &directory, None).await;
+    }
+    let _ = sftp.close().await;
+}
+
+async fn cleanup_one_clipboard_directory(
+    sftp: &SftpSession,
+    directory: &str,
+    expected_uid: Option<u32>,
+) {
+    let Ok(metadata) = sftp.symlink_metadata(directory).await else {
+        return;
+    };
+    if !metadata.is_dir()
+        || metadata.is_symlink()
+        || (expected_uid.is_some() && metadata.uid != expected_uid)
+    {
+        return;
+    }
+    let Ok(entries) = sftp.read_dir(directory).await else {
+        return;
+    };
+    for entry in entries {
+        let metadata = entry.metadata();
+        let name = entry.file_name();
+        let safe_name = safe_clipboard_image_name(&name);
+        if safe_name
+            && metadata.is_regular()
+            && !metadata.is_symlink()
+            && (expected_uid.is_none() || metadata.uid == expected_uid)
+        {
+            let _ = sftp.remove_file(entry.path()).await;
+        }
+    }
+    if sftp
+        .read_dir(directory)
+        .await
+        .is_ok_and(|mut remaining| remaining.next().is_none())
+    {
+        let _ = sftp.remove_dir(directory).await;
+    }
+}
+
+fn remote_child(parent: &str, child: &str) -> String {
+    if parent == "/" {
+        format!("/{child}")
+    } else {
+        format!("{}/{child}", parent.trim_end_matches('/'))
+    }
+}
+
+fn clipboard_directory_expired(now: u64, modified: u64) -> bool {
+    now.saturating_sub(modified) > CLIPBOARD_HOME_TTL_SECS
+}
+
+fn safe_clipboard_image_name(name: &str) -> bool {
+    name.strip_suffix(".png")
+        .is_some_and(|stem| Uuid::parse_str(stem).is_ok())
+        || name
+            .strip_prefix('.')
+            .and_then(|value| value.strip_suffix(".png.part"))
+            .is_some_and(|stem| Uuid::parse_str(stem).is_ok())
+}
+
 pub(super) async fn run_transfer<S>(
     stream: S,
     request: TransferRequest,
@@ -902,5 +1226,33 @@ where
             transferred_bytes: transferred,
             total_bytes: total,
         });
+    }
+}
+
+#[cfg(test)]
+mod clipboard_image_tests {
+    use super::*;
+
+    #[test]
+    fn cleanup_accepts_only_qterm_uuid_image_names() {
+        let id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+        assert!(safe_clipboard_image_name(&format!("{id}.png")));
+        assert!(safe_clipboard_image_name(&format!(".{id}.png.part")));
+        assert!(!safe_clipboard_image_name("image.png"));
+        assert!(!safe_clipboard_image_name(&format!("{id}.png.png")));
+        assert!(!safe_clipboard_image_name(&format!("../{id}.png")));
+    }
+
+    #[test]
+    fn home_cleanup_keeps_the_exact_ttl_boundary() {
+        assert!(!clipboard_directory_expired(CLIPBOARD_HOME_TTL_SECS, 0));
+        assert!(!clipboard_directory_expired(CLIPBOARD_HOME_TTL_SECS - 1, 0));
+        assert!(clipboard_directory_expired(CLIPBOARD_HOME_TTL_SECS + 1, 0));
+    }
+
+    #[test]
+    fn remote_children_preserve_an_absolute_root() {
+        assert_eq!(remote_child("/", ".cache"), "/.cache");
+        assert_eq!(remote_child("/home/dev/", ".cache"), "/home/dev/.cache");
     }
 }

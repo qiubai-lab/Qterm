@@ -324,6 +324,10 @@ pub(super) async fn run_session(
                             _ => { let _ = reply.send(Err(SessionControlError::FileUnavailable)); }
                         }
                     }
+                    Some(SessionControl::StoreClipboardImage { upload_id, reply, .. }) => {
+                        entry.finish_clipboard_upload(&upload_id);
+                        let _ = reply.send(Err(RemoteClipboardImageError::TerminalUnavailable));
+                    }
                     Some(SessionControl::Write(_) | SessionControl::Resize(_) | SessionControl::StartNetworkRule { .. } | SessionControl::StopNetworkRule { .. }) => {}
                     None => {
                         entry.transition(SessionState::Closing);
@@ -431,6 +435,34 @@ pub(super) async fn run_session(
                         entry.fail(SessionFailure::ConnectionFailed);
                     }
                 }
+                Some(SessionControl::StoreClipboardImage { upload_id, session_token, png, cancel, reply }) => {
+                    match handle.channel_open_session().await {
+                        Ok(channel) if channel.request_subsystem(true, "sftp").await.is_ok() => {
+                            let clipboard_entry = Arc::clone(&entry);
+                            let registered = entry.clipboard_directories();
+                            tauri::async_runtime::spawn(async move {
+                                let result = store_clipboard_image(
+                                    channel.into_stream(),
+                                    &session_token,
+                                    png,
+                                    &registered,
+                                    cancel,
+                                )
+                                .await;
+                                let result = result.map(|stored| {
+                                    clipboard_entry.register_clipboard_directory(stored.directory);
+                                    stored.remote_path
+                                });
+                                clipboard_entry.finish_clipboard_upload(&upload_id);
+                                let _ = reply.send(result);
+                            });
+                        }
+                        _ => {
+                            entry.finish_clipboard_upload(&upload_id);
+                            let _ = reply.send(Err(RemoteClipboardImageError::SftpUnavailable));
+                        }
+                    }
+                }
                 Some(SessionControl::StartTransfer { id, request, events, cancel }) => {
                     match handle.channel_open_session().await {
                         Ok(channel) if channel.request_subsystem(true, "sftp").await.is_ok() => {
@@ -512,6 +544,13 @@ pub(super) async fn run_session(
     }
     let _ = terminal_write.eof().await;
     let _ = terminal_write.close().await;
+    let clipboard_directories = entry.clipboard_directories();
+    if !clipboard_directories.is_empty()
+        && let Ok(channel) = handle.channel_open_session().await
+        && channel.request_subsystem(true, "sftp").await.is_ok()
+    {
+        cleanup_clipboard_directories(channel.into_stream(), clipboard_directories).await;
+    }
     let _ = handle
         .disconnect(Disconnect::ByApplication, "session closed", "en")
         .await;
