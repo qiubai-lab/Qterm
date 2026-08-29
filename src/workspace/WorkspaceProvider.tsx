@@ -49,7 +49,8 @@ interface WorkspaceContextValue {
   registerWriter: (blockId: string, writer: (data: Uint8Array) => void, clearer: (reset: boolean) => void, readSize: () => TerminalSizeInput) => () => void;
   clearBlockBuffer: (blockId: string, reset?: boolean) => void;
   setBlockCwd: (blockId: string, cwd: string) => void;
-  splitTerminalBlock: (workspaceId: string, blockId: string, direction: SplitDirection) => void;
+  clearTerminalOsc7State: () => void;
+  splitTerminalBlock: (workspaceId: string, blockId: string, direction: SplitDirection, inheritCurrentDirectory?: boolean) => void;
   startLocalBlock: (blockId: string, columns: number, rows: number) => Promise<void>;
   restartLocalBlock: (blockId: string) => Promise<void>;
   selectBlockTarget: (workspaceId: string, blockId: string, profileId: string | null) => Promise<void>;
@@ -348,12 +349,12 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     await closeCurrentNetworkSession(blockId);
   }, [closeCurrentNetworkSession]);
 
-  const splitTerminalBlock = useCallback((workspaceId: string, blockId: string, direction: SplitDirection) => {
+  const splitTerminalBlock = useCallback((workspaceId: string, blockId: string, direction: SplitDirection, inheritCurrentDirectory = true) => {
     const workspace = documentRef.current.workspaces.find((candidate) => candidate.id === workspaceId);
     const anchor = workspace ? findLeaf(workspace.layout, blockId) : null;
     if (!anchor) return;
     const newBlockId = createId("block");
-    if (anchor.type === "terminal") {
+    if (inheritCurrentDirectory && anchor.type === "terminal") {
       const runtime = runtimesRef.current[blockId];
       const cwd = runtime?.cwd;
       if (runtime?.status === "connected" && runtime.cwdSource === "osc7" && cwd?.trim()) {
@@ -660,6 +661,20 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const setBlockCwd = useCallback((blockId: string, cwd: string) => {
     updateRuntime(blockId, (runtime) => ({ ...runtime, cwd, cwdSource: "osc7" }));
   }, [updateRuntime]);
+  const clearTerminalOsc7State = useCallback(() => {
+    pendingInitialDirectories.current.clear();
+    setRuntimes((current) => {
+      let changed = false;
+      const next = Object.fromEntries(Object.entries(current).map(([blockId, runtime]) => {
+        if (runtime.cwdSource !== "osc7") return [blockId, runtime];
+        changed = true;
+        return [blockId, { ...runtime, cwd: null, cwdSource: null }];
+      }));
+      if (!changed) return current;
+      runtimesRef.current = next;
+      return next;
+    });
+  }, []);
 
   const blocksForWorkspace = useCallback((workspace: Workspace) => blockIds(workspace.layout), []);
   const dismissStorageNotice = useCallback(() => setStorageNotice(""), []);
@@ -702,13 +717,13 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const activeWorkspace = document.workspaces.find((workspace) => workspace.id === document.activeWorkspaceId) ?? document.workspaces[0];
   const value = useMemo<WorkspaceContextValue>(() => ({
     hydrated, document, dispatch, profiles, profileGroups, refreshProfiles, runtimes, fileRuntimes, networkRuntimes, localTerminalCapabilities, activeWorkspace,
-    activeBlockId: activeWorkspace.activeBlockId, registerWriter, clearBlockBuffer, setBlockCwd, splitTerminalBlock, startLocalBlock, restartLocalBlock, selectBlockTarget, connectBlock, disconnectBlock,
+    activeBlockId: activeWorkspace.activeBlockId, registerWriter, clearBlockBuffer, setBlockCwd, clearTerminalOsc7State, splitTerminalBlock, startLocalBlock, restartLocalBlock, selectBlockTarget, connectBlock, disconnectBlock,
     selectFileTarget, connectFileBlock, disconnectFileBlock, selectNetworkTarget, connectNetworkBlock, disconnectNetworkBlock, startNetworkBlockRule, stopNetworkBlockRule, writeBlock, resizeBlock,
     isConnectionTargetCurrent,
     acceptBlockHostKey, rejectBlockHostKey, acceptFileHostKey, rejectFileHostKey, acceptNetworkHostKey, rejectNetworkHostKey, connectedCount,
     closeSessions, blocksForWorkspace,
     storageNotice, dismissStorageNotice,
-  }), [hydrated, document, profiles, profileGroups, refreshProfiles, runtimes, fileRuntimes, networkRuntimes, localTerminalCapabilities, activeWorkspace, registerWriter, clearBlockBuffer, setBlockCwd, splitTerminalBlock, startLocalBlock, restartLocalBlock, selectBlockTarget, connectBlock, disconnectBlock, selectFileTarget, connectFileBlock, disconnectFileBlock, selectNetworkTarget, connectNetworkBlock, disconnectNetworkBlock, startNetworkBlockRule, stopNetworkBlockRule, writeBlock, resizeBlock, acceptBlockHostKey, rejectBlockHostKey, acceptFileHostKey, rejectFileHostKey, acceptNetworkHostKey, rejectNetworkHostKey, isConnectionTargetCurrent, connectedCount, closeSessions, blocksForWorkspace, storageNotice, dismissStorageNotice]);
+  }), [hydrated, document, profiles, profileGroups, refreshProfiles, runtimes, fileRuntimes, networkRuntimes, localTerminalCapabilities, activeWorkspace, registerWriter, clearBlockBuffer, setBlockCwd, clearTerminalOsc7State, splitTerminalBlock, startLocalBlock, restartLocalBlock, selectBlockTarget, connectBlock, disconnectBlock, selectFileTarget, connectFileBlock, disconnectFileBlock, selectNetworkTarget, connectNetworkBlock, disconnectNetworkBlock, startNetworkBlockRule, stopNetworkBlockRule, writeBlock, resizeBlock, acceptBlockHostKey, rejectBlockHostKey, acceptFileHostKey, rejectFileHostKey, acceptNetworkHostKey, rejectNetworkHostKey, isConnectionTargetCurrent, connectedCount, closeSessions, blocksForWorkspace, storageNotice, dismissStorageNotice]);
 
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;
 }

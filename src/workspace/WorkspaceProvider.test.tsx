@@ -53,7 +53,7 @@ import { WorkspaceProvider, useWorkspace } from "./WorkspaceProvider";
 const profile = { id: "profile-1", name: "Server", host: "example.test", port: 22, username: "user", authPreference: "password" as const, credentialId: null, groupId: null };
 
 function Harness() {
-  const { document, activeWorkspace, dispatch, splitTerminalBlock, registerWriter, clearBlockBuffer, setBlockCwd, startLocalBlock, connectBlock, connectFileBlock, disconnectFileBlock, connectNetworkBlock, disconnectNetworkBlock, startNetworkBlockRule, selectBlockTarget, selectFileTarget, selectNetworkTarget, writeBlock, resizeBlock, runtimes, fileRuntimes, networkRuntimes } = useWorkspace();
+  const { document, activeWorkspace, dispatch, clearTerminalOsc7State, splitTerminalBlock, registerWriter, clearBlockBuffer, setBlockCwd, startLocalBlock, connectBlock, connectFileBlock, disconnectFileBlock, connectNetworkBlock, disconnectNetworkBlock, startNetworkBlockRule, selectBlockTarget, selectFileTarget, selectNetworkTarget, writeBlock, resizeBlock, runtimes, fileRuntimes, networkRuntimes } = useWorkspace();
   const ids = blockIds(activeWorkspace.layout);
   const activeLeaf = findLeaf(activeWorkspace.layout, activeWorkspace.activeBlockId);
   return <>
@@ -61,6 +61,8 @@ function Harness() {
     <output data-testid="recent-profiles">{document.recentProfileIds.join(",")}</output>
     <output data-testid="workspace-json">{JSON.stringify(document)}</output>
     <button onClick={() => splitTerminalBlock(activeWorkspace.id, activeWorkspace.activeBlockId, "horizontal")}>split</button>
+    <button onClick={() => splitTerminalBlock(activeWorkspace.id, activeWorkspace.activeBlockId, "horizontal", false)}>split-without-osc7</button>
+    <button onClick={clearTerminalOsc7State}>disable-osc7</button>
     <button onClick={() => ids.forEach((id, index) => registerWriter(id, mocks.writers[index], mocks.clearers[index], () => mocks.terminalSizes[index]))}>register</button>
     <button onClick={() => mocks.unregisterWriters.push(registerWriter(ids[0], mocks.writers[0], mocks.clearers[0], () => mocks.terminalSizes[0]))}>register-old-writer</button>
     <button onClick={() => mocks.unregisterWriters.push(registerWriter(ids[0], mocks.writers[1], mocks.clearers[1], () => mocks.terminalSizes[1]))}>register-new-writer</button>
@@ -287,6 +289,37 @@ describe("WorkspaceProvider multi-session routing", () => {
       expect.any(Function),
       expect.any(Function),
       "/srv/reported",
+    );
+  });
+
+  it("clears reported directories and does not inherit them when OSC 7 is disabled", async () => {
+    Object.defineProperty(window, "__TAURI_INTERNALS__", { configurable: true, value: {} });
+    mocks.connectLocalSession.mockImplementation(async (_columns, _rows, event, terminal) => {
+      mocks.localConnections.push({ event, terminal });
+      event({ type: "stateChanged", state: "connected" });
+      return { sessionId: `local-${mocks.localConnections.length}`, cwd: "/Users/tester" };
+    });
+    const user = userEvent.setup();
+    render(<WorkspaceProvider><Harness/></WorkspaceProvider>);
+
+    await user.click(screen.getByRole("button", { name: "local" }));
+    await waitFor(() => expect(screen.getByTestId("runtime")).toHaveTextContent("local:connected"));
+    await user.click(screen.getByRole("button", { name: "report-cwd" }));
+    expect(screen.getByTestId("runtime-cwd-source")).toHaveTextContent("osc7");
+
+    await user.click(screen.getByRole("button", { name: "disable-osc7" }));
+    expect(screen.getByTestId("runtime-cwd")).toBeEmptyDOMElement();
+    expect(screen.getByTestId("runtime-cwd-source")).toHaveTextContent("unknown");
+
+    await user.click(screen.getByRole("button", { name: "split-without-osc7" }));
+    await user.click(screen.getByRole("button", { name: "local-active" }));
+    await waitFor(() => expect(mocks.connectLocalSession).toHaveBeenCalledTimes(2));
+    expect(mocks.connectLocalSession).toHaveBeenLastCalledWith(
+      100,
+      30,
+      expect.any(Function),
+      expect.any(Function),
+      undefined,
     );
   });
 

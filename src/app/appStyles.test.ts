@@ -120,12 +120,6 @@ describe("application layout styles", () => {
     expect(styles).toContain(".connection-context-menu,.file-context-menu,.network-context-menu,.terminal-context-menu,.terminal-target-menu,.terminal-target-submenu,.dialog-frame{background:var(--raised)}");
   });
 
-  it("keeps terminal cwd integration commands readable inside the compact dialog", () => {
-    expect(declarations(".terminal-cwd-dialog .dialog-content")).toContain("overflow:hidden");
-    expect(declarations(".terminal-cwd-body")).toContain("display:flex");
-    expect(declarations(".terminal-cwd-fallback code")).toContain("text-overflow:ellipsis");
-  });
-
   it("collapses the connected endpoint before persistent route status", () => {
     expect(declarations(".terminal-block")).toContain("container-type:inline-size");
     expect(declarations(".connection-route-progress")).not.toContain("position:absolute");
@@ -143,9 +137,21 @@ describe("application layout styles", () => {
     expect(declarations(".block-actions")).toContain("flex:none");
   });
 
+  it("keeps local-terminal attention in the terminal title's current theme color", () => {
+    const activeTarget = declarations(".terminal-block.active .terminal-target-trigger");
+    const attention = declarations(".local-terminal-attention");
+    expect(activeTarget).toContain("color:var(--selection-marker)");
+    expect(attention).toContain("animation:local-terminal-attention 2.5s ease-in-out both");
+    expect(styles).toContain("color-mix(in srgb,currentColor 62%,transparent)");
+    expect(styles).toContain("color-mix(in srgb,currentColor 45%,transparent)");
+    expect(styles).not.toContain(".local-terminal-attention{animation:none;color:var(--accent)");
+  });
+
   it("reserves the full OSC 7 theme highlight for the active terminal", () => {
     const tag = declarations(".terminal-osc7-tag");
+    const tagText = declarations(".terminal-osc7-tag>span");
     const ready = declarations('.terminal-osc7-tag[data-state="ready"]');
+    const attention = declarations('.terminal-osc7-tag[data-state="attention"]');
     const inactiveHover = declarations('.terminal-block:not(.active) .terminal-osc7-tag[data-state="ready"]:hover');
     const activeReady = declarations('.terminal-block.active .terminal-osc7-tag[data-state="ready"]');
     expect(tag).toContain("color:var(--dim)");
@@ -155,6 +161,8 @@ describe("application layout styles", () => {
     expect(tag).toContain("border-radius:3px");
     expect(tag).toContain('font:700 7px/10px "SFMono-Regular",Consolas,monospace');
     expect(tag).toContain("background:transparent");
+    expect(tagText).toContain("display:block");
+    expect(tagText).toContain("transform:translateY(1px)");
     expect(ready).toContain("--osc7-tag-border:color-mix(in srgb,var(--selection-marker) 20%,var(--border))");
     expect(ready).toContain("--osc7-tag-text:color-mix(in srgb,var(--selection-marker) 55%,var(--dim))");
     expect(ready).toContain("--osc7-tag-surface:transparent");
@@ -162,6 +170,11 @@ describe("application layout styles", () => {
     expect(inactiveHover).toContain("--osc7-tag-text:color-mix(in srgb,var(--selection-marker) 78%,var(--dim))");
     expect(activeReady).toContain("--osc7-tag-text:var(--selection-marker)");
     expect(activeReady).toContain("--osc7-tag-surface:color-mix(in srgb,var(--selection-surface) 72%,transparent)");
+    expect(attention).toContain("border-color:var(--danger)");
+    expect(attention).toContain("color:var(--danger)");
+    expect(attention).toContain("animation:osc7-tag-attention 2.5s ease-in-out both");
+    expect(styles).toContain("@keyframes osc7-tag-attention");
+    expect(styles).toContain('@media(prefers-reduced-motion:reduce){.terminal-osc7-tag[data-state="attention"]');
   });
 
   it("keeps route node details in a compact two-line tooltip", () => {

@@ -1,0 +1,2 @@
+export const OSC7_REPORT_GRACE_MS = 1_000;
+export const TERMINAL_ATTENTION_MS = 2_500;

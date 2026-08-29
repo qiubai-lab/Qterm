@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useState } from "react";
@@ -30,7 +30,10 @@ let fileRuntimes: Record<string, FileRuntime> = {};
 let networkRuntimes: Record<string, NetworkRuntime> = {};
 let fileBrowserMountCount = 0;
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
 
 vi.mock("../terminal/TerminalPanel", () => ({
   TerminalPanel: () => <div aria-label="测试终端"/>,
@@ -214,47 +217,68 @@ describe("WorkspaceCanvas terminal actions", () => {
   });
 
   it("opens the current terminal directory as an internal files leaf", () => {
-    const view = render(<WorkspaceCanvas workspace={workspace} visible onRequestClose={vi.fn()} onRequestAuthConnection={vi.fn()}/>);
+    const view = render(<WorkspaceCanvas workspace={workspace} visible remoteShellIntegrationEnabled onRequestClose={vi.fn()} onRequestAuthConnection={vi.fn()}/>);
     within(view.container).getByRole("button", { name: "打开当前文件夹" }).click();
     expect(dispatch).toHaveBeenCalledWith({ type: "openFiles", workspaceId: "workspace-1", anchorBlockId: "block-1", profileId: null, path: "C:/work" });
   });
 
-  it("explains a local launch-directory fallback before opening it", async () => {
+  it("automatically highlights a new connected terminal when OSC 7 remains unavailable", () => {
+    vi.useFakeTimers();
     terminalRuntimes = { "block-1": { ...connectedLocalRuntime, cwdSource: "initial" } };
-    const user = userEvent.setup();
-    const view = render(<WorkspaceCanvas workspace={workspace} visible onRequestClose={vi.fn()} onRequestAuthConnection={vi.fn()}/>);
+    render(<WorkspaceCanvas workspace={workspace} visible remoteShellIntegrationEnabled onRequestClose={vi.fn()} onRequestAuthConnection={vi.fn()}/>);
 
-    expect(within(view.container).getByRole("button", { name: "打开当前文件夹" })).toHaveAttribute("title", "当前目录尚未确认；可从启动目录 C:/work 打开");
-    await user.click(within(view.container).getByRole("button", { name: "打开当前文件夹" }));
-    expect(screen.getByRole("dialog", { name: "未检测到终端当前目录" })).toBeInTheDocument();
+    expect(screen.getByLabelText("OSC 7 已启用，尚未收到当前会话的目录信息。")).toHaveAttribute("data-state", "waiting");
+    act(() => vi.advanceTimersByTime(999));
+    expect(screen.getByLabelText("OSC 7 已启用，尚未收到当前会话的目录信息。")).toHaveAttribute("data-state", "waiting");
+    act(() => vi.advanceTimersByTime(1));
+    expect(screen.getByLabelText("未检测到本地终端的 OSC 7 当前目录，无法打开当前文件夹。")).toHaveAttribute("data-state", "attention");
+    act(() => vi.advanceTimersByTime(2_500));
+    expect(screen.getByLabelText("OSC 7 已启用，尚未收到当前会话的目录信息。")).toHaveAttribute("data-state", "waiting");
+  });
+
+  it("shows local OSC 7 status and replaces the missing-directory dialog with timed tag attention", () => {
+    vi.useFakeTimers();
+    terminalRuntimes = { "block-1": { ...connectedLocalRuntime, cwdSource: "initial" } };
+    const view = render(<WorkspaceCanvas workspace={workspace} visible remoteShellIntegrationEnabled onRequestClose={vi.fn()} onRequestAuthConnection={vi.fn()}/>);
+
+    expect(screen.getByLabelText("OSC 7 已启用，尚未收到当前会话的目录信息。")).toHaveAttribute("data-state", "waiting");
+    const openDirectory = within(view.container).getByRole("button", { name: "打开当前文件夹" });
+    expect(openDirectory).toHaveAttribute("title", "当前目录尚未确认；点击查看 OSC 7 状态");
+    act(() => openDirectory.click());
+
+    const attention = screen.getByLabelText("未检测到本地终端的 OSC 7 当前目录，无法打开当前文件夹。");
+    expect(attention).toHaveAttribute("data-state", "attention");
+    expect(attention).toHaveAttribute("aria-live", "polite");
+    expect(screen.queryByRole("dialog", { name: "未检测到终端当前目录" })).not.toBeInTheDocument();
     expect(dispatch).not.toHaveBeenCalledWith(expect.objectContaining({ type: "openFiles" }));
-    await user.click(screen.getByRole("button", { name: "从启动目录打开" }));
 
-    expect(dispatch).toHaveBeenCalledWith({ type: "openFiles", workspaceId: "workspace-1", anchorBlockId: "block-1", profileId: null, path: "C:/work" });
+    act(() => vi.advanceTimersByTime(2_499));
+    expect(screen.getByLabelText("未检测到本地终端的 OSC 7 当前目录，无法打开当前文件夹。")).toHaveAttribute("data-state", "attention");
+    act(() => vi.advanceTimersByTime(1));
+    expect(screen.getByLabelText("OSC 7 已启用，尚未收到当前会话的目录信息。")).toHaveAttribute("data-state", "waiting");
   });
 
   it("routes both split buttons through the context-aware terminal operation", async () => {
     const user = userEvent.setup();
-    render(<WorkspaceCanvas workspace={workspace} visible onRequestClose={vi.fn()} onRequestAuthConnection={vi.fn()}/>);
+    render(<WorkspaceCanvas workspace={workspace} visible remoteShellIntegrationEnabled onRequestClose={vi.fn()} onRequestAuthConnection={vi.fn()}/>);
 
     await user.click(screen.getByRole("button", { name: "左右分割" }));
     await user.click(screen.getByRole("button", { name: "上下分割" }));
 
-    expect(splitTerminalBlock).toHaveBeenNthCalledWith(1, "workspace-1", "block-1", "horizontal");
-    expect(splitTerminalBlock).toHaveBeenNthCalledWith(2, "workspace-1", "block-1", "vertical");
+    expect(splitTerminalBlock).toHaveBeenNthCalledWith(1, "workspace-1", "block-1", "horizontal", true);
+    expect(splitTerminalBlock).toHaveBeenNthCalledWith(2, "workspace-1", "block-1", "vertical", true);
   });
 
-  it("explains the remote-home fallback when the shell has not reported OSC 7", async () => {
+  it("uses tag attention instead of a fallback dialog when a remote shell has not reported OSC 7", () => {
     const remoteWorkspace: Workspace = { ...workspace, layout: { type: "terminal", blockId: "block-1", profileId: "password-profile" } };
     terminalRuntimes = { "block-1": { ...connectedLocalRuntime, kind: "ssh", cwd: null, cwdSource: null } };
-    const user = userEvent.setup();
-    const view = render(<WorkspaceCanvas workspace={remoteWorkspace} visible onRequestClose={vi.fn()} onRequestAuthConnection={vi.fn()}/>);
+    const view = render(<WorkspaceCanvas workspace={remoteWorkspace} visible remoteShellIntegrationEnabled onRequestClose={vi.fn()} onRequestAuthConnection={vi.fn()}/>);
 
-    expect(within(view.container).getByRole("button", { name: "打开当前文件夹" })).toHaveAttribute("title", "当前目录尚未确认；可从远程主目录打开");
-    await user.click(within(view.container).getByRole("button", { name: "打开当前文件夹" }));
-    await user.click(screen.getByRole("button", { name: "从远程主目录打开" }));
+    act(() => within(view.container).getByRole("button", { name: "打开当前文件夹" }).click());
 
-    expect(dispatch).toHaveBeenCalledWith({ type: "openFiles", workspaceId: "workspace-1", anchorBlockId: "block-1", profileId: "password-profile", path: "." });
+    expect(screen.getByLabelText("未检测到远程终端的 OSC 7 当前目录，无法打开当前文件夹。")).toHaveAttribute("data-state", "attention");
+    expect(screen.queryByRole("dialog", { name: "未检测到终端当前目录" })).not.toBeInTheDocument();
+    expect(dispatch).not.toHaveBeenCalledWith(expect.objectContaining({ type: "openFiles" }));
   });
 
   it("shows the enabled OSC 7 tag after the remote host and highlights it only after a directory report", () => {
@@ -266,6 +290,7 @@ describe("WorkspaceCanvas terminal actions", () => {
     const waiting = screen.getByLabelText("OSC 7 已启用，尚未收到当前会话的目录信息。");
     const endpoint = view.container.querySelector(".terminal-target-endpoint");
     expect(waiting).toHaveTextContent("OSC7");
+    expect(waiting.querySelector("span")).toHaveAttribute("aria-hidden", "true");
     expect(waiting).toHaveAttribute("data-state", "waiting");
     expect(waiting).toHaveAttribute("title", "OSC 7 已启用，尚未收到当前会话的目录信息。");
     if (!endpoint) throw new Error("remote endpoint should be rendered");
@@ -278,6 +303,19 @@ describe("WorkspaceCanvas terminal actions", () => {
     expect(ready).toHaveAttribute("title", "OSC 7 初始化成功，已开始跟踪当前终端目录。");
 
     view.rerender(<WorkspaceCanvas workspace={remoteWorkspace} visible remoteShellIntegrationEnabled={false} onRequestClose={vi.fn()} onRequestAuthConnection={vi.fn()}/>);
+    expect(screen.queryByText("OSC7")).not.toBeInTheDocument();
+  });
+
+  it("keeps OSC 7 display, validation, and current-folder actions disabled with the setting off", () => {
+    vi.useFakeTimers();
+    terminalRuntimes = { "block-1": { ...connectedLocalRuntime, cwd: "/stale", cwdSource: "osc7" } };
+    const view = render(<WorkspaceCanvas workspace={workspace} visible remoteShellIntegrationEnabled={false} onRequestClose={vi.fn()} onRequestAuthConnection={vi.fn()}/>);
+
+    expect(screen.queryByText("OSC7")).not.toBeInTheDocument();
+    const openDirectory = within(view.container).getByRole("button", { name: "打开当前文件夹" });
+    expect(openDirectory).toBeDisabled();
+    expect(openDirectory).toHaveAttribute("title", "启用 OSC 7 终端目录跟踪后可打开当前文件夹");
+    act(() => vi.advanceTimersByTime(10_000));
     expect(screen.queryByText("OSC7")).not.toBeInTheDocument();
   });
 

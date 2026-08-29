@@ -329,6 +329,16 @@ describe("TerminalPanel view lifetime", () => {
     view.unmount();
   });
 
+  it("waits for terminal settings before starting a local shell", () => {
+    const view = render(<TerminalPanel blockId="block-settings" sessionKey="block-settings:local" local visible terminalSettingsReady={false}/>);
+    expect(mocks.startLocalBlock).not.toHaveBeenCalled();
+
+    view.rerender(<TerminalPanel blockId="block-settings" sessionKey="block-settings:local" local visible terminalSettingsReady/>);
+
+    expect(mocks.startLocalBlock).toHaveBeenCalledWith("block-settings", 80, 24);
+    view.unmount();
+  });
+
   it("forces a full redraw when a hidden terminal becomes visible", () => {
     const view = render(<TerminalPanel blockId="block-visible" sessionKey="block-visible:local" local visible={false}/>);
     const terminal = mocks.terminals[mocks.terminals.length - 1];
@@ -653,6 +663,18 @@ describe("OSC 7 working directory parsing", () => {
     expect(mocks.setBlockCwd).not.toHaveBeenCalled();
     expect(terminal.osc7Handler?.("file://server/srv/app")).toBe(true);
     expect(mocks.setBlockCwd).toHaveBeenCalledWith("block-cwd", "/srv/app");
+    view.unmount();
+    vi.unstubAllGlobals();
+  });
+
+  it("does not parse or submit OSC 7 paths while the feature is disabled", () => {
+    vi.stubGlobal("ResizeObserver", ResizeObserverMock);
+    mocks.setBlockCwd.mockClear();
+    const view = render(<TerminalPanel blockId="block-cwd-disabled" sessionKey="block-cwd-disabled:ssh" local={false} visible osc7Enabled={false}/>);
+    const terminal = mocks.terminals[mocks.terminals.length - 1];
+
+    expect(terminal.osc7Handler?.("file://server/srv/app")).toBe(true);
+    expect(mocks.setBlockCwd).not.toHaveBeenCalled();
     view.unmount();
     vi.unstubAllGlobals();
   });

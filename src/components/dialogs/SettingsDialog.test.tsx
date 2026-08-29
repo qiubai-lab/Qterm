@@ -82,7 +82,7 @@ describe("SettingsDialog", () => {
 
     const generalPanel = await screen.findByRole("region", { name: "通用" });
     expect(within(generalPanel).getByText("配置 Qterm 数据根目录与存储路径。")).toBeInTheDocument();
-    expect(within(generalPanel).queryByRole("switch", { name: "自动获取远程终端目录" })).not.toBeInTheDocument();
+    expect(within(generalPanel).queryByRole("switch", { name: "OSC 7 终端目录跟踪" })).not.toBeInTheDocument();
     const directorySettings = await screen.findByRole("group", { name: "配置目录设置" });
     const pathOverview = screen.getByRole("group", { name: "配置路径" });
     const input = within(directorySettings).getByRole("textbox", { name: "Qterm 配置目录" });
@@ -112,14 +112,14 @@ describe("SettingsDialog", () => {
     renderSettings(vi.fn(), onTerminalSettingsChanged);
     const navigation = screen.getByRole("navigation", { name: "设置分类" });
     const generalPanel = await screen.findByRole("region", { name: "通用" });
-    expect(within(generalPanel).queryByRole("switch", { name: "自动获取远程终端目录" })).not.toBeInTheDocument();
+    expect(within(generalPanel).queryByRole("switch", { name: "OSC 7 终端目录跟踪" })).not.toBeInTheDocument();
 
     await user.click(within(navigation).getByRole("button", { name: /高级/ }));
     const advancedPanel = await screen.findByRole("region", { name: "高级" });
-    const toggle = within(advancedPanel).getByRole("switch", { name: "自动获取远程终端目录" });
+    const toggle = within(advancedPanel).getByRole("switch", { name: "OSC 7 终端目录跟踪" });
     expect(toggle).toBeChecked();
     expect(within(advancedPanel).queryByRole("button", { name: "保存设置" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("dialog", { name: "开启远程目录自动检测" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "开启 OSC 7 终端目录跟踪" })).not.toBeInTheDocument();
 
     await user.click(toggle);
     await waitFor(() => expect(mocks.updateTerminalSettings).toHaveBeenCalledWith({ remoteShellIntegrationEnabled: false }));
@@ -128,7 +128,7 @@ describe("SettingsDialog", () => {
     expect(screen.getByRole("status")).toHaveTextContent("高级设置已保存。");
 
     await user.click(toggle);
-    const confirmation = screen.getByRole("dialog", { name: "开启远程目录自动检测" });
+    const confirmation = screen.getByRole("dialog", { name: "开启 OSC 7 终端目录跟踪" });
     expect(within(confirmation).getByText(/不会修改远程/)).toBeInTheDocument();
     expect(within(confirmation).getByText(/不保存命令输出或凭据/)).toBeInTheDocument();
     expect(within(confirmation).getByText(/自动重试一次.*普通终端连接/)).toBeInTheDocument();
@@ -137,7 +137,7 @@ describe("SettingsDialog", () => {
     expect(mocks.updateTerminalSettings).toHaveBeenCalledTimes(1);
 
     await user.click(toggle);
-    await user.click(within(screen.getByRole("dialog", { name: "开启远程目录自动检测" })).getByRole("button", { name: "确认开启" }));
+    await user.click(within(screen.getByRole("dialog", { name: "开启 OSC 7 终端目录跟踪" })).getByRole("button", { name: "确认开启" }));
     await waitFor(() => expect(mocks.updateTerminalSettings).toHaveBeenLastCalledWith({ remoteShellIntegrationEnabled: true }));
     expect(onTerminalSettingsChanged).toHaveBeenLastCalledWith({ remoteShellIntegrationEnabled: true });
     expect(toggle).toBeChecked();

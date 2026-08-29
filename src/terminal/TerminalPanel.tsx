@@ -24,6 +24,7 @@ interface TerminalView extends TerminalSearchHost {
   element: HTMLElement;
   input: { dispose: () => void };
   cwdHandler: { dispose: () => void };
+  osc7Enabled: boolean;
   onCwd: (cwd: string) => void;
   onKey: (event: KeyboardEvent) => boolean;
   write: (data: string) => Promise<void>;
@@ -47,7 +48,7 @@ const FALLBACK_TERMINAL_LINE_HEIGHT = 1.22;
 const LONG_PASTE_THRESHOLD = 1000;
 const SEARCH_EXIT_DURATION_MS = 110;
 
-export function TerminalPanel({ blockId, sessionKey, visible, local }: { blockId: string; sessionKey: string; visible: boolean; local: boolean }) {
+export function TerminalPanel({ blockId, sessionKey, visible, local, osc7Enabled = true, terminalSettingsReady = true }: { blockId: string; sessionKey: string; visible: boolean; local: boolean; osc7Enabled?: boolean; terminalSettingsReady?: boolean }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -68,9 +69,14 @@ export function TerminalPanel({ blockId, sessionKey, visible, local }: { blockId
   const writeRef = useRef(writeBlock);
   const resizeRef = useRef(resizeBlock);
   const startLocalRef = useRef(startLocalBlock);
+  const osc7EnabledRef = useRef(osc7Enabled);
   useEffect(() => { writeRef.current = writeBlock; }, [writeBlock]);
   useEffect(() => { resizeRef.current = resizeBlock; }, [resizeBlock]);
   useEffect(() => { startLocalRef.current = startLocalBlock; }, [startLocalBlock]);
+  useEffect(() => {
+    osc7EnabledRef.current = osc7Enabled;
+    if (viewRef.current) viewRef.current.osc7Enabled = osc7Enabled;
+  }, [osc7Enabled]);
 
   const restoreTerminalFocus = useCallback(() => {
     window.requestAnimationFrame(() => viewRef.current?.terminal.focus());
@@ -173,6 +179,7 @@ export function TerminalPanel({ blockId, sessionKey, visible, local }: { blockId
     const view = acquireTerminalView(sessionKey, container, windowsPty, local ? 50 : 0);
     view.write = (data) => writeRef.current(blockId, new TextEncoder().encode(data));
     view.resize.send = (columns, rows) => resizeRef.current(blockId, columns, rows);
+    view.osc7Enabled = osc7EnabledRef.current;
     view.onCwd = (cwd) => setBlockCwd(blockId, cwd);
     view.onSearchResults = setSearchResults;
     ensureTerminalSearch(view);
@@ -206,6 +213,7 @@ export function TerminalPanel({ blockId, sessionKey, visible, local }: { blockId
       unregisterWriter();
       view.write = async () => undefined;
       view.resize.send = async () => undefined;
+      view.osc7Enabled = false;
       view.onCwd = () => undefined;
       view.onSearchResults = () => undefined;
       view.onKey = () => true;
@@ -242,10 +250,10 @@ export function TerminalPanel({ blockId, sessionKey, visible, local }: { blockId
   }, [searchMounted, searchOpen]);
 
   useEffect(() => {
-    if (!hydrated || !local) return;
+    if (!hydrated || !local || !terminalSettingsReady) return;
     const view = viewRef.current;
     if (view) void startLocalRef.current(blockId, view.terminal.cols, view.terminal.rows);
-  }, [blockId, hydrated, local]);
+  }, [blockId, hydrated, local, terminalSettingsReady]);
 
   useEffect(() => {
     if (!visible) return;
@@ -535,6 +543,7 @@ function acquireTerminalView(sessionKey: string, container: HTMLElement, windows
     element,
     input: { dispose: () => undefined },
     cwdHandler: { dispose: () => undefined },
+    osc7Enabled: false,
     onCwd: () => undefined,
     onSearchResults: () => undefined,
     onKey: () => true,
@@ -549,6 +558,7 @@ function acquireTerminalView(sessionKey: string, container: HTMLElement, windows
   terminal.attachCustomKeyEventHandler((event) => view.onKey(event));
   view.input = terminal.onData((data) => { void view.inputScheduler.send(data); });
   view.cwdHandler = terminal.parser.registerOscHandler(7, (data) => {
+    if (!view.osc7Enabled) return true;
     const cwd = parseOsc7Cwd(data);
     if (cwd) view.onCwd(cwd);
     return true;

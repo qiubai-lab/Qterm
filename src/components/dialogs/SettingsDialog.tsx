@@ -168,8 +168,8 @@ export function SettingsDialog({ onClose, onSecuritySettingsChanged, onTerminalS
             <div className="settings-section-heading"><h3 id="advanced-settings-title">高级</h3><p>管理远程终端集成等进阶功能。</p></div>
             {terminal ? <div className="settings-rows">
               <div className="settings-row">
-                <span><strong>自动获取远程终端目录</strong><small>登录时识别 Shell，并仅向当前会话注入 OSC 7 Hook。探测结果按目标缓存；瞬态失败会自动重试一次，仍失败则继续普通终端连接。</small></span>
-                <SettingsSwitch label="自动获取远程终端目录" checked={terminal.remoteShellIntegrationEnabled} disabled={busy} onChange={changeRemoteShellIntegration}/>
+                <span><strong>OSC 7 终端目录跟踪</strong><small>开启后显示并验证终端目录状态；远程登录会识别 Shell，并仅向当前会话注入 OSC 7 Hook。关闭后不再解析或显示 OSC 7 状态。</small></span>
+                <SettingsSwitch label="OSC 7 终端目录跟踪" checked={terminal.remoteShellIntegrationEnabled} disabled={busy} onChange={changeRemoteShellIntegration}/>
               </div>
             </div> : <p className="dialog-note">正在读取设置…</p>}
           </div>}
@@ -185,9 +185,9 @@ export function SettingsDialog({ onClose, onSecuritySettingsChanged, onTerminalS
       </section>
     </div>
   </DialogFrame>
-    {confirmRemoteIntegration && <DialogFrame compact className="settings-integration-confirmation" title="开启远程目录自动检测" subtitle="连接远程终端时执行" onClose={() => setConfirmRemoteIntegration(false)}>
+    {confirmRemoteIntegration && <DialogFrame compact className="settings-integration-confirmation" title="开启 OSC 7 终端目录跟踪" subtitle="本地与远程终端" onClose={() => setConfirmRemoteIntegration(false)}>
       <div className="settings-integration-confirmation-body">
-        <div className="settings-integration-confirmation-intro"><span aria-hidden="true"><Icon name="terminal" size={17}/></span><p>Qterm 将先执行固定、限时的 Shell 探测命令，再向当前登录会话注入临时 OSC 7 Hook。</p></div>
+        <div className="settings-integration-confirmation-intro"><span aria-hidden="true"><Icon name="terminal" size={17}/></span><p>Qterm 将跟踪终端上报的 OSC 7 目录；连接远程终端时，会先执行固定、限时的 Shell 探测命令，再向当前登录会话注入临时 Hook。</p></div>
         <ul>
           <li>不会修改远程 <code>.bashrc</code>、Profile 或其他文件</li>
           <li>只缓存目标标识与 Shell 类型，不保存命令输出或凭据</li>

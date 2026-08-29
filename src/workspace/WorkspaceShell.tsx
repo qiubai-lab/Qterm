@@ -16,6 +16,7 @@ import { getProfileRouteRequirements, type ConnectionProfile } from "../lib/taur
 import { getSettings, updateUpdateSettings, type SecuritySettings, type TerminalSettings, type UpdateSettings } from "../lib/tauri/settings";
 import { checkForUpdateOnStartupOnce } from "../lib/updateCheck";
 import { closeCurrentWindow, currentDesktopPlatform, isCurrentWindowAlwaysOnTop, minimizeCurrentWindow, setCurrentWindowAlwaysOnTop, startDraggingCurrentWindow, toggleMaximizeCurrentWindow } from "../lib/tauri/window";
+import { TERMINAL_ATTENTION_MS } from "../terminal/terminalAttention";
 import { focusTerminalBlock, openTerminalSearch } from "../terminal/terminalViewRegistry";
 import { WorkspaceCanvas, type ConnectionOwner } from "./LayoutView";
 import { resolveConfiguredAuth } from "./configuredAuth";
@@ -40,12 +41,11 @@ const WORKSPACE_DRAG_THRESHOLD_PX = 10;
 const TITLEBAR_DRAG_THRESHOLD_PX = 5;
 const TITLEBAR_DOUBLE_CLICK_DISTANCE_PX = 5;
 const TITLEBAR_DOUBLE_CLICK_MS = 350;
-const LOCAL_TERMINAL_ATTENTION_MS = 2_500;
 
 export function WorkspaceShell() {
   const desktopPlatform = currentDesktopPlatform();
   const usesNativeWindowControls = desktopPlatform === "macos";
-  const { hydrated, document, activeWorkspace, dispatch, runtimes, fileRuntimes, networkRuntimes, splitTerminalBlock, connectBlock, connectFileBlock, connectNetworkBlock, disconnectBlock, disconnectFileBlock, disconnectNetworkBlock, isConnectionTargetCurrent, connectedCount, closeSessions, blocksForWorkspace, acceptBlockHostKey, rejectBlockHostKey, acceptFileHostKey, rejectFileHostKey, acceptNetworkHostKey, rejectNetworkHostKey, storageNotice, dismissStorageNotice } = useWorkspace();
+  const { hydrated, document, activeWorkspace, dispatch, runtimes, fileRuntimes, networkRuntimes, clearTerminalOsc7State, splitTerminalBlock, connectBlock, connectFileBlock, connectNetworkBlock, disconnectBlock, disconnectFileBlock, disconnectNetworkBlock, isConnectionTargetCurrent, connectedCount, closeSessions, blocksForWorkspace, acceptBlockHostKey, rejectBlockHostKey, acceptFileHostKey, rejectFileHostKey, acceptNetworkHostKey, rejectNetworkHostKey, storageNotice, dismissStorageNotice } = useWorkspace();
   const [tool, setTool] = useState<Tool | null>(null);
   const [renaming, setRenaming] = useState<{ id: string; value: string } | null>(null);
   const [closeRequest, setCloseRequest] = useState<CloseRequest | null>(null);
@@ -59,6 +59,7 @@ export function WorkspaceShell() {
   const [terminalLocked, setTerminalLocked] = useState(false);
   const [securitySettings, setSecuritySettings] = useState<SecuritySettings | null>(null);
   const [remoteShellIntegrationEnabled, setRemoteShellIntegrationEnabled] = useState(false);
+  const [terminalSettingsReady, setTerminalSettingsReady] = useState(false);
   const [updateSettings, setUpdateSettings] = useState<UpdateSettings | null>(null);
   const [availableUpdateVersion, setAvailableUpdateVersion] = useState<string | null>(null);
   const [windowAlwaysOnTop, setWindowAlwaysOnTop] = useState(false);
@@ -85,6 +86,7 @@ export function WorkspaceShell() {
   const vaultLockBusyRef = useRef(false);
   const terminalLastActivityRef = useRef<number | null>(null);
   const previousTerminalLockedRef = useRef(false);
+  const previousRemoteShellIntegrationEnabledRef = useRef<boolean | null>(null);
   const localTerminalAttentionTimerRef = useRef<number | null>(null);
   const startupAttentionShownRef = useRef(false);
   const knownWorkspaceIdsRef = useRef(new Set(document.workspaces.map((workspace) => workspace.id)));
@@ -108,7 +110,7 @@ export function WorkspaceShell() {
       localTerminalAttentionTimerRef.current = window.setTimeout(() => {
         setLocalTerminalAttentionWorkspaceId((current) => current === workspaceId ? null : current);
         localTerminalAttentionTimerRef.current = null;
-      }, LOCAL_TERMINAL_ATTENTION_MS);
+      }, TERMINAL_ATTENTION_MS);
     }, 0);
   }, []);
 
@@ -396,15 +398,25 @@ export function WorkspaceShell() {
       if (disposed) return;
       setSecuritySettings(snapshot.security);
       setRemoteShellIntegrationEnabled(snapshot.terminal?.remoteShellIntegrationEnabled ?? false);
+      setTerminalSettingsReady(true);
       setUpdateSettings(snapshot.updates);
       if (!snapshot.updates.autoCheckOnStartup) return;
       const result = await checkForUpdateOnStartupOnce();
       if (!disposed && result?.status === "available") {
         setAvailableUpdateVersion(result.latestVersion);
       }
-    }).catch(() => undefined);
+    }).catch(() => {
+      if (!disposed) setTerminalSettingsReady(true);
+    });
     return () => { disposed = true; };
   }, []);
+
+  useEffect(() => {
+    if (!terminalSettingsReady) return;
+    const previous = previousRemoteShellIntegrationEnabledRef.current;
+    previousRemoteShellIntegrationEnabledRef.current = remoteShellIntegrationEnabled;
+    if (previous === true && !remoteShellIntegrationEnabled) clearTerminalOsc7State();
+  }, [clearTerminalOsc7State, remoteShellIntegrationEnabled, terminalSettingsReady]);
 
   useEffect(() => {
     if (!availableUpdateVersion) return;
@@ -504,7 +516,7 @@ export function WorkspaceShell() {
       let handled = true;
       if (command.type === "newWorkspace") dispatch({ type: "addWorkspace" });
       else if (command.type === "openConnections") setTool("connections");
-      else if (command.type === "splitBlock") splitTerminalBlock(activeWorkspace.id, activeWorkspace.activeBlockId, command.direction);
+      else if (command.type === "splitBlock") splitTerminalBlock(activeWorkspace.id, activeWorkspace.activeBlockId, command.direction, remoteShellIntegrationEnabled);
       else if (command.type === "focusBlock") {
         const blockId = adjacentBlockId(activeWorkspace.layout, activeWorkspace.activeBlockId, command.direction);
         if (blockId) dispatch({ type: "selectBlock", workspaceId: activeWorkspace.id, blockId });
@@ -534,7 +546,7 @@ export function WorkspaceShell() {
     };
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [activeWorkspace.activeBlockId, activeWorkspace.id, activeWorkspace.layout, authRequest, closeRequest, desktopPlatform, disconnectRequest, dispatch, document.workspaces, hostPromptOpen, lockChoiceOpen, splitTerminalBlock, terminalLocked, tool, vaultUnlockRequest]);
+  }, [activeWorkspace.activeBlockId, activeWorkspace.id, activeWorkspace.layout, authRequest, closeRequest, desktopPlatform, disconnectRequest, dispatch, document.workspaces, hostPromptOpen, lockChoiceOpen, remoteShellIntegrationEnabled, splitTerminalBlock, terminalLocked, tool, vaultUnlockRequest]);
 
   useEffect(() => {
     if (terminalLocked) return;
@@ -673,7 +685,7 @@ export function WorkspaceShell() {
           {document.workspaces.map((workspace) => {
             const visible = workspace.id === activeWorkspace.id;
             const transitionDirection = visible && workspaceTransition.workspaceId === workspace.id ? workspaceTransition.direction : null;
-            return <div key={workspace.id} className={`workspace-canvas-stage${visible ? " visible" : ""}${transitionDirection ? ` workspace-transition-${transitionDirection}` : ""}`} aria-hidden={!visible}><WorkspaceCanvas workspace={workspace} visible={visible} localTerminalAttention={localTerminalAttentionWorkspaceId === workspace.id} remoteShellIntegrationEnabled={remoteShellIntegrationEnabled} onRequestClose={closeBlock} onRequestDisconnect={(owner, blockId, name, local) => setDisconnectRequest({ owner, blockId, name, local })} onRequestAuthConnection={(owner, blockId, profile) => void requestConfiguredConnection(owner, blockId, profile)} onOpenConnectionManager={() => setTool("connections")}/></div>;
+            return <div key={workspace.id} className={`workspace-canvas-stage${visible ? " visible" : ""}${transitionDirection ? ` workspace-transition-${transitionDirection}` : ""}`} aria-hidden={!visible}><WorkspaceCanvas workspace={workspace} visible={visible} localTerminalAttention={localTerminalAttentionWorkspaceId === workspace.id} remoteShellIntegrationEnabled={remoteShellIntegrationEnabled} terminalSettingsReady={terminalSettingsReady} onRequestClose={closeBlock} onRequestDisconnect={(owner, blockId, name, local) => setDisconnectRequest({ owner, blockId, name, local })} onRequestAuthConnection={(owner, blockId, profile) => void requestConfiguredConnection(owner, blockId, profile)} onOpenConnectionManager={() => setTool("connections")}/></div>;
           })}
         </div>
         <aside className="utility-rail" aria-label="工具">
@@ -681,7 +693,7 @@ export function WorkspaceShell() {
           <RailButton tool="credentials" icon="key" label="凭证管理" active={tool === "credentials"} onClick={setTool}/>
           <RailActionButton icon="files" label="文件管理" onClick={() => dispatch(openFileWindowAction(activeWorkspace))}/>
           <RailActionButton icon="network" label="网络管理" onClick={() => dispatch(openNetworkWindowAction(activeWorkspace))}/>
-          <RailActionButton icon="terminal" label="打开终端" onClick={() => splitTerminalBlock(activeWorkspace.id, activeWorkspace.activeBlockId, "horizontal")}/>
+          <RailActionButton icon="terminal" label="打开终端" onClick={() => splitTerminalBlock(activeWorkspace.id, activeWorkspace.activeBlockId, "horizontal", remoteShellIntegrationEnabled)}/>
           <span className="rail-spacer"/>
           <RailActionButton icon="lock" label="锁定终端" accessibleLabel={terminalLockLabel} title={terminalLockLabel} disabled={!vaultStatus?.initialized || vaultStatus.legacy || vaultLockBusy} onClick={() => { setVaultLockError(""); setLockChoiceOpen(true); }}/>
           <RailButton tool="settings" icon="settings" label="系统设置" active={tool === "settings"} onClick={setTool}/>

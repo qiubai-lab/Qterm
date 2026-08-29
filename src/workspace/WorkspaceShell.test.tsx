@@ -8,6 +8,7 @@ import type { Workspace } from "./model";
 const mocks = vi.hoisted(() => ({
   dispatch: vi.fn(),
   splitTerminalBlock: vi.fn(),
+  clearTerminalOsc7State: vi.fn(),
   connectBlock: vi.fn().mockResolvedValue(undefined),
   connectFileBlock: vi.fn().mockResolvedValue(undefined),
   connectNetworkBlock: vi.fn().mockResolvedValue(undefined),
@@ -18,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   unlockVault: vi.fn(),
   onVaultStatusChanged: vi.fn(),
   getSettings: vi.fn(),
+  updateTerminalSettings: vi.fn(),
   updateUpdateSettings: vi.fn(),
   checkForUpdateOnStartupOnce: vi.fn(),
   closeCurrentWindow: vi.fn(),
@@ -40,20 +42,21 @@ let workspace = initialWorkspace;
 let workspaces = [initialWorkspace];
 
 vi.mock("./configuredAuth", () => ({ resolveConfiguredAuth: mocks.resolveConfiguredAuth }));
-vi.mock("./LayoutView", () => ({ WorkspaceCanvas: ({ workspace: renderedWorkspace, localTerminalAttention, remoteShellIntegrationEnabled, onRequestAuthConnection, onRequestDisconnect, onOpenConnectionManager }: { workspace: Workspace; localTerminalAttention?: boolean; remoteShellIntegrationEnabled?: boolean; onRequestAuthConnection: (owner: "terminal", blockId: string, profile: typeof requestedProfile) => void; onRequestDisconnect: (owner: "terminal" | "files" | "network", blockId: string, name: string, local: boolean) => void; onOpenConnectionManager: () => void }) => <div data-testid={`workspace-canvas-${renderedWorkspace.id}`} data-local-terminal-attention={localTerminalAttention || undefined} data-remote-shell-integration={remoteShellIntegrationEnabled || undefined}><div className="terminal-surface"><textarea className="xterm-helper-textarea" aria-label="终端输入"/></div><button onClick={() => onRequestAuthConnection("terminal", "block-1", requestedProfile)}>请求远程连接</button><button onClick={() => onRequestDisconnect("terminal", "block-1", "Server", false)}>请求断开连接</button><button onClick={() => onRequestDisconnect("files", "files-1", "Server Files", false)}>请求断开文件连接</button><button onClick={() => onRequestDisconnect("network", "network-1", "Server Network", false)}>请求断开网络连接</button><button onClick={onOpenConnectionManager}>从连接选择器管理连接</button></div> }));
+vi.mock("./LayoutView", () => ({ WorkspaceCanvas: ({ workspace: renderedWorkspace, localTerminalAttention, remoteShellIntegrationEnabled, terminalSettingsReady, onRequestAuthConnection, onRequestDisconnect, onOpenConnectionManager }: { workspace: Workspace; localTerminalAttention?: boolean; remoteShellIntegrationEnabled?: boolean; terminalSettingsReady?: boolean; onRequestAuthConnection: (owner: "terminal", blockId: string, profile: typeof requestedProfile) => void; onRequestDisconnect: (owner: "terminal" | "files" | "network", blockId: string, name: string, local: boolean) => void; onOpenConnectionManager: () => void }) => <div data-testid={`workspace-canvas-${renderedWorkspace.id}`} data-local-terminal-attention={localTerminalAttention || undefined} data-remote-shell-integration={remoteShellIntegrationEnabled || undefined} data-terminal-settings-ready={terminalSettingsReady || undefined}><div className="terminal-surface"><textarea className="xterm-helper-textarea" aria-label="终端输入"/></div><button onClick={() => onRequestAuthConnection("terminal", "block-1", requestedProfile)}>请求远程连接</button><button onClick={() => onRequestDisconnect("terminal", "block-1", "Server", false)}>请求断开连接</button><button onClick={() => onRequestDisconnect("files", "files-1", "Server Files", false)}>请求断开文件连接</button><button onClick={() => onRequestDisconnect("network", "network-1", "Server Network", false)}>请求断开网络连接</button><button onClick={onOpenConnectionManager}>从连接选择器管理连接</button></div> }));
 vi.mock("./WorkspaceProvider", () => ({ useWorkspace: () => ({
   hydrated: true, document: { schemaVersion: 6, activeWorkspaceId: workspace.id, recentProfileIds: [], workspaces }, activeWorkspace: workspace,
-  dispatch: mocks.dispatch, runtimes: {}, fileRuntimes: {}, networkRuntimes: {}, splitTerminalBlock: mocks.splitTerminalBlock, connectBlock: mocks.connectBlock, connectFileBlock: mocks.connectFileBlock, connectNetworkBlock: mocks.connectNetworkBlock, disconnectBlock: mocks.disconnectBlock, disconnectFileBlock: mocks.disconnectFileBlock, disconnectNetworkBlock: mocks.disconnectNetworkBlock,
+  dispatch: mocks.dispatch, runtimes: {}, fileRuntimes: {}, networkRuntimes: {}, clearTerminalOsc7State: mocks.clearTerminalOsc7State, splitTerminalBlock: mocks.splitTerminalBlock, connectBlock: mocks.connectBlock, connectFileBlock: mocks.connectFileBlock, connectNetworkBlock: mocks.connectNetworkBlock, disconnectBlock: mocks.disconnectBlock, disconnectFileBlock: mocks.disconnectFileBlock, disconnectNetworkBlock: mocks.disconnectNetworkBlock,
   isConnectionTargetCurrent: mocks.isConnectionTargetCurrent,
   connectedCount: vi.fn().mockReturnValue(0), closeSessions: vi.fn().mockResolvedValue(undefined), blocksForWorkspace: vi.fn().mockReturnValue(["block-1"]),
   acceptBlockHostKey: vi.fn(), rejectBlockHostKey: vi.fn(), acceptFileHostKey: vi.fn(), rejectFileHostKey: vi.fn(), acceptNetworkHostKey: vi.fn(), rejectNetworkHostKey: vi.fn(), storageNotice: "", dismissStorageNotice: vi.fn(),
 }) }));
 vi.mock("../components/dialogs/ConnectionAuthDialog", () => ({ ConnectionAuthDialog: ({ profile: item }: { profile: typeof connectionProfile }) => <div role="dialog" aria-label={`认证 ${item.name}`}/> }));
 vi.mock("../components/dialogs/ConnectionDialog", () => ({ ConnectionDialog: () => <div role="dialog" aria-label="连接管理"/> }));
+vi.mock("../components/dialogs/SettingsDialog", () => ({ SettingsDialog: ({ onTerminalSettingsChanged }: { onTerminalSettingsChanged?: (settings: { remoteShellIntegrationEnabled: boolean }) => void }) => <div role="dialog" aria-label="系统设置"><button onClick={() => onTerminalSettingsChanged?.({ remoteShellIntegrationEnabled: false })}>关闭 OSC 7</button></div> }));
 vi.mock("../components/dialogs/MasterPasswordDialog", () => ({ MasterPasswordDialog: ({ mode, onSuccess }: { mode: string; onSuccess: () => void }) => <div role="dialog" aria-label="解锁凭证库">{mode}<button onClick={onSuccess}>解锁</button></div> }));
 vi.mock("../lib/tauri/credentials", () => ({ getVaultStatus: mocks.getVaultStatus, lockVault: mocks.lockVault, unlockVault: mocks.unlockVault, onVaultStatusChanged: mocks.onVaultStatusChanged }));
 vi.mock("../lib/tauri/profiles", () => ({ getProfileRouteRequirements: mocks.getProfileRouteRequirements }));
-vi.mock("../lib/tauri/settings", () => ({ getSettings: mocks.getSettings, updateUpdateSettings: mocks.updateUpdateSettings }));
+vi.mock("../lib/tauri/settings", () => ({ getSettings: mocks.getSettings, updateTerminalSettings: mocks.updateTerminalSettings, updateUpdateSettings: mocks.updateUpdateSettings }));
 vi.mock("../lib/updateCheck", () => ({
   checkForUpdateOnStartupOnce: mocks.checkForUpdateOnStartupOnce,
   checkForUpdate: vi.fn(),
@@ -69,6 +72,7 @@ beforeEach(() => {
   workspace = initialWorkspace;
   workspaces = [initialWorkspace];
   mocks.splitTerminalBlock.mockClear();
+  mocks.clearTerminalOsc7State.mockClear();
   mocks.getVaultStatus.mockResolvedValue({ initialized: true, unlocked: true });
   mocks.getProfileRouteRequirements.mockImplementation(async () => ({
     usesCredential: requestedProfile.authPreference === "password" || requestedProfile.authPreference === "privateKey",
@@ -84,6 +88,14 @@ beforeEach(() => {
     updates: { autoCheckOnStartup: false },
     warning: null,
   });
+  mocks.updateTerminalSettings.mockImplementation(async (terminal) => ({
+    general: { rootDirectory: "", activeRootDirectory: "", dataDirectory: "", deviceDirectory: "", cacheDirectory: "", restartRequired: false },
+    security: { credentialAutoLockAfterSeconds: 3600, terminalAutoLockAfterSeconds: null },
+    appearance: { theme: "dark" },
+    terminal,
+    updates: { autoCheckOnStartup: false },
+    warning: null,
+  }));
   mocks.updateUpdateSettings.mockImplementation(async (updates) => ({
     general: { rootDirectory: "", activeRootDirectory: "", dataDirectory: "", deviceDirectory: "", cacheDirectory: "", restartRequired: false },
     security: { credentialAutoLockAfterSeconds: 3600, terminalAutoLockAfterSeconds: null },
@@ -103,7 +115,22 @@ describe("WorkspaceShell configured connection routing", () => {
   it("passes the persisted OSC 7 setting into every workspace canvas", async () => {
     render(<WorkspaceShell/>);
 
+    await waitFor(() => {
+      expect(screen.getByTestId("workspace-canvas-workspace-1")).toHaveAttribute("data-remote-shell-integration", "true");
+      expect(screen.getByTestId("workspace-canvas-workspace-1")).toHaveAttribute("data-terminal-settings-ready", "true");
+    });
+  });
+
+  it("clears reported OSC 7 state as soon as the master switch is disabled", async () => {
+    const user = userEvent.setup();
+    render(<WorkspaceShell/>);
     await waitFor(() => expect(screen.getByTestId("workspace-canvas-workspace-1")).toHaveAttribute("data-remote-shell-integration", "true"));
+
+    await user.click(screen.getByRole("button", { name: "系统设置" }));
+    await user.click(screen.getByRole("button", { name: "关闭 OSC 7" }));
+
+    await waitFor(() => expect(mocks.clearTerminalOsc7State).toHaveBeenCalledOnce());
+    expect(screen.getByTestId("workspace-canvas-workspace-1")).not.toHaveAttribute("data-remote-shell-integration");
   });
 
   it("requests local terminal attention on startup and for a newly created workspace", async () => {
@@ -454,18 +481,19 @@ describe("WorkspaceShell utility rail", () => {
     });
 
     await user.click(screen.getByRole("button", { name: "打开终端" }));
-    expect(mocks.splitTerminalBlock).toHaveBeenCalledWith("workspace-1", "block-1", "horizontal");
+    expect(mocks.splitTerminalBlock).toHaveBeenCalledWith("workspace-1", "block-1", "horizontal", true);
   });
 
-  it("handles terminal-safe shortcuts while xterm has focus and preserves control keys", () => {
+  it("handles terminal-safe shortcuts while xterm has focus and preserves control keys", async () => {
     render(<WorkspaceShell/>);
+    await waitFor(() => expect(screen.getByTestId("workspace-canvas-workspace-1")).toHaveAttribute("data-terminal-settings-ready", "true"));
     const terminalInput = screen.getByRole("textbox", { name: "终端输入" });
 
     mocks.dispatch.mockClear();
     fireEvent.keyDown(terminalInput, { key: "d", ctrlKey: true });
     expect(mocks.splitTerminalBlock).not.toHaveBeenCalled();
     fireEvent.keyDown(terminalInput, { key: "d", ctrlKey: true, shiftKey: true });
-    expect(mocks.splitTerminalBlock).toHaveBeenCalledWith("workspace-1", "block-1", "horizontal");
+    expect(mocks.splitTerminalBlock).toHaveBeenCalledWith("workspace-1", "block-1", "horizontal", true);
     fireEvent.keyDown(terminalInput, { key: "f", ctrlKey: true, shiftKey: true });
     expect(mocks.openTerminalSearch).toHaveBeenCalledWith("block-1");
   });
