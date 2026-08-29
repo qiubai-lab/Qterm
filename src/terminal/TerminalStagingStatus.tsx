@@ -12,6 +12,7 @@ export type TerminalStagingPhase =
   | "failed";
 
 export interface TerminalStagingStatusState {
+  operation?: "remote" | "local";
   phase: TerminalStagingPhase;
   displayName?: string;
   itemCount?: number;
@@ -32,14 +33,16 @@ export function TerminalStagingStatus({
   onStop: () => void;
 }) {
   const presentation = stagingPresentation(state);
+  const local = state.operation === "local";
   const progress = progressValue(state);
   const cancellable = canStop && (state.phase === "scanning" || state.phase === "uploading");
   return <section
     className="terminal-staging-status"
     data-phase={state.phase}
+    data-operation={local ? "local" : "remote"}
     data-state={closing ? "closing" : "open"}
     role="status"
-    aria-label="终端文件上传状态"
+    aria-label={local ? "终端文件粘贴状态" : "终端文件上传状态"}
     aria-live="polite"
   >
     <span className="terminal-staging-status-icon">
@@ -49,22 +52,26 @@ export function TerminalStagingStatus({
       <strong>{presentation.label}</strong>
       <small title={presentation.summary}>{presentation.summary}</small>
     </span>
-    <button
-      className="terminal-staging-stop"
-      type="button"
-      disabled={!cancellable}
-      aria-label="停止上传"
-      onClick={onStop}
-    ><Icon name="close" size={11}/></button>
-    <span className="terminal-staging-progress-row">
-      <progress
-        className="terminal-staging-progress"
-        aria-label="上传进度"
-        max={100}
-        {...(progress === null ? {} : { value: progress })}
-      />
-      <span className="terminal-staging-metrics">{presentation.metrics}</span>
-    </span>
+    {local
+      ? <span className="terminal-staging-stop" aria-hidden="true"/>
+      : <button
+          className="terminal-staging-stop"
+          type="button"
+          disabled={!cancellable}
+          aria-label="停止上传"
+          onClick={onStop}
+        ><Icon name="close" size={11}/></button>}
+    {local
+      ? <span className="terminal-staging-progress-row" aria-hidden="true"/>
+      : <span className="terminal-staging-progress-row">
+          <progress
+            className="terminal-staging-progress"
+            aria-label="上传进度"
+            max={100}
+            {...(progress === null ? {} : { value: progress })}
+          />
+          <span className="terminal-staging-metrics">{presentation.metrics}</span>
+        </span>}
   </section>;
 }
 
@@ -74,10 +81,11 @@ function stagingPresentation(state: TerminalStagingStatusState): {
   summary: string;
   metrics: string;
 } {
+  const local = state.operation === "local";
   const itemSummary = state.displayName || (state.itemCount ? `${state.itemCount} 个项目` : "剪贴板文件");
   switch (state.phase) {
     case "preparing":
-      return { icon: "upload", label: "准备上传", summary: "正在读取系统剪贴板", metrics: "—" };
+      return { icon: local ? "copy" : "upload", label: local ? "准备粘贴" : "准备上传", summary: "正在读取系统剪贴板", metrics: "—" };
     case "scanning":
       return { icon: "search", label: "正在扫描", summary: itemSummary, metrics: itemCount(state) };
     case "uploading":
@@ -91,9 +99,9 @@ function stagingPresentation(state: TerminalStagingStatusState): {
     case "cancelled":
       return { icon: "close", label: "上传已停止", summary: itemSummary, metrics: byteMetrics(state) };
     case "failed":
-      return { icon: "close", label: "上传失败", summary: state.message || "请重试", metrics: byteMetrics(state) };
+      return { icon: "close", label: local ? "粘贴失败" : "上传失败", summary: state.message || "请重试", metrics: byteMetrics(state) };
     case "idle":
-      return { icon: "upload", label: "准备上传", summary: "正在读取文件", metrics: "—" };
+      return { icon: local ? "copy" : "upload", label: local ? "准备粘贴" : "准备上传", summary: "正在读取文件", metrics: "—" };
   }
 }
 

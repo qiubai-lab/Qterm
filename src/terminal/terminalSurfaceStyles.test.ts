@@ -101,6 +101,7 @@ describe("terminal staging status styles", () => {
     expect(styles).toContain('--primary-action:#fcee0a');
     expect(styles).toContain('--accent:#00ddeb');
     expect(styles).toContain('.terminal-staging-status[data-state="closing"]');
+    expect(styles).toContain('.terminal-staging-status[data-operation="local"] .terminal-staging-stop,.terminal-staging-status[data-operation="local"] .terminal-staging-progress-row{visibility:hidden}');
     expect(styles).toContain("to{opacity:0;transform:translateY(4px) scale(.985)}");
     expect(styles).not.toMatch(/max-width:300px[\s\S]*?terminal-staging-status-copy small[^}]*display:none/);
     expect(styles).toMatch(/max-width:300px[\s\S]*?\.terminal-staging-metrics\{display:none\}/);

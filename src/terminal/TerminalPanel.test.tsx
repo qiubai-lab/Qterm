@@ -39,6 +39,7 @@ const mocks = vi.hoisted(() => ({
   clearBlockBuffer: vi.fn(),
   writeClipboardText: vi.fn().mockResolvedValue(undefined),
   readClipboardText: vi.fn().mockResolvedValue(""),
+  prepareLocalTerminalClipboardPaste: vi.fn(),
   startTerminalClipboardStaging: vi.fn(),
   cancelTerminalClipboardStaging: vi.fn().mockResolvedValue(undefined),
   runtimes: {} as Record<string, { status: string; sessionId?: string | null }>,
@@ -52,6 +53,10 @@ vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({
 vi.mock("../lib/tauri/sessions", () => ({
   startTerminalClipboardStaging: mocks.startTerminalClipboardStaging,
   cancelTerminalClipboardStaging: mocks.cancelTerminalClipboardStaging,
+}));
+
+vi.mock("../lib/tauri/localSessions", () => ({
+  prepareLocalTerminalClipboardPaste: mocks.prepareLocalTerminalClipboardPaste,
 }));
 
 vi.mock("@xterm/addon-fit", () => ({
@@ -170,6 +175,7 @@ describe("TerminalPanel view lifetime", () => {
     mocks.clearBlockBuffer.mockClear();
     mocks.writeClipboardText.mockClear();
     mocks.readClipboardText.mockReset().mockResolvedValue("");
+    mocks.prepareLocalTerminalClipboardPaste.mockReset().mockResolvedValue({ kind: "empty" });
     mocks.startTerminalClipboardStaging.mockReset().mockResolvedValue({ kind: "empty" });
     mocks.cancelTerminalClipboardStaging.mockReset().mockResolvedValue(undefined);
     mocks.runtimes = {};
@@ -432,6 +438,7 @@ describe("TerminalPanel clipboard interaction", () => {
     mocks.clearBlockBuffer.mockClear();
     mocks.writeClipboardText.mockClear();
     mocks.readClipboardText.mockReset().mockResolvedValue("");
+    mocks.prepareLocalTerminalClipboardPaste.mockReset().mockResolvedValue({ kind: "empty" });
     mocks.startTerminalClipboardStaging.mockReset().mockResolvedValue({ kind: "empty" });
     mocks.cancelTerminalClipboardStaging.mockReset().mockResolvedValue(undefined);
     mocks.runtimes = { "block-menu": { status: "connected", sessionId: "ssh-menu" }, "block-keys": { status: "connected", sessionId: "ssh-keys" } };
@@ -650,18 +657,72 @@ describe("TerminalPanel clipboard interaction", () => {
     view.unmount();
   });
 
-  it("does not request remote image upload for a local terminal", async () => {
+  it("pastes native clipboard files locally without exposing upload controls", async () => {
     vi.stubGlobal("navigator", { platform: "Win32", userAgent: "Windows" });
     mocks.runtimes = { "block-keys": { status: "connected", sessionId: "local-1" } };
-    mocks.readClipboardText.mockResolvedValue("");
+    mocks.prepareLocalTerminalClipboardPaste.mockResolvedValue({
+      kind: "paths",
+      text: '"C:\\My Models\\model.bin"',
+      displayName: "model.bin",
+      itemCount: 1,
+    });
     const view = render(<TerminalPanel blockId="block-keys" sessionKey="block-keys:local-image" local visible/>);
     const terminal = mocks.terminals[0];
 
     expect(terminal.keyHandler?.(new KeyboardEvent("keydown", { key: "v", ctrlKey: true }))).toBe(false);
-    await act(async () => undefined);
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
 
     expect(mocks.startTerminalClipboardStaging).not.toHaveBeenCalled();
+    expect(mocks.prepareLocalTerminalClipboardPaste).toHaveBeenCalledOnce();
+    expect(terminal.paste).toHaveBeenCalledWith('"C:\\My Models\\model.bin"');
+    const status = screen.getByRole("status", { name: "终端文件粘贴状态" });
+    expect(status).toHaveTextContent("路径已粘贴model.bin");
+    expect(screen.queryByRole("progressbar", { name: "上传进度" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "停止上传" })).not.toBeInTheDocument();
+    view.unmount();
+  });
+
+  it("keeps local clipboard preparation ahead of later terminal input", async () => {
+    vi.stubGlobal("navigator", { platform: "Win32", userAgent: "Windows" });
+    mocks.runtimes = { "block-keys": { status: "connected", sessionId: "local-1" } };
+    let resolveClipboard: ((value: { kind: "paths"; text: string; displayName: string; itemCount: number }) => void) | null = null;
+    mocks.prepareLocalTerminalClipboardPaste.mockReturnValue(new Promise((resolve) => { resolveClipboard = resolve; }));
+    const view = render(<TerminalPanel blockId="block-keys" sessionKey="block-keys:local-order" local visible/>);
+    const terminal = mocks.terminals[0];
+
+    expect(terminal.keyHandler?.(new KeyboardEvent("keydown", { key: "v", ctrlKey: true }))).toBe(false);
+    terminal.dataHandler?.("x");
+    expect(mocks.writeBlock).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolveClipboard?.({ kind: "paths", text: "C:\\model.bin", displayName: "model.bin", itemCount: 1 });
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mocks.writeBlock.mock.calls.map(([, data]) => new TextDecoder().decode(data))).toEqual(["C:\\model.bin", "x"]);
+    view.unmount();
+  });
+
+  it("preserves local text confirmation and reports native clipboard failures", async () => {
+    vi.stubGlobal("navigator", { platform: "Win32", userAgent: "Windows" });
+    mocks.runtimes = { "block-keys": { status: "connected", sessionId: "local-1" } };
+    mocks.prepareLocalTerminalClipboardPaste.mockResolvedValueOnce({ kind: "text", text: "first line\nsecond line" });
+    const view = render(<TerminalPanel blockId="block-keys" sessionKey="block-keys:local-text" local visible/>);
+    const terminal = mocks.terminals[0];
+
+    expect(terminal.keyHandler?.(new KeyboardEvent("keydown", { key: "v", ctrlKey: true }))).toBe(false);
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    expect(screen.getByRole("dialog", { name: "确认粘贴？" })).toHaveTextContent("2 行");
     expect(terminal.paste).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "取消" }));
+    mocks.prepareLocalTerminalClipboardPaste.mockRejectedValueOnce({ message: "剪贴板文件不可访问" });
+    expect(terminal.keyHandler?.(new KeyboardEvent("keydown", { key: "v", ctrlKey: true }))).toBe(false);
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    expect(screen.getByRole("status", { name: "终端文件粘贴状态" })).toHaveTextContent("粘贴失败剪贴板文件不可访问");
+    expect(screen.queryByRole("button", { name: "停止上传" })).not.toBeInTheDocument();
     view.unmount();
   });
 

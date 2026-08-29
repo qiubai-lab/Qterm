@@ -1,5 +1,8 @@
 use crate::{
-    domain::terminal_staging::{TerminalStagingError, TerminalStagingEvent},
+    domain::terminal_staging::{
+        LocalTerminalPathStyle, TerminalStagingError, TerminalStagingEvent,
+        format_local_terminal_paths,
+    },
     ports::terminal_staging::{
         ClipboardPayload, ClipboardPayloadSource, RemoteTerminalStagingStore, TerminalStagingSink,
     },
@@ -180,5 +183,113 @@ mod tests {
 
         assert_eq!(result, Err(TerminalStagingError::UploadFailed));
         assert!(!generated.exists());
+    }
+
+    #[tokio::test]
+    async fn local_entries_become_paste_text_without_deleting_any_source() {
+        let directory = tempfile::tempdir().expect("tempdir");
+        let existing = directory.path().join("existing model.bin");
+        let generated = directory.path().join("generated.png");
+        std::fs::write(&existing, b"model").expect("existing fixture");
+        std::fs::write(&generated, b"png").expect("generated fixture");
+
+        let result = prepare_local_terminal_clipboard_paste(
+            &FakeSource(ClipboardPayload::Entries(vec![
+                StagingSourceEntry {
+                    path: existing.clone(),
+                    display_name: "existing model.bin".into(),
+                    extension: Some("bin".into()),
+                    cleanup_after: false,
+                },
+                StagingSourceEntry {
+                    path: generated.clone(),
+                    display_name: "clipboard.png".into(),
+                    extension: Some("png".into()),
+                    cleanup_after: true,
+                },
+            ])),
+            LocalTerminalPathStyle::Posix,
+        )
+        .await
+        .expect("local paste");
+
+        let LocalTerminalClipboardPaste::Paths {
+            text,
+            display_name,
+            item_count,
+        } = result
+        else {
+            panic!("expected local paths");
+        };
+        assert!(text.contains("existing model.bin"));
+        assert!(text.contains("generated.png"));
+        assert_eq!(display_name, "2 个项目");
+        assert_eq!(item_count, 2);
+        assert!(existing.exists());
+        assert!(generated.exists());
+    }
+
+    #[tokio::test]
+    async fn local_text_and_empty_payloads_preserve_the_existing_paste_modes() {
+        assert_eq!(
+            prepare_local_terminal_clipboard_paste(
+                &FakeSource(ClipboardPayload::Text("plain text".into())),
+                LocalTerminalPathStyle::Posix,
+            )
+            .await,
+            Ok(LocalTerminalClipboardPaste::Text("plain text".into()))
+        );
+        assert_eq!(
+            prepare_local_terminal_clipboard_paste(
+                &FakeSource(ClipboardPayload::Empty),
+                LocalTerminalPathStyle::Posix,
+            )
+            .await,
+            Ok(LocalTerminalClipboardPaste::Empty)
+        );
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum LocalTerminalClipboardPaste {
+    Empty,
+    Text(String),
+    Paths {
+        text: String,
+        display_name: String,
+        item_count: usize,
+    },
+}
+
+pub async fn prepare_local_terminal_clipboard_paste<S>(
+    source: &S,
+    style: LocalTerminalPathStyle,
+) -> Result<LocalTerminalClipboardPaste, TerminalStagingError>
+where
+    S: ClipboardPayloadSource,
+{
+    match source.read_payload().await? {
+        ClipboardPayload::Empty => Ok(LocalTerminalClipboardPaste::Empty),
+        ClipboardPayload::Text(text) => Ok(LocalTerminalClipboardPaste::Text(text)),
+        ClipboardPayload::Entries(entries) => {
+            let item_count = entries.len();
+            if item_count == 0 {
+                return Ok(LocalTerminalClipboardPaste::Empty);
+            }
+            let text = format_local_terminal_paths(
+                entries.iter().map(|entry| entry.path.as_path()),
+                style,
+            )?;
+            let display_name = if item_count == 1 {
+                entries[0].display_name.clone()
+            } else {
+                format!("{item_count} 个项目")
+            };
+            Ok(LocalTerminalClipboardPaste::Paths {
+                text,
+                display_name,
+                item_count,
+            })
+        }
     }
 }

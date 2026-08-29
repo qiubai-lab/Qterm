@@ -5,7 +5,10 @@ mod infrastructure;
 mod ports;
 
 use commands::browser::{BrowserProxyState, browser_proxy_launch, browser_proxy_list};
-use commands::clipboard::{session_cancel_clipboard_staging, session_start_clipboard_staging};
+use commands::clipboard::{
+    ClipboardState, local_terminal_prepare_clipboard_paste, session_cancel_clipboard_staging,
+    session_start_clipboard_staging,
+};
 use commands::credential::{
     CredentialState, credential_cancel_private_key, credential_commit_private_key,
     credential_create_password, credential_delete, credential_list,
@@ -159,6 +162,7 @@ pub fn run() {
                 .unwrap_or_else(|| default_configuration.clone());
             let paths = DataPaths::from_root(active_configuration.path().to_path_buf());
             paths.initialize()?;
+            app.manage(ClipboardState::new(paths.cache.join("clipboard")));
             app.manage(SettingsState::new(
                 JsonSettingsRepository::new(paths.settings.clone()),
                 JsonConfigurationDirectoryRepository::new(configuration_location_path),
@@ -245,6 +249,7 @@ pub fn run() {
             session_resize,
             session_start_clipboard_staging,
             session_cancel_clipboard_staging,
+            local_terminal_prepare_clipboard_paste,
             local_terminal_capabilities,
             local_session_connect,
             local_session_write,

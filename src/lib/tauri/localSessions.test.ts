@@ -14,7 +14,7 @@ vi.mock("@tauri-apps/api/core", () => ({
   },
 }));
 
-import { closeLocalSession, connectLocalSession, getLocalTerminalCapabilities, resizeLocalSession, writeLocalSession } from "./localSessions";
+import { closeLocalSession, connectLocalSession, getLocalTerminalCapabilities, prepareLocalTerminalClipboardPaste, resizeLocalSession, writeLocalSession } from "./localSessions";
 
 describe("local terminal IPC client", () => {
   beforeEach(() => {
@@ -71,5 +71,22 @@ describe("local terminal IPC client", () => {
       windowsPty: { backend: "conpty", buildNumber: 26100 },
     });
     expect(mocks.invoke).toHaveBeenCalledWith("local_terminal_capabilities");
+  });
+
+  it("prepares native clipboard files as one local terminal paste result", async () => {
+    mocks.invoke.mockResolvedValue({
+      kind: "paths",
+      text: '"C:\\My Models\\model.bin"',
+      displayName: "model.bin",
+      itemCount: 1,
+    });
+
+    await expect(prepareLocalTerminalClipboardPaste()).resolves.toEqual({
+      kind: "paths",
+      text: '"C:\\My Models\\model.bin"',
+      displayName: "model.bin",
+      itemCount: 1,
+    });
+    expect(mocks.invoke).toHaveBeenCalledWith("local_terminal_prepare_clipboard_paste");
   });
 });

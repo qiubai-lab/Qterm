@@ -15,8 +15,17 @@ export interface LocalSessionConnection {
   cwd: string;
 }
 
+export type LocalTerminalClipboardPaste =
+  | { kind: "empty" }
+  | { kind: "text"; text: string }
+  | { kind: "paths"; text: string; displayName: string; itemCount: number };
+
 export function getLocalTerminalCapabilities(): Promise<LocalTerminalCapabilities> {
   return invoke<LocalTerminalCapabilities>("local_terminal_capabilities");
+}
+
+export function prepareLocalTerminalClipboardPaste(): Promise<LocalTerminalClipboardPaste> {
+  return invoke<LocalTerminalClipboardPaste>("local_terminal_prepare_clipboard_paste");
 }
 
 export function connectLocalSession(

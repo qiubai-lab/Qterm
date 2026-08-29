@@ -49,4 +49,17 @@ describe("TerminalStagingStatus", () => {
     expect(screen.getByRole("button", { name: "停止上传" })).toBeInTheDocument();
     view.unmount();
   });
+
+  it("uses local paste semantics without an upload progress or stop action", () => {
+    const view = render(<TerminalStagingStatus state={{ operation: "local", phase: "preparing" }} closing={false} canStop={false} onStop={vi.fn()}/>);
+    const status = screen.getByRole("status", { name: "终端文件粘贴状态" });
+    expect(status).toHaveTextContent("准备粘贴正在读取系统剪贴板");
+    expect(status).toHaveAttribute("data-operation", "local");
+    expect(screen.queryByRole("progressbar", { name: "上传进度" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "停止上传" })).not.toBeInTheDocument();
+
+    view.rerender(<TerminalStagingStatus state={{ operation: "local", phase: "failed", message: "无法读取文件" }} closing={false} canStop={false} onStop={vi.fn()}/>);
+    expect(status).toHaveTextContent("粘贴失败无法读取文件");
+    view.unmount();
+  });
 });

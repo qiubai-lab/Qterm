@@ -3,13 +3,14 @@ import { createPortal } from "react-dom";
 import { FitAddon } from "@xterm/addon-fit";
 import type { ISearchOptions } from "@xterm/addon-search";
 import { Terminal } from "@xterm/xterm";
-import { readText as readClipboardText, writeText as writeClipboardText } from "@tauri-apps/plugin-clipboard-manager";
+import { writeText as writeClipboardText } from "@tauri-apps/plugin-clipboard-manager";
 import "@xterm/xterm/css/xterm.css";
 
 import { resolveAppShortcut, shortcutLabel } from "../app/shortcuts";
 import { DialogFrame } from "../components/dialogs/DialogFrame";
 import { Icon } from "../components/Icon";
 import { currentDesktopPlatform } from "../lib/tauri/window";
+import { prepareLocalTerminalClipboardPaste } from "../lib/tauri/localSessions";
 import {
   cancelTerminalClipboardStaging,
   startTerminalClipboardStaging,
@@ -144,15 +145,41 @@ export function TerminalPanel({ blockId, sessionKey, visible, local, osc7Enabled
     await view.inputScheduler.runExclusive(async (capture) => {
       closeContextMenu(false);
       if (local) {
-        let text = "";
-        try { text = await readClipboardText(); }
-        catch { /* Local clipboard failures do not reach terminal input. */ }
-        if (viewRef.current !== view) return;
-        if (text && isGuardedPaste(text)) {
-          setPendingPaste({ text, lines: pasteLineCount(text), characters: text.length });
-          return;
+        const sessionId = connectedSessionIdRef.current;
+        const pasteRequestId = ++pasteRequestIdRef.current;
+        setStagingSessionId(sessionId);
+        setStagingClosing(false);
+        setStagingStatus({ operation: "local", phase: "preparing" });
+        try {
+          const result = await prepareLocalTerminalClipboardPaste();
+          if (pasteRequestIdRef.current !== pasteRequestId || viewRef.current !== view || connectedSessionIdRef.current !== sessionId) return;
+          if (result.kind === "empty") {
+            setStagingStatus(IDLE_TERMINAL_STAGING_STATUS);
+            setStagingSessionId(null);
+          } else if (result.kind === "text") {
+            setStagingStatus(IDLE_TERMINAL_STAGING_STATUS);
+            setStagingSessionId(null);
+            if (isGuardedPaste(result.text)) {
+              setPendingPaste({ text: result.text, lines: pasteLineCount(result.text), characters: result.text.length });
+              return;
+            }
+            await capture(() => view.terminal.paste(result.text));
+          } else {
+            await capture(() => view.terminal.paste(result.text));
+            setStagingStatus({
+              operation: "local",
+              phase: "pasted",
+              displayName: result.displayName,
+              itemCount: result.itemCount,
+            });
+          }
+        } catch (reason) {
+          if (pasteRequestIdRef.current === pasteRequestId && viewRef.current === view && connectedSessionIdRef.current === sessionId) {
+            setStagingSessionId(sessionId);
+            setStagingClosing(false);
+            setStagingStatus({ operation: "local", phase: "failed", message: terminalStagingErrorMessage(reason) });
+          }
         }
-        if (text) await capture(() => view.terminal.paste(text));
         restoreTerminalFocus();
         return;
       }

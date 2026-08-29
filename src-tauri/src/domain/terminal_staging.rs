@@ -171,4 +171,97 @@ mod tests {
         );
         assert_eq!(safe_staging_extension(Path::new("file.图")), None);
     }
+
+    #[test]
+    fn local_terminal_paths_preserve_order_and_native_literal_boundaries() {
+        let windows = format_local_terminal_paths(
+            [
+                Path::new(r"C:\Models\plain.bin"),
+                Path::new(r"C:\My Models\量化模型.bin"),
+            ],
+            LocalTerminalPathStyle::Windows,
+        )
+        .expect("Windows paths");
+        assert_eq!(
+            windows,
+            r#"C:\Models\plain.bin "C:\My Models\量化模型.bin""#
+        );
+
+        let posix = format_local_terminal_paths(
+            [
+                Path::new("/tmp/plain.bin"),
+                Path::new("/Users/test/My Model/a'b.bin"),
+            ],
+            LocalTerminalPathStyle::Posix,
+        )
+        .expect("POSIX paths");
+        assert_eq!(posix, "/tmp/plain.bin '/Users/test/My Model/a'\\''b.bin'");
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LocalTerminalPathStyle {
+    Windows,
+    Posix,
+}
+
+impl LocalTerminalPathStyle {
+    pub const fn native() -> Self {
+        if cfg!(windows) {
+            Self::Windows
+        } else {
+            Self::Posix
+        }
+    }
+}
+
+pub fn format_local_terminal_paths<'a>(
+    paths: impl IntoIterator<Item = &'a Path>,
+    style: LocalTerminalPathStyle,
+) -> Result<String, TerminalStagingError> {
+    let mut formatted = Vec::new();
+    for path in paths {
+        let value = path
+            .to_str()
+            .filter(|value| !value.is_empty())
+            .ok_or(TerminalStagingError::InvalidClipboardData)?;
+        if value.chars().any(char::is_control) {
+            return Err(TerminalStagingError::InvalidClipboardData);
+        }
+        formatted.push(match style {
+            LocalTerminalPathStyle::Windows => format_windows_path(value)?,
+            LocalTerminalPathStyle::Posix => format_posix_path(value),
+        });
+    }
+    if formatted.is_empty() {
+        return Err(TerminalStagingError::InvalidClipboardData);
+    }
+    Ok(formatted.join(" "))
+}
+
+fn format_windows_path(value: &str) -> Result<String, TerminalStagingError> {
+    if value.contains('"') {
+        return Err(TerminalStagingError::InvalidClipboardData);
+    }
+    if value.chars().any(|character| {
+        character.is_whitespace() || matches!(character, '&' | '|' | '<' | '>' | '(' | ')' | '^')
+    }) {
+        Ok(format!("\"{value}\""))
+    } else {
+        Ok(value.to_owned())
+    }
+}
+
+fn format_posix_path(value: &str) -> String {
+    if value.chars().all(|character| {
+        character.is_alphanumeric()
+            || matches!(
+                character,
+                '/' | '.' | '_' | '-' | '+' | '=' | ':' | ',' | '@' | '%'
+            )
+    }) {
+        value.to_owned()
+    } else {
+        format!("'{}'", value.replace('\'', "'\\''"))
+    }
 }
