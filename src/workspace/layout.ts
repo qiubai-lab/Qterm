@@ -1,4 +1,4 @@
-import type { LayoutLeaf, LayoutNode, SplitDirection, TerminalNode } from "./model";
+import type { GitTarget, LayoutLeaf, LayoutNode, SplitDirection, TerminalNode } from "./model";
 
 export type DropPosition = "left" | "right" | "top" | "bottom" | "center";
 
@@ -119,7 +119,7 @@ function swapTerminals(
 
 export function terminalBlockIds(node: LayoutNode): string[] {
   if (node.type === "terminal") return [node.blockId];
-  if (node.type === "files" || node.type === "network") return [];
+  if (node.type === "files" || node.type === "network" || node.type === "git") return [];
   return [...terminalBlockIds(node.first), ...terminalBlockIds(node.second)];
 }
 
@@ -147,6 +147,15 @@ export function setNetworkProfile(node: LayoutNode, blockId: string, profileId: 
     ...node,
     first: setNetworkProfile(node.first, blockId, profileId),
     second: setNetworkProfile(node.second, blockId, profileId),
+  };
+}
+
+export function setGitTarget(node: LayoutNode, blockId: string, target: GitTarget): LayoutNode {
+  if (node.type !== "split") return node.type === "git" && node.blockId === blockId ? { ...node, target } : node;
+  return {
+    ...node,
+    first: setGitTarget(node.first, blockId, target),
+    second: setGitTarget(node.second, blockId, target),
   };
 }
 

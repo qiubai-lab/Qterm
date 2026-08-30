@@ -37,6 +37,10 @@ pub enum LayoutNode {
         block_id: String,
         profile_id: Option<String>,
     },
+    Git {
+        block_id: String,
+        target: GitTarget,
+    },
     Split {
         id: String,
         direction: SplitDirection,
@@ -44,6 +48,13 @@ pub enum LayoutNode {
         first: Box<LayoutNode>,
         second: Box<LayoutNode>,
     },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum GitTarget {
+    Unbound,
+    Local { path: String },
+    Remote { profile_id: String, path: String },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -101,7 +112,7 @@ impl WorkspaceDocument {
 fn contains_terminal(node: &LayoutNode) -> bool {
     match node {
         LayoutNode::Terminal { .. } => true,
-        LayoutNode::Files { .. } | LayoutNode::Network { .. } => false,
+        LayoutNode::Files { .. } | LayoutNode::Network { .. } | LayoutNode::Git { .. } => false,
         LayoutNode::Split { first, second, .. } => {
             contains_terminal(first) || contains_terminal(second)
         }
@@ -168,6 +179,21 @@ fn validate_layout<'a>(
             }
             blocks.push(block_id);
         }
+        LayoutNode::Git { block_id, target } => {
+            validate_id(block_id)?;
+            match target {
+                GitTarget::Unbound => {}
+                GitTarget::Local { path } => validate_local_git_path(path)?,
+                GitTarget::Remote { profile_id, path } => {
+                    validate_id(profile_id)?;
+                    validate_remote_git_path(path)?;
+                }
+            }
+            if blocks.contains(&block_id.as_str()) {
+                return Err(WorkspaceValidationError::Layout);
+            }
+            blocks.push(block_id);
+        }
         LayoutNode::Split {
             id,
             ratio,
@@ -184,6 +210,22 @@ fn validate_layout<'a>(
         }
     }
     Ok(())
+}
+
+fn validate_local_git_path(path: &str) -> Result<(), WorkspaceValidationError> {
+    if path.is_empty() || path.len() > 4096 || path.chars().any(char::is_control) {
+        Err(WorkspaceValidationError::Layout)
+    } else {
+        Ok(())
+    }
+}
+
+fn validate_remote_git_path(path: &str) -> Result<(), WorkspaceValidationError> {
+    if path.is_empty() || path.len() > 4096 || path.contains('\0') {
+        Err(WorkspaceValidationError::Layout)
+    } else {
+        Ok(())
+    }
 }
 
 fn validate_id(value: &str) -> Result<(), WorkspaceValidationError> {

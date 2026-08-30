@@ -24,6 +24,11 @@ use commands::files::{
     files_list_local_roots, files_list_remote, files_read_binary, files_read_text,
     files_rename_entry, files_session_connect, files_write_text,
 };
+use commands::git::{
+    GitState, git_available, git_commit, git_create_branch, git_initialize, git_remote_execute,
+    git_select_repository_directory, git_session_connect, git_snapshot, git_stage, git_stage_all,
+    git_switch_branch, git_unstage, git_unstage_all,
+};
 use commands::local_session::{
     LocalSessionState, local_session_close, local_session_connect, local_session_resize,
     local_session_write, local_terminal_capabilities,
@@ -55,6 +60,7 @@ use commands::transfer::{
 };
 use commands::workspace::{WorkspaceState, workspace_load, workspace_save};
 use domain::settings::ConfigurationDirectory;
+use infrastructure::git_cli::SystemGitExecutor;
 use infrastructure::local::pty::LocalSessionManager;
 use infrastructure::persistence::json_appearance_settings_repository::JsonAppearanceSettingsRepository;
 use infrastructure::persistence::json_credential_vault::JsonCredentialVault;
@@ -189,6 +195,7 @@ pub fn run() {
                 JsonRemoteShellCache::new(paths.remote_shells),
             )));
             app.manage(LocalSessionState::new(LocalSessionManager::default()));
+            app.manage(GitState::new(SystemGitExecutor::discover()));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -277,7 +284,20 @@ pub fn run() {
             transfer_download,
             transfer_cancel,
             workspace_load,
-            workspace_save
+            workspace_save,
+            git_available,
+            git_session_connect,
+            git_remote_execute,
+            git_select_repository_directory,
+            git_snapshot,
+            git_initialize,
+            git_stage,
+            git_stage_all,
+            git_unstage,
+            git_unstage_all,
+            git_commit,
+            git_create_branch,
+            git_switch_branch
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Qterm");

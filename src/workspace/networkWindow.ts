@@ -10,6 +10,6 @@ export function openNetworkWindowAction(workspace: Workspace): WorkspaceAction {
     type: "openNetwork",
     workspaceId: workspace.id,
     anchorBlockId,
-    profileId: anchor?.profileId ?? null,
+    profileId: anchor && anchor.type !== "git" ? anchor.profileId : null,
   };
 }

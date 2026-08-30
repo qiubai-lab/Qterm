@@ -13,8 +13,9 @@ use tempfile::tempdir;
 use tokio::sync::{mpsc, oneshot};
 
 use super::{
-    HostKeyDecision, PendingHostKey, SessionConnectRequest, SessionEntry, SessionPurpose,
-    SessionRouteNode, SshSessionManager, TransferRequest, scan_local_upload_entries,
+    HostKeyDecision, PendingHostKey, SessionConnectRequest, SessionControl, SessionEntry,
+    SessionPurpose, SessionRouteNode, SshSessionManager, TransferRequest,
+    scan_local_upload_entries,
     session::{initial_terminal_size, shell_integration_target},
 };
 use crate::{
@@ -32,6 +33,7 @@ use crate::{
         json_known_host_repository::JsonKnownHostRepository,
         json_remote_shell_cache::JsonRemoteShellCache,
     },
+    ports::remote_git_executor::RemoteGitExecutor,
     ports::terminal_staging::{RemoteTerminalStagingStore, StagingSourceEntry},
 };
 
@@ -206,6 +208,51 @@ fn closes_only_network_sessions_for_a_deleted_profile() {
 }
 
 #[test]
+fn closes_only_git_sessions_for_a_deleted_profile() {
+    let directory = tempdir().expect("temp directory");
+    let manager = SshSessionManager::new(
+        JsonKnownHostRepository::new(directory.path().join("known-hosts.json")),
+        JsonRemoteShellCache::new(directory.path().join("remote-shells.json")),
+    );
+    let entry = |purpose, profile_id: &str| {
+        let (cancel_sender, cancel_receiver) = oneshot::channel();
+        let (control_sender, control_receiver) = mpsc::channel(1);
+        (
+            Arc::new(SessionEntry::new(
+                route_metadata("example.com", 22),
+                purpose,
+                Some(profile_id.into()),
+                Arc::new(|_| {}),
+                cancel_sender,
+                control_sender,
+            )),
+            cancel_receiver,
+            control_receiver,
+        )
+    };
+    let (target, mut target_cancel, _target_control) = entry(SessionPurpose::Git, "profile-1");
+    let (other, mut other_cancel, _other_control) = entry(SessionPurpose::Git, "profile-2");
+    let (terminal, mut terminal_cancel, _terminal_control) =
+        entry(SessionPurpose::Terminal, "profile-1");
+    {
+        let mut sessions = manager.sessions.lock().expect("sessions");
+        sessions.insert("target".into(), target);
+        sessions.insert("other".into(), other);
+        sessions.insert("terminal".into(), terminal);
+    }
+    assert_eq!(manager.close_profile_git_sessions("profile-1"), 1);
+    assert!(target_cancel.try_recv().is_ok());
+    assert!(matches!(
+        other_cancel.try_recv(),
+        Err(oneshot::error::TryRecvError::Empty)
+    ));
+    assert!(matches!(
+        terminal_cancel.try_recv(),
+        Err(oneshot::error::TryRecvError::Empty)
+    ));
+}
+
+#[test]
 fn files_sessions_reject_terminal_write_and_resize_controls() {
     let directory = tempdir().expect("temp directory");
     let manager = SshSessionManager::new(
@@ -246,6 +293,74 @@ fn files_sessions_reject_terminal_write_and_resize_controls() {
     assert_eq!(
         manager.start("missing", Vec::new(), Arc::new(|_| {})),
         Err(TerminalStagingError::SessionNotFound)
+    );
+}
+
+#[tokio::test]
+async fn git_actions_require_a_connected_git_purpose_session_owned_by_the_profile() {
+    let directory = tempdir().expect("temp directory");
+    let manager = Arc::new(SshSessionManager::new(
+        JsonKnownHostRepository::new(directory.path().join("known-hosts.json")),
+        JsonRemoteShellCache::new(directory.path().join("remote-shells.json")),
+    ));
+    let (cancel_sender, _cancel_receiver) = oneshot::channel();
+    let (control_sender, mut control_receiver) = mpsc::channel(1);
+    let entry = Arc::new(SessionEntry::new(
+        route_metadata("example.com", 22),
+        SessionPurpose::Git,
+        Some("profile-1".into()),
+        Arc::new(|_| {}),
+        cancel_sender,
+        control_sender,
+    ));
+    entry.transition(SessionState::Authenticating);
+    entry.transition(SessionState::Connected);
+    manager
+        .sessions
+        .lock()
+        .expect("sessions")
+        .insert("git-1".into(), entry);
+
+    assert_eq!(
+        manager
+            .execute(
+                "git-1",
+                "other-profile",
+                crate::domain::git::RemoteGitAction::Snapshot {
+                    path: "/srv/project".into()
+                }
+            )
+            .await,
+        Err(crate::domain::git::GitError::SessionUnavailable)
+    );
+
+    let request = {
+        let manager = Arc::clone(&manager);
+        tokio::spawn(async move {
+            manager
+                .execute(
+                    "git-1",
+                    "profile-1",
+                    crate::domain::git::RemoteGitAction::Snapshot {
+                        path: "/srv/project".into(),
+                    },
+                )
+                .await
+        })
+    };
+    let Some(SessionControl::RunGit { action, reply }) = control_receiver.recv().await else {
+        panic!("Git control")
+    };
+    assert_eq!(
+        action,
+        crate::domain::git::RemoteGitAction::Snapshot {
+            path: "/srv/project".into()
+        }
+    );
+    let _ = reply.send(Err(crate::domain::git::GitError::Missing));
+    assert_eq!(
+        request.await.expect("request"),
+        Err(crate::domain::git::GitError::Missing)
     );
 }
 
@@ -523,6 +638,136 @@ fn local_openssh_connects_to_a_target_through_a_jump_profile() {
         );
     }
     manager.close(&session_id).expect("close route");
+}
+
+#[test]
+#[ignore = "requires /usr/sbin/sshd, ssh-keygen, and Git 2.25+ on a POSIX host"]
+fn local_openssh_exercises_remote_git_init_stage_commit_branch_and_snapshot() {
+    let directory = tempdir().expect("temporary integration directory");
+    let port = reserve_loopback_port();
+    let client_key = directory.path().join("git-client-key");
+    let host_key = directory.path().join("git-host-key");
+    generate_ed25519_key(&client_key);
+    generate_ed25519_key(&host_key);
+    let authorized_keys = directory.path().join("git-authorized-keys");
+    fs::copy(client_key.with_extension("pub"), &authorized_keys).expect("authorized key");
+    let config = directory.path().join("git-sshd_config");
+    fs::write(
+        &config,
+        format!(
+            "Port {port}\nListenAddress 127.0.0.1\nHostKey {}\nPidFile {}\nAuthorizedKeysFile {}\nStrictModes no\nPasswordAuthentication no\nKbdInteractiveAuthentication no\nPubkeyAuthentication yes\nUsePAM no\nLogLevel ERROR\n",
+            host_key.display(),
+            directory.path().join("git-sshd.pid").display(),
+            authorized_keys.display(),
+        ),
+    )
+    .expect("sshd config");
+    let server = Command::new("/usr/sbin/sshd")
+        .args(["-D", "-e", "-f"])
+        .arg(&config)
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("start local sshd");
+    let mut server = SshdGuard(server);
+    wait_for_sshd(&mut server.0, port);
+
+    let manager = Arc::new(SshSessionManager::new(
+        JsonKnownHostRepository::new(directory.path().join("git-known-hosts.json")),
+        JsonRemoteShellCache::new(directory.path().join("remote-shells.json")),
+    ));
+    let username = std::env::var("USER").expect("current username");
+    let (event_sender, event_receiver) = std::sync::mpsc::channel();
+    let session_id = manager.connect(
+        connect_request(
+            HostEndpoint::new("127.0.0.1", port.into()).expect("endpoint"),
+            username,
+            AuthRequest::PrivateKey {
+                path: client_key,
+                passphrase: None,
+            },
+            SessionPurpose::Git,
+            Some("git-profile".into()),
+            Arc::new(|_| {}),
+        ),
+        Arc::new(move |event| {
+            let _ = event_sender.send(event);
+        }),
+    );
+    loop {
+        match event_receiver
+            .recv_timeout(Duration::from_secs(10))
+            .expect("Git session event")
+        {
+            SessionEvent::HostKeyConfirmationRequired { .. } => manager
+                .accept_host_key(&session_id)
+                .expect("accept host key"),
+            SessionEvent::StateChanged(SessionState::Connected) => break,
+            SessionEvent::Failed {
+                failure,
+                node,
+                stage,
+            } => panic!("Git session failed at {node:?} {stage:?}: {failure:?}"),
+            _ => {}
+        }
+    }
+
+    let repository = directory.path().join("remote repo");
+    fs::create_dir(&repository).expect("repository directory");
+    let repository_path = repository.to_string_lossy().into_owned();
+    let run = |action| {
+        tauri::async_runtime::block_on(manager.execute(&session_id, "git-profile", action))
+    };
+    let initialized = run(crate::domain::git::RemoteGitAction::Initialize {
+        path: repository_path.clone(),
+    })
+    .expect("remote init");
+    assert!(initialized.head.unborn);
+    Command::new("git")
+        .args(["-C", &repository_path, "config", "user.name", "Qterm Test"])
+        .status()
+        .expect("git config name");
+    Command::new("git")
+        .args([
+            "-C",
+            &repository_path,
+            "config",
+            "user.email",
+            "qterm@example.test",
+        ])
+        .status()
+        .expect("git config email");
+    fs::write(repository.join("remote file.txt"), b"remote Git\n").expect("worktree file");
+    let staged = run(crate::domain::git::RemoteGitAction::Stage {
+        repository: repository_path.clone(),
+        paths: vec!["remote file.txt".into()],
+    })
+    .expect("remote stage");
+    assert!(
+        staged
+            .changes
+            .iter()
+            .any(|change| change.path == "remote file.txt" && change.staged)
+    );
+    let committed = run(crate::domain::git::RemoteGitAction::Commit {
+        repository: repository_path.clone(),
+        message: "feat: remote Git".into(),
+    })
+    .expect("remote commit");
+    assert_eq!(
+        committed
+            .commits
+            .first()
+            .map(|commit| commit.subject.as_str()),
+        Some("feat: remote Git")
+    );
+    let branched = run(crate::domain::git::RemoteGitAction::CreateBranch {
+        repository: repository_path,
+        name: "feature/remote".into(),
+    })
+    .expect("remote branch");
+    assert_eq!(branched.head.name.as_deref(), Some("feature/remote"));
+    manager.close(&session_id).expect("close Git session");
 }
 
 #[test]

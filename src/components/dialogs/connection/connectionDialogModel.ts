@@ -3,7 +3,7 @@ import type { LayoutNode } from "../../../workspace/model";
 
 export function findProfileId(node: LayoutNode, blockId: string): string | null {
   if (node.type === "terminal") return node.blockId === blockId ? node.profileId : null;
-  if (node.type === "files" || node.type === "network") return null;
+  if (node.type !== "split") return null;
   return findProfileId(node.first, blockId) ?? findProfileId(node.second, blockId);
 }
 

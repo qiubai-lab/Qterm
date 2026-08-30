@@ -23,6 +23,7 @@ import { resolveConfiguredAuth } from "./configuredAuth";
 import { adjacentBlockId } from "./blockNavigation";
 import { blockIds } from "./layout";
 import { openFileWindowAction } from "./fileWindow";
+import { openGitWindowAction } from "./gitWindow";
 import type { LayoutNode, Workspace } from "./model";
 import { openNetworkWindowAction } from "./networkWindow";
 import { useWorkspace } from "./WorkspaceProvider";
@@ -45,7 +46,7 @@ const TITLEBAR_DOUBLE_CLICK_MS = 350;
 export function WorkspaceShell() {
   const desktopPlatform = currentDesktopPlatform();
   const usesNativeWindowControls = desktopPlatform === "macos";
-  const { hydrated, document, activeWorkspace, dispatch, runtimes, fileRuntimes, networkRuntimes, clearTerminalOsc7State, splitTerminalBlock, connectBlock, connectFileBlock, connectNetworkBlock, disconnectBlock, disconnectFileBlock, disconnectNetworkBlock, isConnectionTargetCurrent, connectedCount, closeSessions, blocksForWorkspace, acceptBlockHostKey, rejectBlockHostKey, acceptFileHostKey, rejectFileHostKey, acceptNetworkHostKey, rejectNetworkHostKey, storageNotice, dismissStorageNotice } = useWorkspace();
+  const { hydrated, document, activeWorkspace, dispatch, runtimes, fileRuntimes, networkRuntimes, gitRuntimes, clearTerminalOsc7State, splitTerminalBlock, connectBlock, connectFileBlock, connectNetworkBlock, connectGitBlock, disconnectBlock, disconnectFileBlock, disconnectNetworkBlock, disconnectGitBlock, isConnectionTargetCurrent, connectedCount, closeSessions, blocksForWorkspace, acceptBlockHostKey, rejectBlockHostKey, acceptFileHostKey, rejectFileHostKey, acceptNetworkHostKey, rejectNetworkHostKey, acceptGitHostKey, rejectGitHostKey, storageNotice, dismissStorageNotice } = useWorkspace();
   const [tool, setTool] = useState<Tool | null>(null);
   const [renaming, setRenaming] = useState<{ id: string; value: string } | null>(null);
   const [closeRequest, setCloseRequest] = useState<CloseRequest | null>(null);
@@ -93,6 +94,7 @@ export function WorkspaceShell() {
   const terminalHostPrompt = Object.entries(runtimes).find(([, runtime]) => runtime.hostKeyPrompt);
   const fileHostPrompt = Object.entries(fileRuntimes).find(([, runtime]) => runtime.hostKeyPrompt);
   const networkHostPrompt = Object.entries(networkRuntimes).find(([, runtime]) => runtime.hostKeyPrompt);
+  const gitHostPrompt = Object.entries(gitRuntimes).find(([, runtime]) => runtime.hostKeyPrompt);
   const workspaceOrder = document.workspaces.map((workspace) => workspace.id).join("\u0000");
   const hostPrompt = terminalHostPrompt
     ? { owner: "terminal" as const, blockId: terminalHostPrompt[0], prompt: terminalHostPrompt[1].hostKeyPrompt! }
@@ -100,7 +102,9 @@ export function WorkspaceShell() {
       ? { owner: "files" as const, blockId: fileHostPrompt[0], prompt: fileHostPrompt[1].hostKeyPrompt! }
       : networkHostPrompt
         ? { owner: "network" as const, blockId: networkHostPrompt[0], prompt: networkHostPrompt[1].hostKeyPrompt! }
-        : null;
+        : gitHostPrompt
+          ? { owner: "git" as const, blockId: gitHostPrompt[0], prompt: gitHostPrompt[1].hostKeyPrompt! }
+          : null;
   const hostPromptOpen = Boolean(hostPrompt);
 
   const showLocalTerminalAttention = useCallback((workspaceId: string) => {
@@ -576,6 +580,7 @@ export function WorkspaceShell() {
     if (!disconnectRequest) return;
     if (disconnectRequest.owner === "files") await disconnectFileBlock(disconnectRequest.blockId);
     else if (disconnectRequest.owner === "network") await disconnectNetworkBlock(disconnectRequest.blockId);
+    else if (disconnectRequest.owner === "git") await disconnectGitBlock(disconnectRequest.blockId);
     else await disconnectBlock(disconnectRequest.blockId);
     setDisconnectRequest(null);
   }
@@ -611,7 +616,8 @@ export function WorkspaceShell() {
       if (!auth) { showAuthentication(); return; }
       if (owner === "terminal") await connectBlock(blockId, profile, auth, showAuthentication);
       else if (owner === "files") await connectFileBlock(blockId, profile, auth, showAuthentication);
-      else await connectNetworkBlock(blockId, profile, auth, showAuthentication);
+      else if (owner === "network") await connectNetworkBlock(blockId, profile, auth, showAuthentication);
+      else await connectGitBlock(blockId, profile, auth, showAuthentication);
     } catch {
       if (targetCurrent()) showAuthentication();
     } finally {
@@ -693,6 +699,7 @@ export function WorkspaceShell() {
           <RailButton tool="credentials" icon="key" label="凭证管理" active={tool === "credentials"} onClick={setTool}/>
           <RailActionButton icon="files" label="文件管理" onClick={() => dispatch(openFileWindowAction(activeWorkspace, runtimes, remoteShellIntegrationEnabled))}/>
           <RailActionButton icon="network" label="网络管理" onClick={() => dispatch(openNetworkWindowAction(activeWorkspace))}/>
+          <RailActionButton icon="git" label="Git 管理" onClick={() => dispatch(openGitWindowAction(activeWorkspace, runtimes))}/>
           <RailActionButton icon="terminal" label="打开终端" onClick={() => splitTerminalBlock(activeWorkspace.id, activeWorkspace.activeBlockId, "horizontal", remoteShellIntegrationEnabled)}/>
           <span className="rail-spacer"/>
           <RailActionButton icon="lock" label="锁定终端" accessibleLabel={terminalLockLabel} title={terminalLockLabel} disabled={!vaultStatus?.initialized || vaultStatus.legacy || vaultLockBusy} onClick={() => { setVaultLockError(""); setLockChoiceOpen(true); }}/>
@@ -723,7 +730,8 @@ export function WorkspaceShell() {
         if (!isConnectionTargetCurrent(request.owner, request.blockId, request.profile.id)) return;
         if (request.owner === "terminal") await connectBlock(request.blockId, request.profile, auth);
         else if (request.owner === "files") await connectFileBlock(request.blockId, request.profile, auth);
-        else await connectNetworkBlock(request.blockId, request.profile, auth);
+        else if (request.owner === "network") await connectNetworkBlock(request.blockId, request.profile, auth);
+        else await connectGitBlock(request.blockId, request.profile, auth);
       }}/>
     )}
     {vaultUnlockRequest && <MasterPasswordDialog mode={vaultUnlockRequest.mode} onClose={() => setVaultUnlockRequest(null)} onSuccess={() => {
@@ -740,17 +748,17 @@ export function WorkspaceShell() {
     />}
     {lockChoiceOpen && <TerminalLockChoiceDialog vaultUnlocked={Boolean(vaultStatus?.unlocked)} busy={vaultLockBusy} message={vaultLockError} onClose={() => { setLockChoiceOpen(false); setVaultLockError(""); }} onLockVault={() => void applyLockScope("vault")} onLockTerminalAndVault={() => void applyLockScope("terminalAndVault")}/>}
     {closeRequest && <DialogFrame title={closeRequest.title} subtitle="未保存的终端输出无法恢复" onClose={() => setCloseRequest(null)}><p className="confirm-copy">{closeRequest.detail}</p><p className="callout">将断开 {connectedCount(closeRequest.ids)} 个活动会话。</p><footer className="dialog-actions end"><button className="secondary-button" onClick={() => setCloseRequest(null)}>取消</button><button className="danger-button filled" onClick={() => void confirmClose()}>关闭并断开</button></footer></DialogFrame>}
-    {disconnectRequest && <DialogFrame compact title={disconnectRequest.local ? "停止本地终端？" : `断开“${disconnectRequest.name}”？`} subtitle={disconnectRequest.owner === "files" ? "文件窗口和当前路径将保留" : disconnectRequest.owner === "network" ? "网络窗口和规则配置将保留" : "终端 Block 和当前输出将保留"} onClose={() => setDisconnectRequest(null)}><p className="confirm-copy">{disconnectRequest.local ? "正在运行的本地 Shell 和前台进程将停止。" : disconnectRequest.owner === "files" ? "当前 SFTP 会话将结束，之后可以从状态旁重新连接。" : disconnectRequest.owner === "network" ? "当前 SSH 会话及运行中的网络规则将结束，之后可以从状态旁重新连接。" : "当前 SSH 会话和其中运行的前台进程将结束，之后可以从状态旁重新连接。"}</p><footer className="dialog-actions end"><button className="secondary-button" onClick={() => setDisconnectRequest(null)}>取消</button><button className="danger-button filled" onClick={() => void confirmDisconnect()}>{disconnectRequest.local ? "停止终端" : "断开连接"}</button></footer></DialogFrame>}
+    {disconnectRequest && <DialogFrame compact title={disconnectRequest.local ? "停止本地终端？" : `断开“${disconnectRequest.name}”？`} subtitle={disconnectRequest.owner === "files" ? "文件窗口和当前路径将保留" : disconnectRequest.owner === "network" ? "网络窗口和规则配置将保留" : disconnectRequest.owner === "git" ? "Git 窗口、目标路径和最后快照将保留" : "终端 Block 和当前输出将保留"} onClose={() => setDisconnectRequest(null)}><p className="confirm-copy">{disconnectRequest.local ? "正在运行的本地 Shell 和前台进程将停止。" : disconnectRequest.owner === "files" ? "当前 SFTP 会话将结束，之后可以从状态旁重新连接。" : disconnectRequest.owner === "network" ? "当前 SSH 会话及运行中的网络规则将结束，之后可以从状态旁重新连接。" : disconnectRequest.owner === "git" ? "独立的远程 Git 会话将结束，仓库不会被修改；重新连接后会刷新真实状态。" : "当前 SSH 会话和其中运行的前台进程将结束，之后可以从状态旁重新连接。"}</p><footer className="dialog-actions end"><button className="secondary-button" onClick={() => setDisconnectRequest(null)}>取消</button><button className="danger-button filled" onClick={() => void confirmDisconnect()}>{disconnectRequest.local ? "停止终端" : "断开连接"}</button></footer></DialogFrame>}
     {hostPrompt && <DialogFrame title="确认主机身份" subtitle={`${hostPrompt.prompt.node.role === "jump" ? "跳板" : "目标"}“${hostPrompt.prompt.node.name}” · ${hostPrompt.prompt.node.host}:${hostPrompt.prompt.node.port}`} onClose={() => void rejectPromptHostKey(hostPrompt.owner, hostPrompt.blockId)}><p className="confirm-copy">请通过可信渠道核对当前节点的主机密钥指纹：</p><code className="fingerprint">{hostPrompt.prompt.algorithm}<br/>{hostPrompt.prompt.fingerprint}</code><footer className="dialog-actions end"><button className="danger-button" onClick={() => void rejectPromptHostKey(hostPrompt.owner, hostPrompt.blockId)}>拒绝</button><button className="primary-button" onClick={() => void acceptPromptHostKey(hostPrompt.owner, hostPrompt.blockId)}>信任并继续</button></footer></DialogFrame>}
     {storageNotice && <div className="global-notice" role="status"><span>{storageNotice}</span><button aria-label="关闭提示" onClick={dismissStorageNotice}><Icon name="close" size={13}/></button></div>}
   </main>;
 
   function acceptPromptHostKey(owner: ConnectionOwner, blockId: string) {
-    return owner === "terminal" ? acceptBlockHostKey(blockId) : owner === "files" ? acceptFileHostKey(blockId) : acceptNetworkHostKey(blockId);
+    return owner === "terminal" ? acceptBlockHostKey(blockId) : owner === "files" ? acceptFileHostKey(blockId) : owner === "network" ? acceptNetworkHostKey(blockId) : acceptGitHostKey(blockId);
   }
 
   function rejectPromptHostKey(owner: ConnectionOwner, blockId: string) {
-    return owner === "terminal" ? rejectBlockHostKey(blockId) : owner === "files" ? rejectFileHostKey(blockId) : rejectNetworkHostKey(blockId);
+    return owner === "terminal" ? rejectBlockHostKey(blockId) : owner === "files" ? rejectFileHostKey(blockId) : owner === "network" ? rejectNetworkHostKey(blockId) : rejectGitHostKey(blockId);
   }
 }
 
@@ -802,8 +810,8 @@ function focusWorkspaceBlock(blockId: string): boolean {
   return Boolean(block);
 }
 
-function findBlockType(workspace: Workspace, blockId: string): "terminal" | "files" | "network" | null {
-  const visit = (node: Workspace["layout"]): "terminal" | "files" | "network" | null => node.type === "split"
+function findBlockType(workspace: Workspace, blockId: string): "terminal" | "files" | "network" | "git" | null {
+  const visit = (node: Workspace["layout"]): "terminal" | "files" | "network" | "git" | null => node.type === "split"
     ? visit(node.first) ?? visit(node.second)
     : node.blockId === blockId ? node.type : null;
   return visit(workspace.layout);

@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useState } from "react";
 
 import type { Workspace } from "./model";
-import type { FileRuntime, NetworkRuntime, TerminalRuntime } from "./WorkspaceProvider";
+import type { FileRuntime, GitRuntime, NetworkRuntime, TerminalRuntime } from "./WorkspaceProvider";
 import { moveTerminal } from "./layout";
 
 const dispatch = vi.fn();
@@ -12,12 +12,14 @@ const splitTerminalBlock = vi.fn();
 const selectBlockTarget = vi.fn().mockResolvedValue(undefined);
 const selectFileTarget = vi.fn().mockResolvedValue(undefined);
 const selectNetworkTarget = vi.fn().mockResolvedValue(undefined);
+const selectGitTarget = vi.fn().mockResolvedValue(undefined);
 const startNetworkBlockRule = vi.fn().mockResolvedValue(undefined);
 const stopNetworkBlockRule = vi.fn().mockResolvedValue(undefined);
 const clearBlockBuffer = vi.fn();
 const disconnectBlock = vi.fn().mockResolvedValue(undefined);
 const disconnectFileBlock = vi.fn().mockResolvedValue(undefined);
 const disconnectNetworkBlock = vi.fn().mockResolvedValue(undefined);
+const disconnectGitBlock = vi.fn().mockResolvedValue(undefined);
 const restartLocalBlock = vi.fn().mockResolvedValue(undefined);
 const terminalRegistryMocks = vi.hoisted(() => ({ openTerminalSearch: vi.fn().mockReturnValue(true) }));
 const profiles = [
@@ -28,6 +30,7 @@ const connectedLocalRuntime = { sessionId: "local-1", kind: "local" as const, st
 let terminalRuntimes: Record<string, TerminalRuntime> = { "block-1": connectedLocalRuntime };
 let fileRuntimes: Record<string, FileRuntime> = {};
 let networkRuntimes: Record<string, NetworkRuntime> = {};
+let gitRuntimes: Record<string, GitRuntime> = {};
 let fileBrowserMountCount = 0;
 
 afterEach(() => {
@@ -55,6 +58,10 @@ vi.mock("../network/NetworkPane", () => ({
   NetworkPane: ({ onStart }: { onStart?: (rule: { id: string }) => void }) => <button onClick={() => onStart?.({ id: "rule-1" })}>启动测试规则</button>,
 }));
 
+vi.mock("../git/GitPane", () => ({
+  GitPane: ({ target }: { target: { type: string; path?: string } }) => <div aria-label="测试 Git 窗口" data-repository-path={target.path ?? ""}/>,
+}));
+
 vi.mock("./WorkspaceProvider", () => ({
   useWorkspace: () => ({
     dispatch,
@@ -62,16 +69,19 @@ vi.mock("./WorkspaceProvider", () => ({
     runtimes: terminalRuntimes,
     fileRuntimes,
     networkRuntimes,
+    gitRuntimes,
     profiles,
     selectBlockTarget,
     selectFileTarget,
     selectNetworkTarget,
+    selectGitTarget,
     startNetworkBlockRule,
     stopNetworkBlockRule,
     clearBlockBuffer,
     disconnectBlock,
     disconnectFileBlock,
     disconnectNetworkBlock,
+    disconnectGitBlock,
     restartLocalBlock,
   }),
 }));
@@ -103,6 +113,7 @@ describe("WorkspaceCanvas terminal actions", () => {
     terminalRuntimes = { "block-1": connectedLocalRuntime };
     fileRuntimes = {};
     networkRuntimes = {};
+    gitRuntimes = {};
     fileBrowserMountCount = 0;
   });
   it("does not expose terminal maximize or restore controls", () => {
@@ -407,6 +418,18 @@ describe("WorkspaceCanvas terminal actions", () => {
     render(<WorkspaceCanvas workspace={{ ...workspace, activeBlockId: "files-1", layout: { type: "files", blockId: "files-1", profileId: null, path: "C:/work" } }} visible onRequestClose={vi.fn()} onRequestAuthConnection={vi.fn()}/>);
     expect(screen.getByLabelText("测试文件窗口")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "关闭文件窗口" })).toBeInTheDocument();
+  });
+
+  it("renders a persisted Git leaf", () => {
+    render(<WorkspaceCanvas workspace={{ ...workspace, activeBlockId: "git-1", layout: { type: "git", blockId: "git-1", target: { type: "local", path: "D:/work/project" } } }} visible onRequestClose={vi.fn()} onRequestAuthConnection={vi.fn()}/>);
+    expect(screen.getByLabelText("测试 Git 窗口")).toHaveAttribute("data-repository-path", "D:/work/project");
+    expect(screen.getByRole("button", { name: "关闭 Git 窗口" })).toBeInTheDocument();
+  });
+
+  it("reconnects a persisted remote Git target with its own connection owner", async () => {
+    const onRequestAuthConnection = vi.fn();
+    render(<WorkspaceCanvas workspace={{ ...workspace, activeBlockId: "git-1", layout: { type: "git", blockId: "git-1", target: { type: "remote", profileId: "password-profile", path: "/srv/project" } } }} visible onRequestClose={vi.fn()} onRequestAuthConnection={onRequestAuthConnection}/>);
+    await waitFor(() => expect(onRequestAuthConnection).toHaveBeenCalledWith("git", "git-1", profiles[0]));
   });
 
   it("shows a files connection failure once in the shared lower-right block notice", () => {

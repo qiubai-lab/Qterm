@@ -102,7 +102,7 @@ function Harness() {
     <span data-testid="runtime-cwd">{runtimes[ids[0]]?.cwd}</span>
     <span data-testid="runtime-initial-cwd">{runtimes[ids[0]]?.initialCwd}</span>
     <span data-testid="runtime-cwd-source">{runtimes[ids[0]]?.cwdSource ?? "unknown"}</span>
-    <span data-testid="active-profile">{activeLeaf?.profileId ?? "local"}</span>
+    <span data-testid="active-profile">{activeLeaf && activeLeaf.type !== "git" ? activeLeaf.profileId ?? "local" : "local"}</span>
     <span data-testid="terminal-restore-directory">{activeLeaf?.type === "terminal" ? activeLeaf.restoreDirectory : ""}</span>
     <span data-testid="file-runtime">{fileRuntimes[activeWorkspace.activeBlockId]?.kind}:{fileRuntimes[activeWorkspace.activeBlockId]?.status}</span>
     <span data-testid="file-progress">{fileRuntimes[activeWorkspace.activeBlockId]?.connectionProgress?.phase}:{fileRuntimes[activeWorkspace.activeBlockId]?.connectionProgress?.message}</span>
@@ -241,7 +241,7 @@ describe("WorkspaceProvider multi-session routing", () => {
   it("restores a hydrated local OSC 7 directory and flushes the latest path before window close", async () => {
     Object.defineProperty(window, "__TAURI_INTERNALS__", { configurable: true, value: {} });
     vi.mocked(loadWorkspaces).mockResolvedValue({
-      schemaVersion: 7,
+      schemaVersion: 9,
       activeWorkspaceId: "workspace-restored",
       recentProfileIds: [],
       workspaces: [{
@@ -268,7 +268,7 @@ describe("WorkspaceProvider multi-session routing", () => {
     await act(async () => { await mocks.closeFlush?.(); });
 
     expect(saveWorkspaces).toHaveBeenCalledWith(expect.objectContaining({
-      schemaVersion: 7,
+      schemaVersion: 9,
       workspaces: [expect.objectContaining({ layout: expect.objectContaining({ restoreDirectory: "/srv/reported" }) })],
     }));
   });
@@ -276,7 +276,7 @@ describe("WorkspaceProvider multi-session routing", () => {
   it("passes a hydrated SSH restore directory to the existing terminal connection input", async () => {
     Object.defineProperty(window, "__TAURI_INTERNALS__", { configurable: true, value: {} });
     vi.mocked(loadWorkspaces).mockResolvedValue({
-      schemaVersion: 7,
+      schemaVersion: 9,
       activeWorkspaceId: "workspace-remote",
       recentProfileIds: ["profile-1"],
       workspaces: [{

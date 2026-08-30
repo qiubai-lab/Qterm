@@ -331,6 +331,7 @@ pub(super) async fn run_session(
                         }
                         events(TerminalStagingEvent::Failed);
                     }
+                    Some(SessionControl::RunGit { reply, .. }) => { let _ = reply.send(Err(crate::domain::git::GitError::SessionUnavailable)); }
                     Some(SessionControl::Write(_) | SessionControl::Resize(_) | SessionControl::StartNetworkRule { .. } | SessionControl::StopNetworkRule { .. }) => {}
                     None => {
                         entry.transition(SessionState::Closing);
@@ -356,6 +357,52 @@ pub(super) async fn run_session(
         )
         .await;
         disconnect_handles(&mut upstream_handles).await;
+        return;
+    }
+
+    if request.purpose == SessionPurpose::Git {
+        entry.transition(SessionState::Connected);
+        while entry.state() == SessionState::Connected {
+            tokio::select! {
+                _ = &mut cancel => { entry.transition(SessionState::Closing); }
+                control = controls.recv() => match control {
+                    Some(SessionControl::RunGit { action, reply }) => {
+                        let operation = git::run_remote_git_action(&handle, action);
+                        tokio::select! {
+                            result = operation => { let _ = reply.send(result); }
+                            _ = &mut cancel => {
+                                let _ = reply.send(Err(crate::domain::git::GitError::SessionUnavailable));
+                                entry.transition(SessionState::Closing);
+                            }
+                        }
+                    }
+                    Some(SessionControl::StartNetworkRule { reply, .. } | SessionControl::StopNetworkRule { reply, .. }) => {
+                        let _ = reply.send(Err(SessionControlError::NetworkUnavailable));
+                    }
+                    Some(SessionControl::ListDirectory { reply, .. }) => { let _ = reply.send(Err(())); }
+                    Some(SessionControl::ReadFile { reply, .. } | SessionControl::WriteTextFile { reply, .. }) => {
+                        let _ = reply.send(Err(SessionControlError::FileUnavailable));
+                    }
+                    Some(SessionControl::MutateEntry { reply, .. }) => { let _ = reply.send(Err(SessionControlError::FileUnavailable)); }
+                    Some(SessionControl::StartTransfer { id, events, .. }) => {
+                        events(TransferEvent::Failed);
+                        entry.finish_transfer(&id);
+                    }
+                    Some(SessionControl::StoreTerminalStaging { upload_id, sources, events, .. }) => {
+                        entry.finish_clipboard_upload(&upload_id);
+                        for source in sources.into_iter().filter(|source| source.cleanup_after) { let _ = std::fs::remove_file(source.path); }
+                        events(TerminalStagingEvent::Failed);
+                    }
+                    Some(SessionControl::Write(_) | SessionControl::Resize(_)) => {}
+                    None => { entry.transition(SessionState::Closing); }
+                }
+            }
+        }
+        let _ = handle
+            .disconnect(Disconnect::ByApplication, "git session closed", "en")
+            .await;
+        disconnect_handles(&mut upstream_handles).await;
+        entry.transition(SessionState::Closed);
         return;
     }
 
@@ -531,6 +578,9 @@ pub(super) async fn run_session(
                 }
                 Some(SessionControl::StartNetworkRule { reply, .. }) | Some(SessionControl::StopNetworkRule { reply, .. }) => {
                     let _ = reply.send(Err(SessionControlError::NetworkUnavailable));
+                }
+                Some(SessionControl::RunGit { reply, .. }) => {
+                    let _ = reply.send(Err(crate::domain::git::GitError::SessionUnavailable));
                 }
                 None => {
                     entry.transition(SessionState::Closing);

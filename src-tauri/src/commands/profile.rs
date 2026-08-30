@@ -316,6 +316,7 @@ pub fn profile_delete(
         delete_profile_with_network_rules(&state.service, &network.service, &id)
             .map_err(IpcError::from)?;
     sessions.manager().close_profile_network_sessions(&id);
+    sessions.manager().close_profile_git_sessions(&id);
     Ok(ProfileDeleteResultDto {
         deleted_network_rules,
     })

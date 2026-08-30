@@ -4,7 +4,7 @@ use tauri::State;
 use crate::{
     application::workspace_service::WorkspaceService,
     commands::error::IpcError,
-    domain::workspace::{LayoutNode, SplitDirection, Workspace, WorkspaceDocument},
+    domain::workspace::{GitTarget, LayoutNode, SplitDirection, Workspace, WorkspaceDocument},
     infrastructure::persistence::json_workspace_repository::JsonWorkspaceRepository,
 };
 
@@ -60,6 +60,10 @@ enum LayoutDto {
         block_id: String,
         profile_id: Option<String>,
     },
+    Git {
+        block_id: String,
+        target: GitTargetDto,
+    },
     Split {
         id: String,
         direction: DirectionDto,
@@ -67,6 +71,19 @@ enum LayoutDto {
         first: Box<LayoutDto>,
         second: Box<LayoutDto>,
     },
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
+enum GitTargetDto {
+    Unbound,
+    Local { path: String },
+    Remote { profile_id: String, path: String },
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
@@ -92,7 +109,7 @@ pub fn workspace_save(
     document: WorkspaceDocumentDto,
     state: State<'_, WorkspaceState>,
 ) -> Result<(), IpcError> {
-    if document.schema_version != 7 {
+    if document.schema_version != 9 {
         return Err(IpcError::from(
             crate::application::error::ApplicationError::new(
                 crate::application::error::ApplicationErrorCode::InvalidWorkspaceDocument,
@@ -110,7 +127,7 @@ pub fn workspace_save(
 impl WorkspaceDocumentDto {
     fn from_domain(document: &WorkspaceDocument) -> Self {
         Self {
-            schema_version: 7,
+            schema_version: 9,
             active_workspace_id: document.active_workspace_id.clone(),
             recent_profile_ids: document.recent_profile_ids.clone(),
             workspaces: document
@@ -182,6 +199,10 @@ impl LayoutDto {
                 block_id: block_id.clone(),
                 profile_id: profile_id.clone(),
             },
+            LayoutNode::Git { block_id, target } => Self::Git {
+                block_id: block_id.clone(),
+                target: GitTargetDto::from_domain(target),
+            },
             LayoutNode::Split {
                 id,
                 direction,
@@ -225,6 +246,10 @@ impl LayoutDto {
                 block_id,
                 profile_id,
             },
+            Self::Git { block_id, target } => LayoutNode::Git {
+                block_id,
+                target: target.into_domain(),
+            },
             Self::Split {
                 id,
                 direction,
@@ -238,6 +263,27 @@ impl LayoutDto {
                 first: Box::new(first.into_domain()),
                 second: Box::new(second.into_domain()),
             },
+        }
+    }
+}
+
+impl GitTargetDto {
+    fn from_domain(target: &GitTarget) -> Self {
+        match target {
+            GitTarget::Unbound => Self::Unbound,
+            GitTarget::Local { path } => Self::Local { path: path.clone() },
+            GitTarget::Remote { profile_id, path } => Self::Remote {
+                profile_id: profile_id.clone(),
+                path: path.clone(),
+            },
+        }
+    }
+
+    fn into_domain(self) -> GitTarget {
+        match self {
+            Self::Unbound => GitTarget::Unbound,
+            Self::Local { path } => GitTarget::Local { path },
+            Self::Remote { profile_id, path } => GitTarget::Remote { profile_id, path },
         }
     }
 }
@@ -268,7 +314,7 @@ mod tests {
 
     fn document() -> serde_json::Value {
         json!({
-            "schemaVersion": 7,
+            "schemaVersion": 9,
             "activeWorkspaceId": "workspace-1",
             "recentProfileIds": ["profile-1"],
             "workspaces": [{
@@ -297,8 +343,20 @@ mod tests {
     }
 
     #[test]
-    fn workspace_dto_accepts_v7_terminal_restore_and_network_layout_fields() {
+    fn workspace_dto_accepts_v9_terminal_restore_and_network_layout_fields() {
         assert!(serde_json::from_value::<WorkspaceDocumentDto>(document()).is_ok());
+    }
+
+    #[test]
+    fn workspace_dto_accepts_git_layout_fields() {
+        let mut value = document();
+        value["workspaces"][0]["activeBlockId"] = json!("git-1");
+        value["workspaces"][0]["layout"]["second"] = json!({
+            "type": "git",
+            "blockId": "git-1",
+            "target": { "type": "local", "path": "D:/work/project" }
+        });
+        assert!(serde_json::from_value::<WorkspaceDocumentDto>(value).is_ok());
     }
 
     #[test]

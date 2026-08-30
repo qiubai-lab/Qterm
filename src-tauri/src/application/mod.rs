@@ -5,6 +5,7 @@ pub mod credential_service;
 pub mod credential_workflow;
 pub mod error;
 pub mod file_service;
+pub mod git_service;
 pub mod host_key_service;
 pub mod network_service;
 pub mod profile_service;

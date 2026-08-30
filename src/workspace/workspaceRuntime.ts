@@ -2,7 +2,7 @@ import type { NetworkRuleRuntimeState } from "../lib/tauri/network";
 import type { SessionEvent, SessionNode, SessionState } from "../lib/tauri/sessions";
 import type { ConnectionRouteProgressState } from "./connectionProgress";
 
-export type ConnectionOwner = "terminal" | "files" | "network";
+export type ConnectionOwner = "terminal" | "files" | "network" | "git";
 
 export interface HostKeyPrompt {
   node: SessionNode;
@@ -40,9 +40,19 @@ export interface NetworkRuntime {
   ruleStates: Record<string, NetworkRuleRuntimeState>;
 }
 
+export interface GitRuntime {
+  sessionId: string | null;
+  status: SessionState;
+  hostKeyPrompt: HostKeyPrompt | null;
+  notice: string;
+  connectionProgress: ConnectionRouteProgressState | null;
+  stale: boolean;
+}
+
 export const defaultRuntime: TerminalRuntime = { sessionId: null, kind: null, status: "closed", hostKeyPrompt: null, notice: "", connectionProgress: null, initialCwd: null, cwd: null, cwdSource: null };
 export const defaultFileRuntime: FileRuntime = { sessionId: null, kind: "local", status: "connected", hostKeyPrompt: null, notice: "", connectionProgress: null };
 export const defaultNetworkRuntime: NetworkRuntime = { sessionId: null, status: "closed", hostKeyPrompt: null, notice: "", connectionProgress: null, ruleStates: {} };
+export const defaultGitRuntime: GitRuntime = { sessionId: null, status: "closed", hostKeyPrompt: null, notice: "", connectionProgress: null, stale: false };
 export const MAX_PENDING_TERMINAL_OUTPUT = 256 * 1024;
 
 export function isTauriRuntime(): boolean {

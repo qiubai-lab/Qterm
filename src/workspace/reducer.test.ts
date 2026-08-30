@@ -125,4 +125,26 @@ describe("workspace reducer", () => {
     const retargeted = workspaceReducer(opened, { type: "setNetworkProfile", workspaceId: workspace.id, blockId: current.activeBlockId, profileId: "profile-2" });
     expect(retargeted.workspaces[0].layout).toMatchObject({ second: { type: "network", profileId: "profile-2" } });
   });
+
+  it("opens and retargets a persisted Git leaf", () => {
+    const initial = createWorkspaceDocument();
+    const workspace = initial.workspaces[0];
+    const opened = workspaceReducer(initial, {
+      type: "openGit",
+      workspaceId: workspace.id,
+      anchorBlockId: workspace.activeBlockId,
+      target: { type: "local", path: "D:/work/project" },
+    });
+    const current = opened.workspaces[0];
+    expect(current.activeBlockId).toMatch(/^git-/);
+    expect(current.layout).toMatchObject({ second: { type: "git", target: { type: "local", path: "D:/work/project" } } });
+
+    const retargeted = workspaceReducer(opened, {
+      type: "setGitTarget",
+      workspaceId: workspace.id,
+      blockId: current.activeBlockId,
+      target: { type: "remote", profileId: "profile-1", path: "/srv/project" },
+    });
+    expect(retargeted.workspaces[0].layout).toMatchObject({ second: { type: "git", target: { type: "remote", profileId: "profile-1", path: "/srv/project" } } });
+  });
 });

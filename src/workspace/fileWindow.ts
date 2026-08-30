@@ -11,7 +11,7 @@ export function openFileWindowAction(
   const ids = blockIds(workspace.layout);
   const anchorBlockId = ids.includes(workspace.activeBlockId) ? workspace.activeBlockId : ids[0];
   const anchor = findLeaf(workspace.layout, anchorBlockId);
-  const profileId = anchor?.profileId ?? null;
+  const profileId = anchor && anchor.type !== "git" ? anchor.profileId : null;
   const runtime = anchor?.type === "terminal" ? terminalRuntimes[anchor.blockId] : null;
   const osc7Path = osc7Enabled
     && runtime?.status === "connected"

@@ -2,6 +2,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState, type Dispatch, type ReactNode } from "react";
 
 import { connectFileSession } from "../lib/tauri/files";
+import { connectGitSession } from "../lib/tauri/git";
 import { connectNetworkSession, startNetworkRule, stopNetworkRule } from "../lib/tauri/network";
 import { closeLocalSession, connectLocalSession, getLocalTerminalCapabilities, resizeLocalSession, writeLocalSession, type LocalSessionEvent, type LocalTerminalCapabilities } from "../lib/tauri/localSessions";
 import { listProfileGroups, listProfiles, type ConnectionProfile, type ProfileGroup } from "../lib/tauri/profiles";
@@ -10,7 +11,7 @@ import { loadWorkspaces, saveWorkspaces } from "../lib/tauri/workspaces";
 import { registerCurrentWindowCloseFlush } from "../lib/tauri/window";
 import { completeConnectionProgress, connectionProgressFromRouteEvent, failConnectionProgress, initialConnectionProgress } from "./connectionProgress";
 import { blockIds, findLeaf } from "./layout";
-import { createId, createWorkspaceDocument, type SplitDirection, type Workspace, type WorkspaceDocument } from "./model";
+import { createId, createWorkspaceDocument, type GitTarget, type SplitDirection, type Workspace, type WorkspaceDocument } from "./model";
 import { workspaceReducer, type WorkspaceAction } from "./reducer";
 import {
   MAX_PENDING_TERMINAL_OUTPUT,
@@ -18,6 +19,7 @@ import {
   connectionIntentKey,
   consumeFailureHandler,
   defaultFileRuntime,
+  defaultGitRuntime,
   defaultNetworkRuntime,
   defaultRuntime,
   deleteFailureHandlers,
@@ -28,11 +30,12 @@ import {
   terminalFailureKey,
   workspaceErrorMessage,
   type FileRuntime,
+  type GitRuntime,
   type NetworkRuntime,
   type TerminalRuntime,
 } from "./workspaceRuntime";
 
-export type { FileRuntime, HostKeyPrompt, NetworkRuntime, TerminalRuntime } from "./workspaceRuntime";
+export type { FileRuntime, GitRuntime, HostKeyPrompt, NetworkRuntime, TerminalRuntime } from "./workspaceRuntime";
 
 interface WorkspaceContextValue {
   hydrated: boolean;
@@ -44,6 +47,7 @@ interface WorkspaceContextValue {
   runtimes: Record<string, TerminalRuntime>;
   fileRuntimes: Record<string, FileRuntime>;
   networkRuntimes: Record<string, NetworkRuntime>;
+  gitRuntimes: Record<string, GitRuntime>;
   localTerminalCapabilities: LocalTerminalCapabilities | null;
   activeWorkspace: Workspace;
   activeBlockId: string;
@@ -62,7 +66,10 @@ interface WorkspaceContextValue {
   selectNetworkTarget: (workspaceId: string, blockId: string, profileId: string | null) => Promise<void>;
   connectNetworkBlock: (blockId: string, profile: ConnectionProfile, auth: SessionAuth, onFailure?: () => void) => Promise<void>;
   disconnectNetworkBlock: (blockId: string) => Promise<void>;
-  isConnectionTargetCurrent: (owner: "terminal" | "files" | "network", blockId: string, profileId: string) => boolean;
+  selectGitTarget: (workspaceId: string, blockId: string, target: GitTarget) => Promise<void>;
+  connectGitBlock: (blockId: string, profile: ConnectionProfile, auth: SessionAuth, onFailure?: () => void) => Promise<void>;
+  disconnectGitBlock: (blockId: string) => Promise<void>;
+  isConnectionTargetCurrent: (owner: "terminal" | "files" | "network" | "git", blockId: string, profileId: string) => boolean;
   startNetworkBlockRule: (blockId: string, ruleId: string) => Promise<void>;
   stopNetworkBlockRule: (blockId: string, ruleId: string) => Promise<void>;
   disconnectBlock: (blockId: string) => Promise<void>;
@@ -74,6 +81,8 @@ interface WorkspaceContextValue {
   rejectFileHostKey: (blockId: string) => Promise<void>;
   acceptNetworkHostKey: (blockId: string) => Promise<void>;
   rejectNetworkHostKey: (blockId: string) => Promise<void>;
+  acceptGitHostKey: (blockId: string) => Promise<void>;
+  rejectGitHostKey: (blockId: string) => Promise<void>;
   connectedCount: (ids: string[]) => number;
   closeSessions: (ids: string[]) => Promise<void>;
   blocksForWorkspace: (workspace: Workspace) => string[];
@@ -91,6 +100,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [runtimes, setRuntimes] = useState<Record<string, TerminalRuntime>>({});
   const [fileRuntimes, setFileRuntimes] = useState<Record<string, FileRuntime>>({});
   const [networkRuntimes, setNetworkRuntimes] = useState<Record<string, NetworkRuntime>>({});
+  const [gitRuntimes, setGitRuntimes] = useState<Record<string, GitRuntime>>({});
   const [localTerminalCapabilities, setLocalTerminalCapabilities] = useState<LocalTerminalCapabilities | null>(null);
   const [storageNotice, setStorageNotice] = useState("");
   const writers = useRef(new Map<string, (data: Uint8Array) => void>());
@@ -101,6 +111,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const runtimesRef = useRef(runtimes);
   const fileRuntimesRef = useRef(fileRuntimes);
   const networkRuntimesRef = useRef(networkRuntimes);
+  const gitRuntimesRef = useRef(gitRuntimes);
   const documentRef = useRef(document);
   const sessionEpochs = useRef(new Map<string, number>());
   const connectionTargetIntents = useRef(new Map<string, string | null>());
@@ -114,6 +125,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   useEffect(() => { runtimesRef.current = runtimes; }, [runtimes]);
   useEffect(() => { fileRuntimesRef.current = fileRuntimes; }, [fileRuntimes]);
   useEffect(() => { networkRuntimesRef.current = networkRuntimes; }, [networkRuntimes]);
+  useEffect(() => { gitRuntimesRef.current = gitRuntimes; }, [gitRuntimes]);
   documentRef.current = document;
 
   const refreshProfiles = useCallback(async () => {
@@ -195,6 +207,14 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     setNetworkRuntimes((current) => {
       const next = { ...current, [blockId]: update(current[blockId] ?? defaultNetworkRuntime) };
       networkRuntimesRef.current = next;
+      return next;
+    });
+  }, []);
+
+  const updateGitRuntime = useCallback((blockId: string, update: (current: GitRuntime) => GitRuntime) => {
+    setGitRuntimes((current) => {
+      const next = { ...current, [blockId]: update(current[blockId] ?? defaultGitRuntime) };
+      gitRuntimesRef.current = next;
       return next;
     });
   }, []);
@@ -324,6 +344,33 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     }
   }, [isCurrentEpoch, updateNetworkRuntime]);
 
+  const onGitSessionEvent = useCallback((blockId: string, epoch: number, event: SessionEvent) => {
+    if (!isCurrentEpoch(blockId, epoch)) return;
+    if (event.type === "stateChanged") {
+      updateGitRuntime(blockId, (runtime) => ({
+        ...runtime,
+        status: event.state,
+        sessionId: event.state === "closed" || event.state === "failed" ? null : runtime.sessionId,
+        notice: event.state === "connected" ? "" : runtime.notice,
+        stale: event.state === "connected" ? false : event.state === "closed" || event.state === "failed" ? true : runtime.stale,
+        connectionProgress: event.state === "connected"
+          ? completeConnectionProgress(runtime.connectionProgress)
+          : event.state === "failed" ? failConnectionProgress(runtime.connectionProgress, null, "连接失败")
+            : event.state === "closed" ? null : runtime.connectionProgress,
+      }));
+      if (event.state === "connected") connectionFailureHandlers.current.delete(`git:${blockId}`);
+    } else if (event.type === "routeProgress") {
+      updateGitRuntime(blockId, (runtime) => ({ ...runtime, notice: "", connectionProgress: connectionProgressFromRouteEvent(event, runtime.connectionProgress) }));
+    } else if (event.type === "hostKeyConfirmationRequired") {
+      updateGitRuntime(blockId, (runtime) => ({ ...runtime, hostKeyPrompt: event }));
+    } else if (event.type === "hostKeyChanged") {
+      updateGitRuntime(blockId, (runtime) => ({ ...runtime, stale: true, connectionProgress: failConnectionProgress(runtime.connectionProgress, event.node, "主机密钥已变化"), notice: `${nodeLabel(event.node)}主机密钥已变化：${event.presentedFingerprint}` }));
+    } else {
+      updateGitRuntime(blockId, (runtime) => ({ ...runtime, stale: true, connectionProgress: failConnectionProgress(runtime.connectionProgress, event.node, event.message), notice: routeFailureNotice(event) }));
+      if (event.node?.role === "target" && event.stage === "authenticate") consumeFailureHandler(connectionFailureHandlers.current, `git:${blockId}`);
+    }
+  }, [isCurrentEpoch, updateGitRuntime]);
+
   const closeCurrentSession = useCallback(async (blockId: string) => {
     const runtime = runtimesRef.current[blockId];
     const activeLocalSessionId = activeLocalSessions.current.get(blockId);
@@ -361,6 +408,14 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     updateNetworkRuntime(blockId, () => defaultNetworkRuntime);
   }, [nextEpoch, updateNetworkRuntime]);
 
+  const closeCurrentGitSession = useCallback(async (blockId: string) => {
+    const runtime = gitRuntimesRef.current[blockId];
+    nextEpoch(blockId);
+    connectionFailureHandlers.current.delete(`git:${blockId}`);
+    if (runtime?.sessionId) await closeSession(runtime.sessionId).catch(() => undefined);
+    updateGitRuntime(blockId, (current) => ({ ...defaultGitRuntime, stale: current.stale || Boolean(runtime?.sessionId) }));
+  }, [nextEpoch, updateGitRuntime]);
+
   const disconnectFileBlock = useCallback(async (blockId: string) => {
     const remote = fileRuntimesRef.current[blockId]?.kind === "sftp";
     await closeCurrentFileSession(blockId);
@@ -370,6 +425,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const disconnectNetworkBlock = useCallback(async (blockId: string) => {
     await closeCurrentNetworkSession(blockId);
   }, [closeCurrentNetworkSession]);
+
+  const disconnectGitBlock = useCallback(async (blockId: string) => {
+    await closeCurrentGitSession(blockId);
+  }, [closeCurrentGitSession]);
 
   const splitTerminalBlock = useCallback((workspaceId: string, blockId: string, direction: SplitDirection, inheritCurrentDirectory = true) => {
     const workspace = documentRef.current.workspaces.find((candidate) => candidate.id === workspaceId);
@@ -513,12 +572,13 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     await closeCurrentSession(blockId);
   }, [closeCurrentSession]);
 
-  const isConnectionTargetCurrent = useCallback((owner: "terminal" | "files" | "network", blockId: string, profileId: string) => {
+  const isConnectionTargetCurrent = useCallback((owner: "terminal" | "files" | "network" | "git", blockId: string, profileId: string) => {
     const intentKey = connectionIntentKey(owner, blockId);
     if (connectionTargetIntents.current.has(intentKey)) return connectionTargetIntents.current.get(intentKey) === profileId;
     for (const workspace of documentRef.current.workspaces) {
       const leaf = findLeaf(workspace.layout, blockId);
       if (!leaf || leaf.type !== owner) continue;
+      if (leaf.type === "git") return leaf.target.type === "remote" && leaf.target.profileId === profileId;
       return leaf.profileId === profileId;
     }
     return false;
@@ -586,6 +646,36 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       consumeFailureHandler(connectionFailureHandlers.current, `network:${blockId}`);
     }
   }, [closeCurrentNetworkSession, isCurrentEpoch, nextEpoch, onNetworkSessionEvent, updateNetworkRuntime]);
+
+  const selectGitTarget = useCallback(async (workspaceId: string, blockId: string, target: GitTarget) => {
+    const profileId = target.type === "remote" ? target.profileId : null;
+    connectionTargetIntents.current.set(connectionIntentKey("git", blockId), profileId);
+    dispatch({ type: "recordRecentProfile", profileId });
+    await closeCurrentGitSession(blockId);
+    if (!connectionIntentAllows(connectionTargetIntents.current, "git", blockId, profileId)) return;
+    dispatch({ type: "setGitTarget", workspaceId, blockId, target });
+    updateGitRuntime(blockId, () => ({ ...defaultGitRuntime, stale: false }));
+  }, [closeCurrentGitSession, updateGitRuntime]);
+
+  const connectGitBlock = useCallback(async (blockId: string, profile: ConnectionProfile, auth: SessionAuth, onFailure?: () => void) => {
+    if (!connectionIntentAllows(connectionTargetIntents.current, "git", blockId, profile.id)) return;
+    await closeCurrentGitSession(blockId);
+    if (!connectionIntentAllows(connectionTargetIntents.current, "git", blockId, profile.id)) return;
+    if (onFailure) connectionFailureHandlers.current.set(`git:${blockId}`, onFailure);
+    const epoch = nextEpoch(blockId);
+    updateGitRuntime(blockId, () => ({ ...defaultGitRuntime, status: "connecting", connectionProgress: initialConnectionProgress(profile.jumpProfileIds?.length ?? 0) }));
+    try {
+      const sessionId = await connectGitSession(
+        { profileId: profile.id, auth },
+        (event) => onGitSessionEvent(blockId, epoch, event),
+      );
+      if (!isCurrentEpoch(blockId, epoch)) await closeSession(sessionId).catch(() => undefined);
+      else updateGitRuntime(blockId, (runtime) => ({ ...runtime, sessionId }));
+    } catch (error) {
+      if (isCurrentEpoch(blockId, epoch)) updateGitRuntime(blockId, () => ({ ...defaultGitRuntime, status: "failed", stale: true, notice: workspaceErrorMessage(error) }));
+      consumeFailureHandler(connectionFailureHandlers.current, `git:${blockId}`);
+    }
+  }, [closeCurrentGitSession, isCurrentEpoch, nextEpoch, onGitSessionEvent, updateGitRuntime]);
 
   const startNetworkBlockRule = useCallback(async (blockId: string, ruleId: string) => {
     const runtime = networkRuntimesRef.current[blockId];
@@ -673,6 +763,18 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     updateNetworkRuntime(blockId, (runtime) => ({ ...runtime, hostKeyPrompt: null }));
   }, [networkRuntimes, updateNetworkRuntime]);
 
+  const acceptGitHostKey = useCallback(async (blockId: string) => {
+    const sessionId = gitRuntimes[blockId]?.sessionId;
+    if (sessionId) await acceptHostKey(sessionId);
+    updateGitRuntime(blockId, (runtime) => ({ ...runtime, hostKeyPrompt: null }));
+  }, [gitRuntimes, updateGitRuntime]);
+
+  const rejectGitHostKey = useCallback(async (blockId: string) => {
+    const sessionId = gitRuntimes[blockId]?.sessionId;
+    if (sessionId) await rejectHostKey(sessionId);
+    updateGitRuntime(blockId, (runtime) => ({ ...runtime, hostKeyPrompt: null }));
+  }, [gitRuntimes, updateGitRuntime]);
+
   const registerWriter = useCallback((blockId: string, writer: (data: Uint8Array) => void, clearer: (reset: boolean) => void, readSize: () => TerminalSizeInput) => {
     const owner = Symbol(blockId);
     writers.current.set(blockId, writer);
@@ -724,12 +826,13 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
   const blocksForWorkspace = useCallback((workspace: Workspace) => blockIds(workspace.layout), []);
   const dismissStorageNotice = useCallback(() => setStorageNotice(""), []);
-  const connectedCount = useCallback((ids: string[]) => ids.filter((id) => Boolean(runtimes[id]?.sessionId || fileRuntimes[id]?.sessionId || networkRuntimes[id]?.sessionId)).length, [fileRuntimes, networkRuntimes, runtimes]);
+  const connectedCount = useCallback((ids: string[]) => ids.filter((id) => Boolean(runtimes[id]?.sessionId || fileRuntimes[id]?.sessionId || networkRuntimes[id]?.sessionId || gitRuntimes[id]?.sessionId)).length, [fileRuntimes, gitRuntimes, networkRuntimes, runtimes]);
   const closeSessions = useCallback(async (ids: string[]) => {
     await Promise.all(ids.map(async (id) => {
       if (runtimesRef.current[id]) await closeCurrentSession(id);
       if (fileRuntimesRef.current[id]) await closeCurrentFileSession(id);
       if (networkRuntimesRef.current[id]) await closeCurrentNetworkSession(id);
+      if (gitRuntimesRef.current[id]) await closeCurrentGitSession(id);
       writers.current.delete(id);
       clearers.current.delete(id);
       terminalSizeReaders.current.delete(id);
@@ -739,6 +842,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       connectionTargetIntents.current.delete(connectionIntentKey("terminal", id));
       connectionTargetIntents.current.delete(connectionIntentKey("files", id));
       connectionTargetIntents.current.delete(connectionIntentKey("network", id));
+      connectionTargetIntents.current.delete(connectionIntentKey("git", id));
     }));
     setRuntimes((current) => {
       const next = { ...current };
@@ -758,18 +862,24 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       networkRuntimesRef.current = next;
       return next;
     });
-  }, [closeCurrentFileSession, closeCurrentNetworkSession, closeCurrentSession]);
+    setGitRuntimes((current) => {
+      const next = { ...current };
+      ids.forEach((id) => delete next[id]);
+      gitRuntimesRef.current = next;
+      return next;
+    });
+  }, [closeCurrentFileSession, closeCurrentGitSession, closeCurrentNetworkSession, closeCurrentSession]);
 
   const activeWorkspace = document.workspaces.find((workspace) => workspace.id === document.activeWorkspaceId) ?? document.workspaces[0];
   const value = useMemo<WorkspaceContextValue>(() => ({
-    hydrated, document, dispatch, profiles, profileGroups, refreshProfiles, runtimes, fileRuntimes, networkRuntimes, localTerminalCapabilities, activeWorkspace,
+    hydrated, document, dispatch, profiles, profileGroups, refreshProfiles, runtimes, fileRuntimes, networkRuntimes, gitRuntimes, localTerminalCapabilities, activeWorkspace,
     activeBlockId: activeWorkspace.activeBlockId, registerWriter, clearBlockBuffer, setBlockCwd, clearTerminalOsc7State, splitTerminalBlock, startLocalBlock, restartLocalBlock, selectBlockTarget, connectBlock, disconnectBlock,
-    selectFileTarget, connectFileBlock, disconnectFileBlock, selectNetworkTarget, connectNetworkBlock, disconnectNetworkBlock, startNetworkBlockRule, stopNetworkBlockRule, writeBlock, resizeBlock,
+    selectFileTarget, connectFileBlock, disconnectFileBlock, selectNetworkTarget, connectNetworkBlock, disconnectNetworkBlock, selectGitTarget, connectGitBlock, disconnectGitBlock, startNetworkBlockRule, stopNetworkBlockRule, writeBlock, resizeBlock,
     isConnectionTargetCurrent,
-    acceptBlockHostKey, rejectBlockHostKey, acceptFileHostKey, rejectFileHostKey, acceptNetworkHostKey, rejectNetworkHostKey, connectedCount,
+    acceptBlockHostKey, rejectBlockHostKey, acceptFileHostKey, rejectFileHostKey, acceptNetworkHostKey, rejectNetworkHostKey, acceptGitHostKey, rejectGitHostKey, connectedCount,
     closeSessions, blocksForWorkspace,
     storageNotice, dismissStorageNotice,
-  }), [hydrated, document, profiles, profileGroups, refreshProfiles, runtimes, fileRuntimes, networkRuntimes, localTerminalCapabilities, activeWorkspace, registerWriter, clearBlockBuffer, setBlockCwd, clearTerminalOsc7State, splitTerminalBlock, startLocalBlock, restartLocalBlock, selectBlockTarget, connectBlock, disconnectBlock, selectFileTarget, connectFileBlock, disconnectFileBlock, selectNetworkTarget, connectNetworkBlock, disconnectNetworkBlock, startNetworkBlockRule, stopNetworkBlockRule, writeBlock, resizeBlock, acceptBlockHostKey, rejectBlockHostKey, acceptFileHostKey, rejectFileHostKey, acceptNetworkHostKey, rejectNetworkHostKey, isConnectionTargetCurrent, connectedCount, closeSessions, blocksForWorkspace, storageNotice, dismissStorageNotice]);
+  }), [hydrated, document, profiles, profileGroups, refreshProfiles, runtimes, fileRuntimes, networkRuntimes, gitRuntimes, localTerminalCapabilities, activeWorkspace, registerWriter, clearBlockBuffer, setBlockCwd, clearTerminalOsc7State, splitTerminalBlock, startLocalBlock, restartLocalBlock, selectBlockTarget, connectBlock, disconnectBlock, selectFileTarget, connectFileBlock, disconnectFileBlock, selectNetworkTarget, connectNetworkBlock, disconnectNetworkBlock, selectGitTarget, connectGitBlock, disconnectGitBlock, startNetworkBlockRule, stopNetworkBlockRule, writeBlock, resizeBlock, acceptBlockHostKey, rejectBlockHostKey, acceptFileHostKey, rejectFileHostKey, acceptNetworkHostKey, rejectNetworkHostKey, acceptGitHostKey, rejectGitHostKey, isConnectionTargetCurrent, connectedCount, closeSessions, blocksForWorkspace, storageNotice, dismissStorageNotice]);
 
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;
 }

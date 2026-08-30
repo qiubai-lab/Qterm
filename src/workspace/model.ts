@@ -20,6 +20,17 @@ export interface NetworkNode {
   profileId: string | null;
 }
 
+export interface GitNode {
+  type: "git";
+  blockId: string;
+  target: GitTarget;
+}
+
+export type GitTarget =
+  | { type: "unbound" }
+  | { type: "local"; path: string }
+  | { type: "remote"; profileId: string; path: string };
+
 export interface SplitNode {
   type: "split";
   id: string;
@@ -29,7 +40,7 @@ export interface SplitNode {
   second: LayoutNode;
 }
 
-export type LayoutLeaf = TerminalNode | FilesNode | NetworkNode;
+export type LayoutLeaf = TerminalNode | FilesNode | NetworkNode | GitNode;
 export type LayoutNode = LayoutLeaf | SplitNode;
 
 export interface Workspace {
@@ -40,7 +51,7 @@ export interface Workspace {
 }
 
 export interface WorkspaceDocument {
-  schemaVersion: 7;
+  schemaVersion: 9;
   activeWorkspaceId: string;
   recentProfileIds: string[];
   workspaces: Workspace[];
@@ -62,6 +73,10 @@ export function createNetworkNode(profileId: string | null): NetworkNode {
   return { type: "network", blockId: createId("network"), profileId };
 }
 
+export function createGitNode(target: GitTarget): GitNode {
+  return { type: "git", blockId: createId("git"), target };
+}
+
 export function createWorkspace(name = "Workspace 1"): Workspace {
   const terminal = createTerminalNode();
   return { id: createId("workspace"), name, activeBlockId: terminal.blockId, layout: terminal };
@@ -69,7 +84,7 @@ export function createWorkspace(name = "Workspace 1"): Workspace {
 
 export function createWorkspaceDocument(): WorkspaceDocument {
   const workspace = createWorkspace();
-  return { schemaVersion: 7, activeWorkspaceId: workspace.id, recentProfileIds: [], workspaces: [workspace] };
+  return { schemaVersion: 9, activeWorkspaceId: workspace.id, recentProfileIds: [], workspaces: [workspace] };
 }
 
 export function isValidTerminalRestoreDirectory(value: string): boolean {

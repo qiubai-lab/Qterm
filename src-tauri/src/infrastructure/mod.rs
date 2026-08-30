@@ -2,6 +2,7 @@
 
 pub mod browser;
 pub mod clipboard;
+pub mod git_cli;
 pub mod local;
 pub mod persistence;
 pub mod ssh;

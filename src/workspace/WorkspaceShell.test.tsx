@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   connectBlock: vi.fn().mockResolvedValue(undefined),
   connectFileBlock: vi.fn().mockResolvedValue(undefined),
   connectNetworkBlock: vi.fn().mockResolvedValue(undefined),
+  connectGitBlock: vi.fn().mockResolvedValue(undefined),
   resolveConfiguredAuth: vi.fn(),
   getVaultStatus: vi.fn(),
   getProfileRouteRequirements: vi.fn(),
@@ -32,6 +33,7 @@ const mocks = vi.hoisted(() => ({
   disconnectBlock: vi.fn().mockResolvedValue(undefined),
   disconnectFileBlock: vi.fn().mockResolvedValue(undefined),
   disconnectNetworkBlock: vi.fn().mockResolvedValue(undefined),
+  disconnectGitBlock: vi.fn().mockResolvedValue(undefined),
   focusTerminalBlock: vi.fn().mockReturnValue(true),
   openTerminalSearch: vi.fn().mockReturnValue(true),
 }));
@@ -44,13 +46,13 @@ let workspaces = [initialWorkspace];
 let terminalRuntimes: Record<string, TerminalRuntime> = {};
 
 vi.mock("./configuredAuth", () => ({ resolveConfiguredAuth: mocks.resolveConfiguredAuth }));
-vi.mock("./LayoutView", () => ({ WorkspaceCanvas: ({ workspace: renderedWorkspace, localTerminalAttention, remoteShellIntegrationEnabled, terminalSettingsReady, onRequestAuthConnection, onRequestDisconnect, onOpenConnectionManager }: { workspace: Workspace; localTerminalAttention?: boolean; remoteShellIntegrationEnabled?: boolean; terminalSettingsReady?: boolean; onRequestAuthConnection: (owner: "terminal", blockId: string, profile: typeof requestedProfile) => void; onRequestDisconnect: (owner: "terminal" | "files" | "network", blockId: string, name: string, local: boolean) => void; onOpenConnectionManager: () => void }) => <div data-testid={`workspace-canvas-${renderedWorkspace.id}`} data-local-terminal-attention={localTerminalAttention || undefined} data-remote-shell-integration={remoteShellIntegrationEnabled || undefined} data-terminal-settings-ready={terminalSettingsReady || undefined}><div className="terminal-surface"><textarea className="xterm-helper-textarea" aria-label="终端输入"/></div><button onClick={() => onRequestAuthConnection("terminal", "block-1", requestedProfile)}>请求远程连接</button><button onClick={() => onRequestDisconnect("terminal", "block-1", "Server", false)}>请求断开连接</button><button onClick={() => onRequestDisconnect("files", "files-1", "Server Files", false)}>请求断开文件连接</button><button onClick={() => onRequestDisconnect("network", "network-1", "Server Network", false)}>请求断开网络连接</button><button onClick={onOpenConnectionManager}>从连接选择器管理连接</button></div> }));
+vi.mock("./LayoutView", () => ({ WorkspaceCanvas: ({ workspace: renderedWorkspace, localTerminalAttention, remoteShellIntegrationEnabled, terminalSettingsReady, onRequestAuthConnection, onRequestDisconnect, onOpenConnectionManager }: { workspace: Workspace; localTerminalAttention?: boolean; remoteShellIntegrationEnabled?: boolean; terminalSettingsReady?: boolean; onRequestAuthConnection: (owner: "terminal", blockId: string, profile: typeof requestedProfile) => void; onRequestDisconnect: (owner: "terminal" | "files" | "network" | "git", blockId: string, name: string, local: boolean) => void; onOpenConnectionManager: () => void }) => <div data-testid={`workspace-canvas-${renderedWorkspace.id}`} data-local-terminal-attention={localTerminalAttention || undefined} data-remote-shell-integration={remoteShellIntegrationEnabled || undefined} data-terminal-settings-ready={terminalSettingsReady || undefined}><div className="terminal-surface"><textarea className="xterm-helper-textarea" aria-label="终端输入"/></div><button onClick={() => onRequestAuthConnection("terminal", "block-1", requestedProfile)}>请求远程连接</button><button onClick={() => onRequestDisconnect("terminal", "block-1", "Server", false)}>请求断开连接</button><button onClick={() => onRequestDisconnect("files", "files-1", "Server Files", false)}>请求断开文件连接</button><button onClick={() => onRequestDisconnect("network", "network-1", "Server Network", false)}>请求断开网络连接</button><button onClick={onOpenConnectionManager}>从连接选择器管理连接</button></div> }));
 vi.mock("./WorkspaceProvider", () => ({ useWorkspace: () => ({
-  hydrated: true, document: { schemaVersion: 7, activeWorkspaceId: workspace.id, recentProfileIds: [], workspaces }, activeWorkspace: workspace,
-  dispatch: mocks.dispatch, runtimes: terminalRuntimes, fileRuntimes: {}, networkRuntimes: {}, clearTerminalOsc7State: mocks.clearTerminalOsc7State, splitTerminalBlock: mocks.splitTerminalBlock, connectBlock: mocks.connectBlock, connectFileBlock: mocks.connectFileBlock, connectNetworkBlock: mocks.connectNetworkBlock, disconnectBlock: mocks.disconnectBlock, disconnectFileBlock: mocks.disconnectFileBlock, disconnectNetworkBlock: mocks.disconnectNetworkBlock,
+  hydrated: true, document: { schemaVersion: 9, activeWorkspaceId: workspace.id, recentProfileIds: [], workspaces }, activeWorkspace: workspace,
+  dispatch: mocks.dispatch, runtimes: terminalRuntimes, fileRuntimes: {}, networkRuntimes: {}, gitRuntimes: {}, clearTerminalOsc7State: mocks.clearTerminalOsc7State, splitTerminalBlock: mocks.splitTerminalBlock, connectBlock: mocks.connectBlock, connectFileBlock: mocks.connectFileBlock, connectNetworkBlock: mocks.connectNetworkBlock, connectGitBlock: mocks.connectGitBlock, disconnectBlock: mocks.disconnectBlock, disconnectFileBlock: mocks.disconnectFileBlock, disconnectNetworkBlock: mocks.disconnectNetworkBlock, disconnectGitBlock: mocks.disconnectGitBlock,
   isConnectionTargetCurrent: mocks.isConnectionTargetCurrent,
   connectedCount: vi.fn().mockReturnValue(0), closeSessions: vi.fn().mockResolvedValue(undefined), blocksForWorkspace: vi.fn().mockReturnValue(["block-1"]),
-  acceptBlockHostKey: vi.fn(), rejectBlockHostKey: vi.fn(), acceptFileHostKey: vi.fn(), rejectFileHostKey: vi.fn(), acceptNetworkHostKey: vi.fn(), rejectNetworkHostKey: vi.fn(), storageNotice: "", dismissStorageNotice: vi.fn(),
+  acceptBlockHostKey: vi.fn(), rejectBlockHostKey: vi.fn(), acceptFileHostKey: vi.fn(), rejectFileHostKey: vi.fn(), acceptNetworkHostKey: vi.fn(), rejectNetworkHostKey: vi.fn(), acceptGitHostKey: vi.fn(), rejectGitHostKey: vi.fn(), storageNotice: "", dismissStorageNotice: vi.fn(),
 }) }));
 vi.mock("../components/dialogs/ConnectionAuthDialog", () => ({ ConnectionAuthDialog: ({ profile: item }: { profile: typeof connectionProfile }) => <div role="dialog" aria-label={`认证 ${item.name}`}/> }));
 vi.mock("../components/dialogs/ConnectionDialog", () => ({ ConnectionDialog: () => <div role="dialog" aria-label="连接管理"/> }));
@@ -485,6 +487,11 @@ describe("WorkspaceShell utility rail", () => {
 
     await user.click(screen.getByRole("button", { name: "打开终端" }));
     expect(mocks.splitTerminalBlock).toHaveBeenCalledWith("workspace-1", "block-1", "horizontal", true);
+
+    await user.click(screen.getByRole("button", { name: "Git 管理" }));
+    expect(mocks.dispatch).toHaveBeenCalledWith({
+      type: "openGit", workspaceId: "workspace-1", anchorBlockId: "block-1", target: { type: "unbound" },
+    });
   });
 
   it("opens files with the active remote terminal profile and OSC 7 directory", async () => {

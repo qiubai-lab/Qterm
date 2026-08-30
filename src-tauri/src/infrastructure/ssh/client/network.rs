@@ -78,6 +78,7 @@ pub(super) async fn run_network_session(
                     };
                     let _ = reply.send(result);
                 }
+                Some(SessionControl::RunGit { reply, .. }) => { let _ = reply.send(Err(crate::domain::git::GitError::SessionUnavailable)); }
                 Some(SessionControl::Write(_) | SessionControl::Resize(_) | SessionControl::StoreTerminalStaging { .. } | SessionControl::StartTransfer { .. } | SessionControl::ListDirectory { .. } | SessionControl::ReadFile { .. } | SessionControl::WriteTextFile { .. } | SessionControl::MutateEntry { .. }) => {}
                 None => { entry.transition(SessionState::Closing); }
             },

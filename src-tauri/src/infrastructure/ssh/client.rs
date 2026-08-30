@@ -1,3 +1,4 @@
+mod git;
 mod handler;
 mod network;
 mod session;
@@ -64,6 +65,7 @@ use crate::{
             },
         },
     },
+    ports::remote_git_executor::RemoteGitExecutor,
     ports::terminal_staging::{
         RemoteTerminalStagingStore, StagingSourceEntry, TerminalStagingSink,
     },
@@ -114,6 +116,7 @@ pub enum SessionPurpose {
     Terminal,
     Files,
     Network,
+    Git,
 }
 
 type EventSink = Arc<dyn Fn(SessionEvent) + Send + Sync>;
@@ -242,6 +245,24 @@ impl SshSessionManager {
             .values()
             .filter(|entry| {
                 entry.purpose == SessionPurpose::Network
+                    && entry.profile_id.as_deref() == Some(profile_id)
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        for entry in &entries {
+            entry.begin_close();
+        }
+        entries.len()
+    }
+
+    pub fn close_profile_git_sessions(&self, profile_id: &str) -> usize {
+        let entries = self
+            .sessions
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .values()
+            .filter(|entry| {
+                entry.purpose == SessionPurpose::Git
                     && entry.profile_id.as_deref() == Some(profile_id)
             })
             .cloned()
@@ -393,6 +414,32 @@ impl SshSessionManager {
         response
             .await
             .map_err(|_| SessionControlError::SessionFinished)?
+    }
+
+    async fn run_git_action(
+        &self,
+        id: &str,
+        profile_id: &str,
+        action: crate::domain::git::RemoteGitAction,
+    ) -> Result<crate::domain::git::GitSnapshot, crate::domain::git::GitError> {
+        let entry = self
+            .entry(id)
+            .map_err(|_| crate::domain::git::GitError::SessionUnavailable)?;
+        if entry.purpose != SessionPurpose::Git
+            || entry.profile_id.as_deref() != Some(profile_id)
+            || entry.state() != SessionState::Connected
+        {
+            return Err(crate::domain::git::GitError::SessionUnavailable);
+        }
+        action.validate()?;
+        let (reply, response) = oneshot::channel();
+        entry
+            .control
+            .try_send(SessionControl::RunGit { action, reply })
+            .map_err(|_| crate::domain::git::GitError::SessionUnavailable)?;
+        response
+            .await
+            .map_err(|_| crate::domain::git::GitError::SessionUnavailable)?
     }
 
     pub fn start_transfer(
@@ -589,6 +636,24 @@ impl SshSessionManager {
         if finished.len() > 256 {
             finished.pop_front();
         }
+    }
+}
+
+impl RemoteGitExecutor for SshSessionManager {
+    fn execute<'a>(
+        &'a self,
+        session_id: &'a str,
+        profile_id: &'a str,
+        action: crate::domain::git::RemoteGitAction,
+    ) -> std::pin::Pin<
+        Box<
+            dyn std::future::Future<
+                    Output = Result<crate::domain::git::GitSnapshot, crate::domain::git::GitError>,
+                > + Send
+                + 'a,
+        >,
+    > {
+        Box::pin(self.run_git_action(session_id, profile_id, action))
     }
 }
 
@@ -911,6 +976,11 @@ enum SessionControl {
     StopNetworkRule {
         rule_id: String,
         reply: oneshot::Sender<Result<(), SessionControlError>>,
+    },
+    RunGit {
+        action: crate::domain::git::RemoteGitAction,
+        reply:
+            oneshot::Sender<Result<crate::domain::git::GitSnapshot, crate::domain::git::GitError>>,
     },
 }
 

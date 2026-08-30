@@ -1,5 +1,5 @@
-import { blockIds, clearTerminalRestoreDirectories, closeTerminal, findLeaf, moveTerminal, setFilesPath, setFilesProfile, setNetworkProfile, setTerminalProfile, setTerminalRestoreDirectory, splitTerminal, terminalBlockIds, updateSplitRatio, type DropPosition } from "./layout";
-import { createFilesNode, createId, createNetworkNode, createTerminalNode, createWorkspace, isValidTerminalRestoreDirectory, type SplitDirection, type Workspace, type WorkspaceDocument } from "./model";
+import { blockIds, clearTerminalRestoreDirectories, closeTerminal, findLeaf, moveTerminal, setFilesPath, setFilesProfile, setGitTarget, setNetworkProfile, setTerminalProfile, setTerminalRestoreDirectory, splitTerminal, terminalBlockIds, updateSplitRatio, type DropPosition } from "./layout";
+import { createFilesNode, createGitNode, createId, createNetworkNode, createTerminalNode, createWorkspace, isValidTerminalRestoreDirectory, type GitTarget, type SplitDirection, type Workspace, type WorkspaceDocument } from "./model";
 
 export type WorkspaceAction =
   | { type: "hydrate"; document: WorkspaceDocument }
@@ -13,6 +13,7 @@ export type WorkspaceAction =
   | { type: "splitBlock"; workspaceId: string; blockId: string; direction: SplitDirection; newBlockId: string; splitId: string }
   | { type: "openFiles"; workspaceId: string; anchorBlockId: string; profileId: string | null; path: string }
   | { type: "openNetwork"; workspaceId: string; anchorBlockId: string; profileId: string | null }
+  | { type: "openGit"; workspaceId: string; anchorBlockId: string; target: GitTarget }
   | { type: "closeBlock"; workspaceId: string; blockId: string }
   | { type: "resizeSplit"; workspaceId: string; splitId: string; ratio: number }
   | { type: "setBlockProfile"; workspaceId: string; blockId: string; profileId: string | null }
@@ -21,6 +22,7 @@ export type WorkspaceAction =
   | { type: "setFilesPath"; workspaceId: string; blockId: string; profileId: string | null; path: string }
   | { type: "setFilesProfile"; workspaceId: string; blockId: string; profileId: string | null }
   | { type: "setNetworkProfile"; workspaceId: string; blockId: string; profileId: string | null }
+  | { type: "setGitTarget"; workspaceId: string; blockId: string; target: GitTarget }
   | { type: "moveBlock"; workspaceId: string; sourceId: string; targetId: string; position: DropPosition };
 
 export function workspaceReducer(state: WorkspaceDocument, action: WorkspaceAction): WorkspaceDocument {
@@ -51,7 +53,7 @@ export function workspaceReducer(state: WorkspaceDocument, action: WorkspaceActi
     case "splitBlock": return mapWorkspace(state, action.workspaceId, (workspace) => {
       const anchor = findLeaf(workspace.layout, action.blockId);
       if (!anchor) return workspace;
-      const terminal = createTerminalNode(anchor.profileId, action.newBlockId);
+      const terminal = createTerminalNode(anchor.type === "git" ? null : anchor.profileId, action.newBlockId);
       return { ...workspace, activeBlockId: terminal.blockId, layout: splitTerminal(workspace.layout, action.blockId, action.direction, terminal, action.splitId) };
     });
     case "openFiles": return mapWorkspace(state, action.workspaceId, (workspace) => {
@@ -61,6 +63,10 @@ export function workspaceReducer(state: WorkspaceDocument, action: WorkspaceActi
     case "openNetwork": return mapWorkspace(state, action.workspaceId, (workspace) => {
       const network = createNetworkNode(action.profileId);
       return { ...workspace, activeBlockId: network.blockId, layout: splitTerminal(workspace.layout, action.anchorBlockId, "horizontal", network, createId("split")) };
+    });
+    case "openGit": return mapWorkspace(state, action.workspaceId, (workspace) => {
+      const git = createGitNode(action.target);
+      return { ...workspace, activeBlockId: git.blockId, layout: splitTerminal(workspace.layout, action.anchorBlockId, "horizontal", git, createId("split")) };
     });
     case "closeBlock": return mapWorkspace(state, action.workspaceId, (workspace) => {
       if (blockIds(workspace.layout).length === 1) return workspace;
@@ -96,6 +102,7 @@ export function workspaceReducer(state: WorkspaceDocument, action: WorkspaceActi
     });
     case "setFilesProfile": return mapWorkspace(state, action.workspaceId, (workspace) => ({ ...workspace, layout: setFilesProfile(workspace.layout, action.blockId, action.profileId) }));
     case "setNetworkProfile": return mapWorkspace(state, action.workspaceId, (workspace) => ({ ...workspace, layout: setNetworkProfile(workspace.layout, action.blockId, action.profileId) }));
+    case "setGitTarget": return mapWorkspace(state, action.workspaceId, (workspace) => ({ ...workspace, layout: setGitTarget(workspace.layout, action.blockId, action.target) }));
     case "moveBlock": return mapWorkspace(state, action.workspaceId, (workspace) => ({ ...workspace, activeBlockId: action.sourceId, layout: moveTerminal(workspace.layout, action.sourceId, action.targetId, action.position, createId("split")) }));
   }
 }

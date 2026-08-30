@@ -9,6 +9,7 @@
 @import "../terminal/terminalChrome.css";
 @import "../network/network.css";
 @import "../files/fileBrowser.css";
+@import "../git/git.css";
 @import "../terminal/terminalSurface.css";
 @import "../workspace/workspaceInteractions.css";
 @import "../components/dialogs/dialogFrame.css";

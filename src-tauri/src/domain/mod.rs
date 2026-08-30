@@ -3,6 +3,7 @@
 pub mod auth;
 pub mod credential;
 pub mod files;
+pub mod git;
 pub mod network;
 pub mod profile;
 pub mod session;

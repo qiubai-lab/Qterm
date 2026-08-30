@@ -10,11 +10,11 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::{
-    domain::workspace::{LayoutNode, SplitDirection, Workspace, WorkspaceDocument},
+    domain::workspace::{GitTarget, LayoutNode, SplitDirection, Workspace, WorkspaceDocument},
     ports::workspace_repository::{WorkspaceRepository, WorkspaceRepositoryError},
 };
 
-const SCHEMA_VERSION: u64 = 7;
+const SCHEMA_VERSION: u64 = 9;
 const MAX_DOCUMENT_BYTES: u64 = 4 * 1024 * 1024;
 
 pub struct JsonWorkspaceRepository {
@@ -57,7 +57,7 @@ impl JsonWorkspaceRepository {
             .ok_or(WorkspaceRepositoryError::CorruptData)?;
         match version {
             SCHEMA_VERSION => {}
-            5 | 6 => {
+            5..=8 => {
                 let object = value
                     .as_object_mut()
                     .ok_or(WorkspaceRepositoryError::CorruptData)?;
@@ -65,7 +65,12 @@ impl JsonWorkspaceRepository {
                     object.insert("recentProfileIds".into(), Value::Array(Vec::new()));
                 }
                 object.insert("schemaVersion".into(), Value::from(SCHEMA_VERSION));
-                add_terminal_restore_directories(&mut value);
+                if version < 7 {
+                    add_terminal_restore_directories(&mut value);
+                }
+                if version < 9 {
+                    migrate_git_targets(&mut value);
+                }
             }
             _ => return Err(WorkspaceRepositoryError::UnsupportedSchemaVersion(version)),
         }
@@ -148,6 +153,10 @@ enum LayoutRecord {
         block_id: String,
         profile_id: Option<String>,
     },
+    Git {
+        block_id: String,
+        target: GitTargetRecord,
+    },
     Split {
         id: String,
         direction: DirectionRecord,
@@ -155,6 +164,19 @@ enum LayoutRecord {
         first: Box<LayoutRecord>,
         second: Box<LayoutRecord>,
     },
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
+enum GitTargetRecord {
+    Unbound,
+    Local { path: String },
+    Remote { profile_id: String, path: String },
 }
 
 #[derive(Clone, Copy, Deserialize, Serialize)]
@@ -239,6 +261,10 @@ impl LayoutRecord {
                 block_id: block_id.clone(),
                 profile_id: profile_id.clone(),
             },
+            LayoutNode::Git { block_id, target } => Self::Git {
+                block_id: block_id.clone(),
+                target: GitTargetRecord::from_domain(target),
+            },
             LayoutNode::Split {
                 id,
                 direction,
@@ -282,6 +308,10 @@ impl LayoutRecord {
                 block_id,
                 profile_id,
             },
+            Self::Git { block_id, target } => LayoutNode::Git {
+                block_id,
+                target: target.into_domain(),
+            },
             Self::Split {
                 id,
                 direction,
@@ -295,6 +325,27 @@ impl LayoutRecord {
                 first: Box::new(first.into_domain()),
                 second: Box::new(second.into_domain()),
             },
+        }
+    }
+}
+
+impl GitTargetRecord {
+    fn from_domain(target: &GitTarget) -> Self {
+        match target {
+            GitTarget::Unbound => Self::Unbound,
+            GitTarget::Local { path } => Self::Local { path: path.clone() },
+            GitTarget::Remote { profile_id, path } => Self::Remote {
+                profile_id: profile_id.clone(),
+                path: path.clone(),
+            },
+        }
+    }
+
+    fn into_domain(self) -> GitTarget {
+        match self {
+            Self::Unbound => GitTarget::Unbound,
+            Self::Local { path } => GitTarget::Local { path },
+            Self::Remote { profile_id, path } => GitTarget::Remote { profile_id, path },
         }
     }
 }
@@ -355,6 +406,26 @@ fn add_terminal_restore_directories(value: &mut Value) {
     }
 }
 
+fn migrate_git_targets(value: &mut Value) {
+    match value {
+        Value::Object(object) => {
+            if object.get("type").and_then(Value::as_str) == Some("git") {
+                let repository_path = object.remove("repositoryPath").unwrap_or(Value::Null);
+                let target = match repository_path {
+                    Value::String(path) => serde_json::json!({ "type": "local", "path": path }),
+                    _ => serde_json::json!({ "type": "unbound" }),
+                };
+                object.insert("target".into(), target);
+            }
+            for nested in object.values_mut() {
+                migrate_git_targets(nested);
+            }
+        }
+        Value::Array(values) => values.iter_mut().for_each(migrate_git_targets),
+        _ => {}
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::fs;
@@ -394,7 +465,7 @@ mod tests {
     }
 
     #[test]
-    fn round_trips_v7_terminal_restore_without_runtime_or_secret_fields() {
+    fn round_trips_v9_terminal_restore_without_runtime_or_secret_fields() {
         let directory = tempdir().expect("temporary directory");
         let path = directory.path().join("workspaces.json");
         let repository = JsonWorkspaceRepository::new(path.clone());
@@ -402,7 +473,7 @@ mod tests {
 
         assert_eq!(repository.load().expect("load workspace"), Some(document()));
         let json = fs::read_to_string(path).expect("workspace json");
-        assert!(json.contains("\"schemaVersion\": 7"));
+        assert!(json.contains("\"schemaVersion\": 9"));
         assert!(json.contains("\"recentProfileIds\""));
         assert!(json.contains("\"type\": \"network\""));
         assert!(json.contains("\"blockId\": \"block-1\""));
@@ -416,17 +487,19 @@ mod tests {
     }
 
     #[test]
-    fn migrates_v5_and_v6_workspace_schemas_without_overwriting_until_save() {
-        for version in [5, 6] {
+    fn migrates_v5_v6_and_v7_workspace_schemas_without_overwriting_until_save() {
+        for version in [5, 6, 7] {
             let directory = tempdir().expect("temporary directory");
             let path = directory.path().join("workspaces.json");
             let mut value = serde_json::to_value(super::DocumentRecord::from_domain(&document()))
                 .expect("workspace fixture");
             value["schemaVersion"] = serde_json::json!(version);
-            value["workspaces"][0]["layout"]["first"]
-                .as_object_mut()
-                .expect("terminal record")
-                .remove("restoreDirectory");
+            if version < 7 {
+                value["workspaces"][0]["layout"]["first"]
+                    .as_object_mut()
+                    .expect("terminal record")
+                    .remove("restoreDirectory");
+            }
             if version == 5 {
                 value
                     .as_object_mut()
@@ -438,7 +511,8 @@ mod tests {
             let repository = JsonWorkspaceRepository::new(path.clone());
 
             let mut expected = document();
-            if let LayoutNode::Split { first, .. } = &mut expected.workspaces[0].layout
+            if version < 7
+                && let LayoutNode::Split { first, .. } = &mut expected.workspaces[0].layout
                 && let LayoutNode::Terminal {
                     restore_directory, ..
                 } = first.as_mut()
@@ -451,6 +525,108 @@ mod tests {
             assert_eq!(repository.load(), Ok(Some(expected)));
             assert_eq!(fs::read(path).expect("preserved"), fixture);
         }
+    }
+
+    #[test]
+    fn round_trips_a_git_leaf_with_a_local_target() {
+        let directory = tempdir().expect("temporary directory");
+        let path = directory.path().join("workspaces.json");
+        let repository = JsonWorkspaceRepository::new(path.clone());
+        let mut document = document();
+        if let LayoutNode::Split { second, .. } = &mut document.workspaces[0].layout {
+            **second = LayoutNode::Git {
+                block_id: "git-1".into(),
+                target: crate::domain::workspace::GitTarget::Local {
+                    path: "D:/work/project".into(),
+                },
+            };
+        }
+        document.workspaces[0].active_block_id = "git-1".into();
+
+        repository.save(&document).expect("save git workspace");
+
+        assert_eq!(repository.load(), Ok(Some(document)));
+        let json = fs::read_to_string(path).expect("workspace json");
+        assert!(json.contains("\"type\": \"git\""));
+        assert!(json.contains("\"type\": \"local\""));
+        assert!(json.contains("\"path\": \"D:/work/project\""));
+    }
+
+    #[test]
+    fn round_trips_a_remote_git_target_without_runtime_or_command_payloads() {
+        let directory = tempdir().expect("temporary directory");
+        let path = directory.path().join("workspaces.json");
+        let repository = JsonWorkspaceRepository::new(path.clone());
+        let mut document = document();
+        if let LayoutNode::Split { second, .. } = &mut document.workspaces[0].layout {
+            **second = LayoutNode::Git {
+                block_id: "git-remote".into(),
+                target: crate::domain::workspace::GitTarget::Remote {
+                    profile_id: "profile-1".into(),
+                    path: "/srv/project".into(),
+                },
+            };
+        }
+        document.workspaces[0].active_block_id = "git-remote".into();
+        repository
+            .save(&document)
+            .expect("save remote Git workspace");
+        assert_eq!(repository.load(), Ok(Some(document)));
+        let json = fs::read_to_string(path).expect("workspace json");
+        assert!(json.contains("\"type\": \"remote\""));
+        assert!(json.contains("\"profileId\": \"profile-1\""));
+        assert!(json.contains("\"path\": \"/srv/project\""));
+        for forbidden in [
+            "sessionId",
+            "snapshot",
+            "stdin",
+            "command",
+            "password",
+            "privateKeyData",
+        ] {
+            assert!(!json.contains(forbidden), "persisted {forbidden}");
+        }
+    }
+
+    #[test]
+    fn migrates_v8_git_repository_path_to_v9_target_without_overwriting_until_save() {
+        let directory = tempdir().expect("temporary directory");
+        let path = directory.path().join("workspaces.json");
+        let fixture = br#"{
+  "schemaVersion": 8,
+  "activeWorkspaceId": "workspace-1",
+  "recentProfileIds": [],
+  "workspaces": [{
+    "id": "workspace-1",
+    "name": "Workspace",
+    "activeBlockId": "terminal-1",
+    "layout": {
+      "type": "split", "id": "split-1", "direction": "horizontal", "ratio": 0.5,
+      "first": { "type": "terminal", "blockId": "terminal-1", "profileId": null, "restoreDirectory": null },
+      "second": { "type": "git", "blockId": "git-1", "repositoryPath": "D:/work/project" }
+    }
+  }]
+}"#;
+        fs::write(&path, fixture).expect("v8 fixture");
+        let repository = JsonWorkspaceRepository::new(path.clone());
+        let document = repository.load().expect("load migrated").expect("document");
+        let LayoutNode::Split { second, .. } = &document.workspaces[0].layout else {
+            panic!("split")
+        };
+        assert_eq!(
+            second.as_ref(),
+            &LayoutNode::Git {
+                block_id: "git-1".into(),
+                target: crate::domain::workspace::GitTarget::Local {
+                    path: "D:/work/project".into()
+                },
+            }
+        );
+        assert_eq!(fs::read(&path).expect("preserved"), fixture);
+        repository.save(&document).expect("save v9");
+        let saved = fs::read_to_string(path).expect("saved");
+        assert!(saved.contains("\"schemaVersion\": 9"));
+        assert!(!saved.contains("repositoryPath"));
     }
 
     #[test]

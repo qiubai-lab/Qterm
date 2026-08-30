@@ -1,0 +1,753 @@
+use std::{
+    ffi::{OsStr, OsString},
+    io::Read,
+    path::{Path, PathBuf},
+    process::{Command, Stdio},
+    thread,
+    time::{Duration, Instant},
+};
+
+use crate::{
+    domain::git::{GitBranch, GitChange, GitCommit, GitError, GitHead, GitSnapshot},
+    ports::git_executor::GitExecutor,
+};
+
+const READ_TIMEOUT: Duration = Duration::from_secs(10);
+const MUTATION_TIMEOUT: Duration = Duration::from_secs(60);
+const OUTPUT_LIMIT: usize = 8 * 1024 * 1024;
+
+pub struct SystemGitExecutor {
+    executable: Option<PathBuf>,
+}
+
+struct ProcessOutput {
+    stdout: Vec<u8>,
+}
+
+impl SystemGitExecutor {
+    pub fn discover() -> Self {
+        let executable = candidates().into_iter().find(|candidate| {
+            run_process(candidate, [OsStr::new("--version")], Duration::from_secs(2)).is_ok()
+        });
+        Self { executable }
+    }
+
+    #[cfg(test)]
+    fn with_executable(executable: PathBuf) -> Self {
+        Self {
+            executable: Some(executable),
+        }
+    }
+
+    fn git<I, S>(&self, args: I, timeout: Duration) -> Result<ProcessOutput, GitError>
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<OsStr>,
+    {
+        let executable = self.executable.as_ref().ok_or(GitError::Missing)?;
+        run_process(executable, args, timeout)
+    }
+
+    fn repository_root(&self, path: &Path) -> Result<PathBuf, GitError> {
+        if !path.is_dir() {
+            return Err(GitError::InvalidPath);
+        }
+        let output = self.git(
+            [
+                OsString::from("-C"),
+                path.as_os_str().to_owned(),
+                OsString::from("rev-parse"),
+                OsString::from("--show-toplevel"),
+            ],
+            READ_TIMEOUT,
+        )?;
+        let root = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+        if root.is_empty() {
+            return Err(GitError::NotRepository);
+        }
+        Ok(PathBuf::from(root))
+    }
+
+    fn mutate<I, S>(&self, repository: &Path, args: I) -> Result<GitSnapshot, GitError>
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<OsStr>,
+    {
+        let mut command = vec![OsString::from("-C"), repository.as_os_str().to_owned()];
+        command.extend(args.into_iter().map(|value| value.as_ref().to_owned()));
+        self.git(command, MUTATION_TIMEOUT)?;
+        self.snapshot(repository)
+    }
+
+    fn has_head(&self, repository: &Path) -> bool {
+        self.git(
+            [
+                OsString::from("-C"),
+                repository.as_os_str().to_owned(),
+                OsString::from("rev-parse"),
+                OsString::from("--verify"),
+                OsString::from("HEAD"),
+            ],
+            READ_TIMEOUT,
+        )
+        .is_ok()
+    }
+}
+
+impl GitExecutor for SystemGitExecutor {
+    fn available(&self) -> bool {
+        self.executable.is_some()
+    }
+
+    fn snapshot(&self, path: &Path) -> Result<GitSnapshot, GitError> {
+        let repository = self.repository_root(path)?;
+        let status = self.git(
+            [
+                OsString::from("-C"),
+                repository.as_os_str().to_owned(),
+                OsString::from("status"),
+                OsString::from("--porcelain=v2"),
+                OsString::from("-z"),
+                OsString::from("--branch"),
+                OsString::from("--untracked-files=all"),
+            ],
+            READ_TIMEOUT,
+        )?;
+        let branches = self.git(
+            [
+                OsString::from("-C"),
+                repository.as_os_str().to_owned(),
+                OsString::from("for-each-ref"),
+                OsString::from(
+                    "--format=%(refname:short)%00%(objectname)%00%(HEAD)%00%(upstream:short)",
+                ),
+                OsString::from("refs/heads/"),
+            ],
+            READ_TIMEOUT,
+        )?;
+        let log = self.git(
+            [
+                OsString::from("-C"),
+                repository.as_os_str().to_owned(),
+                OsString::from("log"),
+                OsString::from("--all"),
+                OsString::from("--topo-order"),
+                OsString::from("--decorate=short"),
+                OsString::from("-n"),
+                OsString::from("100"),
+                OsString::from("--format=%H%x1f%P%x1f%D%x1f%s%x1f%an%x1f%at%x1e"),
+            ],
+            READ_TIMEOUT,
+        );
+        let (head, changes) = parse_status(&status.stdout)?;
+        let commits = match log {
+            Ok(output) => parse_commits(&output.stdout),
+            Err(GitError::CommandFailed(_)) if head.unborn => Vec::new(),
+            Err(error) => return Err(error),
+        };
+        let repository_path = repository.to_string_lossy().into_owned();
+        let repository_name = repository
+            .file_name()
+            .and_then(OsStr::to_str)
+            .unwrap_or(&repository_path)
+            .to_owned();
+        Ok(GitSnapshot {
+            repository_path,
+            repository_name,
+            head,
+            changes,
+            branches: parse_branches(&branches.stdout),
+            commits,
+        })
+    }
+
+    fn initialize(&self, path: &Path) -> Result<GitSnapshot, GitError> {
+        if !path.is_dir() {
+            return Err(GitError::InvalidPath);
+        }
+        self.git(
+            [
+                OsString::from("-C"),
+                path.as_os_str().to_owned(),
+                OsString::from("init"),
+            ],
+            MUTATION_TIMEOUT,
+        )?;
+        self.snapshot(path)
+    }
+
+    fn stage(&self, repository: &Path, paths: &[String]) -> Result<GitSnapshot, GitError> {
+        let mut args = vec![OsString::from("add"), OsString::from("--")];
+        args.extend(paths.iter().map(OsString::from));
+        self.mutate(repository, args)
+    }
+
+    fn stage_all(&self, repository: &Path) -> Result<GitSnapshot, GitError> {
+        self.mutate(repository, ["add", "-A", "--"])
+    }
+
+    fn unstage(&self, repository: &Path, paths: &[String]) -> Result<GitSnapshot, GitError> {
+        let mut args = if self.has_head(repository) {
+            vec![
+                OsString::from("reset"),
+                OsString::from("-q"),
+                OsString::from("HEAD"),
+                OsString::from("--"),
+            ]
+        } else {
+            vec![
+                OsString::from("rm"),
+                OsString::from("--cached"),
+                OsString::from("-q"),
+                OsString::from("--"),
+            ]
+        };
+        args.extend(paths.iter().map(OsString::from));
+        self.mutate(repository, args)
+    }
+
+    fn unstage_all(&self, repository: &Path) -> Result<GitSnapshot, GitError> {
+        if self.has_head(repository) {
+            self.mutate(repository, ["reset", "-q", "HEAD", "--"])
+        } else {
+            self.mutate(repository, ["rm", "--cached", "-r", "-q", "--", "."])
+        }
+    }
+
+    fn commit(&self, repository: &Path, message: &str) -> Result<GitSnapshot, GitError> {
+        self.mutate(
+            repository,
+            [OsStr::new("commit"), OsStr::new("-m"), OsStr::new(message)],
+        )
+    }
+
+    fn create_branch(&self, repository: &Path, name: &str) -> Result<GitSnapshot, GitError> {
+        self.mutate(
+            repository,
+            [OsStr::new("switch"), OsStr::new("-c"), OsStr::new(name)],
+        )
+    }
+
+    fn switch_branch(&self, repository: &Path, name: &str) -> Result<GitSnapshot, GitError> {
+        self.mutate(repository, [OsStr::new("switch"), OsStr::new(name)])
+    }
+}
+
+fn candidates() -> Vec<PathBuf> {
+    let mut values = Vec::new();
+    if let Some(configured) = std::env::var_os("QTERM_GIT_PATH") {
+        values.push(PathBuf::from(configured));
+    }
+    values.push(PathBuf::from(if cfg!(windows) { "git.exe" } else { "git" }));
+    if cfg!(windows) {
+        for variable in [
+            "ProgramW6432",
+            "ProgramFiles",
+            "ProgramFiles(x86)",
+            "LocalAppData",
+        ] {
+            if let Some(root) = std::env::var_os(variable) {
+                let root = PathBuf::from(root);
+                values.push(if variable == "LocalAppData" {
+                    root.join("Programs/Git/cmd/git.exe")
+                } else {
+                    root.join("Git/cmd/git.exe")
+                });
+            }
+        }
+    } else {
+        values.extend(
+            [
+                "/usr/bin/git",
+                "/usr/local/bin/git",
+                "/opt/homebrew/bin/git",
+            ]
+            .map(PathBuf::from),
+        );
+    }
+    values
+}
+
+fn run_process<I, S>(
+    executable: &Path,
+    args: I,
+    timeout: Duration,
+) -> Result<ProcessOutput, GitError>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<OsStr>,
+{
+    let mut child = Command::new(executable)
+        .args(args)
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .env("GIT_EDITOR", "true")
+        .env("GIT_PAGER", "cat")
+        .env("LC_ALL", "C")
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|error| {
+            if error.kind() == std::io::ErrorKind::NotFound {
+                GitError::Missing
+            } else {
+                GitError::Io
+            }
+        })?;
+    let stdout = child.stdout.take().ok_or(GitError::Io)?;
+    let stderr = child.stderr.take().ok_or(GitError::Io)?;
+    let stdout_reader = thread::spawn(move || read_bounded(stdout));
+    let stderr_reader = thread::spawn(move || read_bounded(stderr));
+    let deadline = Instant::now() + timeout;
+    let status = loop {
+        match child.try_wait().map_err(|_| GitError::Io)? {
+            Some(status) => break status,
+            None if Instant::now() >= deadline => {
+                let _ = child.kill();
+                let _ = child.wait();
+                let _ = stdout_reader.join();
+                let _ = stderr_reader.join();
+                return Err(GitError::Timeout);
+            }
+            None => thread::sleep(Duration::from_millis(10)),
+        }
+    };
+    let stdout = stdout_reader.join().map_err(|_| GitError::Io)??;
+    let stderr = stderr_reader.join().map_err(|_| GitError::Io)??;
+    if !status.success() {
+        return Err(classify_failure(&stderr));
+    }
+    Ok(ProcessOutput { stdout })
+}
+
+fn read_bounded(mut reader: impl Read) -> Result<Vec<u8>, GitError> {
+    let mut result = Vec::new();
+    let mut buffer = [0_u8; 8192];
+    let mut exceeded = false;
+    loop {
+        let read = reader.read(&mut buffer).map_err(|_| GitError::Io)?;
+        if read == 0 {
+            break;
+        }
+        if result.len() + read <= OUTPUT_LIMIT {
+            result.extend_from_slice(&buffer[..read]);
+        } else {
+            exceeded = true;
+        }
+    }
+    if exceeded {
+        Err(GitError::OutputTooLarge)
+    } else {
+        Ok(result)
+    }
+}
+
+pub(crate) fn classify_failure(stderr: &[u8]) -> GitError {
+    let detail = String::from_utf8_lossy(stderr)
+        .trim()
+        .chars()
+        .take(1200)
+        .collect::<String>();
+    let lower = detail.to_ascii_lowercase();
+    if lower.contains("not a git repository") {
+        GitError::NotRepository
+    } else if lower.contains("dubious ownership") || lower.contains("safe.directory") {
+        GitError::Conflict("仓库所有权未被 Git 信任，请先在终端配置 safe.directory".into())
+    } else if lower.contains("would be overwritten")
+        || lower.contains("resolve your current index first")
+    {
+        GitError::Conflict(detail)
+    } else {
+        GitError::CommandFailed(detail)
+    }
+}
+
+pub(crate) fn parse_status(bytes: &[u8]) -> Result<(GitHead, Vec<GitChange>), GitError> {
+    let mut head = GitHead {
+        name: None,
+        oid: None,
+        detached: false,
+        unborn: false,
+        upstream: None,
+        ahead: 0,
+        behind: 0,
+    };
+    let mut changes = Vec::new();
+    let chunks = bytes.split(|byte| *byte == 0).collect::<Vec<_>>();
+    let mut index = 0;
+    while index < chunks.len() {
+        let line = String::from_utf8_lossy(chunks[index]);
+        if !line.is_empty() {
+            if line.starts_with("# ") {
+                parse_status_header(&mut head, &line);
+            } else if let Some(path) = line.strip_prefix("? ") {
+                changes.push(GitChange {
+                    path: path.into(),
+                    original_path: None,
+                    status: "U".into(),
+                    staged: false,
+                    conflict: false,
+                });
+            } else if line.starts_with("1 ") || line.starts_with("2 ") {
+                let rename = line.starts_with("2 ");
+                let fields = line
+                    .splitn(if rename { 10 } else { 9 }, ' ')
+                    .collect::<Vec<_>>();
+                let xy = fields.get(1).copied().unwrap_or("..");
+                let path = fields.last().copied().unwrap_or("").to_owned();
+                let original_path = if rename {
+                    chunks
+                        .get(index + 1)
+                        .map(|value| String::from_utf8_lossy(value).into_owned())
+                } else {
+                    None
+                };
+                push_xy_changes(&mut changes, path, original_path, xy);
+                if rename {
+                    index += 1;
+                }
+            } else if line.starts_with("u ") {
+                let fields = line.splitn(11, ' ').collect::<Vec<_>>();
+                let path = fields.last().copied().unwrap_or("").to_owned();
+                changes.push(GitChange {
+                    path,
+                    original_path: None,
+                    status: "!".into(),
+                    staged: false,
+                    conflict: true,
+                });
+            }
+        }
+        index += 1;
+    }
+    Ok((head, changes))
+}
+
+fn parse_status_header(head: &mut GitHead, line: &str) {
+    if let Some(value) = line.strip_prefix("# branch.oid ") {
+        if value == "(initial)" {
+            head.unborn = true;
+        } else {
+            head.oid = Some(value.into());
+        }
+    } else if let Some(value) = line.strip_prefix("# branch.head ") {
+        if value == "(detached)" {
+            head.detached = true;
+        } else {
+            head.name = Some(value.into());
+        }
+    } else if let Some(value) = line.strip_prefix("# branch.upstream ") {
+        head.upstream = Some(value.into());
+    } else if let Some(value) = line.strip_prefix("# branch.ab ") {
+        for part in value.split_whitespace() {
+            if let Some(value) = part.strip_prefix('+') {
+                head.ahead = value.parse().unwrap_or(0);
+            }
+            if let Some(value) = part.strip_prefix('-') {
+                head.behind = value.parse().unwrap_or(0);
+            }
+        }
+    }
+}
+
+fn push_xy_changes(
+    changes: &mut Vec<GitChange>,
+    path: String,
+    original_path: Option<String>,
+    xy: &str,
+) {
+    let mut values = xy.chars();
+    let staged = values.next().unwrap_or('.');
+    let unstaged = values.next().unwrap_or('.');
+    let conflict = matches!(
+        (staged, unstaged),
+        ('U', _) | (_, 'U') | ('A', 'A') | ('D', 'D')
+    );
+    if conflict {
+        changes.push(GitChange {
+            path,
+            original_path,
+            status: "!".into(),
+            staged: false,
+            conflict: true,
+        });
+        return;
+    }
+    if staged != '.' {
+        changes.push(GitChange {
+            path: path.clone(),
+            original_path: original_path.clone(),
+            status: staged.to_string(),
+            staged: true,
+            conflict: false,
+        });
+    }
+    if unstaged != '.' {
+        changes.push(GitChange {
+            path,
+            original_path,
+            status: unstaged.to_string(),
+            staged: false,
+            conflict: false,
+        });
+    }
+}
+
+pub(crate) fn parse_branches(bytes: &[u8]) -> Vec<GitBranch> {
+    String::from_utf8_lossy(bytes)
+        .lines()
+        .filter_map(|line| {
+            let fields = line.split('\0').collect::<Vec<_>>();
+            let name = fields.first()?.trim();
+            if name.is_empty() {
+                return None;
+            }
+            Some(GitBranch {
+                name: name.into(),
+                oid: fields.get(1).unwrap_or(&"").to_string(),
+                current: fields.get(2).is_some_and(|value| value.trim() == "*"),
+                upstream: fields
+                    .get(3)
+                    .filter(|value| !value.trim().is_empty())
+                    .map(|value| value.trim().into()),
+            })
+        })
+        .collect()
+}
+
+pub(crate) fn parse_commits(bytes: &[u8]) -> Vec<GitCommit> {
+    String::from_utf8_lossy(bytes)
+        .split('\u{1e}')
+        .filter_map(|record| {
+            let fields = record
+                .trim_matches('\n')
+                .split('\u{1f}')
+                .collect::<Vec<_>>();
+            if fields.len() < 6 || fields[0].is_empty() {
+                return None;
+            }
+            Some(GitCommit {
+                oid: fields[0].into(),
+                parents: fields[1].split_whitespace().map(str::to_owned).collect(),
+                decorations: fields[2]
+                    .split(',')
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                    .map(str::to_owned)
+                    .collect(),
+                subject: fields[3].into(),
+                author: fields[4].into(),
+                timestamp: fields[5].parse().unwrap_or(0),
+            })
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        OUTPUT_LIMIT, SystemGitExecutor, classify_failure, parse_branches, parse_commits,
+        parse_status, read_bounded, run_process,
+    };
+    use crate::domain::git::GitError;
+    use crate::ports::git_executor::GitExecutor;
+    use std::{fs, io::Cursor, process::Command};
+    use tempfile::tempdir;
+
+    #[test]
+    fn parses_porcelain_v2_headers_and_dual_staged_worktree_changes() {
+        let fixture = b"# branch.oid abc\0# branch.head main\0# branch.upstream origin/main\0# branch.ab +2 -1\0\x31 MM N... 100644 100644 100644 a b file.txt\0? new.txt\0";
+        let (head, changes) = parse_status(fixture).expect("status");
+        assert_eq!(head.name.as_deref(), Some("main"));
+        assert_eq!((head.ahead, head.behind), (2, 1));
+        assert_eq!(changes.len(), 3);
+        assert!(
+            changes
+                .iter()
+                .any(|change| change.path == "file.txt" && change.staged)
+        );
+        assert!(
+            changes
+                .iter()
+                .any(|change| change.path == "file.txt" && !change.staged)
+        );
+    }
+
+    #[test]
+    fn parses_renames_conflicts_branches_and_merge_metadata() {
+        let fixture = b"# branch.oid abc\0# branch.head feature/test\0\x32 R. N... 100644 100644 100644 a b R100 renamed.txt\0old.txt\0u UU N... 100644 100644 100644 100644 a b c conflict.txt\0? -leading \xe4\xb8\xad\xe6\x96\x87.txt\0";
+        let (_, changes) = parse_status(fixture).expect("status");
+        assert!(changes.iter().any(|change| {
+            change.path == "renamed.txt"
+                && change.original_path.as_deref() == Some("old.txt")
+                && change.staged
+        }));
+        assert!(
+            changes
+                .iter()
+                .any(|change| change.path == "conflict.txt" && change.conflict)
+        );
+        assert!(
+            changes
+                .iter()
+                .any(|change| change.path == "-leading 中文.txt")
+        );
+
+        let branches = parse_branches(b"main\0abc\0*\0origin/main\nfeature/test\0def\0 \0\n");
+        assert_eq!(branches.len(), 2);
+        assert!(branches[0].current);
+        assert_eq!(branches[0].upstream.as_deref(), Some("origin/main"));
+
+        let commits = parse_commits(b"merge\x1fleft right\x1fHEAD -> main, tag: v1\x1fmerge subject\x1fQterm\x1f1700000000\x1e");
+        assert_eq!(commits[0].parents, ["left", "right"]);
+        assert_eq!(commits[0].decorations, ["HEAD -> main", "tag: v1"]);
+    }
+
+    #[test]
+    fn bounds_process_output_and_classifies_recoverable_failures() {
+        assert_eq!(
+            read_bounded(Cursor::new(vec![b'x'; OUTPUT_LIMIT + 1])),
+            Err(GitError::OutputTooLarge)
+        );
+        assert!(matches!(
+            classify_failure(b"fatal: detected dubious ownership; add safe.directory"),
+            GitError::Conflict(_)
+        ));
+        assert_eq!(
+            classify_failure(b"fatal: not a git repository"),
+            GitError::NotRepository
+        );
+    }
+
+    #[test]
+    fn timed_out_process_is_terminated() {
+        let result = if cfg!(windows) {
+            run_process(
+                std::path::Path::new("cmd.exe"),
+                ["/C", "ping -n 10 127.0.0.1 > nul"],
+                std::time::Duration::from_millis(50),
+            )
+        } else {
+            run_process(
+                std::path::Path::new("sh"),
+                ["-c", "sleep 5"],
+                std::time::Duration::from_millis(50),
+            )
+        };
+        assert!(matches!(result, Err(GitError::Timeout)));
+    }
+
+    #[test]
+    fn real_git_repository_supports_init_stage_commit_and_branch_snapshot() {
+        let git = which_git();
+        let executor = SystemGitExecutor::with_executable(git);
+        let directory = tempdir().expect("repo");
+        let first = executor.initialize(directory.path()).expect("init");
+        assert!(first.head.unborn);
+        fs::write(directory.path().join("hello world.txt"), b"hello").expect("fixture");
+        let staged = executor.stage_all(directory.path()).expect("stage");
+        assert!(staged.changes.iter().any(|change| change.staged));
+        let unstaged = executor
+            .unstage(directory.path(), &["hello world.txt".into()])
+            .expect("unstage unborn file");
+        assert!(unstaged.changes.iter().all(|change| !change.staged));
+        executor
+            .stage(directory.path(), &["hello world.txt".into()])
+            .expect("stage one path");
+        Command::new(executor.executable.as_ref().expect("git"))
+            .args([
+                "-C",
+                directory.path().to_str().expect("path"),
+                "config",
+                "user.name",
+                "Qterm Test",
+            ])
+            .status()
+            .expect("name");
+        Command::new(executor.executable.as_ref().expect("git"))
+            .args([
+                "-C",
+                directory.path().to_str().expect("path"),
+                "config",
+                "user.email",
+                "qterm@example.invalid",
+            ])
+            .status()
+            .expect("email");
+        let committed = executor
+            .commit(directory.path(), "feat: initial")
+            .expect("commit");
+        assert_eq!(committed.commits.len(), 1);
+        let base_branch = committed.head.name.clone().expect("base branch");
+        let branched = executor
+            .create_branch(directory.path(), "feature/test")
+            .expect("branch");
+        assert_eq!(branched.head.name.as_deref(), Some("feature/test"));
+        fs::write(directory.path().join("hello world.txt"), b"feature").expect("branch change");
+        executor.stage_all(directory.path()).expect("stage branch");
+        executor
+            .commit(directory.path(), "feat: branch change")
+            .expect("branch commit");
+        executor
+            .switch_branch(directory.path(), &base_branch)
+            .expect("switch base");
+        fs::write(directory.path().join("hello world.txt"), b"local").expect("local change");
+        assert!(matches!(
+            executor.switch_branch(directory.path(), "feature/test"),
+            Err(GitError::Conflict(_))
+        ));
+        let unchanged = executor
+            .snapshot(directory.path())
+            .expect("unchanged branch");
+        assert_eq!(unchanged.head.name.as_deref(), Some(base_branch.as_str()));
+        assert!(!unchanged.changes.is_empty());
+
+        fs::write(directory.path().join(".git/index.lock"), b"locked").expect("index lock");
+        assert!(matches!(
+            executor.stage_all(directory.path()),
+            Err(GitError::CommandFailed(_))
+        ));
+        fs::remove_file(directory.path().join(".git/index.lock")).expect("remove lock");
+    }
+
+    #[test]
+    fn failed_commit_does_not_create_history() {
+        let executor = SystemGitExecutor::with_executable(which_git());
+        let directory = tempdir().expect("repo");
+        executor.initialize(directory.path()).expect("init");
+        fs::write(directory.path().join("staged.txt"), b"staged").expect("fixture");
+        executor.stage_all(directory.path()).expect("stage");
+        for key in ["user.name", "user.email"] {
+            Command::new(executor.executable.as_ref().expect("git"))
+                .args([
+                    "-C",
+                    directory.path().to_str().expect("path"),
+                    "config",
+                    key,
+                    "",
+                ])
+                .status()
+                .expect("empty identity");
+        }
+        assert!(matches!(
+            executor.commit(directory.path(), "feat: should fail"),
+            Err(GitError::CommandFailed(_))
+        ));
+        let snapshot = executor.snapshot(directory.path()).expect("snapshot");
+        assert!(snapshot.head.unborn);
+        assert!(snapshot.changes.iter().any(|change| change.staged));
+    }
+
+    fn which_git() -> std::path::PathBuf {
+        let output = Command::new(if cfg!(windows) { "where" } else { "which" })
+            .arg("git")
+            .output()
+            .expect("find git");
+        std::path::PathBuf::from(
+            String::from_utf8_lossy(&output.stdout)
+                .lines()
+                .next()
+                .expect("git path"),
+        )
+    }
+}
