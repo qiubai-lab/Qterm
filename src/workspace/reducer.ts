@@ -49,7 +49,10 @@ export function workspaceReducer(state: WorkspaceDocument, action: WorkspaceActi
       return { ...state, activeWorkspaceId, workspaces };
     }
     case "reorderWorkspace": return reorderWorkspace(state, action.workspaceId, action.targetWorkspaceId);
-    case "selectBlock": return mapWorkspace(state, action.workspaceId, (workspace) => blockIds(workspace.layout).includes(action.blockId) ? { ...workspace, activeBlockId: action.blockId } : workspace);
+    case "selectBlock": return mapWorkspace(state, action.workspaceId, (workspace) => {
+      if (!blockIds(workspace.layout).includes(action.blockId) || workspace.activeBlockId === action.blockId) return workspace;
+      return { ...workspace, activeBlockId: action.blockId };
+    });
     case "splitBlock": return mapWorkspace(state, action.workspaceId, (workspace) => {
       const anchor = findLeaf(workspace.layout, action.blockId);
       if (!anchor) return workspace;

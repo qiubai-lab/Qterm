@@ -628,10 +628,10 @@ function GitBlock(props: BlockRenderProps & { blockId: string; target: GitTarget
     props.onRequestAuthConnection("git", props.blockId, nextProfile);
   }
 
-  async function retargetGit(target: GitTarget) {
+  const retargetGit = useCallback(async (target: GitTarget) => {
     if (target.type === "remote") requestedProfileRef.current = null;
     await selectGitTarget(props.workspace.id, props.blockId, target);
-  }
+  }, [props.blockId, props.workspace.id, selectGitTarget]);
 
   useEffect(() => {
     if (props.target.type !== "remote" || !profile || status !== "closed" || requestedProfileRef.current === profile.id) return;
@@ -657,7 +657,7 @@ function GitBlock(props: BlockRenderProps & { blockId: string; target: GitTarget
       <label htmlFor={`git-remote-path-${props.blockId}`}><RequiredFieldLabel>远程工作目录</RequiredFieldLabel></label>
       <input id={`git-remote-path-${props.blockId}`} required autoFocus value={pendingRemote.path} maxLength={4096} placeholder="/srv/project" onChange={(event) => setPendingRemote({ ...pendingRemote, path: event.target.value })}/>
       <div><button type="button" className="secondary" onClick={() => setPendingRemote(null)}>取消</button><button type="submit" disabled={!pendingRemote.path.trim()}>连接并打开</button></div>
-    </form> : <GitPane blockId={props.blockId} target={props.target} runtime={runtime} visible={props.visible} onTargetChange={(target) => void retargetGit(target)}/>}
+    </form> : <GitPane blockId={props.blockId} target={props.target} runtime={runtime} visible={props.visible} onTargetChange={retargetGit}/>}
     {runtime?.notice && <BlockNotice message={runtime.notice}/>}
     {drop && <div className={`drop-zone drop-${drop}`} />}
   </section>;

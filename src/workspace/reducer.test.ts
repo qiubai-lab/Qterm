@@ -24,6 +24,29 @@ describe("workspace reducer", () => {
     expect(workspaceReducer(initial, { type: "closeBlock", workspaceId: workspace.id, blockId: workspace.activeBlockId })).toEqual(initial);
   });
 
+  it("does not recreate a workspace when selecting its already active block", () => {
+    const initial = createWorkspaceDocument();
+    const workspace = initial.workspaces[0];
+    expect(workspaceReducer(initial, { type: "selectBlock", workspaceId: workspace.id, blockId: workspace.activeBlockId })).toBe(initial);
+
+    const split = workspaceReducer(initial, {
+      type: "splitBlock",
+      workspaceId: workspace.id,
+      blockId: workspace.activeBlockId,
+      direction: "horizontal",
+      newBlockId: "block-child",
+      splitId: "split-child",
+    });
+    const splitWorkspace = split.workspaces[0];
+    expect(workspaceReducer(split, { type: "selectBlock", workspaceId: workspace.id, blockId: splitWorkspace.activeBlockId })).toBe(split);
+
+    const previousBlockId = blockIds(splitWorkspace.layout).find((blockId) => blockId !== splitWorkspace.activeBlockId);
+    expect(previousBlockId).toBeDefined();
+    const changed = workspaceReducer(split, { type: "selectBlock", workspaceId: workspace.id, blockId: previousBlockId! });
+    expect(changed).not.toBe(split);
+    expect(changed.workspaces[0].activeBlockId).toBe(previousBlockId);
+  });
+
   it("creates and reorders isolated workspace identities", () => {
     const initial = createWorkspaceDocument();
     const firstId = initial.workspaces[0].id;
