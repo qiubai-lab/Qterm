@@ -362,6 +362,48 @@ async fn git_actions_require_a_connected_git_purpose_session_owned_by_the_profil
         request.await.expect("request"),
         Err(crate::domain::git::GitError::Missing)
     );
+
+    assert_eq!(
+        manager
+            .commit_files(
+                "git-1",
+                "other-profile",
+                "/srv/project".into(),
+                "0123456789abcdef0123456789abcdef01234567".into(),
+            )
+            .await,
+        Err(crate::domain::git::GitError::SessionUnavailable)
+    );
+    let files_request = {
+        let manager = Arc::clone(&manager);
+        tokio::spawn(async move {
+            manager
+                .commit_files(
+                    "git-1",
+                    "profile-1",
+                    "/srv/project".into(),
+                    "0123456789abcdef0123456789abcdef01234567".into(),
+                )
+                .await
+        })
+    };
+    let Some(SessionControl::RunGitCommitFiles {
+        repository,
+        oid,
+        reply,
+    }) = control_receiver.recv().await
+    else {
+        panic!("Git commit files control")
+    };
+    assert_eq!(repository, "/srv/project");
+    assert_eq!(oid, "0123456789abcdef0123456789abcdef01234567");
+    let expected = vec![crate::domain::git::GitCommitFile {
+        path: "src/main.rs".into(),
+        original_path: None,
+        status: "M".into(),
+    }];
+    let _ = reply.send(Ok(expected.clone()));
+    assert_eq!(files_request.await.expect("request"), Ok(expected));
 }
 
 #[test]

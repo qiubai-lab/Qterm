@@ -5,7 +5,7 @@ import { GitPane } from "./GitPane";
 import type { GitSnapshot } from "../lib/tauri/git";
 
 const api = vi.hoisted(() => ({
-  available: vi.fn(), select: vi.fn(), snapshot: vi.fn(), initialize: vi.fn(), stage: vi.fn(), stageAll: vi.fn(), unstage: vi.fn(), unstageAll: vi.fn(), commit: vi.fn(), createBranch: vi.fn(), switchBranch: vi.fn(), remote: vi.fn(),
+  available: vi.fn(), select: vi.fn(), snapshot: vi.fn(), initialize: vi.fn(), stage: vi.fn(), stageAll: vi.fn(), unstage: vi.fn(), unstageAll: vi.fn(), commit: vi.fn(), commitFiles: vi.fn(), createBranch: vi.fn(), switchBranch: vi.fn(), remote: vi.fn(), remoteCommitFiles: vi.fn(),
 }));
 
 vi.mock("../lib/tauri/git", () => ({
@@ -18,9 +18,11 @@ vi.mock("../lib/tauri/git", () => ({
   unstageGitPaths: api.unstage,
   unstageAllGitChanges: api.unstageAll,
   commitGitChanges: api.commit,
+  loadGitCommitFiles: api.commitFiles,
   createGitBranch: api.createBranch,
   switchGitBranch: api.switchBranch,
   executeRemoteGit: api.remote,
+  loadRemoteGitCommitFiles: api.remoteCommitFiles,
   gitError: (error: unknown) => error as { code: string; message: string },
 }));
 
@@ -44,6 +46,11 @@ describe("GitPane", () => {
     api.snapshot.mockResolvedValue(snapshot);
     api.createBranch.mockResolvedValue(snapshot);
     api.switchBranch.mockResolvedValue(snapshot);
+    api.commitFiles.mockResolvedValue([
+      { path: "src/new-file.ts", originalPath: null, status: "A" },
+      { path: "src/renamed.ts", originalPath: "src/old.ts", status: "R100" },
+    ]);
+    api.remoteCommitFiles.mockResolvedValue([]);
   });
 
   it("shows a recoverable unbound state and selects a local directory", async () => {
@@ -61,6 +68,81 @@ describe("GitPane", () => {
     expect(screen.getByText("src/new.ts")).toBeInTheDocument();
     expect(screen.getByText("feat: initial")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /diff|比较|查看改动/i })).not.toBeInTheDocument();
+  });
+
+  it("renders a VS Code-style selectable commit graph with branch decorations", async () => {
+    api.snapshot.mockResolvedValueOnce({
+      ...snapshot,
+      commits: [
+        snapshot.commits[0],
+        { oid: "123456789abc", parents: [], decorations: ["origin/archive"], subject: "fix: older commit", author: "Koppa", timestamp: 1_690_000_000 },
+      ],
+    });
+    render(<GitPane blockId="git-1" target={{ type: "local", path: "D:/work/project" }} visible onTargetChange={vi.fn()}/>);
+    await screen.findByText("project");
+    fireEvent.click(screen.getByRole("button", { name: "图表" }));
+    const current = screen.getByRole("button", { name: /feat: initial/ });
+    const older = screen.getByRole("button", { name: /fix: older commit/ });
+    expect(current).toHaveAttribute("aria-pressed", "true");
+    expect(current.querySelector('[data-kind="head"]')).toHaveTextContent("main");
+    expect(current.querySelector('[data-kind="head"]')).not.toHaveTextContent("HEAD ->");
+    expect(older.querySelector('[data-kind="remote"]')).toHaveTextContent("origin/archive");
+
+    fireEvent.click(older);
+    expect(older).toHaveAttribute("aria-pressed", "true");
+    expect(current).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("loads commit files lazily, shows rename context, and reuses the cached result", async () => {
+    render(<GitPane blockId="git-1" target={{ type: "local", path: "D:/work/project" }} visible onTargetChange={vi.fn()}/>);
+    await screen.findByText("project");
+    fireEvent.click(screen.getByRole("button", { name: "图表" }));
+    const commit = screen.getByRole("button", { name: /feat: initial/ });
+    expect(api.commitFiles).not.toHaveBeenCalled();
+
+    fireEvent.click(commit);
+    const files = await screen.findByRole("list", { name: "feat: initial 的文件" });
+    expect(api.commitFiles).toHaveBeenCalledWith("D:/work/project", "abcdef012345");
+    expect(files).toHaveTextContent("new-file.ts");
+    expect(files).toHaveTextContent("src");
+    expect(files).toHaveTextContent("来自 src/old.ts");
+    expect(files.querySelector('[data-tone="added"]')).toHaveTextContent("A");
+    expect(files.querySelector('[data-tone="renamed"]')).toHaveTextContent("R");
+    expect(screen.queryByRole("button", { name: /diff|比较|查看改动/i })).not.toBeInTheDocument();
+
+    fireEvent.click(commit);
+    expect(screen.queryByRole("list", { name: "feat: initial 的文件" })).not.toBeInTheDocument();
+    fireEvent.click(commit);
+    expect(await screen.findByRole("list", { name: "feat: initial 的文件" })).toBeInTheDocument();
+    expect(api.commitFiles).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps commit-file cache entries isolated by repository", async () => {
+    const otherSnapshot = { ...snapshot, repositoryPath: "D:/work/other", repositoryName: "other" };
+    api.snapshot.mockResolvedValueOnce(snapshot).mockResolvedValueOnce(otherSnapshot);
+    const view = render(<GitPane blockId="git-1" target={{ type: "local", path: "D:/work/project" }} visible onTargetChange={vi.fn()}/>);
+    await screen.findByText("project");
+    fireEvent.click(screen.getByRole("button", { name: "图表" }));
+    fireEvent.click(screen.getByRole("button", { name: /feat: initial/ }));
+    await waitFor(() => expect(api.commitFiles).toHaveBeenCalledWith("D:/work/project", "abcdef012345"));
+
+    view.rerender(<GitPane blockId="git-1" target={{ type: "local", path: "D:/work/other" }} visible onTargetChange={vi.fn()}/>);
+    await screen.findByText("other");
+    fireEvent.click(screen.getByRole("button", { name: /feat: initial/ }));
+    await waitFor(() => expect(api.commitFiles).toHaveBeenCalledWith("D:/work/other", "abcdef012345"));
+    expect(api.commitFiles).toHaveBeenCalledTimes(2);
+  });
+
+  it("offers an inline retry and empty state when commit files cannot be loaded", async () => {
+    api.commitFiles.mockRejectedValueOnce({ code: "gitCommandFailed", message: "读取提交失败" }).mockResolvedValueOnce([]);
+    render(<GitPane blockId="git-1" target={{ type: "local", path: "D:/work/project" }} visible onTargetChange={vi.fn()}/>);
+    await screen.findByText("project");
+    fireEvent.click(screen.getByRole("button", { name: "图表" }));
+    fireEvent.click(screen.getByRole("button", { name: /feat: initial/ }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("读取提交失败");
+    fireEvent.click(screen.getByRole("button", { name: "重试" }));
+    expect(await screen.findByText("该提交没有可显示的文件变更")).toBeInTheDocument();
+    expect(api.commitFiles).toHaveBeenCalledTimes(2);
   });
 
   it("does not refresh the snapshot when only the target-change callback changes", async () => {
@@ -148,7 +230,7 @@ describe("GitPane", () => {
     fireEvent.click(branchTrigger);
     const branchDialog = screen.getByRole("dialog", { name: "切换分支" });
     expect(branchDialog.parentElement).toBe(document.body);
-    expect(screen.getByRole("searchbox", { name: "筛选分支" })).toHaveAttribute("placeholder", "选择要签出的分支或标记");
+    expect(screen.getByRole("searchbox", { name: "筛选分支" })).toHaveAttribute("placeholder", "筛选要签出的分支");
     expect(screen.getByRole("option", { name: /main/ })).toHaveAttribute("aria-selected", "true");
     fireEvent.change(screen.getByRole("searchbox", { name: "筛选分支" }), { target: { value: "feature" } });
     expect(screen.queryByRole("option", { name: /main/ })).not.toBeInTheDocument();
@@ -260,6 +342,9 @@ describe("GitPane", () => {
     await waitFor(() => expect(api.remote).toHaveBeenCalledWith("git-session", "profile-1", { type: "snapshot", path: "/srv/project" }));
     fireEvent.click(await screen.findByRole("button", { name: "暂存 src/new.ts" }));
     await waitFor(() => expect(api.remote).toHaveBeenCalledWith("git-session", "profile-1", { type: "stage", repository: "/srv/project", paths: ["src/new.ts"] }));
+    fireEvent.click(screen.getByRole("button", { name: "图表" }));
+    fireEvent.click(screen.getByRole("button", { name: /feat: initial/ }));
+    await waitFor(() => expect(api.remoteCommitFiles).toHaveBeenCalledWith("git-session", "profile-1", "/srv/project", "abcdef012345"));
     expect(api.snapshot).not.toHaveBeenCalled();
   });
 });

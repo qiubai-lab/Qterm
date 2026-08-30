@@ -8,7 +8,7 @@ use std::{
 };
 
 use crate::{
-    domain::git::{GitBranch, GitChange, GitCommit, GitError, GitHead, GitSnapshot},
+    domain::git::{GitBranch, GitChange, GitCommit, GitCommitFile, GitError, GitHead, GitSnapshot},
     ports::git_executor::GitExecutor,
 };
 
@@ -219,6 +219,27 @@ impl GitExecutor for SystemGitExecutor {
             repository,
             [OsStr::new("commit"), OsStr::new("-m"), OsStr::new(message)],
         )
+    }
+
+    fn commit_files(&self, repository: &Path, oid: &str) -> Result<Vec<GitCommitFile>, GitError> {
+        let output = self.git(
+            [
+                OsString::from("-C"),
+                repository.as_os_str().to_owned(),
+                OsString::from("diff-tree"),
+                OsString::from("--root"),
+                OsString::from("--first-parent"),
+                OsString::from("--no-commit-id"),
+                OsString::from("--name-status"),
+                OsString::from("-r"),
+                OsString::from("-z"),
+                OsString::from("-M"),
+                OsString::from("-C"),
+                OsString::from(oid),
+            ],
+            READ_TIMEOUT,
+        )?;
+        Ok(parse_commit_files(&output.stdout))
     }
 
     fn create_branch(&self, repository: &Path, name: &str) -> Result<GitSnapshot, GitError> {
@@ -543,11 +564,53 @@ pub(crate) fn parse_commits(bytes: &[u8]) -> Vec<GitCommit> {
         .collect()
 }
 
+pub(crate) fn parse_commit_files(bytes: &[u8]) -> Vec<GitCommitFile> {
+    let fields = bytes
+        .split(|byte| *byte == 0)
+        .filter(|field| !field.is_empty())
+        .collect::<Vec<_>>();
+    let mut files = Vec::new();
+    let mut index = 0;
+    while index < fields.len() {
+        let status = String::from_utf8_lossy(fields[index])
+            .trim_matches(['\r', '\n'])
+            .to_owned();
+        index += 1;
+        if status.is_empty() {
+            continue;
+        }
+        let renamed_or_copied = matches!(status.as_bytes().first(), Some(b'R' | b'C'));
+        let original_path = if renamed_or_copied {
+            let Some(field) = fields.get(index) else {
+                break;
+            };
+            index += 1;
+            Some(String::from_utf8_lossy(field).into_owned())
+        } else {
+            None
+        };
+        let Some(field) = fields.get(index) else {
+            break;
+        };
+        index += 1;
+        let path = String::from_utf8_lossy(field).into_owned();
+        if path.is_empty() {
+            continue;
+        }
+        files.push(GitCommitFile {
+            path,
+            original_path,
+            status,
+        });
+    }
+    files
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        OUTPUT_LIMIT, SystemGitExecutor, classify_failure, parse_branches, parse_commits,
-        parse_status, read_bounded, run_process,
+        OUTPUT_LIMIT, SystemGitExecutor, classify_failure, parse_branches, parse_commit_files,
+        parse_commits, parse_status, read_bounded, run_process,
     };
     use crate::domain::git::GitError;
     use crate::ports::git_executor::GitExecutor;
@@ -601,6 +664,19 @@ mod tests {
         let commits = parse_commits(b"merge\x1fleft right\x1fHEAD -> main, tag: v1\x1fmerge subject\x1fQterm\x1f1700000000\x1e");
         assert_eq!(commits[0].parents, ["left", "right"]);
         assert_eq!(commits[0].decorations, ["HEAD -> main", "tag: v1"]);
+    }
+
+    #[test]
+    fn parses_nul_delimited_commit_files_and_preserves_rename_sources() {
+        let files = parse_commit_files(b"A\0src/new.ts\0M\0README.md\0R100\0old name.txt\0new name.txt\0C075\0base.txt\0copy.txt\0");
+        assert_eq!(files.len(), 4);
+        assert_eq!(files[0].status, "A");
+        assert_eq!(files[0].path, "src/new.ts");
+        assert_eq!(files[2].status, "R100");
+        assert_eq!(files[2].original_path.as_deref(), Some("old name.txt"));
+        assert_eq!(files[2].path, "new name.txt");
+        assert_eq!(files[3].original_path.as_deref(), Some("base.txt"));
+        assert_eq!(files[3].path, "copy.txt");
     }
 
     #[test]
@@ -678,6 +754,15 @@ mod tests {
             .commit(directory.path(), "feat: initial")
             .expect("commit");
         assert_eq!(committed.commits.len(), 1);
+        let commit_files = executor
+            .commit_files(
+                directory.path(),
+                committed.head.oid.as_deref().expect("commit oid"),
+            )
+            .expect("commit files");
+        assert_eq!(commit_files.len(), 1);
+        assert_eq!(commit_files[0].path, "hello world.txt");
+        assert_eq!(commit_files[0].status, "A");
         let base_branch = committed.head.name.clone().expect("base branch");
         let branched = executor
             .create_branch(directory.path(), "feature/test")

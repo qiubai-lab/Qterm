@@ -442,6 +442,38 @@ impl SshSessionManager {
             .map_err(|_| crate::domain::git::GitError::SessionUnavailable)?
     }
 
+    async fn run_git_commit_files(
+        &self,
+        id: &str,
+        profile_id: &str,
+        repository: String,
+        oid: String,
+    ) -> Result<Vec<crate::domain::git::GitCommitFile>, crate::domain::git::GitError> {
+        let entry = self
+            .entry(id)
+            .map_err(|_| crate::domain::git::GitError::SessionUnavailable)?;
+        if entry.purpose != SessionPurpose::Git
+            || entry.profile_id.as_deref() != Some(profile_id)
+            || entry.state() != SessionState::Connected
+        {
+            return Err(crate::domain::git::GitError::SessionUnavailable);
+        }
+        crate::domain::git::validate_remote_repository_path(&repository)?;
+        crate::domain::git::validate_commit_oid(&oid)?;
+        let (reply, response) = oneshot::channel();
+        entry
+            .control
+            .try_send(SessionControl::RunGitCommitFiles {
+                repository,
+                oid,
+                reply,
+            })
+            .map_err(|_| crate::domain::git::GitError::SessionUnavailable)?;
+        response
+            .await
+            .map_err(|_| crate::domain::git::GitError::SessionUnavailable)?
+    }
+
     pub fn start_transfer(
         &self,
         session_id: &str,
@@ -654,6 +686,26 @@ impl RemoteGitExecutor for SshSessionManager {
         >,
     > {
         Box::pin(self.run_git_action(session_id, profile_id, action))
+    }
+
+    fn commit_files<'a>(
+        &'a self,
+        session_id: &'a str,
+        profile_id: &'a str,
+        repository: String,
+        oid: String,
+    ) -> std::pin::Pin<
+        Box<
+            dyn std::future::Future<
+                    Output = Result<
+                        Vec<crate::domain::git::GitCommitFile>,
+                        crate::domain::git::GitError,
+                    >,
+                > + Send
+                + 'a,
+        >,
+    > {
+        Box::pin(self.run_git_commit_files(session_id, profile_id, repository, oid))
     }
 }
 
@@ -981,6 +1033,13 @@ enum SessionControl {
         action: crate::domain::git::RemoteGitAction,
         reply:
             oneshot::Sender<Result<crate::domain::git::GitSnapshot, crate::domain::git::GitError>>,
+    },
+    RunGitCommitFiles {
+        repository: String,
+        oid: String,
+        reply: oneshot::Sender<
+            Result<Vec<crate::domain::git::GitCommitFile>, crate::domain::git::GitError>,
+        >,
     },
 }
 

@@ -2,7 +2,8 @@ use std::path::{Path, PathBuf};
 
 use crate::{
     domain::git::{
-        GitError, GitSnapshot, validate_branch_name, validate_commit_message, validate_paths,
+        GitCommitFile, GitError, GitSnapshot, validate_branch_name, validate_commit_message,
+        validate_commit_oid, validate_paths, validate_remote_repository_path,
         validate_repository_path,
     },
     ports::git_executor::GitExecutor,
@@ -21,6 +22,20 @@ pub async fn execute_remote_git<E: RemoteGitExecutor>(
 ) -> Result<GitSnapshot, GitError> {
     action.validate()?;
     executor.execute(session_id, profile_id, action).await
+}
+
+pub async fn execute_remote_git_commit_files<E: RemoteGitExecutor>(
+    executor: &E,
+    session_id: &str,
+    profile_id: &str,
+    repository: String,
+    oid: String,
+) -> Result<Vec<GitCommitFile>, GitError> {
+    validate_remote_repository_path(&repository)?;
+    validate_commit_oid(&oid)?;
+    executor
+        .commit_files(session_id, profile_id, repository, oid)
+        .await
 }
 
 impl<E: GitExecutor> GitService<E> {
@@ -63,6 +78,15 @@ impl<E: GitExecutor> GitService<E> {
     pub fn commit(&self, repository: String, message: String) -> Result<GitSnapshot, GitError> {
         validate_commit_message(&message)?;
         self.executor.commit(&input_path(repository)?, &message)
+    }
+
+    pub fn commit_files(
+        &self,
+        repository: String,
+        oid: String,
+    ) -> Result<Vec<GitCommitFile>, GitError> {
+        validate_commit_oid(&oid)?;
+        self.executor.commit_files(&input_path(repository)?, &oid)
     }
 
     pub fn create_branch(&self, repository: String, name: String) -> Result<GitSnapshot, GitError> {

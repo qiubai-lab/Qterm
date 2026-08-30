@@ -78,6 +78,13 @@ pub struct GitCommit {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GitCommitFile {
+    pub path: String,
+    pub original_path: Option<String>,
+    pub status: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GitSnapshot {
     pub repository_path: String,
     pub repository_name: String,
@@ -179,6 +186,14 @@ pub fn validate_commit_message(message: &str) -> Result<(), GitError> {
     Ok(())
 }
 
+pub fn validate_commit_oid(oid: &str) -> Result<(), GitError> {
+    if matches!(oid.len(), 40 | 64) && oid.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        Ok(())
+    } else {
+        Err(GitError::InvalidInput)
+    }
+}
+
 pub fn validate_paths(paths: &[String]) -> Result<(), GitError> {
     if paths.is_empty()
         || paths.len() > 10_000
@@ -196,7 +211,10 @@ pub fn validate_paths(paths: &[String]) -> Result<(), GitError> {
 
 #[cfg(test)]
 mod tests {
-    use super::{RemoteGitAction, validate_branch_name, validate_commit_message, validate_paths};
+    use super::{
+        RemoteGitAction, validate_branch_name, validate_commit_message, validate_commit_oid,
+        validate_paths,
+    };
 
     #[test]
     fn rejects_branch_and_path_values_that_can_change_git_argument_meaning() {
@@ -220,6 +238,20 @@ mod tests {
         assert!(validate_commit_message("  ").is_err());
         assert!(validate_commit_message("feat: Git 管理").is_ok());
         assert!(validate_commit_message(&"x".repeat(10_001)).is_err());
+    }
+
+    #[test]
+    fn commit_oid_must_be_a_full_sha1_or_sha256_identifier() {
+        assert!(validate_commit_oid("0123456789abcdef0123456789abcdef01234567").is_ok());
+        assert!(validate_commit_oid(&"a".repeat(64)).is_ok());
+        for value in [
+            "abc123",
+            "HEAD",
+            "-deadbeef",
+            "0123456789abcdef0123456789abcdef0123456g",
+        ] {
+            assert!(validate_commit_oid(value).is_err(), "{value}");
+        }
     }
 
     #[test]

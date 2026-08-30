@@ -332,6 +332,7 @@ pub(super) async fn run_session(
                         events(TerminalStagingEvent::Failed);
                     }
                     Some(SessionControl::RunGit { reply, .. }) => { let _ = reply.send(Err(crate::domain::git::GitError::SessionUnavailable)); }
+                    Some(SessionControl::RunGitCommitFiles { reply, .. }) => { let _ = reply.send(Err(crate::domain::git::GitError::SessionUnavailable)); }
                     Some(SessionControl::Write(_) | SessionControl::Resize(_) | SessionControl::StartNetworkRule { .. } | SessionControl::StopNetworkRule { .. }) => {}
                     None => {
                         entry.transition(SessionState::Closing);
@@ -368,6 +369,16 @@ pub(super) async fn run_session(
                 control = controls.recv() => match control {
                     Some(SessionControl::RunGit { action, reply }) => {
                         let operation = git::run_remote_git_action(&handle, action);
+                        tokio::select! {
+                            result = operation => { let _ = reply.send(result); }
+                            _ = &mut cancel => {
+                                let _ = reply.send(Err(crate::domain::git::GitError::SessionUnavailable));
+                                entry.transition(SessionState::Closing);
+                            }
+                        }
+                    }
+                    Some(SessionControl::RunGitCommitFiles { repository, oid, reply }) => {
+                        let operation = git::commit_files(&handle, &repository, &oid);
                         tokio::select! {
                             result = operation => { let _ = reply.send(result); }
                             _ = &mut cancel => {
@@ -580,6 +591,9 @@ pub(super) async fn run_session(
                     let _ = reply.send(Err(SessionControlError::NetworkUnavailable));
                 }
                 Some(SessionControl::RunGit { reply, .. }) => {
+                    let _ = reply.send(Err(crate::domain::git::GitError::SessionUnavailable));
+                }
+                Some(SessionControl::RunGitCommitFiles { reply, .. }) => {
                     let _ = reply.send(Err(crate::domain::git::GitError::SessionUnavailable));
                 }
                 None => {

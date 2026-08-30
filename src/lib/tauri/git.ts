@@ -6,6 +6,7 @@ export interface GitHead { name: string | null; oid: string | null; detached: bo
 export interface GitChange { path: string; originalPath: string | null; status: string; staged: boolean; conflict: boolean }
 export interface GitBranch { name: string; oid: string; current: boolean; upstream: string | null }
 export interface GitCommit { oid: string; parents: string[]; decorations: string[]; subject: string; author: string; timestamp: number }
+export interface GitCommitFile { path: string; originalPath: string | null; status: string }
 export interface GitSnapshot { repositoryPath: string; repositoryName: string; head: GitHead; changes: GitChange[]; branches: GitBranch[]; commits: GitCommit[] }
 
 export type RemoteGitAction =
@@ -28,6 +29,7 @@ export function stageAllGitChanges(repository: string): Promise<GitSnapshot> { r
 export function unstageGitPaths(repository: string, paths: string[]): Promise<GitSnapshot> { return invoke("git_unstage", { input: { repository, paths } }); }
 export function unstageAllGitChanges(repository: string): Promise<GitSnapshot> { return invoke("git_unstage_all", { input: { repository } }); }
 export function commitGitChanges(repository: string, message: string): Promise<GitSnapshot> { return invoke("git_commit", { input: { repository, message } }); }
+export function loadGitCommitFiles(repository: string, oid: string): Promise<GitCommitFile[]> { return invoke("git_commit_files", { input: { repository, oid } }); }
 export function createGitBranch(repository: string, name: string): Promise<GitSnapshot> { return invoke("git_create_branch", { input: { repository, name } }); }
 export function switchGitBranch(repository: string, name: string): Promise<GitSnapshot> { return invoke("git_switch_branch", { input: { repository, name } }); }
 
@@ -37,6 +39,10 @@ export function connectGitSession(input: SessionConnectInput, onEvent: (event: S
 
 export function executeRemoteGit(sessionId: string, profileId: string, action: RemoteGitAction): Promise<GitSnapshot> {
   return invoke("git_remote_execute", { input: { sessionId, profileId, action } });
+}
+
+export function loadRemoteGitCommitFiles(sessionId: string, profileId: string, repository: string, oid: string): Promise<GitCommitFile[]> {
+  return invoke("git_remote_commit_files", { input: { sessionId, profileId, repository, oid } });
 }
 
 export function gitError(error: unknown): { code: string; message: string } {

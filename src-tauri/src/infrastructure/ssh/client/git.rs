@@ -3,8 +3,13 @@ use std::time::Duration;
 use russh::{ChannelMsg, client};
 
 use crate::{
-    domain::git::{GitError, GitSnapshot, RemoteGitAction},
-    infrastructure::git_cli::{classify_failure, parse_branches, parse_commits, parse_status},
+    domain::git::{
+        GitCommitFile, GitError, GitSnapshot, RemoteGitAction, validate_commit_oid,
+        validate_remote_repository_path,
+    },
+    infrastructure::git_cli::{
+        classify_failure, parse_branches, parse_commit_files, parse_commits, parse_status,
+    },
 };
 
 use super::ClientHandler;
@@ -102,6 +107,22 @@ pub(super) async fn run_remote_git_action(
             snapshot(handle, &repository).await
         }
     }
+}
+
+pub(super) async fn commit_files(
+    handle: &client::Handle<ClientHandler>,
+    repository: &str,
+    oid: &str,
+) -> Result<Vec<GitCommitFile>, GitError> {
+    validate_remote_repository_path(repository)?;
+    validate_commit_oid(oid)?;
+    ensure_capability(handle).await?;
+    let args = format!(
+        "diff-tree --root --first-parent --no-commit-id --name-status -r -z -M -C {}",
+        posix_literal(oid)
+    );
+    let output = run_git(handle, repository, &args, Vec::new(), READ_TIMEOUT).await?;
+    Ok(parse_commit_files(&output.stdout))
 }
 
 async fn ensure_capability(handle: &client::Handle<ClientHandler>) -> Result<(), GitError> {

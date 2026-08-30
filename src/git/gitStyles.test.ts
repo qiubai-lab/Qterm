@@ -94,19 +94,46 @@ describe("Git pane style contracts", () => {
     expect(declarations(".git-repository-actions")).toContain("display: flex");
     expect(declarations(".git-repository-actions")).toContain("gap: 2px");
     expect(declarations(".git-branch-trigger")).toContain("display: flex");
-    expect(declarations(".git-branch-trigger svg")).toContain("color: var(--accent)");
+    expect(declarations(".git-branch-trigger")).toContain("width: max-content");
+    expect(declarations(".git-branch-trigger")).toContain("background: var(--primary-action)");
+    expect(declarations(".git-branch-trigger")).toContain("color: var(--primary-action-contrast)");
+    expect(declarations(".git-branch-trigger svg")).toContain("color: currentColor");
     expect(styles).not.toContain(".git-repository-row select");
     const popover = declarations(".git-repository-popover");
     expect(popover).toContain("position: fixed");
     expect(popover).toContain("z-index: 130");
     expect(popover).toContain("background: var(--floating-material)");
-    expect(declarations(".git-branch-popover")).toContain("width: 430px");
+    expect(declarations(".git-branch-popover")).toContain("width: 336px");
     expect(declarations(".git-branch-popover")).toContain("padding: 0");
     expect(declarations(".git-branch-list")).toContain("width: 100%");
+    expect(declarations(".git-branch-list")).toContain("gap: 3px");
+    expect(declarations(".git-branch-list")).toContain("padding: 4px");
     expect(declarations(".git-branch-list")).toContain("scrollbar-gutter: auto");
     const option = declarations('.git-branch-popover [role="option"]');
     expect(option).toContain("box-sizing: border-box");
     expect(option).toContain("width: 100%");
+    expect(option).toContain("border-radius: 6px");
+    expect(declarations('.git-branch-popover [role="option"][aria-selected="true"]')).toContain("var(--primary-action)");
+    expect(declarations('.git-branch-popover [role="option"][aria-selected="true"]:hover')).toContain("repeating-linear-gradient");
+  });
+
+  it("presents graph commits as selectable two-line rows with themed decorations", () => {
+    const row = declarations(".git-commit-row");
+    expect(row).toContain("grid-template-columns: auto minmax(0, 1fr)");
+    expect(row).toContain("width: 100%");
+    expect(declarations('.git-commit-row[aria-pressed="true"]')).toContain("var(--primary-action)");
+    expect(declarations(".git-commit-summary")).toContain("display: flex");
+    expect(declarations('.git-decorations span[data-kind="head"]')).toContain("var(--primary-action)");
+    expect(declarations('.git-decorations span[data-kind="remote"]')).toContain("var(--accent)");
+  });
+
+  it("shows lazy commit files as an indented themed continuation of the graph", () => {
+    expect(declarations(".git-commit-files")).toContain("padding: 2px 0 3px");
+    expect(declarations(".git-commit-files,\n.git-commit-files-state")).toContain("background: var(--surface)");
+    expect(declarations(".git-commit-file-row > svg")).toContain("color: var(--accent)");
+    expect(declarations(".git-commit-file-path > span:first-child")).toContain("color: var(--text)");
+    expect(declarations('.git-commit-file-status[data-tone="deleted"],\n.git-commit-file-status[data-tone="conflict"]')).toContain("var(--danger)");
+    expect(declarations('.git-commit-row[aria-expanded="true"] .git-commit-expander svg')).toContain("rotate(0)");
   });
 
   it("uses the theme accent for change-file icons and file-browser-strength text", () => {

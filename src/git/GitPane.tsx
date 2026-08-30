@@ -5,9 +5,9 @@ import { Icon } from "../components/Icon";
 import { RequiredFieldLabel } from "../components/RequiredFieldLabel";
 import {
   commitGitChanges, createGitBranch, gitAvailable, gitError, initializeGitRepository,
-  executeRemoteGit, loadGitSnapshot, selectGitRepositoryDirectory, stageAllGitChanges, stageGitPaths,
+  executeRemoteGit, loadGitCommitFiles, loadGitSnapshot, loadRemoteGitCommitFiles, selectGitRepositoryDirectory, stageAllGitChanges, stageGitPaths,
   switchGitBranch, unstageAllGitChanges, unstageGitPaths,
-  type GitChange, type GitSnapshot, type RemoteGitAction,
+  type GitChange, type GitCommit, type GitCommitFile, type GitSnapshot, type RemoteGitAction,
 } from "../lib/tauri/git";
 import type { GitTarget } from "../workspace/model";
 import type { GitRuntime } from "../workspace/WorkspaceProvider";
@@ -22,6 +22,12 @@ interface GitRepositoryOverlay {
   left: number;
   top: number;
   placement: "above" | "below";
+}
+
+interface GitCommitFilesState {
+  status: "loading" | "ready" | "error";
+  files: GitCommitFile[];
+  message?: string;
 }
 
 function fitRepositoryOverlay(anchor: DOMRect, width: number, height: number): Omit<GitRepositoryOverlay, "kind"> {
@@ -41,6 +47,9 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange }: G
   const [message, setMessage] = useState("");
   const [newBranch, setNewBranch] = useState("");
   const [branchQuery, setBranchQuery] = useState("");
+  const [selectedCommitOid, setSelectedCommitOid] = useState<string | null>(null);
+  const [expandedCommitKey, setExpandedCommitKey] = useState<string | null>(null);
+  const [commitFilesCache, setCommitFilesCache] = useState<Record<string, GitCommitFilesState>>({});
   const [editingPath, setEditingPath] = useState(false);
   const [pathDraft, setPathDraft] = useState("");
   const [repositoryOverlay, setRepositoryOverlay] = useState<GitRepositoryOverlay | null>(null);
@@ -176,6 +185,9 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange }: G
   const unstaged = useMemo(() => snapshot?.changes.filter((change) => !change.staged && !change.conflict) ?? [], [snapshot]);
   const conflicts = useMemo(() => snapshot?.changes.filter((change) => change.conflict) ?? [], [snapshot]);
   const graphRows = useMemo(() => buildGitGraphRows(snapshot?.commits ?? []), [snapshot]);
+  const activeCommitOid = selectedCommitOid && snapshot?.commits.some((commit) => commit.oid === selectedCommitOid)
+    ? selectedCommitOid
+    : snapshot?.head.oid ?? null;
   const root = snapshot?.repositoryPath ?? repositoryPath;
   const disabled = Boolean(busy) || !remoteReady;
   const branchLabel = snapshot?.head.detached ? "detached HEAD" : snapshot?.head.name ?? "未命名分支";
@@ -193,6 +205,40 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange }: G
         .some((value) => value?.toLocaleLowerCase().includes(query));
     });
   }, [branchOptions, branchQuery, snapshot?.commits]);
+
+  function commitFilesKey(oid: string): string | null {
+    if (!root) return null;
+    return JSON.stringify([remote ? "remote" : "local", remoteProfileId ?? "", root, oid]);
+  }
+
+  async function requestCommitFiles(commitToLoad: GitCommit, force = false) {
+    const repository = root;
+    const key = commitFilesKey(commitToLoad.oid);
+    if (!repository || !key || (!force && ["loading", "ready"].includes(commitFilesCache[key]?.status))) return;
+    setCommitFilesCache((value) => ({ ...value, [key]: { status: "loading", files: value[key]?.files ?? [] } }));
+    try {
+      const files = remote
+        ? remoteProfileId && remoteSessionId && remoteStatus === "connected"
+          ? await loadRemoteGitCommitFiles(remoteSessionId, remoteProfileId, repository, commitToLoad.oid)
+          : await Promise.reject(new Error("远程 Git 连接尚未建立"))
+        : await loadGitCommitFiles(repository, commitToLoad.oid);
+      setCommitFilesCache((value) => ({ ...value, [key]: { status: "ready", files } }));
+    } catch (cause) {
+      setCommitFilesCache((value) => ({ ...value, [key]: { status: "error", files: [], message: gitError(cause).message } }));
+    }
+  }
+
+  function toggleCommitFiles(commitToToggle: GitCommit) {
+    const key = commitFilesKey(commitToToggle.oid);
+    if (!key) return;
+    setSelectedCommitOid(commitToToggle.oid);
+    if (expandedCommitKey === key) {
+      setExpandedCommitKey(null);
+      return;
+    }
+    setExpandedCommitKey(key);
+    void requestCommitFiles(commitToToggle);
+  }
 
   function repositoryAnchor(kind: GitRepositoryOverlayKind): HTMLButtonElement | null {
     if (kind === "branches") return branchButtonRef.current;
@@ -218,7 +264,7 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange }: G
       setError(null);
     }
     if (kind === "branches") setBranchQuery("");
-    const estimatedWidth = kind === "createBranch" ? 270 : kind === "branches" ? 430 : 170;
+    const estimatedWidth = kind === "createBranch" ? 270 : kind === "branches" ? 336 : 170;
     const estimatedHeight = kind === "createBranch" ? 138 : kind === "branches" ? Math.min(376, 92 + branchOptions.length * 44) : 38;
     setRepositoryOverlay({ kind, ...fitRepositoryOverlay(anchor.getBoundingClientRect(), estimatedWidth, estimatedHeight) });
   }
@@ -331,11 +377,17 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange }: G
 
     <GitSection className="git-graph-section" title="图表" collapsed={collapsed.graph} onToggle={() => toggleExclusiveSection("graph")}>
       <div className="git-graph-scroll" role="list" aria-label="提交图表">
-        {snapshot?.commits.map((commit, index) => <div className="git-commit-row" role="listitem" key={commit.oid}>
-          <GitGraph row={graphRows[index]}/>
-          <span className="git-commit-content"><span className="git-commit-subject">{commit.subject}</span><span className="git-commit-meta">{commit.author} · {formatCommitTime(commit.timestamp)} · {commit.oid.slice(0, 7)}</span></span>
-          {commit.decorations.length > 0 && <span className="git-decorations">{commit.decorations.slice(0, 2).map((decoration) => <span key={decoration}>{decoration}</span>)}</span>}
-        </div>)}
+        {snapshot?.commits.map((commit, index) => {
+          const cacheKey = commitFilesKey(commit.oid);
+          const expanded = cacheKey === expandedCommitKey;
+          return <div className="git-commit-entry" role="listitem" key={commit.oid}>
+            <button type="button" className="git-commit-row" aria-pressed={commit.oid === activeCommitOid} aria-expanded={expanded} title={`${commit.subject} · ${formatCommitTime(commit.timestamp)}`} onClick={() => toggleCommitFiles(commit)}>
+              <GitGraph row={graphRows[index]}/>
+              <span className="git-commit-content"><span className="git-commit-summary"><span className="git-commit-expander"><Icon name="chevronDown" size={9}/></span><span className="git-commit-subject">{commit.subject}</span>{commit.decorations.length > 0 && <span className="git-decorations">{commit.decorations.slice(0, 3).map((decoration) => <span data-kind={gitDecorationKind(decoration)} key={decoration}><Icon name={decoration.includes("origin/") ? "network" : "git"} size={9}/>{formatGitDecoration(decoration)}</span>)}</span>}</span><span className="git-commit-meta"><span>{commit.author}</span><span>{formatRelativeCommitTime(commit.timestamp)}</span><span>{commit.oid.slice(0, 7)}</span></span></span>
+            </button>
+            {expanded && <GitCommitFiles commit={commit} state={cacheKey ? commitFilesCache[cacheKey] : undefined} onRetry={() => void requestCommitFiles(commit, true)}/>}
+          </div>;
+        })}
         {snapshot && snapshot.commits.length === 0 && <div className="git-clean-state">提交后将在这里显示分支图</div>}
       </div>
     </GitSection>
@@ -359,7 +411,7 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange }: G
       </form>
       : repositoryOverlay.kind === "branches"
         ? <div ref={(node) => { repositoryOverlayRef.current = node; }} className="git-repository-popover git-branch-popover" data-placement={repositoryOverlay.placement} role="dialog" aria-label="切换分支" style={{ left: repositoryOverlay.left, top: repositoryOverlay.top }} onKeyDown={navigateRepositoryMenu}>
-          <div className="git-branch-search-shell"><Icon name="search" size={12}/><input className="git-branch-search" type="search" role="searchbox" aria-label="筛选分支" value={branchQuery} placeholder="选择要签出的分支或标记" onChange={(event) => setBranchQuery(event.target.value)}/></div>
+          <div className="git-branch-search-shell"><Icon name="search" size={12}/><input className="git-branch-search" type="search" role="searchbox" aria-label="筛选分支" value={branchQuery} placeholder="筛选要签出的分支" onChange={(event) => setBranchQuery(event.target.value)}/></div>
           <div className="git-branch-actions"><button type="button" onClick={() => openRepositoryOverlay("createBranch")}><Icon name="plus" size={12}/><span>创建新分支…</span></button></div>
           <div className="git-branch-list-header"><span>分支</span><span>{visibleBranches.length}</span></div>
           <div className="git-branch-list" role="listbox" aria-label="选择分支">
@@ -412,6 +464,42 @@ function GitChangeList({ title, changes, actionLabel, onAction }: { title: strin
   </div>)}{changes.length > visible.length && <div className="git-list-limit">另有 {changes.length - visible.length} 项，请使用终端处理后刷新</div>}</section>;
 }
 
+function GitCommitFiles({ commit, state, onRetry }: { commit: GitCommit; state?: GitCommitFilesState; onRetry: () => void }) {
+  if (!state || state.status === "loading") return <div className="git-commit-files-state" role="status"><span className="git-commit-files-spinner"/>正在读取提交文件…</div>;
+  if (state.status === "error") return <div className="git-commit-files-state error" role="alert"><span>{state.message ?? "无法读取提交文件"}</span><button type="button" onClick={onRetry}>重试</button></div>;
+  if (state.files.length === 0) return <div className="git-commit-files-state empty" role="status">该提交没有可显示的文件变更</div>;
+  const visible = state.files.slice(0, 500);
+  return <div className="git-commit-files" role="list" aria-label={`${commit.subject} 的文件`}>
+    {visible.map((file) => {
+      const path = splitGitFilePath(file.path);
+      const status = commitFileStatus(file.status);
+      return <div className="git-commit-file-row" role="listitem" key={`${file.status}:${file.originalPath ?? ""}:${file.path}`} title={file.originalPath ? `${file.originalPath} → ${file.path}` : file.path}>
+        <Icon name="file" size={12}/>
+        <span className="git-commit-file-path"><span>{path.name}</span>{path.directory && <span className="git-commit-file-directory">{path.directory}</span>}{file.originalPath && <span className="git-commit-file-original">来自 {file.originalPath}</span>}</span>
+        <span className="git-commit-file-status" data-tone={status.tone} title={status.label}>{status.short}</span>
+      </div>;
+    })}
+    {state.files.length > visible.length && <div className="git-list-limit">另有 {state.files.length - visible.length} 个文件未显示</div>}
+  </div>;
+}
+
+function splitGitFilePath(path: string): { name: string; directory: string } {
+  const separator = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
+  return separator < 0 ? { name: path, directory: "" } : { name: path.slice(separator + 1), directory: path.slice(0, separator) };
+}
+
+function commitFileStatus(status: string): { short: string; label: string; tone: string } {
+  const short = status.charAt(0).toUpperCase() || "?";
+  if (short === "A") return { short, label: "新增", tone: "added" };
+  if (short === "M") return { short, label: "修改", tone: "modified" };
+  if (short === "D") return { short, label: "删除", tone: "deleted" };
+  if (short === "R") return { short, label: "重命名", tone: "renamed" };
+  if (short === "C") return { short, label: "复制", tone: "copied" };
+  if (short === "T") return { short, label: "类型变更", tone: "modified" };
+  if (short === "U") return { short, label: "冲突", tone: "conflict" };
+  return { short, label: status || "未知状态", tone: "default" };
+}
+
 function GitEmpty({ icon, title, detail, action, secondary, onAction, onSecondary }: { icon: "git"; title: string; detail: string; action?: string; secondary?: string; onAction?: () => void; onSecondary?: () => void }) {
   return <div className="git-empty"><Icon name={icon} size={28}/><strong>{title}</strong><span>{detail}</span><div>{action && <button type="button" onClick={onAction}>{action}</button>}{secondary && <button type="button" className="secondary" onClick={onSecondary}>{secondary}</button>}</div></div>;
 }
@@ -430,6 +518,17 @@ function formatRelativeCommitTime(timestamp: number): string {
   if (elapsed < 2_592_000) return `${Math.floor(elapsed / 86_400)} 天前`;
   if (elapsed < 31_536_000) return `${Math.floor(elapsed / 2_592_000)} 个月前`;
   return `${Math.floor(elapsed / 31_536_000)} 年前`;
+}
+
+function formatGitDecoration(decoration: string): string {
+  return decoration.replace(/^HEAD -> /, "").replace(/^tag: /, "");
+}
+
+function gitDecorationKind(decoration: string): "head" | "remote" | "tag" | "branch" {
+  if (decoration.startsWith("HEAD -> ")) return "head";
+  if (decoration.startsWith("tag: ")) return "tag";
+  if (decoration.includes("origin/")) return "remote";
+  return "branch";
 }
 
 function gitFailureTitle(code: string): string {

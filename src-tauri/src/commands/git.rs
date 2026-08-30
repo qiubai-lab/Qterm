@@ -5,7 +5,7 @@ use tauri::{AppHandle, State, ipc::Channel};
 use tauri_plugin_dialog::DialogExt;
 
 use crate::{
-    application::git_service::{GitService, execute_remote_git},
+    application::git_service::{GitService, execute_remote_git, execute_remote_git_commit_files},
     commands::{
         credential::CredentialState,
         native_dialog,
@@ -13,7 +13,8 @@ use crate::{
         session::{SessionConnectDto, SessionEventDto, SessionState, build_connect_request},
     },
     domain::git::{
-        GitBranch, GitChange, GitCommit, GitError, GitHead, GitSnapshot, RemoteGitAction,
+        GitBranch, GitChange, GitCommit, GitCommitFile, GitError, GitHead, GitSnapshot,
+        RemoteGitAction,
     },
     infrastructure::{git_cli::SystemGitExecutor, ssh::client::SessionPurpose},
 };
@@ -88,6 +89,14 @@ struct GitCommitDto {
     timestamp: i64,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitCommitFileDto {
+    path: String,
+    original_path: Option<String>,
+    status: String,
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct GitDirectoryInput {
@@ -121,6 +130,13 @@ pub struct GitCommitInput {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitCommitFilesInput {
+    repository: String,
+    oid: String,
+}
+
+#[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct GitBranchInput {
     repository: String,
@@ -133,6 +149,15 @@ pub struct RemoteGitInput {
     session_id: String,
     profile_id: String,
     action: RemoteGitActionDto,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RemoteGitCommitFilesInput {
+    session_id: String,
+    profile_id: String,
+    repository: String,
+    oid: String,
 }
 
 #[derive(Deserialize)]
@@ -222,6 +247,23 @@ pub async fn git_remote_execute(
 }
 
 #[tauri::command]
+pub async fn git_remote_commit_files(
+    input: RemoteGitCommitFilesInput,
+    session_state: State<'_, SessionState>,
+) -> Result<Vec<GitCommitFileDto>, GitIpcError> {
+    execute_remote_git_commit_files(
+        session_state.manager().as_ref(),
+        &input.session_id,
+        &input.profile_id,
+        input.repository,
+        input.oid,
+    )
+    .await
+    .map(|files| files.into_iter().map(Into::into).collect())
+    .map_err(GitIpcError::from)
+}
+
+#[tauri::command]
 pub async fn git_select_repository_directory(
     input: GitDirectoryInput,
     app: AppHandle,
@@ -301,6 +343,19 @@ pub async fn git_commit(
 ) -> Result<GitSnapshotDto, GitIpcError> {
     let service = Arc::clone(&state.service);
     run(move || service.commit(input.repository, input.message)).await
+}
+
+#[tauri::command]
+pub async fn git_commit_files(
+    input: GitCommitFilesInput,
+    state: State<'_, GitState>,
+) -> Result<Vec<GitCommitFileDto>, GitIpcError> {
+    let service = Arc::clone(&state.service);
+    tauri::async_runtime::spawn_blocking(move || service.commit_files(input.repository, input.oid))
+        .await
+        .map_err(|_| GitIpcError::from(GitError::Io))?
+        .map(|files| files.into_iter().map(Into::into).collect())
+        .map_err(GitIpcError::from)
 }
 
 #[tauri::command]
@@ -482,11 +537,21 @@ impl From<GitCommit> for GitCommitDto {
         }
     }
 }
+impl From<GitCommitFile> for GitCommitFileDto {
+    fn from(value: GitCommitFile) -> Self {
+        Self {
+            path: value.path,
+            original_path: value.original_path,
+            status: value.status,
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {
     use super::{
-        GitBranchInput, GitCommitInput, GitIpcError, GitPathInput, GitPathsInput, RemoteGitInput,
+        GitBranchInput, GitCommitFilesInput, GitCommitInput, GitIpcError, GitPathInput,
+        GitPathsInput, RemoteGitCommitFilesInput, RemoteGitInput,
     };
     use crate::domain::git::GitError;
 
@@ -541,6 +606,24 @@ mod tests {
                 "repository": "D:/work/project",
                 "name": "feature/test",
                 "subcommand": "delete"
+            }))
+            .is_err()
+        );
+        assert!(
+            serde_json::from_value::<GitCommitFilesInput>(serde_json::json!({
+                "repository": "D:/work/project",
+                "oid": "0123456789abcdef0123456789abcdef01234567",
+                "args": ["reset", "--hard"]
+            }))
+            .is_err()
+        );
+        assert!(
+            serde_json::from_value::<RemoteGitCommitFilesInput>(serde_json::json!({
+                "sessionId": "git-session",
+                "profileId": "profile-1",
+                "repository": "/srv/project",
+                "oid": "0123456789abcdef0123456789abcdef01234567",
+                "command": "cat /etc/passwd"
             }))
             .is_err()
         );
