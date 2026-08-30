@@ -4,6 +4,7 @@ export interface TerminalNode {
   type: "terminal";
   blockId: string;
   profileId: string | null;
+  restoreDirectory: string | null;
 }
 
 export interface FilesNode {
@@ -39,7 +40,7 @@ export interface Workspace {
 }
 
 export interface WorkspaceDocument {
-  schemaVersion: 6;
+  schemaVersion: 7;
   activeWorkspaceId: string;
   recentProfileIds: string[];
   workspaces: Workspace[];
@@ -50,7 +51,7 @@ export function createId(prefix: string): string {
 }
 
 export function createTerminalNode(profileId: string | null = null, blockId = createId("block")): TerminalNode {
-  return { type: "terminal", blockId, profileId };
+  return { type: "terminal", blockId, profileId, restoreDirectory: null };
 }
 
 export function createFilesNode(profileId: string | null, path: string): FilesNode {
@@ -68,5 +69,9 @@ export function createWorkspace(name = "Workspace 1"): Workspace {
 
 export function createWorkspaceDocument(): WorkspaceDocument {
   const workspace = createWorkspace();
-  return { schemaVersion: 6, activeWorkspaceId: workspace.id, recentProfileIds: [], workspaces: [workspace] };
+  return { schemaVersion: 7, activeWorkspaceId: workspace.id, recentProfileIds: [], workspaces: [workspace] };
+}
+
+export function isValidTerminalRestoreDirectory(value: string): boolean {
+  return value.length > 0 && !value.includes("\0") && new TextEncoder().encode(value).byteLength <= 4 * 1024;
 }

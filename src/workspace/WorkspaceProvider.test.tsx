@@ -25,10 +25,15 @@ const mocks = vi.hoisted(() => ({
   terminalSizes: [{ columns: 93, rows: 31 }, { columns: 117, rows: 42 }],
   localConnections: [] as Array<{ event: (event: { type: "stateChanged"; state: "connected" | "closed" }) => void; terminal: (data: Uint8Array) => void }>,
   networkConnections: [] as Array<{ event: (event: SessionEvent) => void }>,
+  closeFlush: null as (() => Promise<void>) | null,
+  registerCurrentWindowCloseFlush: vi.fn(),
 }));
 
 vi.mock("../lib/tauri/profiles", () => ({ listProfiles: vi.fn().mockResolvedValue([]), listProfileGroups: vi.fn().mockResolvedValue([]) }));
 vi.mock("../lib/tauri/workspaces", () => ({ loadWorkspaces: vi.fn().mockResolvedValue(null), saveWorkspaces: vi.fn().mockResolvedValue(undefined) }));
+vi.mock("../lib/tauri/window", () => ({
+  registerCurrentWindowCloseFlush: mocks.registerCurrentWindowCloseFlush,
+}));
 vi.mock("../lib/tauri/sessions", () => ({
   connectSession: mocks.connectSession,
   closeSession: mocks.closeSession, writeSession: vi.fn().mockResolvedValue(undefined), resizeSession: vi.fn().mockResolvedValue(undefined),
@@ -49,6 +54,7 @@ vi.mock("../lib/tauri/localSessions", () => ({
 }));
 
 import { WorkspaceProvider, useWorkspace } from "./WorkspaceProvider";
+import { loadWorkspaces, saveWorkspaces } from "../lib/tauri/workspaces";
 
 const profile = { id: "profile-1", name: "Server", host: "example.test", port: 22, username: "user", authPreference: "password" as const, credentialId: null, groupId: null };
 
@@ -97,6 +103,7 @@ function Harness() {
     <span data-testid="runtime-initial-cwd">{runtimes[ids[0]]?.initialCwd}</span>
     <span data-testid="runtime-cwd-source">{runtimes[ids[0]]?.cwdSource ?? "unknown"}</span>
     <span data-testid="active-profile">{activeLeaf?.profileId ?? "local"}</span>
+    <span data-testid="terminal-restore-directory">{activeLeaf?.type === "terminal" ? activeLeaf.restoreDirectory : ""}</span>
     <span data-testid="file-runtime">{fileRuntimes[activeWorkspace.activeBlockId]?.kind}:{fileRuntimes[activeWorkspace.activeBlockId]?.status}</span>
     <span data-testid="file-progress">{fileRuntimes[activeWorkspace.activeBlockId]?.connectionProgress?.phase}:{fileRuntimes[activeWorkspace.activeBlockId]?.connectionProgress?.message}</span>
     <span data-testid="file-path">{activeLeaf?.type === "files" ? activeLeaf.path : ""}</span>
@@ -107,6 +114,13 @@ function Harness() {
 
 describe("WorkspaceProvider multi-session routing", () => {
   beforeEach(() => {
+    vi.mocked(loadWorkspaces).mockReset().mockResolvedValue(null);
+    vi.mocked(saveWorkspaces).mockReset().mockResolvedValue(undefined);
+    mocks.closeFlush = null;
+    mocks.registerCurrentWindowCloseFlush.mockReset().mockImplementation(async (flush: () => Promise<void>) => {
+      mocks.closeFlush = flush;
+      return vi.fn();
+    });
     mocks.connectSession.mockReset();
     mocks.connectLocalSession.mockReset();
     mocks.connectFileSession.mockReset();
@@ -221,6 +235,69 @@ describe("WorkspaceProvider multi-session routing", () => {
     expect(screen.getByTestId("runtime-cwd")).toHaveTextContent("/srv/reported");
     expect(screen.getByTestId("runtime-initial-cwd")).toHaveTextContent("/Users/tester");
     expect(screen.getByTestId("runtime-cwd-source")).toHaveTextContent("osc7");
+    expect(screen.getByTestId("terminal-restore-directory")).toHaveTextContent("/srv/reported");
+  });
+
+  it("restores a hydrated local OSC 7 directory and flushes the latest path before window close", async () => {
+    Object.defineProperty(window, "__TAURI_INTERNALS__", { configurable: true, value: {} });
+    vi.mocked(loadWorkspaces).mockResolvedValue({
+      schemaVersion: 7,
+      activeWorkspaceId: "workspace-restored",
+      recentProfileIds: [],
+      workspaces: [{
+        id: "workspace-restored",
+        name: "Restored",
+        activeBlockId: "block-restored",
+        layout: { type: "terminal", blockId: "block-restored", profileId: null, restoreDirectory: "/srv/restored" },
+      }],
+    });
+    mocks.connectLocalSession.mockImplementation(async (_columns, _rows, event, terminal) => {
+      mocks.localConnections.push({ event, terminal });
+      event({ type: "stateChanged", state: "connected" });
+      return { sessionId: "local-restored", cwd: "/srv/restored" };
+    });
+    const user = userEvent.setup();
+    render(<WorkspaceProvider><Harness/></WorkspaceProvider>);
+
+    await waitFor(() => expect(screen.getByTestId("terminal-restore-directory")).toHaveTextContent("/srv/restored"));
+    await user.click(screen.getByRole("button", { name: "local" }));
+    await waitFor(() => expect(mocks.connectLocalSession).toHaveBeenCalledWith(100, 30, expect.any(Function), expect.any(Function), true, "/srv/restored"));
+    await user.click(screen.getByRole("button", { name: "report-cwd" }));
+    await waitFor(() => expect(mocks.closeFlush).not.toBeNull());
+    vi.mocked(saveWorkspaces).mockClear();
+    await act(async () => { await mocks.closeFlush?.(); });
+
+    expect(saveWorkspaces).toHaveBeenCalledWith(expect.objectContaining({
+      schemaVersion: 7,
+      workspaces: [expect.objectContaining({ layout: expect.objectContaining({ restoreDirectory: "/srv/reported" }) })],
+    }));
+  });
+
+  it("passes a hydrated SSH restore directory to the existing terminal connection input", async () => {
+    Object.defineProperty(window, "__TAURI_INTERNALS__", { configurable: true, value: {} });
+    vi.mocked(loadWorkspaces).mockResolvedValue({
+      schemaVersion: 7,
+      activeWorkspaceId: "workspace-remote",
+      recentProfileIds: ["profile-1"],
+      workspaces: [{
+        id: "workspace-remote",
+        name: "Remote",
+        activeBlockId: "block-remote",
+        layout: { type: "terminal", blockId: "block-remote", profileId: "profile-1", restoreDirectory: "/srv/remote" },
+      }],
+    });
+    mocks.connectSession.mockResolvedValue("ssh-restored");
+    const user = userEvent.setup();
+    render(<WorkspaceProvider><Harness/></WorkspaceProvider>);
+
+    await waitFor(() => expect(screen.getByTestId("terminal-restore-directory")).toHaveTextContent("/srv/remote"));
+    await user.click(screen.getByRole("button", { name: "connect" }));
+
+    expect(mocks.connectSession).toHaveBeenCalledWith(
+      expect.objectContaining({ profileId: "profile-1", initialDirectory: "/srv/remote" }),
+      expect.any(Function),
+      expect.any(Function),
+    );
   });
 
   it("inherits the anchor profile and routes its OSC 7 directory only to the new terminal", async () => {
@@ -247,13 +324,13 @@ describe("WorkspaceProvider multi-session routing", () => {
     const childInput = mocks.connectSession.mock.calls.find(([input]) => input.initialDirectory === "/srv/reported")?.[0];
     expect(childInput).toMatchObject({ profileId: "profile-1", initialDirectory: "/srv/reported" });
     expect(document.querySelector("[data-testid='active-profile']")).toHaveTextContent("profile-1");
-    expect(screen.getByTestId("workspace-json")).not.toHaveTextContent("initialDirectory");
-    expect(screen.getByTestId("workspace-json")).not.toHaveTextContent("/srv/reported");
+    expect(screen.getByTestId("workspace-json")).toHaveTextContent("/srv/reported");
 
     mocks.connectSession.mockClear();
     await user.click(screen.getByRole("button", { name: "connect" }));
     await waitFor(() => expect(mocks.connectSession).toHaveBeenCalledTimes(2));
-    expect(mocks.connectSession.mock.calls.every(([input]) => input.initialDirectory === undefined)).toBe(true);
+    expect(mocks.connectSession.mock.calls.filter(([input]) => input.initialDirectory === "/srv/reported")).toHaveLength(1);
+    expect(mocks.connectSession.mock.calls.filter(([input]) => input.initialDirectory === undefined)).toHaveLength(1);
   });
 
   it("does not inherit a reported directory from a disconnected source", async () => {
@@ -316,6 +393,7 @@ describe("WorkspaceProvider multi-session routing", () => {
     expect(screen.getByTestId("runtime-cwd")).toHaveTextContent("/Users/tester");
     expect(screen.getByTestId("runtime-initial-cwd")).toHaveTextContent("/Users/tester");
     expect(screen.getByTestId("runtime-cwd-source")).toHaveTextContent("initial");
+    expect(screen.getByTestId("terminal-restore-directory")).toBeEmptyDOMElement();
 
     await user.click(screen.getByRole("button", { name: "split-without-osc7" }));
     await user.click(screen.getByRole("button", { name: "local-active-without-osc7" }));

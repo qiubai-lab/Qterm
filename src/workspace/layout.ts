@@ -59,12 +59,24 @@ export function updateSplitRatio(node: LayoutNode, splitId: string, ratio: numbe
 }
 
 export function setTerminalProfile(node: LayoutNode, blockId: string, profileId: string | null): LayoutNode {
-  if (node.type !== "split") return node.type === "terminal" && node.blockId === blockId ? { ...node, profileId } : node;
-  return {
-    ...node,
-    first: setTerminalProfile(node.first, blockId, profileId),
-    second: setTerminalProfile(node.second, blockId, profileId),
-  };
+  if (node.type !== "split") {
+    if (node.type !== "terminal" || node.blockId !== blockId || node.profileId === profileId) return node;
+    return { ...node, profileId, restoreDirectory: null };
+  }
+  return mapSplit(node, (child) => setTerminalProfile(child, blockId, profileId));
+}
+
+export function setTerminalRestoreDirectory(node: LayoutNode, blockId: string, profileId: string | null, restoreDirectory: string | null): LayoutNode {
+  if (node.type !== "split") {
+    if (node.type !== "terminal" || node.blockId !== blockId || node.profileId !== profileId || node.restoreDirectory === restoreDirectory) return node;
+    return { ...node, restoreDirectory };
+  }
+  return mapSplit(node, (child) => setTerminalRestoreDirectory(child, blockId, profileId, restoreDirectory));
+}
+
+export function clearTerminalRestoreDirectories(node: LayoutNode): LayoutNode {
+  if (node.type !== "split") return node.type === "terminal" && node.restoreDirectory !== null ? { ...node, restoreDirectory: null } : node;
+  return mapSplit(node, clearTerminalRestoreDirectories);
 }
 
 export function moveTerminal(
@@ -141,4 +153,10 @@ export function setNetworkProfile(node: LayoutNode, blockId: string, profileId: 
 export function findLeaf(node: LayoutNode, blockId: string): LayoutLeaf | null {
   if (node.type !== "split") return node.blockId === blockId ? node : null;
   return findLeaf(node.first, blockId) ?? findLeaf(node.second, blockId);
+}
+
+function mapSplit(node: Extract<LayoutNode, { type: "split" }>, update: (child: LayoutNode) => LayoutNode): LayoutNode {
+  const first = update(node.first);
+  const second = update(node.second);
+  return first === node.first && second === node.second ? node : { ...node, first, second };
 }

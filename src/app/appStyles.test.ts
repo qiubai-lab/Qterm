@@ -52,6 +52,7 @@ describe("application layout styles", () => {
     expect(declarations(".window-controls button:focus-visible")).toContain("outline:2px solid var(--focus)");
     expect(defaultCapability.permissions).toContain("core:window:allow-is-always-on-top");
     expect(defaultCapability.permissions).toContain("core:window:allow-set-always-on-top");
+    expect(defaultCapability.permissions).toContain("core:window:allow-destroy");
   });
 
   it("uses the current theme action color for ordinary context-menu hover", () => {

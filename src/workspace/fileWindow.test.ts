@@ -14,7 +14,7 @@ const connectedRuntime = (overrides: Partial<TerminalRuntime> = {}): TerminalRun
 
 describe("openFileWindowAction", () => {
   it("inherits a remote terminal profile and its valid OSC 7 directory", () => {
-    const workspace: Workspace = { id: "w", name: "W", activeBlockId: "t", layout: { type: "terminal", blockId: "t", profileId: "p" } };
+    const workspace: Workspace = { id: "w", name: "W", activeBlockId: "t", layout: { type: "terminal", blockId: "t", profileId: "p", restoreDirectory: null } };
 
     expect(openFileWindowAction(workspace, {
       t: connectedRuntime({ cwd: "/tmp", cwdSource: "osc7" }),
@@ -24,7 +24,7 @@ describe("openFileWindowAction", () => {
   });
 
   it("opens a local terminal OSC 7 directory without a remote profile", () => {
-    const workspace: Workspace = { id: "w", name: "W", activeBlockId: "t", layout: { type: "terminal", blockId: "t", profileId: null } };
+    const workspace: Workspace = { id: "w", name: "W", activeBlockId: "t", layout: { type: "terminal", blockId: "t", profileId: null, restoreDirectory: null } };
 
     expect(openFileWindowAction(workspace, {
       t: connectedRuntime({ kind: "local", initialCwd: "/Users/tester", cwd: "/Users/tester/project", cwdSource: "osc7" }),
@@ -40,7 +40,7 @@ describe("openFileWindowAction", () => {
     ["the terminal is disconnected", true, connectedRuntime({ status: "closed", cwd: "/srv/stale", cwdSource: "osc7" })],
     ["the reported path is empty", true, connectedRuntime({ cwd: "   ", cwdSource: "osc7" })],
   ])("uses the remote home when %s", (_label, enabled, runtime) => {
-    const workspace: Workspace = { id: "w", name: "W", activeBlockId: "t", layout: { type: "terminal", blockId: "t", profileId: "p" } };
+    const workspace: Workspace = { id: "w", name: "W", activeBlockId: "t", layout: { type: "terminal", blockId: "t", profileId: "p", restoreDirectory: null } };
 
     expect(openFileWindowAction(workspace, { t: runtime }, enabled)).toEqual({
       type: "openFiles", workspaceId: "w", anchorBlockId: "t", profileId: "p", path: ".",
@@ -48,7 +48,7 @@ describe("openFileWindowAction", () => {
   });
 
   it("uses the local home when no OSC 7 directory is available", () => {
-    const workspace: Workspace = { id: "w", name: "W", activeBlockId: "t", layout: { type: "terminal", blockId: "t", profileId: null } };
+    const workspace: Workspace = { id: "w", name: "W", activeBlockId: "t", layout: { type: "terminal", blockId: "t", profileId: null, restoreDirectory: null } };
 
     expect(openFileWindowAction(workspace, {
       t: connectedRuntime({ kind: "local", initialCwd: "/Users/tester", cwd: "/Users/tester", cwdSource: "initial" }),
@@ -91,7 +91,7 @@ describe("openFileWindowAction", () => {
         id: "split-1",
         direction: "horizontal",
         ratio: 0.5,
-        first: { type: "terminal", blockId: "first", profileId: "p" },
+        first: { type: "terminal", blockId: "first", profileId: "p", restoreDirectory: null },
         second: { type: "files", blockId: "second", profileId: null, path: "~" },
       },
     };

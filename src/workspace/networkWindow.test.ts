@@ -5,7 +5,7 @@ import { openNetworkWindowAction } from "./networkWindow";
 
 describe("openNetworkWindowAction", () => {
   it.each([
-    ["terminal", { type: "terminal" as const, blockId: "active", profileId: "profile-1" }],
+    ["terminal", { type: "terminal" as const, blockId: "active", profileId: "profile-1", restoreDirectory: null }],
     ["files", { type: "files" as const, blockId: "active", profileId: "profile-1", path: "/srv" }],
     ["network", { type: "network" as const, blockId: "active", profileId: "profile-1" }],
   ])("inherits the active remote %s connection", (_label, layout) => {
@@ -21,7 +21,7 @@ describe("openNetworkWindowAction", () => {
       id: "workspace-1",
       name: "Workspace",
       activeBlockId: "terminal-1",
-      layout: { type: "terminal", blockId: "terminal-1", profileId: null },
+      layout: { type: "terminal", blockId: "terminal-1", profileId: null, restoreDirectory: null },
     };
 
     expect(openNetworkWindowAction(workspace)).toEqual({
@@ -40,7 +40,7 @@ describe("openNetworkWindowAction", () => {
         direction: "horizontal",
         ratio: 0.5,
         first: { type: "files", blockId: "first", profileId: "profile-1", path: "/srv" },
-        second: { type: "terminal", blockId: "second", profileId: null },
+        second: { type: "terminal", blockId: "second", profileId: null, restoreDirectory: null },
       },
     };
 

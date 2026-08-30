@@ -49,6 +49,7 @@ enum LayoutDto {
     Terminal {
         block_id: String,
         profile_id: Option<String>,
+        restore_directory: Option<String>,
     },
     Files {
         block_id: String,
@@ -91,7 +92,7 @@ pub fn workspace_save(
     document: WorkspaceDocumentDto,
     state: State<'_, WorkspaceState>,
 ) -> Result<(), IpcError> {
-    if document.schema_version != 6 {
+    if document.schema_version != 7 {
         return Err(IpcError::from(
             crate::application::error::ApplicationError::new(
                 crate::application::error::ApplicationErrorCode::InvalidWorkspaceDocument,
@@ -109,7 +110,7 @@ pub fn workspace_save(
 impl WorkspaceDocumentDto {
     fn from_domain(document: &WorkspaceDocument) -> Self {
         Self {
-            schema_version: 6,
+            schema_version: 7,
             active_workspace_id: document.active_workspace_id.clone(),
             recent_profile_ids: document.recent_profile_ids.clone(),
             workspaces: document
@@ -159,9 +160,11 @@ impl LayoutDto {
             LayoutNode::Terminal {
                 block_id,
                 profile_id,
+                restore_directory,
             } => Self::Terminal {
                 block_id: block_id.clone(),
                 profile_id: profile_id.clone(),
+                restore_directory: restore_directory.clone(),
             },
             LayoutNode::Files {
                 block_id,
@@ -200,9 +203,11 @@ impl LayoutDto {
             Self::Terminal {
                 block_id,
                 profile_id,
+                restore_directory,
             } => LayoutNode::Terminal {
                 block_id,
                 profile_id,
+                restore_directory,
             },
             Self::Files {
                 block_id,
@@ -263,7 +268,7 @@ mod tests {
 
     fn document() -> serde_json::Value {
         json!({
-            "schemaVersion": 6,
+            "schemaVersion": 7,
             "activeWorkspaceId": "workspace-1",
             "recentProfileIds": ["profile-1"],
             "workspaces": [{
@@ -278,7 +283,8 @@ mod tests {
                     "first": {
                         "type": "terminal",
                         "blockId": "block-1",
-                        "profileId": null
+                        "profileId": null,
+                        "restoreDirectory": "/srv/project"
                     },
                     "second": {
                         "type": "network",
@@ -291,7 +297,7 @@ mod tests {
     }
 
     #[test]
-    fn workspace_dto_accepts_v6_recent_profiles_and_network_layout_fields() {
+    fn workspace_dto_accepts_v7_terminal_restore_and_network_layout_fields() {
         assert!(serde_json::from_value::<WorkspaceDocumentDto>(document()).is_ok());
     }
 

@@ -7,6 +7,7 @@ import { closeLocalSession, connectLocalSession, getLocalTerminalCapabilities, r
 import { listProfileGroups, listProfiles, type ConnectionProfile, type ProfileGroup } from "../lib/tauri/profiles";
 import { acceptHostKey, closeSession, connectSession, rejectHostKey, resizeSession, writeSession, type SessionAuth, type SessionEvent, type TerminalSizeInput } from "../lib/tauri/sessions";
 import { loadWorkspaces, saveWorkspaces } from "../lib/tauri/workspaces";
+import { registerCurrentWindowCloseFlush } from "../lib/tauri/window";
 import { completeConnectionProgress, connectionProgressFromRouteEvent, failConnectionProgress, initialConnectionProgress } from "./connectionProgress";
 import { blockIds, findLeaf } from "./layout";
 import { createId, createWorkspaceDocument, type SplitDirection, type Workspace, type WorkspaceDocument } from "./model";
@@ -153,9 +154,30 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     return () => window.clearTimeout(timer);
   }, [document, hydrated]);
 
+  useEffect(() => {
+    if (!hydrated || !isTauriRuntime()) return;
+    let disposed = false;
+    let stop: (() => void) | undefined;
+    void registerCurrentWindowCloseFlush(async () => {
+      await saveWorkspaces(documentRef.current).catch((error: unknown) => {
+        setStorageNotice(`无法保存工作区：${workspaceErrorMessage(error)}`);
+      });
+    }).then((unlisten) => {
+      if (disposed) unlisten();
+      else stop = unlisten;
+    });
+    return () => {
+      disposed = true;
+      stop?.();
+    };
+  }, [hydrated]);
+
   const updateRuntime = useCallback((blockId: string, update: (current: TerminalRuntime) => TerminalRuntime) => {
     setRuntimes((current) => {
-      const next = { ...current, [blockId]: update(current[blockId] ?? defaultRuntime) };
+      const previous = current[blockId] ?? defaultRuntime;
+      const updated = update(previous);
+      if (current[blockId] && updated === previous) return current;
+      const next = { ...current, [blockId]: updated };
       runtimesRef.current = next;
       return next;
     });
@@ -364,6 +386,14 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     dispatch({ type: "splitBlock", workspaceId, blockId, direction, newBlockId, splitId: createId("split") });
   }, []);
 
+  const terminalRestoreDirectory = useCallback((blockId: string, profileId: string | null): string | undefined => {
+    for (const workspace of documentRef.current.workspaces) {
+      const leaf = findLeaf(workspace.layout, blockId);
+      if (leaf?.type === "terminal" && leaf.profileId === profileId) return leaf.restoreDirectory ?? undefined;
+    }
+    return undefined;
+  }, []);
+
   const startLocalBlock = useCallback(async (blockId: string, columns: number, rows: number, osc7Enabled: boolean) => {
     if (!isTauriRuntime() || startingLocal.current.has(blockId)) return;
     if (!connectionIntentAllows(connectionTargetIntents.current, "terminal", blockId, null)) return;
@@ -400,7 +430,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           if (isCurrentEpoch(blockId, epoch)) deliverTerminalOutput(blockId, data);
         },
         osc7Enabled,
-        pendingInitialDirectories.current.get(blockId),
+        pendingInitialDirectories.current.get(blockId) ?? (osc7Enabled ? terminalRestoreDirectory(blockId, null) : undefined),
       );
       const { sessionId } = connection;
       startedSessionId = sessionId;
@@ -433,7 +463,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       if (startingLocal.current.get(blockId) === epoch) startingLocal.current.delete(blockId);
       if (isCurrentEpoch(blockId, epoch)) pendingLocalInput.current.delete(blockId);
     }
-  }, [clearBlockBuffer, closeCurrentSession, deliverTerminalOutput, isCurrentEpoch, nextEpoch, updateRuntime]);
+  }, [clearBlockBuffer, closeCurrentSession, deliverTerminalOutput, isCurrentEpoch, nextEpoch, terminalRestoreDirectory, updateRuntime]);
 
   const connectBlock = useCallback(async (blockId: string, profile: ConnectionProfile, auth: SessionAuth, onFailure?: () => void) => {
     if (!connectionIntentAllows(connectionTargetIntents.current, "terminal", blockId, profile.id)) return;
@@ -449,7 +479,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     updateRuntime(blockId, () => ({ ...defaultRuntime, kind: "ssh", status: "connecting", connectionProgress: initialConnectionProgress(profile.jumpProfileIds?.length ?? 0) }));
     try {
       const sessionId = await connectSession(
-        { profileId: profile.id, auth, terminalSize, initialDirectory: pendingInitialDirectories.current.get(blockId) },
+        { profileId: profile.id, auth, terminalSize, initialDirectory: pendingInitialDirectories.current.get(blockId) ?? terminalRestoreDirectory(blockId, profile.id) },
         (event) => onSessionEvent(blockId, epoch, event),
         (data) => { if (isCurrentEpoch(blockId, epoch)) deliverTerminalOutput(blockId, data); },
       );
@@ -464,7 +494,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         consumeFailureHandler(connectionFailureHandlers.current, failureKey);
       }
     }
-  }, [clearBlockBuffer, closeCurrentSession, deliverTerminalOutput, isCurrentEpoch, nextEpoch, onSessionEvent, updateRuntime]);
+  }, [clearBlockBuffer, closeCurrentSession, deliverTerminalOutput, isCurrentEpoch, nextEpoch, onSessionEvent, terminalRestoreDirectory, updateRuntime]);
 
   const restartLocalBlock = useCallback(async (blockId: string, osc7Enabled: boolean) => {
     const size = terminalSizeReaders.current.get(blockId)?.() ?? { columns: 80, rows: 24 };
@@ -661,10 +691,19 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     };
   }, []);
   const setBlockCwd = useCallback((blockId: string, cwd: string) => {
-    updateRuntime(blockId, (runtime) => ({ ...runtime, cwd, cwdSource: "osc7" }));
+    const runtime = runtimesRef.current[blockId];
+    if (!runtime?.kind || runtime.status === "closing" || runtime.status === "closed" || runtime.status === "failed") return;
+    updateRuntime(blockId, (current) => current.cwd === cwd && current.cwdSource === "osc7" ? current : { ...current, cwd, cwdSource: "osc7" });
+    for (const workspace of documentRef.current.workspaces) {
+      const leaf = findLeaf(workspace.layout, blockId);
+      if (leaf?.type !== "terminal") continue;
+      dispatch({ type: "setTerminalRestoreDirectory", workspaceId: workspace.id, blockId, profileId: leaf.profileId, restoreDirectory: cwd });
+      break;
+    }
   }, [updateRuntime]);
   const clearTerminalOsc7State = useCallback(() => {
     pendingInitialDirectories.current.clear();
+    dispatch({ type: "clearTerminalRestoreDirectories" });
     setRuntimes((current) => {
       let changed = false;
       const next = { ...current };

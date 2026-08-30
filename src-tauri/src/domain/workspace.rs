@@ -4,6 +4,7 @@ const MAX_NAME_CHARS: usize = 80;
 const MAX_TREE_DEPTH: usize = 16;
 const MAX_BLOCKS: usize = 64;
 const MAX_RECENT_PROFILE_IDS: usize = 6;
+const MAX_RESTORE_DIRECTORY_BYTES: usize = 4 * 1024;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct WorkspaceDocument {
@@ -25,6 +26,7 @@ pub enum LayoutNode {
     Terminal {
         block_id: String,
         profile_id: Option<String>,
+        restore_directory: Option<String>,
     },
     Files {
         block_id: String,
@@ -118,10 +120,18 @@ fn validate_layout<'a>(
         LayoutNode::Terminal {
             block_id,
             profile_id,
+            restore_directory,
         } => {
             validate_id(block_id)?;
             if let Some(profile_id) = profile_id {
                 validate_id(profile_id)?;
+            }
+            if restore_directory.as_ref().is_some_and(|directory| {
+                directory.is_empty()
+                    || directory.len() > MAX_RESTORE_DIRECTORY_BYTES
+                    || directory.contains('\0')
+            }) {
+                return Err(WorkspaceValidationError::Layout);
             }
             if blocks.contains(&block_id.as_str()) {
                 return Err(WorkspaceValidationError::Layout);
@@ -220,10 +230,12 @@ mod tests {
                     first: Box::new(LayoutNode::Terminal {
                         block_id: "block-1".into(),
                         profile_id: Some("profile-1".into()),
+                        restore_directory: Some("/srv/project".into()),
                     }),
                     second: Box::new(LayoutNode::Terminal {
                         block_id: "block-2".into(),
                         profile_id: None,
+                        restore_directory: None,
                     }),
                 },
             }],
@@ -252,6 +264,7 @@ mod tests {
             **second = LayoutNode::Terminal {
                 block_id: "block-1".into(),
                 profile_id: None,
+                restore_directory: None,
             };
         }
         assert!(duplicate.validate().is_err());
@@ -286,5 +299,25 @@ mod tests {
         let mut bounded = document();
         bounded.recent_profile_ids = (0..6).map(|index| format!("profile-{index}")).collect();
         assert!(bounded.validate().is_ok());
+    }
+
+    #[test]
+    fn rejects_empty_nul_or_unbounded_terminal_restore_directories() {
+        for restore_directory in [
+            Some(String::new()),
+            Some("/srv/has\0nul".into()),
+            Some("x".repeat(4097)),
+        ] {
+            let mut invalid = document();
+            if let LayoutNode::Split { first, .. } = &mut invalid.workspaces[0].layout
+                && let LayoutNode::Terminal {
+                    restore_directory: value,
+                    ..
+                } = first.as_mut()
+            {
+                *value = restore_directory;
+            }
+            assert!(invalid.validate().is_err());
+        }
     }
 }

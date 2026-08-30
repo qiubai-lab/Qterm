@@ -415,7 +415,7 @@ export function WorkspaceShell() {
     if (!terminalSettingsReady) return;
     const previous = previousRemoteShellIntegrationEnabledRef.current;
     previousRemoteShellIntegrationEnabledRef.current = remoteShellIntegrationEnabled;
-    if (previous === true && !remoteShellIntegrationEnabled) clearTerminalOsc7State();
+    if (previous !== false && !remoteShellIntegrationEnabled) clearTerminalOsc7State();
   }, [clearTerminalOsc7State, remoteShellIntegrationEnabled, terminalSettingsReady]);
 
   useEffect(() => {

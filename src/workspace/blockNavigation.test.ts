@@ -5,10 +5,10 @@ import { adjacentBlockId } from "./blockNavigation";
 
 const layout: LayoutNode = {
   type: "split", id: "root", direction: "horizontal", ratio: 0.5,
-  first: { type: "terminal", blockId: "left", profileId: null },
+  first: { type: "terminal", blockId: "left", profileId: null, restoreDirectory: null },
   second: {
     type: "split", id: "right", direction: "vertical", ratio: 0.5,
-    first: { type: "terminal", blockId: "top-right", profileId: null },
+    first: { type: "terminal", blockId: "top-right", profileId: null, restoreDirectory: null },
     second: { type: "files", blockId: "bottom-right", profileId: null, path: "~" },
   },
 };

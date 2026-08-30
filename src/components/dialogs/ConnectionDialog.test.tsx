@@ -75,7 +75,7 @@ vi.mock("../../workspace/WorkspaceProvider", () => ({
       id: "workspace-1",
       name: "Workspace 1",
       activeBlockId: "block-1",
-      layout: { type: "terminal", blockId: "block-1", profileId: "profile-1" },
+      layout: { type: "terminal", blockId: "block-1", profileId: "profile-1", restoreDirectory: null },
     },
     activeBlockId: "block-1",
     selectBlockTarget: mocks.selectBlockTarget,

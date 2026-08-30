@@ -3,8 +3,8 @@ import { describe, expect, it } from "vitest";
 import { blockIds, closeTerminal, moveTerminal, splitTerminal, updateSplitRatio } from "./layout";
 import type { FilesNode, LayoutNode, TerminalNode } from "./model";
 
-const a: TerminalNode = { type: "terminal", blockId: "a", profileId: null };
-const b: TerminalNode = { type: "terminal", blockId: "b", profileId: "profile-b" };
+const a: TerminalNode = { type: "terminal", blockId: "a", profileId: null, restoreDirectory: null };
+const b: TerminalNode = { type: "terminal", blockId: "b", profileId: "profile-b", restoreDirectory: null };
 
 describe("workspace layout tree", () => {
   it("splits, clamps ratios, and collapses a closed branch", () => {
@@ -15,7 +15,7 @@ describe("workspace layout tree", () => {
   });
 
   it("moves a terminal to an edge without duplicating identities", () => {
-    const c: TerminalNode = { type: "terminal", blockId: "c", profileId: null };
+    const c: TerminalNode = { type: "terminal", blockId: "c", profileId: null, restoreDirectory: null };
     const tree = splitTerminal(splitTerminal(a, "a", "horizontal", b, "s1"), "b", "vertical", c, "s2");
     const moved = moveTerminal(tree, "a", "c", "bottom", "s3");
     expect(blockIds(moved).sort()).toEqual(["a", "b", "c"]);

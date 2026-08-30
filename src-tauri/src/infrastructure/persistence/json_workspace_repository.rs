@@ -14,7 +14,7 @@ use crate::{
     ports::workspace_repository::{WorkspaceRepository, WorkspaceRepositoryError},
 };
 
-const SCHEMA_VERSION: u64 = 6;
+const SCHEMA_VERSION: u64 = 7;
 const MAX_DOCUMENT_BYTES: u64 = 4 * 1024 * 1024;
 
 pub struct JsonWorkspaceRepository {
@@ -57,12 +57,15 @@ impl JsonWorkspaceRepository {
             .ok_or(WorkspaceRepositoryError::CorruptData)?;
         match version {
             SCHEMA_VERSION => {}
-            5 => {
+            5 | 6 => {
                 let object = value
                     .as_object_mut()
                     .ok_or(WorkspaceRepositoryError::CorruptData)?;
+                if version == 5 {
+                    object.insert("recentProfileIds".into(), Value::Array(Vec::new()));
+                }
                 object.insert("schemaVersion".into(), Value::from(SCHEMA_VERSION));
-                object.insert("recentProfileIds".into(), Value::Array(Vec::new()));
+                add_terminal_restore_directories(&mut value);
             }
             _ => return Err(WorkspaceRepositoryError::UnsupportedSchemaVersion(version)),
         }
@@ -134,6 +137,7 @@ enum LayoutRecord {
     Terminal {
         block_id: String,
         profile_id: Option<String>,
+        restore_directory: Option<String>,
     },
     Files {
         block_id: String,
@@ -213,9 +217,11 @@ impl LayoutRecord {
             LayoutNode::Terminal {
                 block_id,
                 profile_id,
+                restore_directory,
             } => Self::Terminal {
                 block_id: block_id.clone(),
                 profile_id: profile_id.clone(),
+                restore_directory: restore_directory.clone(),
             },
             LayoutNode::Files {
                 block_id,
@@ -254,9 +260,11 @@ impl LayoutRecord {
             Self::Terminal {
                 block_id,
                 profile_id,
+                restore_directory,
             } => LayoutNode::Terminal {
                 block_id,
                 profile_id,
+                restore_directory,
             },
             Self::Files {
                 block_id,
@@ -332,6 +340,21 @@ fn contains_forbidden_field(value: &Value) -> bool {
     }
 }
 
+fn add_terminal_restore_directories(value: &mut Value) {
+    match value {
+        Value::Object(object) => {
+            if object.get("type").and_then(Value::as_str) == Some("terminal") {
+                object.insert("restoreDirectory".into(), Value::Null);
+            }
+            for nested in object.values_mut() {
+                add_terminal_restore_directories(nested);
+            }
+        }
+        Value::Array(values) => values.iter_mut().for_each(add_terminal_restore_directories),
+        _ => {}
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::fs;
@@ -359,6 +382,7 @@ mod tests {
                     first: Box::new(LayoutNode::Terminal {
                         block_id: "block-1".into(),
                         profile_id: Some("profile-1".into()),
+                        restore_directory: Some("/srv/project".into()),
                     }),
                     second: Box::new(LayoutNode::Network {
                         block_id: "network-1".into(),
@@ -370,7 +394,7 @@ mod tests {
     }
 
     #[test]
-    fn round_trips_v6_recent_profiles_without_runtime_or_secret_fields() {
+    fn round_trips_v7_terminal_restore_without_runtime_or_secret_fields() {
         let directory = tempdir().expect("temporary directory");
         let path = directory.path().join("workspaces.json");
         let repository = JsonWorkspaceRepository::new(path.clone());
@@ -378,11 +402,12 @@ mod tests {
 
         assert_eq!(repository.load().expect("load workspace"), Some(document()));
         let json = fs::read_to_string(path).expect("workspace json");
-        assert!(json.contains("\"schemaVersion\": 6"));
+        assert!(json.contains("\"schemaVersion\": 7"));
         assert!(json.contains("\"recentProfileIds\""));
         assert!(json.contains("\"type\": \"network\""));
         assert!(json.contains("\"blockId\": \"block-1\""));
         assert!(json.contains("\"profileId\": \"profile-1\""));
+        assert!(json.contains("\"restoreDirectory\": \"/srv/project\""));
         assert!(!json.contains("sourceBlockId"));
         assert!(!json.contains("block_id"));
         for forbidden in ["password", "passphrase", "sessionId", "terminalOutput"] {
@@ -391,24 +416,41 @@ mod tests {
     }
 
     #[test]
-    fn migrates_v5_workspace_schema_without_overwriting_until_save() {
-        let directory = tempdir().expect("temporary directory");
-        let path = directory.path().join("workspaces.json");
-        let mut value = serde_json::to_value(super::DocumentRecord::from_domain(&document()))
-            .expect("workspace fixture");
-        value["schemaVersion"] = serde_json::json!(5);
-        value
-            .as_object_mut()
-            .expect("object")
-            .remove("recentProfileIds");
-        let fixture = serde_json::to_vec_pretty(&value).expect("serialize fixture");
-        fs::write(&path, &fixture).expect("v5 fixture");
-        let repository = JsonWorkspaceRepository::new(path.clone());
+    fn migrates_v5_and_v6_workspace_schemas_without_overwriting_until_save() {
+        for version in [5, 6] {
+            let directory = tempdir().expect("temporary directory");
+            let path = directory.path().join("workspaces.json");
+            let mut value = serde_json::to_value(super::DocumentRecord::from_domain(&document()))
+                .expect("workspace fixture");
+            value["schemaVersion"] = serde_json::json!(version);
+            value["workspaces"][0]["layout"]["first"]
+                .as_object_mut()
+                .expect("terminal record")
+                .remove("restoreDirectory");
+            if version == 5 {
+                value
+                    .as_object_mut()
+                    .expect("object")
+                    .remove("recentProfileIds");
+            }
+            let fixture = serde_json::to_vec_pretty(&value).expect("serialize fixture");
+            fs::write(&path, &fixture).expect("legacy fixture");
+            let repository = JsonWorkspaceRepository::new(path.clone());
 
-        let mut expected = document();
-        expected.recent_profile_ids.clear();
-        assert_eq!(repository.load(), Ok(Some(expected)));
-        assert_eq!(fs::read(path).expect("preserved"), fixture);
+            let mut expected = document();
+            if let LayoutNode::Split { first, .. } = &mut expected.workspaces[0].layout
+                && let LayoutNode::Terminal {
+                    restore_directory, ..
+                } = first.as_mut()
+            {
+                *restore_directory = None;
+            }
+            if version == 5 {
+                expected.recent_profile_ids.clear();
+            }
+            assert_eq!(repository.load(), Ok(Some(expected)));
+            assert_eq!(fs::read(path).expect("preserved"), fixture);
+        }
     }
 
     #[test]

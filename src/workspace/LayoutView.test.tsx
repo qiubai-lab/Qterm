@@ -82,7 +82,7 @@ const workspace: Workspace = {
   id: "workspace-1",
   name: "Workspace 1",
   activeBlockId: "block-1",
-  layout: { type: "terminal", blockId: "block-1", profileId: null },
+  layout: { type: "terminal", blockId: "block-1", profileId: null, restoreDirectory: null },
 };
 
 describe("WorkspaceCanvas terminal actions", () => {
@@ -137,8 +137,8 @@ describe("WorkspaceCanvas terminal actions", () => {
         id: "split-1",
         direction: "horizontal",
         ratio: 0.5,
-        first: { type: "terminal", blockId: "block-1", profileId: null },
-        second: { type: "terminal", blockId: "block-2", profileId: null },
+        first: { type: "terminal", blockId: "block-1", profileId: null, restoreDirectory: null },
+        second: { type: "terminal", blockId: "block-2", profileId: null, restoreDirectory: null },
       },
     };
     const view = render(<WorkspaceCanvas workspace={splitWorkspace} visible onRequestClose={onRequestClose} onRequestAuthConnection={vi.fn()}/>);
@@ -189,7 +189,7 @@ describe("WorkspaceCanvas terminal actions", () => {
   it("reconnects a closed remote terminal through configured authentication", async () => {
     const user = userEvent.setup();
     const onRequestAuthConnection = vi.fn();
-    const remoteWorkspace: Workspace = { ...workspace, layout: { type: "terminal", blockId: "block-1", profileId: "password-profile" } };
+    const remoteWorkspace: Workspace = { ...workspace, layout: { type: "terminal", blockId: "block-1", profileId: "password-profile", restoreDirectory: null } };
     terminalRuntimes = { "block-1": { ...connectedLocalRuntime, sessionId: null, kind: "ssh", status: "failed" } };
     render(<WorkspaceCanvas workspace={remoteWorkspace} visible onRequestClose={vi.fn()} onRequestAuthConnection={onRequestAuthConnection}/>);
 
@@ -200,7 +200,7 @@ describe("WorkspaceCanvas terminal actions", () => {
   it("moves a connected remote disconnect into the host summary", async () => {
     const user = userEvent.setup();
     const onRequestDisconnect = vi.fn();
-    const remoteWorkspace: Workspace = { ...workspace, layout: { type: "terminal", blockId: "block-1", profileId: "password-profile" } };
+    const remoteWorkspace: Workspace = { ...workspace, layout: { type: "terminal", blockId: "block-1", profileId: "password-profile", restoreDirectory: null } };
     terminalRuntimes = { "block-1": { ...connectedLocalRuntime, kind: "ssh", status: "connected" } };
     const view = render(<WorkspaceCanvas workspace={remoteWorkspace} visible onRequestClose={vi.fn()} onRequestDisconnect={onRequestDisconnect} onRequestAuthConnection={vi.fn()}/>);
 
@@ -310,7 +310,7 @@ describe("WorkspaceCanvas terminal actions", () => {
   });
 
   it("opens the remote home directory without a dialog when OSC 7 is unavailable", () => {
-    const remoteWorkspace: Workspace = { ...workspace, layout: { type: "terminal", blockId: "block-1", profileId: "password-profile" } };
+    const remoteWorkspace: Workspace = { ...workspace, layout: { type: "terminal", blockId: "block-1", profileId: "password-profile", restoreDirectory: null } };
     terminalRuntimes = { "block-1": { ...connectedLocalRuntime, kind: "ssh", cwd: null, cwdSource: null } };
     const view = render(<WorkspaceCanvas workspace={remoteWorkspace} visible remoteShellIntegrationEnabled onRequestClose={vi.fn()} onRequestAuthConnection={vi.fn()}/>);
 
@@ -324,7 +324,7 @@ describe("WorkspaceCanvas terminal actions", () => {
   });
 
   it("shows the enabled OSC 7 tag after the remote host and highlights it only after a directory report", () => {
-    const remoteWorkspace: Workspace = { ...workspace, layout: { type: "terminal", blockId: "block-1", profileId: "password-profile" } };
+    const remoteWorkspace: Workspace = { ...workspace, layout: { type: "terminal", blockId: "block-1", profileId: "password-profile", restoreDirectory: null } };
     terminalRuntimes = { "block-1": { ...connectedLocalRuntime, kind: "ssh", cwd: null, cwdSource: null } };
     const renderCanvas = () => <WorkspaceCanvas workspace={remoteWorkspace} visible remoteShellIntegrationEnabled onRequestClose={vi.fn()} onRequestAuthConnection={vi.fn()}/>;
     const view = render(renderCanvas());
@@ -364,7 +364,7 @@ describe("WorkspaceCanvas terminal actions", () => {
   });
 
   it("opens the remote home directory when OSC 7 is disabled", () => {
-    const remoteWorkspace: Workspace = { ...workspace, layout: { type: "terminal", blockId: "block-1", profileId: "password-profile" } };
+    const remoteWorkspace: Workspace = { ...workspace, layout: { type: "terminal", blockId: "block-1", profileId: "password-profile", restoreDirectory: null } };
     terminalRuntimes = { "block-1": { ...connectedLocalRuntime, kind: "ssh", initialCwd: null, cwd: null, cwdSource: null } };
     const view = render(<WorkspaceCanvas workspace={remoteWorkspace} visible remoteShellIntegrationEnabled={false} onRequestClose={vi.fn()} onRequestAuthConnection={vi.fn()}/>);
 
@@ -383,7 +383,7 @@ describe("WorkspaceCanvas terminal actions", () => {
     expect(within(localView.container).getByRole("button", { name: "打开网络窗口" })).toBeDisabled();
     localView.unmount();
 
-    const remoteWorkspace: Workspace = { ...workspace, layout: { type: "terminal", blockId: "block-1", profileId: "password-profile" } };
+    const remoteWorkspace: Workspace = { ...workspace, layout: { type: "terminal", blockId: "block-1", profileId: "password-profile", restoreDirectory: null } };
     const remoteView = render(<WorkspaceCanvas workspace={remoteWorkspace} visible onRequestClose={vi.fn()} onRequestAuthConnection={vi.fn()}/>);
     await user.click(within(remoteView.container).getByRole("button", { name: "打开网络窗口" }));
     expect(dispatch).toHaveBeenCalledWith({ type: "openNetwork", workspaceId: "workspace-1", anchorBlockId: "block-1", profileId: "password-profile" });
@@ -431,7 +431,7 @@ describe("WorkspaceCanvas terminal actions", () => {
       ],
     };
     terminalRuntimes = { "block-1": { ...connectedLocalRuntime, kind: "ssh", status: "connecting", connectionProgress: progress } };
-    const view = render(<WorkspaceCanvas workspace={{ ...workspace, layout: { type: "terminal", blockId: "block-1", profileId: "password-profile" } }} visible onRequestClose={vi.fn()} onRequestAuthConnection={vi.fn()}/>);
+    const view = render(<WorkspaceCanvas workspace={{ ...workspace, layout: { type: "terminal", blockId: "block-1", profileId: "password-profile", restoreDirectory: null } }} visible onRequestClose={vi.fn()} onRequestAuthConnection={vi.fn()}/>);
     expect(screen.getByRole("status")).toHaveTextContent("正在连接节点 1");
     expect(view.container.querySelector(".terminal-block-header > .connection-route-progress")).not.toBeNull();
 
@@ -450,7 +450,7 @@ describe("WorkspaceCanvas terminal actions", () => {
       nodes: [{ index: 0, name: "Password Server", endpoint: "password.example:22", role: "target" as const, state: "complete" as const, stage: "startSession" as const }],
     };
     terminalRuntimes = { "block-1": { ...connectedLocalRuntime, kind: "ssh", status: "connected", connectionProgress: progress } };
-    const view = render(<WorkspaceCanvas workspace={{ ...workspace, layout: { type: "terminal", blockId: "block-1", profileId: "password-profile" } }} visible onRequestClose={vi.fn()} onRequestAuthConnection={vi.fn()}/>);
+    const view = render(<WorkspaceCanvas workspace={{ ...workspace, layout: { type: "terminal", blockId: "block-1", profileId: "password-profile", restoreDirectory: null } }} visible onRequestClose={vi.fn()} onRequestAuthConnection={vi.fn()}/>);
     const route = view.container.querySelector(".connection-route-progress");
     const dots = route?.querySelector(".connection-route-dots");
     const endpoint = route?.querySelector(".connection-route-endpoint");
@@ -512,7 +512,7 @@ describe("WorkspaceCanvas terminal actions", () => {
   it("automatically requests one connection for a persisted remote terminal leaf", async () => {
     terminalRuntimes = {};
     const onRequestAuthConnection = vi.fn();
-    render(<WorkspaceCanvas workspace={{ ...workspace, layout: { type: "terminal", blockId: "block-1", profileId: "password-profile" } }} visible onRequestClose={vi.fn()} onRequestAuthConnection={onRequestAuthConnection}/>);
+    render(<WorkspaceCanvas workspace={{ ...workspace, layout: { type: "terminal", blockId: "block-1", profileId: "password-profile", restoreDirectory: null } }} visible onRequestClose={vi.fn()} onRequestAuthConnection={onRequestAuthConnection}/>);
 
     await vi.waitFor(() => expect(onRequestAuthConnection).toHaveBeenCalledWith("terminal", "block-1", profiles[0]));
     expect(onRequestAuthConnection).toHaveBeenCalledOnce();
@@ -559,7 +559,7 @@ describe("WorkspaceCanvas terminal actions", () => {
         second: {
           type: "split", id: "split-right", direction: "vertical", ratio: 0.5,
           first: { type: "files", blockId: "files-1", profileId: null, path: "C:/work" },
-          second: { type: "terminal", blockId: "block-2", profileId: null },
+          second: { type: "terminal", blockId: "block-2", profileId: null, restoreDirectory: null },
         },
       },
     };

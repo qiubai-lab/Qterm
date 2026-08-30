@@ -8,7 +8,7 @@ const layout: LayoutNode = {
   id: "root",
   direction: "horizontal",
   ratio: 0.4,
-  first: { type: "terminal", blockId: "terminal-1", profileId: null },
+  first: { type: "terminal", blockId: "terminal-1", profileId: null, restoreDirectory: null },
   second: {
     type: "split",
     id: "right",

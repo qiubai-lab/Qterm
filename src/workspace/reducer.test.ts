@@ -68,6 +68,26 @@ describe("workspace reducer", () => {
     expect(blockIds(closedWorkspace.layout)).toContain(closedWorkspace.activeBlockId);
   });
 
+  it("persists a terminal restore directory idempotently and clears it across target changes", () => {
+    const initial = createWorkspaceDocument();
+    const workspace = initial.workspaces[0];
+    const blockId = workspace.activeBlockId;
+    const restored = workspaceReducer(initial, { type: "setTerminalRestoreDirectory", workspaceId: workspace.id, blockId, profileId: null, restoreDirectory: "/srv/project" });
+
+    expect(restored.workspaces[0].layout).toMatchObject({ type: "terminal", blockId, profileId: null, restoreDirectory: "/srv/project" });
+    expect(workspaceReducer(restored, { type: "setTerminalRestoreDirectory", workspaceId: workspace.id, blockId, profileId: null, restoreDirectory: "/srv/project" })).toBe(restored);
+    expect(workspaceReducer(restored, { type: "setTerminalRestoreDirectory", workspaceId: workspace.id, blockId, profileId: "profile-stale", restoreDirectory: "/wrong" })).toBe(restored);
+    expect(workspaceReducer(restored, { type: "setTerminalRestoreDirectory", workspaceId: workspace.id, blockId, profileId: null, restoreDirectory: "x".repeat(4097) })).toBe(restored);
+    expect(workspaceReducer(restored, { type: "setTerminalRestoreDirectory", workspaceId: workspace.id, blockId, profileId: null, restoreDirectory: "/has\0nul" })).toBe(restored);
+
+    const retargeted = workspaceReducer(restored, { type: "setBlockProfile", workspaceId: workspace.id, blockId, profileId: "profile-1" });
+    expect(retargeted.workspaces[0].layout).toMatchObject({ type: "terminal", profileId: "profile-1", restoreDirectory: null });
+
+    const remote = workspaceReducer(retargeted, { type: "setTerminalRestoreDirectory", workspaceId: workspace.id, blockId, profileId: "profile-1", restoreDirectory: "/remote" });
+    const cleared = workspaceReducer(remote, { type: "clearTerminalRestoreDirectories" });
+    expect(cleared.workspaces[0].layout).toMatchObject({ type: "terminal", profileId: "profile-1", restoreDirectory: null });
+  });
+
   it("opens the current path as a persisted files leaf", () => {
     const initial = createWorkspaceDocument();
     const workspace = initial.workspaces[0];

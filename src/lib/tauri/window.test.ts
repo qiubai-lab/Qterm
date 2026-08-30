@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@tauri-apps/api/window", () => ({ getCurrentWindow: vi.fn() }));
 
-import { closeCurrentWindow, currentDesktopPlatform, minimizeCurrentWindow, setNativeWindowTheme, startDraggingCurrentWindow, toggleMaximizeCurrentWindow } from "./window";
+import { closeCurrentWindow, currentDesktopPlatform, minimizeCurrentWindow, registerCurrentWindowCloseFlush, setNativeWindowTheme, startDraggingCurrentWindow, toggleMaximizeCurrentWindow } from "./window";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -56,5 +56,41 @@ describe("Tauri window adapter", () => {
 
     expect(setTheme).toHaveBeenNthCalledWith(1, "light");
     expect(setTheme).toHaveBeenNthCalledWith(2, "dark");
+  });
+
+  it("flushes workspace state before destroying a normally closing window", async () => {
+    const preventDefault = vi.fn();
+    const destroy = vi.fn().mockResolvedValue(undefined);
+    const stop = vi.fn();
+    let closeHandler: ((event: { preventDefault: () => void }) => Promise<void>) | undefined;
+    const onCloseRequested = vi.fn().mockImplementation(async (handler) => {
+      closeHandler = handler;
+      return stop;
+    });
+    Object.defineProperty(window, "__TAURI_INTERNALS__", { configurable: true, value: {} });
+    vi.mocked(getCurrentWindow).mockReturnValue({ onCloseRequested, destroy } as unknown as ReturnType<typeof getCurrentWindow>);
+    const flush = vi.fn().mockResolvedValue(undefined);
+
+    await expect(registerCurrentWindowCloseFlush(flush)).resolves.toBe(stop);
+    await closeHandler?.({ preventDefault });
+
+    expect(preventDefault).toHaveBeenCalledOnce();
+    expect(flush).toHaveBeenCalledOnce();
+    expect(destroy).toHaveBeenCalledOnce();
+    expect(flush.mock.invocationCallOrder[0]).toBeLessThan(destroy.mock.invocationCallOrder[0]);
+  });
+
+  it("still destroys the window when the final workspace save fails", async () => {
+    const destroy = vi.fn().mockResolvedValue(undefined);
+    let closeHandler: ((event: { preventDefault: () => void }) => Promise<void>) | undefined;
+    Object.defineProperty(window, "__TAURI_INTERNALS__", { configurable: true, value: {} });
+    vi.mocked(getCurrentWindow).mockReturnValue({
+      onCloseRequested: vi.fn().mockImplementation(async (handler) => { closeHandler = handler; return vi.fn(); }),
+      destroy,
+    } as unknown as ReturnType<typeof getCurrentWindow>);
+
+    await registerCurrentWindowCloseFlush(vi.fn().mockRejectedValue(new Error("save failed")));
+    await expect(closeHandler?.({ preventDefault: vi.fn() })).rejects.toThrow("save failed");
+    expect(destroy).toHaveBeenCalledOnce();
   });
 });

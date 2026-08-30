@@ -40,6 +40,19 @@ export async function setNativeWindowTheme(theme: AppTheme): Promise<void> {
   if (isTauriRuntime()) await getCurrentWindow().setTheme(theme === "light" ? "light" : "dark");
 }
 
+export async function registerCurrentWindowCloseFlush(flush: () => Promise<void>): Promise<() => void> {
+  if (!isTauriRuntime()) return () => undefined;
+  const currentWindow = getCurrentWindow();
+  return currentWindow.onCloseRequested(async (event) => {
+    event.preventDefault();
+    try {
+      await flush();
+    } finally {
+      await currentWindow.destroy();
+    }
+  });
+}
+
 function isTauriRuntime(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }

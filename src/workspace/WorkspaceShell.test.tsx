@@ -38,7 +38,7 @@ const mocks = vi.hoisted(() => ({
 
 const connectionProfile: ConnectionProfile = { id: "agent-profile", name: "Server", host: "host", port: 22, username: "dev", authPreference: "sshAgent", credentialId: null, groupId: null };
 let requestedProfile: ConnectionProfile = connectionProfile;
-const initialWorkspace: Workspace = { id: "workspace-1", name: "Workspace 1", activeBlockId: "block-1", layout: { type: "terminal", blockId: "block-1", profileId: null } };
+const initialWorkspace: Workspace = { id: "workspace-1", name: "Workspace 1", activeBlockId: "block-1", layout: { type: "terminal", blockId: "block-1", profileId: null, restoreDirectory: null } };
 let workspace = initialWorkspace;
 let workspaces = [initialWorkspace];
 let terminalRuntimes: Record<string, TerminalRuntime> = {};
@@ -46,7 +46,7 @@ let terminalRuntimes: Record<string, TerminalRuntime> = {};
 vi.mock("./configuredAuth", () => ({ resolveConfiguredAuth: mocks.resolveConfiguredAuth }));
 vi.mock("./LayoutView", () => ({ WorkspaceCanvas: ({ workspace: renderedWorkspace, localTerminalAttention, remoteShellIntegrationEnabled, terminalSettingsReady, onRequestAuthConnection, onRequestDisconnect, onOpenConnectionManager }: { workspace: Workspace; localTerminalAttention?: boolean; remoteShellIntegrationEnabled?: boolean; terminalSettingsReady?: boolean; onRequestAuthConnection: (owner: "terminal", blockId: string, profile: typeof requestedProfile) => void; onRequestDisconnect: (owner: "terminal" | "files" | "network", blockId: string, name: string, local: boolean) => void; onOpenConnectionManager: () => void }) => <div data-testid={`workspace-canvas-${renderedWorkspace.id}`} data-local-terminal-attention={localTerminalAttention || undefined} data-remote-shell-integration={remoteShellIntegrationEnabled || undefined} data-terminal-settings-ready={terminalSettingsReady || undefined}><div className="terminal-surface"><textarea className="xterm-helper-textarea" aria-label="终端输入"/></div><button onClick={() => onRequestAuthConnection("terminal", "block-1", requestedProfile)}>请求远程连接</button><button onClick={() => onRequestDisconnect("terminal", "block-1", "Server", false)}>请求断开连接</button><button onClick={() => onRequestDisconnect("files", "files-1", "Server Files", false)}>请求断开文件连接</button><button onClick={() => onRequestDisconnect("network", "network-1", "Server Network", false)}>请求断开网络连接</button><button onClick={onOpenConnectionManager}>从连接选择器管理连接</button></div> }));
 vi.mock("./WorkspaceProvider", () => ({ useWorkspace: () => ({
-  hydrated: true, document: { schemaVersion: 6, activeWorkspaceId: workspace.id, recentProfileIds: [], workspaces }, activeWorkspace: workspace,
+  hydrated: true, document: { schemaVersion: 7, activeWorkspaceId: workspace.id, recentProfileIds: [], workspaces }, activeWorkspace: workspace,
   dispatch: mocks.dispatch, runtimes: terminalRuntimes, fileRuntimes: {}, networkRuntimes: {}, clearTerminalOsc7State: mocks.clearTerminalOsc7State, splitTerminalBlock: mocks.splitTerminalBlock, connectBlock: mocks.connectBlock, connectFileBlock: mocks.connectFileBlock, connectNetworkBlock: mocks.connectNetworkBlock, disconnectBlock: mocks.disconnectBlock, disconnectFileBlock: mocks.disconnectFileBlock, disconnectNetworkBlock: mocks.disconnectNetworkBlock,
   isConnectionTargetCurrent: mocks.isConnectionTargetCurrent,
   connectedCount: vi.fn().mockReturnValue(0), closeSessions: vi.fn().mockResolvedValue(undefined), blocksForWorkspace: vi.fn().mockReturnValue(["block-1"]),
@@ -141,7 +141,7 @@ describe("WorkspaceShell configured connection routing", () => {
 
     await waitFor(() => expect(screen.getByTestId("workspace-canvas-workspace-1")).toHaveAttribute("data-local-terminal-attention", "true"));
 
-    const createdWorkspace: Workspace = { id: "workspace-2", name: "Workspace 2", activeBlockId: "block-2", layout: { type: "terminal", blockId: "block-2", profileId: null } };
+    const createdWorkspace: Workspace = { id: "workspace-2", name: "Workspace 2", activeBlockId: "block-2", layout: { type: "terminal", blockId: "block-2", profileId: null, restoreDirectory: null } };
     workspace = createdWorkspace;
     workspaces = [initialWorkspace, createdWorkspace];
     view.rerender(<WorkspaceShell/>);
@@ -488,7 +488,7 @@ describe("WorkspaceShell utility rail", () => {
   });
 
   it("opens files with the active remote terminal profile and OSC 7 directory", async () => {
-    workspace = { id: "workspace-remote", name: "Remote", activeBlockId: "remote-terminal", layout: { type: "terminal", blockId: "remote-terminal", profileId: "agent-profile" } };
+    workspace = { id: "workspace-remote", name: "Remote", activeBlockId: "remote-terminal", layout: { type: "terminal", blockId: "remote-terminal", profileId: "agent-profile", restoreDirectory: null } };
     workspaces = [workspace];
     terminalRuntimes = {
       "remote-terminal": {
@@ -516,7 +516,7 @@ describe("WorkspaceShell utility rail", () => {
   });
 
   it("opens network management with the active remote connection", async () => {
-    workspace = { id: "workspace-remote", name: "Remote", activeBlockId: "remote-terminal", layout: { type: "terminal", blockId: "remote-terminal", profileId: "agent-profile" } };
+    workspace = { id: "workspace-remote", name: "Remote", activeBlockId: "remote-terminal", layout: { type: "terminal", blockId: "remote-terminal", profileId: "agent-profile", restoreDirectory: null } };
     workspaces = [workspace];
     const user = userEvent.setup();
     render(<WorkspaceShell/>);
@@ -559,7 +559,7 @@ describe("WorkspaceShell utility rail", () => {
         direction: "horizontal" as const,
         ratio: 0.5,
         first: initialWorkspace.layout,
-        second: { type: "terminal" as const, blockId: "block-2", profileId: null },
+        second: { type: "terminal" as const, blockId: "block-2", profileId: null, restoreDirectory: null },
       },
     };
     view.rerender(<WorkspaceShell/>);

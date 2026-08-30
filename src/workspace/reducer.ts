@@ -1,5 +1,5 @@
-import { blockIds, closeTerminal, findLeaf, moveTerminal, setFilesPath, setFilesProfile, setNetworkProfile, setTerminalProfile, splitTerminal, terminalBlockIds, updateSplitRatio, type DropPosition } from "./layout";
-import { createFilesNode, createId, createNetworkNode, createTerminalNode, createWorkspace, type SplitDirection, type Workspace, type WorkspaceDocument } from "./model";
+import { blockIds, clearTerminalRestoreDirectories, closeTerminal, findLeaf, moveTerminal, setFilesPath, setFilesProfile, setNetworkProfile, setTerminalProfile, setTerminalRestoreDirectory, splitTerminal, terminalBlockIds, updateSplitRatio, type DropPosition } from "./layout";
+import { createFilesNode, createId, createNetworkNode, createTerminalNode, createWorkspace, isValidTerminalRestoreDirectory, type SplitDirection, type Workspace, type WorkspaceDocument } from "./model";
 
 export type WorkspaceAction =
   | { type: "hydrate"; document: WorkspaceDocument }
@@ -16,6 +16,8 @@ export type WorkspaceAction =
   | { type: "closeBlock"; workspaceId: string; blockId: string }
   | { type: "resizeSplit"; workspaceId: string; splitId: string; ratio: number }
   | { type: "setBlockProfile"; workspaceId: string; blockId: string; profileId: string | null }
+  | { type: "setTerminalRestoreDirectory"; workspaceId: string; blockId: string; profileId: string | null; restoreDirectory: string | null }
+  | { type: "clearTerminalRestoreDirectories" }
   | { type: "setFilesPath"; workspaceId: string; blockId: string; profileId: string | null; path: string }
   | { type: "setFilesProfile"; workspaceId: string; blockId: string; profileId: string | null }
   | { type: "setNetworkProfile"; workspaceId: string; blockId: string; profileId: string | null }
@@ -70,6 +72,23 @@ export function workspaceReducer(state: WorkspaceDocument, action: WorkspaceActi
     });
     case "resizeSplit": return mapWorkspace(state, action.workspaceId, (workspace) => ({ ...workspace, layout: updateSplitRatio(workspace.layout, action.splitId, action.ratio) }));
     case "setBlockProfile": return mapWorkspace(state, action.workspaceId, (workspace) => ({ ...workspace, layout: setTerminalProfile(workspace.layout, action.blockId, action.profileId) }));
+    case "setTerminalRestoreDirectory": {
+      if (action.restoreDirectory !== null && !isValidTerminalRestoreDirectory(action.restoreDirectory)) return state;
+      return mapWorkspace(state, action.workspaceId, (workspace) => {
+        const layout = setTerminalRestoreDirectory(workspace.layout, action.blockId, action.profileId, action.restoreDirectory);
+        return layout === workspace.layout ? workspace : { ...workspace, layout };
+      });
+    }
+    case "clearTerminalRestoreDirectories": {
+      let changed = false;
+      const workspaces = state.workspaces.map((workspace) => {
+        const layout = clearTerminalRestoreDirectories(workspace.layout);
+        if (layout === workspace.layout) return workspace;
+        changed = true;
+        return { ...workspace, layout };
+      });
+      return changed ? { ...state, workspaces } : state;
+    }
     case "setFilesPath": return mapWorkspace(state, action.workspaceId, (workspace) => {
       const leaf = findLeaf(workspace.layout, action.blockId);
       if (!leaf || leaf.type !== "files" || leaf.profileId !== action.profileId) return workspace;
@@ -82,7 +101,14 @@ export function workspaceReducer(state: WorkspaceDocument, action: WorkspaceActi
 }
 
 function mapWorkspace(state: WorkspaceDocument, id: string, update: (workspace: Workspace) => Workspace): WorkspaceDocument {
-  return { ...state, workspaces: state.workspaces.map((workspace) => workspace.id === id ? update(workspace) : workspace) };
+  let changed = false;
+  const workspaces = state.workspaces.map((workspace) => {
+    if (workspace.id !== id) return workspace;
+    const next = update(workspace);
+    changed = next !== workspace;
+    return next;
+  });
+  return changed ? { ...state, workspaces } : state;
 }
 
 function reorderWorkspace(state: WorkspaceDocument, workspaceId: string, targetWorkspaceId: string): WorkspaceDocument {
