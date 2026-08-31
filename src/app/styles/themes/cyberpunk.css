@@ -45,6 +45,12 @@
   --block-active-endpoint-text:var(--danger);
   --scrollbar-track:#090d12;
   --scrollbar-thumb:#168996;
+  --git-graph-lane-1:#00ddeb;
+  --git-graph-lane-2:#fcee0a;
+  --git-graph-lane-3:#ff7a83;
+  --git-graph-lane-4:#76beff;
+  --git-graph-lane-5:#e883ff;
+  --git-graph-lane-6:#83e9b2;
   --accent:#00ddeb;
   --accent-bg:#07383f;
   --accent-contrast:#071014;

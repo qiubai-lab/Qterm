@@ -13,8 +13,23 @@ pub trait GitExecutor: Send + Sync + 'static {
     fn commit(&self, repository: &Path, message: &str) -> Result<GitSnapshot, GitError>;
     fn commit_files(&self, repository: &Path, oid: &str) -> Result<Vec<GitCommitFile>, GitError>;
     fn create_branch(&self, repository: &Path, name: &str) -> Result<GitSnapshot, GitError>;
+    fn create_branch_from(
+        &self,
+        repository: &Path,
+        name: &str,
+        source_ref: &str,
+    ) -> Result<GitSnapshot, GitError>;
+    fn rename_branch(
+        &self,
+        repository: &Path,
+        ref_name: &str,
+        new_name: &str,
+    ) -> Result<GitSnapshot, GitError>;
+    fn delete_branch(&self, repository: &Path, ref_name: &str) -> Result<GitSnapshot, GitError>;
     fn switch_branch(&self, repository: &Path, name: &str) -> Result<GitSnapshot, GitError>;
     fn fetch(&self, repository: &Path) -> Result<GitSnapshot, GitError>;
+    fn pull(&self, repository: &Path) -> Result<GitSnapshot, GitError>;
+    fn push(&self, repository: &Path, remote: Option<&str>) -> Result<GitSnapshot, GitError>;
     fn track_remote_branch(
         &self,
         repository: &Path,

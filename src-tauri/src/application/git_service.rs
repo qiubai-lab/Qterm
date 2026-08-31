@@ -2,9 +2,10 @@ use std::path::{Path, PathBuf};
 
 use crate::{
     domain::git::{
-        GitCommitFile, GitError, GitSnapshot, validate_branch_name, validate_commit_message,
-        validate_commit_oid, validate_paths, validate_remote_branch_ref,
-        validate_remote_repository_path, validate_repository_path,
+        GitCommitFile, GitError, GitSnapshot, validate_branch_name, validate_branch_source_ref,
+        validate_commit_message, validate_commit_oid, validate_local_branch_ref, validate_paths,
+        validate_remote_branch_ref, validate_remote_name, validate_remote_repository_path,
+        validate_repository_path,
     },
     ports::git_executor::GitExecutor,
     ports::remote_git_executor::RemoteGitExecutor,
@@ -94,6 +95,40 @@ impl<E: GitExecutor> GitService<E> {
         self.executor.create_branch(&input_path(repository)?, &name)
     }
 
+    pub fn create_branch_from(
+        &self,
+        repository: String,
+        name: String,
+        source_ref: String,
+    ) -> Result<GitSnapshot, GitError> {
+        validate_branch_name(&name)?;
+        validate_branch_source_ref(&source_ref)?;
+        self.executor
+            .create_branch_from(&input_path(repository)?, &name, &source_ref)
+    }
+
+    pub fn rename_branch(
+        &self,
+        repository: String,
+        ref_name: String,
+        new_name: String,
+    ) -> Result<GitSnapshot, GitError> {
+        validate_local_branch_ref(&ref_name)?;
+        validate_branch_name(&new_name)?;
+        self.executor
+            .rename_branch(&input_path(repository)?, &ref_name, &new_name)
+    }
+
+    pub fn delete_branch(
+        &self,
+        repository: String,
+        ref_name: String,
+    ) -> Result<GitSnapshot, GitError> {
+        validate_local_branch_ref(&ref_name)?;
+        self.executor
+            .delete_branch(&input_path(repository)?, &ref_name)
+    }
+
     pub fn switch_branch(&self, repository: String, name: String) -> Result<GitSnapshot, GitError> {
         validate_branch_name(&name)?;
         self.executor.switch_branch(&input_path(repository)?, &name)
@@ -101,6 +136,22 @@ impl<E: GitExecutor> GitService<E> {
 
     pub fn fetch(&self, repository: String) -> Result<GitSnapshot, GitError> {
         self.executor.fetch(&input_path(repository)?)
+    }
+
+    pub fn pull(&self, repository: String) -> Result<GitSnapshot, GitError> {
+        self.executor.pull(&input_path(repository)?)
+    }
+
+    pub fn push(
+        &self,
+        repository: String,
+        remote: Option<String>,
+    ) -> Result<GitSnapshot, GitError> {
+        if let Some(remote) = remote.as_deref() {
+            validate_remote_name(remote)?;
+        }
+        self.executor
+            .push(&input_path(repository)?, remote.as_deref())
     }
 
     pub fn track_remote_branch(

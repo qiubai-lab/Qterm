@@ -213,10 +213,17 @@ describe("Git pane style contracts", () => {
     const popover = declarations(".git-repository-popover");
     expect(popover).toContain("position: fixed");
     expect(popover).toContain("z-index: 130");
-    expect(popover).toContain("background: var(--floating-material)");
+    expect(popover).toContain("background: color-mix(in srgb, var(--raised) 98%, var(--canvas))");
+    expect(popover).toContain("border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--floating-border))");
+    const popoverTitle = declarations(".git-repository-popover-title");
+    expect(popoverTitle).toContain("border-bottom: 1px solid color-mix(in srgb, var(--text) 9%, var(--subtle))");
+    expect(popoverTitle).toContain("color: var(--text)");
+    expect(popoverTitle).toContain("background: linear-gradient(180deg, color-mix(in srgb, var(--raised) 94%, var(--text)) 0%, color-mix(in srgb, var(--raised) 96%, var(--surface)) 100%)");
+    expect(popoverTitle).toContain("box-shadow: inset 0 1px color-mix(in srgb, var(--text) 7%, transparent)");
+    expect(popoverTitle).not.toContain("inset 2px 0 var(--accent)");
     expect(declarations(".git-branch-popover")).toContain("width: 336px");
     expect(declarations(".git-branch-popover")).toContain("padding: 0");
-    expect(declarations(".git-branch-popover")).toContain("background: color-mix(in srgb, var(--raised) 96%, var(--canvas))");
+    expect(declarations(".git-branch-popover")).toContain("background: color-mix(in srgb, var(--raised) 98%, var(--canvas))");
     const branchSearch = declarations(".git-branch-search");
     expect(branchSearch).toContain("width: 0");
     expect(branchSearch).toContain("margin: 0");
@@ -263,6 +270,32 @@ describe("Git pane style contracts", () => {
     expect(styles).not.toContain(".git-branch-upstream");
   });
 
+  it("keeps P0 Git action and form popovers compact, themed, and independently scrollable", () => {
+    const actionMenu = declarations(".git-repository-action-popover");
+    expect(actionMenu).toContain("width: 210px");
+    expect(actionMenu).toContain("background: color-mix(in srgb, var(--raised) 98%, var(--canvas))");
+    expect(declarations(".git-repository-action-popover > .git-repository-popover-title")).toBe("");
+    expect(declarations(".git-repository-action-item")).toContain("height: 28px");
+    expect(declarations(".git-repository-action-item:hover:not(:disabled)")).toContain("background: color-mix(in srgb, var(--accent) 12%, var(--raised))");
+    const expandedAction = declarations('.git-repository-action-item[aria-expanded="true"]');
+    expect(expandedAction).toContain("background: color-mix(in srgb, var(--accent) 12%, var(--raised))");
+    expect(expandedAction).toContain("box-shadow: inset 2px 0 var(--accent)");
+    expect(declarations(".git-repository-action-item:focus-visible")).toContain("outline: 2px solid var(--focus)");
+    expect(declarations(".git-repository-action-separator")).toContain("var(--accent) 22%");
+    const submenu = declarations(".git-repository-submenu");
+    expect(submenu).toContain("position: fixed");
+    expect(submenu).toContain("z-index: 131");
+    const form = declarations(".git-branch-management-popover");
+    expect(form).toContain("width: 292px");
+    expect(declarations(".git-operation-list")).toContain("overflow-y: auto");
+    expect(declarations(".git-operation-list")).toContain("scrollbar-color: var(--scrollbar-thumb) transparent");
+    expect(declarations('.git-operation-row[data-status="error"]')).toContain("var(--danger)");
+    expect(declarations(".git-branch-management-danger")).toContain("var(--danger)");
+    expect(declarations('.git-repository-refresh[data-updating="true"] svg')).toContain("animation: git-repository-picker-spin 700ms linear infinite");
+    const reducedMotion = styles.slice(styles.indexOf("@media (prefers-reduced-motion: reduce)"));
+    expect(reducedMotion).toContain('.git-repository-refresh[data-updating="true"] svg');
+  });
+
   it("presents graph commits as selectable two-line rows with themed decorations", () => {
     const row = declarations(".git-commit-row");
     expect(row).toContain("grid-template-columns: auto minmax(0, 1fr)");
@@ -274,6 +307,11 @@ describe("Git pane style contracts", () => {
     expect(selected).not.toContain("inset 2px");
     const selectedCopy = declarations('.git-commit-row[aria-pressed="true"] .git-commit-subject,\n.git-commit-row[aria-pressed="true"] .git-commit-meta,\n.git-commit-row[aria-pressed="true"] .git-commit-expander');
     expect(selectedCopy).toContain("color: var(--primary-action-contrast)");
+    expect(declarations('.git-commit-row[aria-pressed="true"] .git-graph-lanes circle')).not.toContain("stroke:");
+    expect(styles).toContain("stroke: var(--git-graph-lane-color)");
+    for (let lane = 1; lane <= 6; lane += 1) {
+      expect(styles).toContain(`--git-graph-lane-color: var(--git-graph-lane-${lane})`);
+    }
     expect(declarations(".git-commit-summary")).toContain("display: flex");
     expect(declarations('.git-decorations span[data-kind="head"]')).toContain("var(--primary-action)");
     expect(declarations('.git-decorations span[data-kind="remote"]')).toContain("var(--accent)");
@@ -318,7 +356,7 @@ describe("Git pane style contracts", () => {
     const continuationSvg = declarations(".git-graph-continuation svg");
     expect(continuationSvg).toContain("position: absolute");
     expect(continuationSvg).toContain("height: 100%");
-    expect(declarations(".git-graph-continuation line")).toContain("stroke: currentColor");
+    expect(declarations(".git-graph-continuation line")).toContain("stroke: var(--git-graph-lane-color)");
     expect(declarations(".git-graph-bridge")).toContain("height: 7px");
     expect(declarations(".git-graph-bridge")).toContain("margin: -1px 0");
     expect(declarations(".git-commit-files")).toContain("padding: 3px 4px 4px");

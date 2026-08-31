@@ -372,6 +372,27 @@ async fn git_actions_require_a_connected_git_purpose_session_owned_by_the_profil
             repository: "/srv/project".into(),
             ref_name: "refs/remotes/origin/feature/test".into(),
         },
+        crate::domain::git::RemoteGitAction::CreateBranchFrom {
+            repository: "/srv/project".into(),
+            name: "feature/from-main".into(),
+            source_ref: "refs/remotes/origin/main".into(),
+        },
+        crate::domain::git::RemoteGitAction::RenameBranch {
+            repository: "/srv/project".into(),
+            ref_name: "refs/heads/feature/from-main".into(),
+            new_name: "feature/renamed".into(),
+        },
+        crate::domain::git::RemoteGitAction::DeleteBranch {
+            repository: "/srv/project".into(),
+            ref_name: "refs/heads/feature/renamed".into(),
+        },
+        crate::domain::git::RemoteGitAction::Pull {
+            repository: "/srv/project".into(),
+        },
+        crate::domain::git::RemoteGitAction::Push {
+            repository: "/srv/project".into(),
+            remote: Some("origin".into()),
+        },
     ] {
         let expected = action.clone();
         let action_request = {
@@ -1041,12 +1062,144 @@ fn local_openssh_exercises_remote_git_init_stage_commit_fetch_track_branch_and_s
     })
     .expect("remote track branch");
     assert_eq!(tracked.head.name.as_deref(), Some("remote-only"));
-    let branched = run(crate::domain::git::RemoteGitAction::CreateBranch {
-        repository: repository_path,
-        name: "feature/remote".into(),
+    let created_from = run(crate::domain::git::RemoteGitAction::CreateBranchFrom {
+        repository: repository_path.clone(),
+        name: "feature/from-remote".into(),
+        source_ref: "refs/remotes/origin/remote-only".into(),
     })
-    .expect("remote branch");
-    assert_eq!(branched.head.name.as_deref(), Some("feature/remote"));
+    .expect("remote branch from explicit ref");
+    assert_eq!(
+        created_from.head.name.as_deref(),
+        Some("feature/from-remote")
+    );
+    assert_eq!(created_from.head.upstream, None);
+    let renamed = run(crate::domain::git::RemoteGitAction::RenameBranch {
+        repository: repository_path.clone(),
+        ref_name: "refs/heads/feature/from-remote".into(),
+        new_name: "feature/renamed".into(),
+    })
+    .expect("remote rename branch");
+    assert_eq!(renamed.head.name.as_deref(), Some("feature/renamed"));
+    run(crate::domain::git::RemoteGitAction::SwitchBranch {
+        repository: repository_path.clone(),
+        name: "remote-only".into(),
+    })
+    .expect("leave renamed branch");
+    let deleted = run(crate::domain::git::RemoteGitAction::DeleteBranch {
+        repository: repository_path.clone(),
+        ref_name: "refs/heads/feature/renamed".into(),
+    })
+    .expect("safe delete renamed branch");
+    assert!(
+        deleted
+            .branches
+            .iter()
+            .all(|branch| branch.ref_name != "refs/heads/feature/renamed")
+    );
+
+    run(crate::domain::git::RemoteGitAction::CreateBranch {
+        repository: repository_path.clone(),
+        name: "feature/publish".into(),
+    })
+    .expect("create publish branch");
+    fs::write(repository.join("published.txt"), b"published over SSH\n").expect("published file");
+    run(crate::domain::git::RemoteGitAction::StageAll {
+        repository: repository_path.clone(),
+    })
+    .expect("stage published file");
+    run(crate::domain::git::RemoteGitAction::Commit {
+        repository: repository_path.clone(),
+        message: "feat: publish over SSH".into(),
+    })
+    .expect("commit published file");
+    let published = run(crate::domain::git::RemoteGitAction::Push {
+        repository: repository_path.clone(),
+        remote: Some("origin".into()),
+    })
+    .expect("publish over SSH");
+    assert_eq!(
+        published.head.upstream.as_deref(),
+        Some("origin/feature/publish")
+    );
+    fs::write(
+        repository.join("published.txt"),
+        b"published over SSH\nsecond\n",
+    )
+    .expect("second published file");
+    run(crate::domain::git::RemoteGitAction::StageAll {
+        repository: repository_path.clone(),
+    })
+    .expect("stage second push");
+    let pushed = run(crate::domain::git::RemoteGitAction::Commit {
+        repository: repository_path.clone(),
+        message: "feat: push over SSH".into(),
+    })
+    .expect("commit second push");
+    run(crate::domain::git::RemoteGitAction::Push {
+        repository: repository_path.clone(),
+        remote: None,
+    })
+    .expect("tracked push over SSH");
+    assert_eq!(pushed.head.ahead, 1);
+
+    let peer = directory.path().join("peer");
+    assert!(
+        Command::new("git")
+            .args(["clone", "--branch", "feature/publish"])
+            .arg(&origin)
+            .arg(&peer)
+            .status()
+            .expect("clone peer")
+            .success()
+    );
+    for (key, value) in [
+        ("user.name", "Qterm Peer"),
+        ("user.email", "peer@example.test"),
+    ] {
+        assert!(
+            Command::new("git")
+                .args(["-C"])
+                .arg(&peer)
+                .args(["config", key, value])
+                .status()
+                .expect("configure peer")
+                .success()
+        );
+    }
+    fs::write(peer.join("peer.txt"), b"peer update\n").expect("peer update");
+    assert!(
+        Command::new("git")
+            .args(["-C"])
+            .arg(&peer)
+            .args(["add", "peer.txt"])
+            .status()
+            .expect("peer add")
+            .success()
+    );
+    assert!(
+        Command::new("git")
+            .args(["-C"])
+            .arg(&peer)
+            .args(["commit", "-m", "peer update"])
+            .status()
+            .expect("peer commit")
+            .success()
+    );
+    assert!(
+        Command::new("git")
+            .args(["-C"])
+            .arg(&peer)
+            .args(["push", "origin", "feature/publish"])
+            .status()
+            .expect("peer push")
+            .success()
+    );
+    let pulled = run(crate::domain::git::RemoteGitAction::Pull {
+        repository: repository_path,
+    })
+    .expect("ff-only pull over SSH");
+    assert_eq!(pulled.head.behind, 0);
+    assert!(repository.join("peer.txt").is_file());
     manager.close(&session_id).expect("close Git session");
 }
 

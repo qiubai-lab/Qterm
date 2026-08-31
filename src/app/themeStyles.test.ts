@@ -53,6 +53,7 @@ describe("application theme contract", () => {
       "--workspace-tab-active-border", "--workspace-tab-active-background", "--workspace-tab-active-shadow", "--workspace-tab-active-text",
       "--workspace-tab-hover-border", "--workspace-tab-hover-background",
       "--scrollbar-track", "--scrollbar-thumb",
+      "--git-graph-lane-1", "--git-graph-lane-2", "--git-graph-lane-3", "--git-graph-lane-4", "--git-graph-lane-5", "--git-graph-lane-6",
       "--terminal-background", "--terminal-foreground", "--terminal-cursor", "--terminal-selection",
       "--terminal-ansi-red", "--terminal-ansi-yellow", "--terminal-ansi-blue", "--terminal-ansi-magenta", "--terminal-ansi-cyan", "--terminal-ansi-white",
       "--file-active-surface", "--file-active-marker", "--file-selection-surface", "--file-selection-foreground", "--file-selection-secondary-foreground", "--file-selection-marker",
@@ -130,6 +131,10 @@ describe("application theme contract", () => {
     expect(tokenValue(cyberpunkTheme, "--rail-material")).not.toContain("gradient");
     expect(tokenValue(cyberpunkTheme, "--workspace-material")).not.toContain("gradient");
     expect(tokenValue(cyberpunkTheme, "--scrollbar-thumb")).toBe("#168996");
+    expect(tokenValue(cyberpunkTheme, "--git-graph-lane-1")).toBe("#00ddeb");
+    expect(tokenValue(cyberpunkTheme, "--git-graph-lane-2")).toBe("#fcee0a");
+    expect(tokenValue(cyberpunkTheme, "--git-graph-lane-3")).toBe("#ff7a83");
+    expect(new Set(Array.from({ length: 6 }, (_, index) => tokenValue(cyberpunkTheme, `--git-graph-lane-${index + 1}`))).size).toBe(6);
     expect(tokenValue(cyberpunkTheme, "--focus")).toBe("#00ddeb");
     expect(tokenValue(theme, "--primary-action")).toBe("var(--accent)");
     expect(tokenValue(lightTheme, "--primary-action")).toBe("var(--accent)");

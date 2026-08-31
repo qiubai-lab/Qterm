@@ -33,12 +33,33 @@ pub enum RemoteGitAction {
         repository: String,
         name: String,
     },
+    CreateBranchFrom {
+        repository: String,
+        name: String,
+        source_ref: String,
+    },
+    RenameBranch {
+        repository: String,
+        ref_name: String,
+        new_name: String,
+    },
+    DeleteBranch {
+        repository: String,
+        ref_name: String,
+    },
     SwitchBranch {
         repository: String,
         name: String,
     },
     Fetch {
         repository: String,
+    },
+    Pull {
+        repository: String,
+    },
+    Push {
+        repository: String,
+        remote: Option<String>,
     },
     TrackRemoteBranch {
         repository: String,
@@ -108,6 +129,7 @@ pub struct GitSnapshot {
     pub head: GitHead,
     pub changes: Vec<GitChange>,
     pub branches: Vec<GitBranch>,
+    pub remotes: Vec<String>,
     pub commits: Vec<GitCommit>,
 }
 
@@ -140,7 +162,16 @@ impl RemoteGitAction {
             Self::StageAll { repository } | Self::UnstageAll { repository } => {
                 validate_remote_repository_path(repository)
             }
-            Self::Fetch { repository } => validate_remote_repository_path(repository),
+            Self::Fetch { repository } | Self::Pull { repository } => {
+                validate_remote_repository_path(repository)
+            }
+            Self::Push { repository, remote } => {
+                validate_remote_repository_path(repository)?;
+                if let Some(remote) = remote {
+                    validate_remote_name(remote)?;
+                }
+                Ok(())
+            }
             Self::Commit {
                 repository,
                 message,
@@ -151,6 +182,31 @@ impl RemoteGitAction {
             Self::CreateBranch { repository, name } | Self::SwitchBranch { repository, name } => {
                 validate_remote_repository_path(repository)?;
                 validate_branch_name(name)
+            }
+            Self::CreateBranchFrom {
+                repository,
+                name,
+                source_ref,
+            } => {
+                validate_remote_repository_path(repository)?;
+                validate_branch_name(name)?;
+                validate_branch_source_ref(source_ref)
+            }
+            Self::RenameBranch {
+                repository,
+                ref_name,
+                new_name,
+            } => {
+                validate_remote_repository_path(repository)?;
+                validate_local_branch_ref(ref_name)?;
+                validate_branch_name(new_name)
+            }
+            Self::DeleteBranch {
+                repository,
+                ref_name,
+            } => {
+                validate_remote_repository_path(repository)?;
+                validate_local_branch_ref(ref_name)
             }
             Self::TrackRemoteBranch {
                 repository,
@@ -214,6 +270,25 @@ pub fn validate_remote_branch_ref(ref_name: &str) -> Result<(), GitError> {
     validate_branch_name(name)
 }
 
+pub fn validate_local_branch_ref(ref_name: &str) -> Result<(), GitError> {
+    let Some(name) = ref_name.strip_prefix("refs/heads/") else {
+        return Err(GitError::InvalidInput);
+    };
+    validate_branch_name(name)
+}
+
+pub fn validate_branch_source_ref(ref_name: &str) -> Result<(), GitError> {
+    if ref_name.starts_with("refs/heads/") {
+        validate_local_branch_ref(ref_name)
+    } else {
+        validate_remote_branch_ref(ref_name)
+    }
+}
+
+pub fn validate_remote_name(name: &str) -> Result<(), GitError> {
+    validate_branch_name(name)
+}
+
 pub fn find_tracking_local_branch<'a>(
     branches: &'a [GitBranch],
     remote_ref_name: &str,
@@ -260,8 +335,9 @@ pub fn validate_paths(paths: &[String]) -> Result<(), GitError> {
 #[cfg(test)]
 mod tests {
     use super::{
-        RemoteGitAction, validate_branch_name, validate_commit_message, validate_commit_oid,
-        validate_paths, validate_remote_branch_ref,
+        RemoteGitAction, validate_branch_name, validate_branch_source_ref, validate_commit_message,
+        validate_commit_oid, validate_local_branch_ref, validate_paths, validate_remote_branch_ref,
+        validate_remote_name,
     };
 
     #[test]
@@ -316,6 +392,29 @@ mod tests {
     }
 
     #[test]
+    fn lifecycle_refs_and_remote_names_are_closed_business_values() {
+        for value in ["refs/heads/main", "refs/remotes/origin/feature/test"] {
+            assert!(validate_branch_source_ref(value).is_ok(), "{value}");
+        }
+        for value in ["main", "HEAD", "refs/tags/v1", "refs/remotes/origin"] {
+            assert!(validate_branch_source_ref(value).is_err(), "{value}");
+        }
+        assert!(validate_local_branch_ref("refs/heads/feature/test").is_ok());
+        assert!(validate_local_branch_ref("refs/remotes/origin/main").is_err());
+        for value in ["origin", "company-mirror", "team/upstream"] {
+            assert!(validate_remote_name(value).is_ok(), "{value}");
+        }
+        for value in [
+            "",
+            "-force",
+            "origin bad",
+            "https://user:secret@example.com/repo",
+        ] {
+            assert!(validate_remote_name(value).is_err(), "{value}");
+        }
+    }
+
+    #[test]
     fn remote_actions_allow_posix_paths_but_reject_nul_and_unvalidated_payloads() {
         assert!(
             RemoteGitAction::Snapshot {
@@ -358,6 +457,23 @@ mod tests {
             RemoteGitAction::TrackRemoteBranch {
                 repository: "/srv/repo".into(),
                 ref_name: "refs/heads/main".into()
+            }
+            .validate()
+            .is_err()
+        );
+        assert!(
+            RemoteGitAction::CreateBranchFrom {
+                repository: "/srv/repo".into(),
+                name: "feature/new".into(),
+                source_ref: "refs/remotes/origin/main".into(),
+            }
+            .validate()
+            .is_ok()
+        );
+        assert!(
+            RemoteGitAction::Push {
+                repository: "/srv/repo".into(),
+                remote: Some("https://user:secret@example.com/repo".into()),
             }
             .validate()
             .is_err()

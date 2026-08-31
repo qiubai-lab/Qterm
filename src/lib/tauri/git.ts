@@ -9,7 +9,7 @@ export interface GitCommit { oid: string; parents: string[]; decorations: string
 export interface GitCommitFile { path: string; originalPath: string | null; status: string }
 export interface GitDirectoryEntry { name: string; path: string; isSymlink: boolean }
 export interface GitDirectoryListing { path: string; entries: GitDirectoryEntry[] }
-export interface GitSnapshot { repositoryPath: string; repositoryName: string; head: GitHead; changes: GitChange[]; branches: GitBranch[]; commits: GitCommit[] }
+export interface GitSnapshot { repositoryPath: string; repositoryName: string; head: GitHead; changes: GitChange[]; branches: GitBranch[]; remotes: string[]; commits: GitCommit[] }
 
 export type RemoteGitAction =
   | { type: "snapshot"; path: string }
@@ -20,14 +20,21 @@ export type RemoteGitAction =
   | { type: "unstageAll"; repository: string }
   | { type: "commit"; repository: string; message: string }
   | { type: "createBranch"; repository: string; name: string }
+  | { type: "createBranchFrom"; repository: string; name: string; sourceRef: string }
+  | { type: "renameBranch"; repository: string; refName: string; newName: string }
+  | { type: "deleteBranch"; repository: string; refName: string }
   | { type: "switchBranch"; repository: string; name: string }
   | { type: "fetch"; repository: string }
+  | { type: "pull"; repository: string }
+  | { type: "push"; repository: string; remote?: string | null }
   | { type: "trackRemoteBranch"; repository: string; refName: string };
 
 export function gitAvailable(): Promise<boolean> { return invoke("git_available"); }
 export function selectGitRepositoryDirectory(initialPath?: string | null): Promise<string | null> { return invoke("git_select_repository_directory", { input: { initialPath: initialPath ?? null } }); }
 export function loadGitSnapshot(path: string): Promise<GitSnapshot> { return invoke("git_snapshot", { input: { path } }); }
 export function fetchGitRepository(repository: string): Promise<GitSnapshot> { return invoke("git_fetch", { input: { repository } }); }
+export function pullGitRepository(repository: string): Promise<GitSnapshot> { return invoke("git_pull", { input: { repository } }); }
+export function pushGitRepository(repository: string, remote?: string | null): Promise<GitSnapshot> { return invoke("git_push", { input: { repository, remote: remote ?? null } }); }
 export function initializeGitRepository(path: string): Promise<GitSnapshot> { return invoke("git_initialize", { input: { path } }); }
 export function stageGitPaths(repository: string, paths: string[]): Promise<GitSnapshot> { return invoke("git_stage", { input: { repository, paths } }); }
 export function stageAllGitChanges(repository: string): Promise<GitSnapshot> { return invoke("git_stage_all", { input: { repository } }); }
@@ -36,6 +43,9 @@ export function unstageAllGitChanges(repository: string): Promise<GitSnapshot> {
 export function commitGitChanges(repository: string, message: string): Promise<GitSnapshot> { return invoke("git_commit", { input: { repository, message } }); }
 export function loadGitCommitFiles(repository: string, oid: string): Promise<GitCommitFile[]> { return invoke("git_commit_files", { input: { repository, oid } }); }
 export function createGitBranch(repository: string, name: string): Promise<GitSnapshot> { return invoke("git_create_branch", { input: { repository, name } }); }
+export function createGitBranchFrom(repository: string, name: string, sourceRef: string): Promise<GitSnapshot> { return invoke("git_create_branch_from", { input: { repository, name, sourceRef } }); }
+export function renameGitBranch(repository: string, refName: string, newName: string): Promise<GitSnapshot> { return invoke("git_rename_branch", { input: { repository, refName, newName } }); }
+export function deleteGitBranch(repository: string, refName: string): Promise<GitSnapshot> { return invoke("git_delete_branch", { input: { repository, refName } }); }
 export function switchGitBranch(repository: string, name: string): Promise<GitSnapshot> { return invoke("git_switch_branch", { input: { repository, name } }); }
 export function trackGitRemoteBranch(repository: string, refName: string): Promise<GitSnapshot> { return invoke("git_track_remote_branch", { input: { repository, refName } }); }
 

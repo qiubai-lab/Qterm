@@ -5,7 +5,7 @@ import { GitPane } from "./GitPane";
 import type { GitSnapshot } from "../lib/tauri/git";
 
 const api = vi.hoisted(() => ({
-  available: vi.fn(), select: vi.fn(), snapshot: vi.fn(), fetch: vi.fn(), initialize: vi.fn(), stage: vi.fn(), stageAll: vi.fn(), unstage: vi.fn(), unstageAll: vi.fn(), commit: vi.fn(), commitFiles: vi.fn(), createBranch: vi.fn(), switchBranch: vi.fn(), trackRemoteBranch: vi.fn(), remote: vi.fn(), remoteCommitFiles: vi.fn(),
+  available: vi.fn(), select: vi.fn(), snapshot: vi.fn(), fetch: vi.fn(), pull: vi.fn(), push: vi.fn(), initialize: vi.fn(), stage: vi.fn(), stageAll: vi.fn(), unstage: vi.fn(), unstageAll: vi.fn(), commit: vi.fn(), commitFiles: vi.fn(), createBranch: vi.fn(), createBranchFrom: vi.fn(), renameBranch: vi.fn(), deleteBranch: vi.fn(), switchBranch: vi.fn(), trackRemoteBranch: vi.fn(), remote: vi.fn(), remoteCommitFiles: vi.fn(),
 }));
 
 vi.mock("../lib/tauri/git", () => ({
@@ -13,6 +13,8 @@ vi.mock("../lib/tauri/git", () => ({
   selectGitRepositoryDirectory: api.select,
   loadGitSnapshot: api.snapshot,
   fetchGitRepository: api.fetch,
+  pullGitRepository: api.pull,
+  pushGitRepository: api.push,
   initializeGitRepository: api.initialize,
   stageGitPaths: api.stage,
   stageAllGitChanges: api.stageAll,
@@ -21,6 +23,9 @@ vi.mock("../lib/tauri/git", () => ({
   commitGitChanges: api.commit,
   loadGitCommitFiles: api.commitFiles,
   createGitBranch: api.createBranch,
+  createGitBranchFrom: api.createBranchFrom,
+  renameGitBranch: api.renameBranch,
+  deleteGitBranch: api.deleteBranch,
   switchGitBranch: api.switchBranch,
   trackGitRemoteBranch: api.trackRemoteBranch,
   executeRemoteGit: api.remote,
@@ -37,6 +42,7 @@ const snapshot: GitSnapshot = {
     { path: "src/new.ts", originalPath: null, status: "U", staged: false, conflict: false },
   ],
   branches: [{ refName: "refs/heads/main", name: "main", kind: "local", oid: "abcdef012345", current: true, upstream: "origin/main", upstreamRef: "refs/remotes/origin/main" }],
+  remotes: ["origin"],
   commits: [{ oid: "abcdef012345", parents: [], decorations: ["HEAD -> main"], subject: "feat: initial", body: "Introduces the first Qterm workflow.\n\nKeeps the terminal interaction compact.", author: "Qterm", timestamp: 1_700_000_000 }],
 };
 
@@ -47,8 +53,13 @@ describe("GitPane", () => {
     api.available.mockResolvedValue(true);
     api.snapshot.mockResolvedValue(snapshot);
     api.fetch.mockResolvedValue(snapshot);
+    api.pull.mockResolvedValue(snapshot);
+    api.push.mockResolvedValue(snapshot);
     api.stage.mockResolvedValue(snapshot);
     api.createBranch.mockResolvedValue(snapshot);
+    api.createBranchFrom.mockResolvedValue(snapshot);
+    api.renameBranch.mockResolvedValue(snapshot);
+    api.deleteBranch.mockResolvedValue(snapshot);
     api.switchBranch.mockResolvedValue(snapshot);
     api.trackRemoteBranch.mockResolvedValue(snapshot);
     api.commitFiles.mockResolvedValue([
@@ -290,12 +301,41 @@ describe("GitPane", () => {
     expect(railSvg).toHaveAttribute("height", "36");
     expect(railSvg).toHaveAttribute("viewBox", "0 0 28 36");
     expect(railSvg?.querySelector("circle")).toHaveAttribute("cy", "18");
+    expect(railSvg?.querySelector("circle")).toHaveAttribute("data-color", "0");
+    expect(Array.from(railSvg?.querySelectorAll('path[data-kind="parent"]') ?? []).map((path) => path.getAttribute("data-color"))).toEqual(["0", "1"]);
     expect(Array.from(railSvg?.querySelectorAll("path") ?? []).some((path) => path.getAttribute("d")?.endsWith("36"))).toBe(true);
     expect(card).not.toContainElement(rail);
     expect(card).not.toContainElement(details);
     expect(details).toContainElement(files);
     expect(details?.querySelectorAll(".git-graph-continuation line")).toHaveLength(2);
+    expect(Array.from(details?.querySelectorAll(".git-graph-continuation line") ?? []).map((line) => line.getAttribute("data-color"))).toEqual(["0", "1"]);
     expect(entry?.querySelectorAll(":scope > .git-graph-bridge line")).toHaveLength(2);
+    expect(Array.from(entry?.querySelectorAll(":scope > .git-graph-bridge line") ?? []).map((line) => line.getAttribute("data-color"))).toEqual(["0", "1"]);
+  });
+
+  it("sizes each commit, expanded continuation, and bridge from that row's live lanes", async () => {
+    const left = { oid: "111111111111", parents: ["333333333333"], decorations: [], subject: "left", body: "", author: "Koppa", timestamp: 1_690_000_004 };
+    const right = { oid: "222222222222", parents: ["333333333333"], decorations: [], subject: "right", body: "", author: "Koppa", timestamp: 1_690_000_003 };
+    const root = { oid: "333333333333", parents: ["444444444444"], decorations: [], subject: "root", body: "", author: "Koppa", timestamp: 1_690_000_002 };
+    const older = { oid: "444444444444", parents: [], decorations: [], subject: "older", body: "", author: "Koppa", timestamp: 1_690_000_001 };
+    api.snapshot.mockResolvedValueOnce({
+      ...snapshot,
+      commits: [{ ...snapshot.commits[0], parents: [left.oid, right.oid] }, left, right, root, older],
+    });
+    render(<GitPane blockId="git-1" target={{ type: "local", path: "D:/work/project" }} visible onTargetChange={vi.fn()}/>);
+    await screen.findByText("project");
+    fireEvent.click(screen.getByRole("button", { name: "图表" }));
+
+    const merge = screen.getByRole("button", { name: /feat: initial/ });
+    const rootCommit = screen.getByRole("button", { name: /^root/ });
+    expect(merge.querySelector(".git-graph-lanes")).toHaveAttribute("viewBox", "0 0 28 36");
+    expect(rootCommit.querySelector(".git-graph-lanes")).toHaveAttribute("viewBox", "0 0 17 36");
+
+    fireEvent.click(rootCommit);
+    await screen.findByRole("list", { name: "root 的文件" });
+    const rootEntry = rootCommit.closest<HTMLElement>(".git-commit-entry");
+    expect(rootEntry?.querySelector(".git-graph-continuation svg")).toHaveAttribute("width", "17");
+    expect(rootEntry?.querySelector(":scope > .git-graph-bridge svg")).toHaveAttribute("width", "17");
   });
 
   it("keeps commit-file cache entries isolated by repository", async () => {
@@ -423,6 +463,7 @@ describe("GitPane", () => {
     const branchDialog = screen.getByRole("dialog", { name: "切换分支" });
     expect(branchDialog.parentElement).toBe(document.body);
     expect(branchDialog).toContainElement(screen.getByRole("button", { name: "创建新分支…" }));
+    expect(within(branchDialog).queryByRole("button", { name: "本地分支管理…" })).not.toBeInTheDocument();
     expect(screen.getByRole("searchbox", { name: "筛选分支" })).toHaveAttribute("placeholder", "筛选要签出的分支");
     const localGroup = screen.getByRole("group", { name: "本地分支" });
     const remoteGroup = screen.getByRole("group", { name: "远程分支" });
@@ -498,13 +539,17 @@ describe("GitPane", () => {
     await screen.findByText("project");
     expect(api.snapshot).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByRole("button", { name: "刷新 Git 状态" }));
+    const refreshButton = screen.getByRole("button", { name: "刷新 Git 状态" });
+    expect(refreshButton).not.toHaveAttribute("data-updating");
+    fireEvent.click(refreshButton);
+    expect(refreshButton).toHaveAttribute("data-updating", "true");
     await waitFor(() => expect(api.fetch).toHaveBeenCalledOnce());
     fireEvent.focus(window);
     expect(api.snapshot).toHaveBeenCalledTimes(1);
 
     pendingFetch.resolve({ ...snapshot, repositoryName: "fetched-project" });
     expect(await screen.findByText("fetched-project")).toBeInTheDocument();
+    expect(refreshButton).not.toHaveAttribute("data-updating");
   });
 
   it("creates a branch from a separate portaled input popover", async () => {
@@ -520,11 +565,162 @@ describe("GitPane", () => {
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "新建分支" })).not.toBeInTheDocument());
   });
 
-  it("does not keep repository retargeting in the repository-card actions", async () => {
+  it("keeps repository retargeting out of the new sync action menu", async () => {
     render(<GitPane blockId="git-1" target={{ type: "local", path: "D:/work/project" }} visible onTargetChange={vi.fn()}/>);
     await screen.findByText("project");
-    expect(screen.queryByRole("button", { name: "更多存储库操作" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Git 仓库操作" }));
+    const menu = screen.getByRole("menu", { name: "存储库操作" });
+    expect(within(menu).queryByText(/更换.*仓库|选择文件夹/)).not.toBeInTheDocument();
+    expect(within(menu).getByRole("menuitem", { name: "本地分支管理…" })).toBeInTheDocument();
+    await waitFor(() => expect(within(menu).getByRole("menuitem", { name: "拉取" })).toHaveFocus());
+    fireEvent.keyDown(menu, { key: "ArrowDown" });
+    expect(within(menu).getByRole("menuitem", { name: "推送" })).toHaveFocus();
+
+    const branchManagement = within(menu).getByRole("menuitem", { name: "本地分支管理…" });
+    branchManagement.focus();
+    fireEvent.keyDown(branchManagement, { key: "ArrowRight" });
+    const submenu = screen.getByRole("menu", { name: "本地分支管理" });
+    expect(menu).toBeInTheDocument();
+    expect(submenu).toBeInTheDocument();
+    expect(branchManagement).toHaveAttribute("aria-expanded", "true");
+    await waitFor(() => expect(within(submenu).getByRole("menuitem", { name: "从指定分支创建…" })).toHaveFocus());
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("menu", { name: "本地分支管理" })).not.toBeInTheDocument();
+    expect(screen.getByRole("menu", { name: "存储库操作" })).toBeInTheDocument();
+    await waitFor(() => expect(branchManagement).toHaveFocus());
+    fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.queryByRole("menu", { name: "存储库操作" })).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Git 仓库操作" })).toHaveFocus());
+  });
+
+  it("runs tracked pull, push and sync from a compact repository menu", async () => {
+    render(<GitPane blockId="git-1" target={{ type: "local", path: "D:/work/project" }} visible onTargetChange={vi.fn()}/>);
+    await screen.findByText("project");
+
+    fireEvent.click(screen.getByRole("button", { name: "Git 仓库操作" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "拉取" }));
+    await waitFor(() => expect(api.pull).toHaveBeenCalledWith("D:/work/project"));
+
+    fireEvent.click(screen.getByRole("button", { name: "Git 仓库操作" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "推送" }));
+    await waitFor(() => expect(api.push).toHaveBeenCalledWith("D:/work/project", null));
+
+    api.pull.mockClear();
+    api.push.mockClear();
+    fireEvent.click(screen.getByRole("button", { name: "Git 仓库操作" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "同步" }));
+    await waitFor(() => expect(api.push).toHaveBeenCalledOnce());
+    expect(api.pull.mock.invocationCallOrder[0]).toBeLessThan(api.push.mock.invocationCallOrder[0]);
+  });
+
+  it("publishes an untracked branch to a selected existing remote", async () => {
+    api.snapshot.mockResolvedValueOnce({
+      ...snapshot,
+      head: { ...snapshot.head, upstream: null, ahead: 0, behind: 0 },
+      branches: snapshot.branches.map((branch) => ({ ...branch, upstream: null, upstreamRef: null })),
+      remotes: ["origin", "mirror"],
+    });
+    render(<GitPane blockId="git-1" target={{ type: "local", path: "D:/work/project" }} visible onTargetChange={vi.fn()}/>);
+    await screen.findByText("project");
+    fireEvent.click(screen.getByRole("button", { name: "Git 仓库操作" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "发布分支…" }));
+    const dialog = screen.getByRole("dialog", { name: "发布分支" });
+    fireEvent.change(within(dialog).getByRole("combobox", { name: "目标 remote" }), { target: { value: "mirror" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "发布并设置 upstream" }));
+    await waitFor(() => expect(api.push).toHaveBeenCalledWith("D:/work/project", "mirror"));
+  });
+
+  it("manages create-from, rename and safe delete through explicit branch forms", async () => {
+    const managementSnapshot = {
+      ...snapshot,
+      branches: [
+        ...snapshot.branches,
+        { refName: "refs/heads/feature/old", name: "feature/old", kind: "local", oid: "abcdef012345", current: false, upstream: null, upstreamRef: null },
+        { refName: "refs/remotes/origin/release", name: "origin/release", kind: "remote", oid: "abcdef012345", current: false, upstream: null, upstreamRef: null },
+      ],
+    } satisfies GitSnapshot;
+    api.snapshot.mockResolvedValueOnce(managementSnapshot);
+    api.createBranchFrom.mockResolvedValueOnce(managementSnapshot);
+    api.renameBranch.mockResolvedValueOnce(managementSnapshot);
+    api.deleteBranch.mockResolvedValueOnce(managementSnapshot);
+    render(<GitPane blockId="git-1" target={{ type: "local", path: "D:/work/project" }} visible onTargetChange={vi.fn()}/>);
+    await screen.findByText("project");
+
+    fireEvent.click(screen.getByRole("button", { name: "Git 仓库操作" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "本地分支管理…" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "从指定分支创建…" }));
+    let dialog = screen.getByRole("dialog", { name: "从指定分支创建" });
+    fireEvent.change(within(dialog).getByRole("combobox", { name: "起点分支" }), { target: { value: "refs/remotes/origin/release" } });
+    fireEvent.change(within(dialog).getByRole("textbox", { name: "新分支名称" }), { target: { value: "release/local" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "创建并切换" }));
+    await waitFor(() => expect(api.createBranchFrom).toHaveBeenCalledWith("D:/work/project", "release/local", "refs/remotes/origin/release"));
+
+    fireEvent.click(screen.getByRole("button", { name: "Git 仓库操作" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "本地分支管理…" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "重命名本地分支…" }));
+    dialog = screen.getByRole("dialog", { name: "重命名本地分支" });
+    fireEvent.change(within(dialog).getByRole("combobox", { name: "本地分支" }), { target: { value: "refs/heads/feature/old" } });
+    fireEvent.change(within(dialog).getByRole("textbox", { name: "新分支名称" }), { target: { value: "feature/new" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "重命名" }));
+    await waitFor(() => expect(api.renameBranch).toHaveBeenCalledWith("D:/work/project", "refs/heads/feature/old", "feature/new"));
+
+    fireEvent.click(screen.getByRole("button", { name: "Git 仓库操作" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "本地分支管理…" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "安全删除本地分支…" }));
+    dialog = screen.getByRole("dialog", { name: "安全删除本地分支" });
+    expect(within(dialog).queryByRole("option", { name: /main/ })).not.toBeInTheDocument();
+    fireEvent.change(within(dialog).getByRole("combobox", { name: "待删除分支" }), { target: { value: "refs/heads/feature/old" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "确认安全删除" }));
+    await waitFor(() => expect(api.deleteBranch).toHaveBeenCalledWith("D:/work/project", "refs/heads/feature/old"));
+  });
+
+  it("records sync partial success without losing the pulled snapshot", async () => {
+    const pulled = { ...snapshot, repositoryName: "pulled-project", head: { ...snapshot.head, behind: 0 } };
+    api.pull.mockResolvedValueOnce(pulled);
+    api.push.mockRejectedValueOnce({ code: "gitCommandFailed", message: "https://alice:p%40ss@example.com/repo denied" });
+    api.snapshot.mockResolvedValueOnce(snapshot).mockResolvedValueOnce(pulled);
+    render(<GitPane blockId="git-1" target={{ type: "local", path: "D:/work/project" }} visible onTargetChange={vi.fn()}/>);
+    await screen.findByText("project");
+    fireEvent.click(screen.getByRole("button", { name: "Git 仓库操作" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "同步" }));
+    expect(await screen.findByText("pulled-project")).toBeInTheDocument();
+    await waitFor(() => expect(api.snapshot).toHaveBeenCalledTimes(2));
+
+    fireEvent.click(screen.getByRole("button", { name: "Git 仓库操作" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "操作记录" }));
+    const log = screen.getByRole("dialog", { name: "Git 操作记录" });
+    expect(within(log).getByText("同步")).toBeInTheDocument();
+    expect(within(log).getByText(/Pull 已完成.*Push 失败/)).toBeInTheDocument();
+    expect(log).not.toHaveTextContent("alice");
+    expect(log).not.toHaveTextContent("p%40ss");
+    expect(log).toHaveTextContent("https://***@example.com/repo denied");
+  });
+
+  it("shows running and duration states and bounds the in-memory operation log to 20 records", async () => {
+    const pendingPush = deferred<GitSnapshot>();
+    api.push.mockReturnValueOnce(pendingPush.promise);
+    render(<GitPane blockId="git-1" target={{ type: "local", path: "D:/work/project" }} visible onTargetChange={vi.fn()}/>);
+    await screen.findByText("project");
+
+    fireEvent.click(screen.getByRole("button", { name: "Git 仓库操作" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "推送" }));
+    fireEvent.click(screen.getByRole("button", { name: "Git 仓库操作" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "操作记录" }));
+    expect(within(screen.getByRole("dialog", { name: "Git 操作记录" })).getByLabelText("进行中")).toBeInTheDocument();
+    pendingPush.resolve(snapshot);
+    await waitFor(() => expect(within(screen.getByRole("dialog", { name: "Git 操作记录" })).getByLabelText("成功")).toBeInTheDocument());
+    expect(screen.getByRole("dialog", { name: "Git 操作记录" })).toHaveTextContent(/\d+ ms/);
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    for (let index = 0; index < 20; index += 1) {
+      fireEvent.click(screen.getByRole("button", { name: "Git 仓库操作" }));
+      fireEvent.click(screen.getByRole("menuitem", { name: "推送" }));
+      await waitFor(() => expect(api.push).toHaveBeenCalledTimes(index + 2));
+    }
+    fireEvent.click(screen.getByRole("button", { name: "Git 仓库操作" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "操作记录" }));
+    expect(within(screen.getByRole("dialog", { name: "Git 操作记录" })).getAllByRole("listitem")).toHaveLength(20);
   });
 
   it("grows the commit message from one row to a five-row cap and keeps the action below it", async () => {
@@ -626,6 +822,9 @@ describe("GitPane", () => {
     fireEvent.click(screen.getByRole("button", { name: "图表" }));
     fireEvent.click(screen.getByRole("button", { name: /feat: initial/ }));
     await waitFor(() => expect(api.remoteCommitFiles).toHaveBeenCalledWith("git-session", "profile-1", "/srv/project", "abcdef012345"));
+    fireEvent.click(screen.getByRole("button", { name: "Git 仓库操作" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "拉取" }));
+    await waitFor(() => expect(api.remote).toHaveBeenCalledWith("git-session", "profile-1", { type: "pull", repository: "/srv/project" }));
     expect(api.snapshot).not.toHaveBeenCalled();
     expect(onRepositoryOpened).toHaveBeenCalledOnce();
     expect(onRepositoryOpened).toHaveBeenCalledWith({ type: "remote", profileId: "profile-1", path: "/srv/project" });

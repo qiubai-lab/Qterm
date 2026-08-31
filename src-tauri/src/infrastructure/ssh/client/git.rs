@@ -4,8 +4,10 @@ use russh::{ChannelMsg, client};
 
 use crate::{
     domain::git::{
-        GitBranchKind, GitCommitFile, GitError, GitSnapshot, RemoteGitAction,
-        find_tracking_local_branch, validate_commit_oid, validate_remote_repository_path,
+        GitBranch, GitBranchKind, GitCommitFile, GitError, GitSnapshot, RemoteGitAction,
+        find_tracking_local_branch, validate_branch_name, validate_branch_source_ref,
+        validate_commit_oid, validate_local_branch_ref, validate_remote_name,
+        validate_remote_repository_path,
     },
     infrastructure::git_cli::{
         classify_failure, parse_branches, parse_commit_files, parse_commits, parse_status,
@@ -102,6 +104,20 @@ pub(super) async fn run_remote_git_action(
             run_git(handle, &repository, &args, Vec::new(), MUTATION_TIMEOUT).await?;
             snapshot(handle, &repository).await
         }
+        RemoteGitAction::CreateBranchFrom {
+            repository,
+            name,
+            source_ref,
+        } => create_branch_from(handle, &repository, &name, &source_ref).await,
+        RemoteGitAction::RenameBranch {
+            repository,
+            ref_name,
+            new_name,
+        } => rename_branch(handle, &repository, &ref_name, &new_name).await,
+        RemoteGitAction::DeleteBranch {
+            repository,
+            ref_name,
+        } => delete_branch(handle, &repository, &ref_name).await,
         RemoteGitAction::SwitchBranch { repository, name } => {
             let args = format!("switch {}", posix_literal(&name));
             run_git(handle, &repository, &args, Vec::new(), MUTATION_TIMEOUT).await?;
@@ -117,6 +133,10 @@ pub(super) async fn run_remote_git_action(
             )
             .await?;
             snapshot(handle, &repository).await
+        }
+        RemoteGitAction::Pull { repository } => pull(handle, &repository).await,
+        RemoteGitAction::Push { repository, remote } => {
+            push(handle, &repository, remote.as_deref()).await
         }
         RemoteGitAction::TrackRemoteBranch {
             repository,
@@ -209,6 +229,7 @@ async fn snapshot(
         READ_TIMEOUT,
     )
     .await?;
+    let remotes = run_git(handle, &repository, "remote", Vec::new(), READ_TIMEOUT).await?;
     let (head, changes) = parse_status(&status.stdout)?;
     let commits = if head.unborn {
         Vec::new()
@@ -236,8 +257,171 @@ async fn snapshot(
         head,
         changes,
         branches: parse_branches(&branches.stdout),
+        remotes: parse_remotes(&remotes.stdout),
         commits,
     })
+}
+
+async fn create_branch_from(
+    handle: &client::Handle<ClientHandler>,
+    repository: &str,
+    name: &str,
+    source_ref: &str,
+) -> Result<GitSnapshot, GitError> {
+    validate_branch_source_ref(source_ref)?;
+    let current = snapshot(handle, repository).await?;
+    if !current
+        .branches
+        .iter()
+        .any(|branch| branch.ref_name == source_ref)
+    {
+        return Err(GitError::InvalidInput);
+    }
+    let args = format!(
+        "switch --no-track -c {} {}",
+        posix_literal(name),
+        posix_literal(source_ref)
+    );
+    run_git(handle, repository, &args, Vec::new(), MUTATION_TIMEOUT).await?;
+    snapshot(handle, repository).await
+}
+
+async fn rename_branch(
+    handle: &client::Handle<ClientHandler>,
+    repository: &str,
+    ref_name: &str,
+    new_name: &str,
+) -> Result<GitSnapshot, GitError> {
+    validate_local_branch_ref(ref_name)?;
+    let current = snapshot(handle, repository).await?;
+    let old_name = local_branch(&current, ref_name)?.name.clone();
+    let args = format!(
+        "branch -m {} {}",
+        posix_literal(&old_name),
+        posix_literal(new_name)
+    );
+    run_git(handle, repository, &args, Vec::new(), MUTATION_TIMEOUT).await?;
+    snapshot(handle, repository).await
+}
+
+async fn delete_branch(
+    handle: &client::Handle<ClientHandler>,
+    repository: &str,
+    ref_name: &str,
+) -> Result<GitSnapshot, GitError> {
+    validate_local_branch_ref(ref_name)?;
+    let current = snapshot(handle, repository).await?;
+    let branch = local_branch(&current, ref_name)?;
+    if branch.current {
+        return Err(GitError::Conflict("不能删除当前分支".into()));
+    }
+    let args = format!("branch -d {}", posix_literal(&branch.name));
+    run_git(handle, repository, &args, Vec::new(), MUTATION_TIMEOUT).await?;
+    snapshot(handle, repository).await
+}
+
+async fn pull(
+    handle: &client::Handle<ClientHandler>,
+    repository: &str,
+) -> Result<GitSnapshot, GitError> {
+    let current = snapshot(handle, repository).await?;
+    let (_, remote, target_ref) = current_tracking(&current)?;
+    let args = format!(
+        "pull --ff-only --no-rebase --no-recurse-submodules {} {}",
+        posix_literal(&remote),
+        posix_literal(&target_ref)
+    );
+    run_git(handle, repository, &args, Vec::new(), FETCH_TIMEOUT).await?;
+    snapshot(handle, repository).await
+}
+
+async fn push(
+    handle: &client::Handle<ClientHandler>,
+    repository: &str,
+    remote: Option<&str>,
+) -> Result<GitSnapshot, GitError> {
+    let current = snapshot(handle, repository).await?;
+    let branch = current_local_branch(&current)?;
+    let local_ref = branch.ref_name.clone();
+    let (remote, target_ref, publish) = if let Some(remote) = remote {
+        validate_remote_name(remote)?;
+        if !current.remotes.iter().any(|candidate| candidate == remote) {
+            return Err(GitError::InvalidInput);
+        }
+        (remote.to_owned(), local_ref.clone(), true)
+    } else {
+        let (_, remote, target_ref) = current_tracking(&current)?;
+        (remote, target_ref, false)
+    };
+    let refspec = format!("{local_ref}:{target_ref}");
+    let args = if publish {
+        format!(
+            "push --set-upstream {} {}",
+            posix_literal(&remote),
+            posix_literal(&refspec)
+        )
+    } else {
+        format!(
+            "push {} {}",
+            posix_literal(&remote),
+            posix_literal(&refspec)
+        )
+    };
+    run_git(handle, repository, &args, Vec::new(), FETCH_TIMEOUT).await?;
+    snapshot(handle, repository).await
+}
+
+fn local_branch<'a>(snapshot: &'a GitSnapshot, ref_name: &str) -> Result<&'a GitBranch, GitError> {
+    snapshot
+        .branches
+        .iter()
+        .find(|branch| branch.kind == GitBranchKind::Local && branch.ref_name == ref_name)
+        .ok_or(GitError::InvalidInput)
+}
+
+fn current_local_branch(snapshot: &GitSnapshot) -> Result<&GitBranch, GitError> {
+    if snapshot.head.detached || snapshot.head.unborn {
+        return Err(GitError::Conflict(
+            "当前 HEAD 未指向可同步的本地分支".into(),
+        ));
+    }
+    snapshot
+        .branches
+        .iter()
+        .find(|branch| branch.kind == GitBranchKind::Local && branch.current)
+        .ok_or_else(|| GitError::Conflict("当前 HEAD 未指向可同步的本地分支".into()))
+}
+
+fn current_tracking(snapshot: &GitSnapshot) -> Result<(String, String, String), GitError> {
+    let branch = current_local_branch(snapshot)?;
+    let upstream_ref = branch
+        .upstream_ref
+        .as_deref()
+        .ok_or_else(|| GitError::Conflict("当前分支尚未设置 upstream".into()))?;
+    let mut remotes = snapshot.remotes.iter().collect::<Vec<_>>();
+    remotes.sort_by_key(|remote| std::cmp::Reverse(remote.len()));
+    for remote in remotes {
+        let prefix = format!("refs/remotes/{remote}/");
+        if let Some(target) = upstream_ref.strip_prefix(&prefix) {
+            validate_remote_name(remote)?;
+            validate_branch_name(target)?;
+            return Ok((
+                branch.ref_name.clone(),
+                remote.clone(),
+                format!("refs/heads/{target}"),
+            ));
+        }
+    }
+    Err(GitError::Conflict("当前分支的 upstream 无法解析".into()))
+}
+
+fn parse_remotes(bytes: &[u8]) -> Vec<String> {
+    String::from_utf8_lossy(bytes)
+        .lines()
+        .map(str::trim)
+        .filter(|name| validate_remote_name(name).is_ok())
+        .map(str::to_owned)
+        .collect()
 }
 
 async fn track_remote_branch(

@@ -67,6 +67,8 @@
   --block-header-border:#ffffff12; --block-header-active-border:#75e6cf42;
   --block-active-endpoint-text:var(--accent);
   --scrollbar-track:#050607; --scrollbar-thumb:#438b7d;
+  --git-graph-lane-1:#68cbd6; --git-graph-lane-2:#ead797; --git-graph-lane-3:#ff9b96;
+  --git-graph-lane-4:#9fc5fa; --git-graph-lane-5:#d9a8f3; --git-graph-lane-6:#9bf5bd;
   --accent:#75e6cf; --accent-bg:#153b35; --danger:#ff7b77; --focus:#5fb3ff;
   --accent-contrast:#08201b; --danger-bg:#2a1918; --warning:#c4a96e; --warning-bg:#211c13;
   --signature:var(--accent); --signature-contrast:var(--accent-contrast);

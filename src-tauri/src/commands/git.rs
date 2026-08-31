@@ -55,6 +55,7 @@ pub struct GitSnapshotDto {
     head: GitHeadDto,
     changes: Vec<GitChangeDto>,
     branches: Vec<GitBranchDto>,
+    remotes: Vec<String>,
     commits: Vec<GitCommitDto>,
 }
 
@@ -164,6 +165,36 @@ pub struct GitBranchInput {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitCreateBranchFromInput {
+    repository: String,
+    name: String,
+    source_ref: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitRenameBranchInput {
+    repository: String,
+    ref_name: String,
+    new_name: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitDeleteBranchInput {
+    repository: String,
+    ref_name: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct GitPushInput {
+    repository: String,
+    remote: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct GitRemoteBranchInput {
     repository: String,
     ref_name: String,
@@ -245,12 +276,33 @@ pub enum RemoteGitActionDto {
         repository: String,
         name: String,
     },
+    CreateBranchFrom {
+        repository: String,
+        name: String,
+        source_ref: String,
+    },
+    RenameBranch {
+        repository: String,
+        ref_name: String,
+        new_name: String,
+    },
+    DeleteBranch {
+        repository: String,
+        ref_name: String,
+    },
     SwitchBranch {
         repository: String,
         name: String,
     },
     Fetch {
         repository: String,
+    },
+    Pull {
+        repository: String,
+    },
+    Push {
+        repository: String,
+        remote: Option<String>,
     },
     TrackRemoteBranch {
         repository: String,
@@ -439,6 +491,33 @@ pub async fn git_create_branch(
 }
 
 #[tauri::command]
+pub async fn git_create_branch_from(
+    input: GitCreateBranchFromInput,
+    state: State<'_, GitState>,
+) -> Result<GitSnapshotDto, GitIpcError> {
+    let service = Arc::clone(&state.service);
+    run(move || service.create_branch_from(input.repository, input.name, input.source_ref)).await
+}
+
+#[tauri::command]
+pub async fn git_rename_branch(
+    input: GitRenameBranchInput,
+    state: State<'_, GitState>,
+) -> Result<GitSnapshotDto, GitIpcError> {
+    let service = Arc::clone(&state.service);
+    run(move || service.rename_branch(input.repository, input.ref_name, input.new_name)).await
+}
+
+#[tauri::command]
+pub async fn git_delete_branch(
+    input: GitDeleteBranchInput,
+    state: State<'_, GitState>,
+) -> Result<GitSnapshotDto, GitIpcError> {
+    let service = Arc::clone(&state.service);
+    run(move || service.delete_branch(input.repository, input.ref_name)).await
+}
+
+#[tauri::command]
 pub async fn git_switch_branch(
     input: GitBranchInput,
     state: State<'_, GitState>,
@@ -454,6 +533,24 @@ pub async fn git_fetch(
 ) -> Result<GitSnapshotDto, GitIpcError> {
     let service = Arc::clone(&state.service);
     run(move || service.fetch(input.repository)).await
+}
+
+#[tauri::command]
+pub async fn git_pull(
+    input: GitRepositoryInput,
+    state: State<'_, GitState>,
+) -> Result<GitSnapshotDto, GitIpcError> {
+    let service = Arc::clone(&state.service);
+    run(move || service.pull(input.repository)).await
+}
+
+#[tauri::command]
+pub async fn git_push(
+    input: GitPushInput,
+    state: State<'_, GitState>,
+) -> Result<GitSnapshotDto, GitIpcError> {
+    let service = Arc::clone(&state.service);
+    run(move || service.push(input.repository, input.remote)).await
 }
 
 #[tauri::command]
@@ -603,10 +700,37 @@ impl From<RemoteGitActionDto> for RemoteGitAction {
             RemoteGitActionDto::CreateBranch { repository, name } => {
                 Self::CreateBranch { repository, name }
             }
+            RemoteGitActionDto::CreateBranchFrom {
+                repository,
+                name,
+                source_ref,
+            } => Self::CreateBranchFrom {
+                repository,
+                name,
+                source_ref,
+            },
+            RemoteGitActionDto::RenameBranch {
+                repository,
+                ref_name,
+                new_name,
+            } => Self::RenameBranch {
+                repository,
+                ref_name,
+                new_name,
+            },
+            RemoteGitActionDto::DeleteBranch {
+                repository,
+                ref_name,
+            } => Self::DeleteBranch {
+                repository,
+                ref_name,
+            },
             RemoteGitActionDto::SwitchBranch { repository, name } => {
                 Self::SwitchBranch { repository, name }
             }
             RemoteGitActionDto::Fetch { repository } => Self::Fetch { repository },
+            RemoteGitActionDto::Pull { repository } => Self::Pull { repository },
+            RemoteGitActionDto::Push { repository, remote } => Self::Push { repository, remote },
             RemoteGitActionDto::TrackRemoteBranch {
                 repository,
                 ref_name,
@@ -626,6 +750,7 @@ impl From<GitSnapshot> for GitSnapshotDto {
             head: value.head.into(),
             changes: value.changes.into_iter().map(Into::into).collect(),
             branches: value.branches.into_iter().map(Into::into).collect(),
+            remotes: value.remotes,
             commits: value.commits.into_iter().map(Into::into).collect(),
         }
     }
@@ -842,6 +967,76 @@ mod tests {
                 repository: "/srv/project".into(),
                 ref_name: "refs/remotes/origin/feature/test".into()
             }
+        );
+    }
+
+    #[test]
+    fn p0_remote_actions_reject_command_url_and_force_fields() {
+        let publish = serde_json::from_value::<RemoteGitInput>(serde_json::json!({
+            "sessionId": "git-session",
+            "profileId": "profile-1",
+            "action": {
+                "type": "push",
+                "repository": "/srv/project",
+                "remote": "origin"
+            }
+        }))
+        .expect("closed publish action");
+        assert_eq!(
+            crate::domain::git::RemoteGitAction::from(publish.action),
+            crate::domain::git::RemoteGitAction::Push {
+                repository: "/srv/project".into(),
+                remote: Some("origin".into()),
+            }
+        );
+
+        for payload in [
+            serde_json::json!({
+                "sessionId": "git-session",
+                "profileId": "profile-1",
+                "action": {
+                    "type": "push",
+                    "repository": "/srv/project",
+                    "remote": "origin",
+                    "force": true
+                }
+            }),
+            serde_json::json!({
+                "sessionId": "git-session",
+                "profileId": "profile-1",
+                "action": {
+                    "type": "pull",
+                    "repository": "/srv/project",
+                    "args": ["--rebase"]
+                }
+            }),
+            serde_json::json!({
+                "sessionId": "git-session",
+                "profileId": "profile-1",
+                "action": {
+                    "type": "deleteBranch",
+                    "repository": "/srv/project",
+                    "refName": "refs/heads/main",
+                    "command": "branch -D main"
+                }
+            }),
+        ] {
+            assert!(serde_json::from_value::<RemoteGitInput>(payload).is_err());
+        }
+        let invalid_remote = serde_json::from_value::<RemoteGitInput>(serde_json::json!({
+            "sessionId": "git-session",
+            "profileId": "profile-1",
+            "action": {
+                "type": "push",
+                "repository": "/srv/project",
+                "remote": "https://user:secret@example.com/repo"
+            }
+        }))
+        .expect("shape remains closed");
+        assert!(
+            crate::domain::git::RemoteGitAction::from(invalid_remote.action)
+                .validate()
+                .is_err()
         );
     }
 

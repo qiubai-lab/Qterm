@@ -10,7 +10,8 @@ use std::{
 use crate::{
     domain::git::{
         GitBranch, GitBranchKind, GitChange, GitCommit, GitCommitFile, GitError, GitHead,
-        GitSnapshot, find_tracking_local_branch, validate_remote_branch_ref,
+        GitSnapshot, find_tracking_local_branch, validate_branch_source_ref,
+        validate_local_branch_ref, validate_remote_branch_ref, validate_remote_name,
     },
     ports::git_executor::GitExecutor,
 };
@@ -83,6 +84,18 @@ impl SystemGitExecutor {
         self.snapshot(repository)
     }
 
+    fn network_mutate<I, S>(&self, repository: &Path, args: I) -> Result<GitSnapshot, GitError>
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<OsStr>,
+    {
+        let repository = self.repository_root(repository)?;
+        let mut command = vec![OsString::from("-C"), repository.as_os_str().to_owned()];
+        command.extend(args.into_iter().map(|value| value.as_ref().to_owned()));
+        self.git(command, FETCH_TIMEOUT)?;
+        self.snapshot(&repository)
+    }
+
     fn has_head(&self, repository: &Path) -> bool {
         self.git(
             [
@@ -130,6 +143,14 @@ impl GitExecutor for SystemGitExecutor {
             ],
             READ_TIMEOUT,
         )?;
+        let remotes = self.git(
+            [
+                OsString::from("-C"),
+                repository.as_os_str().to_owned(),
+                OsString::from("remote"),
+            ],
+            READ_TIMEOUT,
+        )?;
         let log = self.git(
             [
                 OsString::from("-C"),
@@ -162,6 +183,7 @@ impl GitExecutor for SystemGitExecutor {
             head,
             changes,
             branches: parse_branches(&branches.stdout),
+            remotes: parse_remotes(&remotes.stdout),
             commits,
         })
     }
@@ -254,6 +276,67 @@ impl GitExecutor for SystemGitExecutor {
         )
     }
 
+    fn create_branch_from(
+        &self,
+        repository: &Path,
+        name: &str,
+        source_ref: &str,
+    ) -> Result<GitSnapshot, GitError> {
+        validate_branch_source_ref(source_ref)?;
+        let current = self.snapshot(repository)?;
+        if !current
+            .branches
+            .iter()
+            .any(|branch| branch.ref_name == source_ref)
+        {
+            return Err(GitError::InvalidInput);
+        }
+        self.mutate(
+            repository,
+            [
+                OsStr::new("switch"),
+                OsStr::new("--no-track"),
+                OsStr::new("-c"),
+                OsStr::new(name),
+                OsStr::new(source_ref),
+            ],
+        )
+    }
+
+    fn rename_branch(
+        &self,
+        repository: &Path,
+        ref_name: &str,
+        new_name: &str,
+    ) -> Result<GitSnapshot, GitError> {
+        validate_local_branch_ref(ref_name)?;
+        let current = self.snapshot(repository)?;
+        let old_name = local_branch(&current, ref_name)?.name.clone();
+        self.mutate(
+            repository,
+            [
+                OsStr::new("branch"),
+                OsStr::new("-m"),
+                OsStr::new(&old_name),
+                OsStr::new(new_name),
+            ],
+        )
+    }
+
+    fn delete_branch(&self, repository: &Path, ref_name: &str) -> Result<GitSnapshot, GitError> {
+        validate_local_branch_ref(ref_name)?;
+        let current = self.snapshot(repository)?;
+        let branch = local_branch(&current, ref_name)?;
+        if branch.current {
+            return Err(GitError::Conflict("不能删除当前分支".into()));
+        }
+        let name = branch.name.clone();
+        self.mutate(
+            repository,
+            [OsStr::new("branch"), OsStr::new("-d"), OsStr::new(&name)],
+        )
+    }
+
     fn switch_branch(&self, repository: &Path, name: &str) -> Result<GitSnapshot, GitError> {
         self.mutate(repository, [OsStr::new("switch"), OsStr::new(name)])
     }
@@ -272,6 +355,59 @@ impl GitExecutor for SystemGitExecutor {
             FETCH_TIMEOUT,
         )?;
         self.snapshot(&repository)
+    }
+
+    fn pull(&self, repository: &Path) -> Result<GitSnapshot, GitError> {
+        let current = self.snapshot(repository)?;
+        let (_, remote, target_ref) = current_tracking(&current)?;
+        self.network_mutate(
+            repository,
+            [
+                OsStr::new("pull"),
+                OsStr::new("--ff-only"),
+                OsStr::new("--no-rebase"),
+                OsStr::new("--no-recurse-submodules"),
+                OsStr::new(&remote),
+                OsStr::new(&target_ref),
+            ],
+        )
+    }
+
+    fn push(&self, repository: &Path, remote: Option<&str>) -> Result<GitSnapshot, GitError> {
+        let current = self.snapshot(repository)?;
+        let branch = current_local_branch(&current)?;
+        let local_ref = branch.ref_name.clone();
+        let (remote, target_ref, publish) = if let Some(remote) = remote {
+            validate_remote_name(remote)?;
+            if !current.remotes.iter().any(|candidate| candidate == remote) {
+                return Err(GitError::InvalidInput);
+            }
+            (remote.to_owned(), local_ref.clone(), true)
+        } else {
+            let (_, remote, target_ref) = current_tracking(&current)?;
+            (remote, target_ref, false)
+        };
+        let refspec = format!("{local_ref}:{target_ref}");
+        if publish {
+            self.network_mutate(
+                repository,
+                [
+                    OsStr::new("push"),
+                    OsStr::new("--set-upstream"),
+                    OsStr::new(&remote),
+                    OsStr::new(&refspec),
+                ],
+            )
+        } else {
+            self.network_mutate(
+                repository,
+                [
+                    OsStr::new("push"),
+                    OsStr::new(&remote),
+                    OsStr::new(&refspec),
+                ],
+            )
+        }
     }
 
     fn track_remote_branch(
@@ -299,6 +435,59 @@ impl GitExecutor for SystemGitExecutor {
             ],
         )
     }
+}
+
+fn local_branch<'a>(snapshot: &'a GitSnapshot, ref_name: &str) -> Result<&'a GitBranch, GitError> {
+    snapshot
+        .branches
+        .iter()
+        .find(|branch| branch.kind == GitBranchKind::Local && branch.ref_name == ref_name)
+        .ok_or(GitError::InvalidInput)
+}
+
+fn current_local_branch(snapshot: &GitSnapshot) -> Result<&GitBranch, GitError> {
+    if snapshot.head.detached || snapshot.head.unborn {
+        return Err(GitError::Conflict(
+            "当前 HEAD 未指向可同步的本地分支".into(),
+        ));
+    }
+    snapshot
+        .branches
+        .iter()
+        .find(|branch| branch.kind == GitBranchKind::Local && branch.current)
+        .ok_or_else(|| GitError::Conflict("当前 HEAD 未指向可同步的本地分支".into()))
+}
+
+fn current_tracking(snapshot: &GitSnapshot) -> Result<(String, String, String), GitError> {
+    let branch = current_local_branch(snapshot)?;
+    let upstream_ref = branch
+        .upstream_ref
+        .as_deref()
+        .ok_or_else(|| GitError::Conflict("当前分支尚未设置 upstream".into()))?;
+    let mut remotes = snapshot.remotes.iter().collect::<Vec<_>>();
+    remotes.sort_by_key(|remote| std::cmp::Reverse(remote.len()));
+    for remote in remotes {
+        let prefix = format!("refs/remotes/{remote}/");
+        if let Some(target) = upstream_ref.strip_prefix(&prefix) {
+            validate_remote_name(remote)?;
+            crate::domain::git::validate_branch_name(target)?;
+            return Ok((
+                branch.ref_name.clone(),
+                remote.clone(),
+                format!("refs/heads/{target}"),
+            ));
+        }
+    }
+    Err(GitError::Conflict("当前分支的 upstream 无法解析".into()))
+}
+
+fn parse_remotes(bytes: &[u8]) -> Vec<String> {
+    String::from_utf8_lossy(bytes)
+        .lines()
+        .map(str::trim)
+        .filter(|name| validate_remote_name(name).is_ok())
+        .map(str::to_owned)
+        .collect()
 }
 
 fn candidates() -> Vec<PathBuf> {
@@ -411,11 +600,9 @@ fn read_bounded(mut reader: impl Read) -> Result<Vec<u8>, GitError> {
 }
 
 pub(crate) fn classify_failure(stderr: &[u8]) -> GitError {
-    let detail = String::from_utf8_lossy(stderr)
-        .trim()
-        .chars()
-        .take(1200)
-        .collect::<String>();
+    let raw = String::from_utf8_lossy(stderr);
+    let sanitized = redact_url_userinfo(raw.trim());
+    let detail = sanitized.chars().take(1200).collect::<String>();
     let lower = detail.to_ascii_lowercase();
     if lower.contains("not a git repository") {
         GitError::NotRepository
@@ -428,6 +615,50 @@ pub(crate) fn classify_failure(stderr: &[u8]) -> GitError {
     } else {
         GitError::CommandFailed(detail)
     }
+}
+
+pub(crate) fn redact_url_userinfo(value: &str) -> String {
+    let mut result = value.to_owned();
+    let mut search_from = 0;
+    loop {
+        let lower = result.to_ascii_lowercase();
+        let match_index = ["https://", "http://", "ssh://"]
+            .iter()
+            .filter_map(|scheme| {
+                lower[search_from..]
+                    .find(scheme)
+                    .map(|index| search_from + index)
+            })
+            .min();
+        let Some(scheme_start) = match_index else {
+            break;
+        };
+        let authority_start = result[scheme_start..]
+            .find("://")
+            .map(|index| scheme_start + index + 3)
+            .unwrap_or(result.len());
+        let authority_end = result[authority_start..]
+            .find(|character: char| {
+                character == '/'
+                    || character.is_whitespace()
+                    || matches!(character, '\'' | '"' | ')' | ']')
+            })
+            .map(|index| authority_start + index)
+            .unwrap_or(result.len());
+        let userinfo_end = result[authority_start..authority_end]
+            .rfind('@')
+            .map(|index| authority_start + index);
+        if let Some(userinfo_end) = userinfo_end {
+            result.replace_range(authority_start..=userinfo_end, "***@");
+            search_from = authority_start + 4;
+        } else {
+            search_from = authority_end.max(authority_start + 1);
+        }
+        if search_from >= result.len() {
+            break;
+        }
+    }
+    result
 }
 
 pub(crate) fn parse_status(bytes: &[u8]) -> Result<(GitHead, Vec<GitChange>), GitError> {
@@ -780,6 +1011,14 @@ refs/remotes/origin/HEAD\0origin/HEAD\0abc\0 \0\0\0refs/remotes/origin/main\n",
             classify_failure(b"fatal: not a git repository"),
             GitError::NotRepository
         );
+        let GitError::CommandFailed(detail) = classify_failure(
+            b"fatal: unable to access 'https://alice:p%40ss@example.com/repo.git/': denied",
+        ) else {
+            panic!("expected command failure");
+        };
+        assert!(!detail.contains("alice"));
+        assert!(!detail.contains("p%40ss"));
+        assert!(detail.contains("https://***@example.com/repo.git/"));
     }
 
     #[test]
@@ -1025,6 +1264,178 @@ refs/remotes/origin/HEAD\0origin/HEAD\0abc\0 \0\0\0refs/remotes/origin/main\n",
     }
 
     #[test]
+    fn real_git_p0_lifecycle_publish_push_and_ff_only_pull_are_safe() {
+        let git = which_git();
+        let executor = SystemGitExecutor::with_executable(git.clone());
+        let directory = tempdir().expect("p0 fixture");
+        let bare = directory.path().join("origin.git");
+        let seed = directory.path().join("seed");
+        let local = directory.path().join("local");
+
+        run_git_test(&git, ["init", "--bare", path(&bare)]);
+        run_git_test(&git, ["init", path(&seed)]);
+        configure_identity(&git, &seed);
+        fs::write(seed.join("main.txt"), b"initial\n").expect("initial file");
+        run_git_test(&git, ["-C", path(&seed), "add", "main.txt"]);
+        run_git_test(&git, ["-C", path(&seed), "commit", "-m", "initial"]);
+        run_git_test(&git, ["-C", path(&seed), "branch", "-M", "main"]);
+        run_git_test(
+            &git,
+            ["-C", path(&seed), "remote", "add", "origin", path(&bare)],
+        );
+        run_git_test(&git, ["-C", path(&seed), "push", "-u", "origin", "main"]);
+        run_git_test(
+            &git,
+            ["-C", path(&bare), "symbolic-ref", "HEAD", "refs/heads/main"],
+        );
+        run_git_test(&git, ["clone", path(&bare), path(&local)]);
+        configure_identity(&git, &local);
+        run_git_test(
+            &git,
+            ["-C", path(&local), "config", "push.default", "nothing"],
+        );
+        run_git_test(&git, ["-C", path(&local), "config", "pull.rebase", "true"]);
+
+        let initial = executor.snapshot(&local).expect("initial snapshot");
+        assert_eq!(initial.remotes, ["origin"]);
+        let created = executor
+            .create_branch_from(&local, "feature/from-remote", "refs/remotes/origin/main")
+            .expect("create from remote");
+        assert_eq!(created.head.name.as_deref(), Some("feature/from-remote"));
+        assert_eq!(created.head.upstream, None);
+        executor.switch_branch(&local, "main").expect("switch main");
+        let renamed = executor
+            .rename_branch(&local, "refs/heads/feature/from-remote", "feature/renamed")
+            .expect("rename local branch");
+        assert!(
+            renamed
+                .branches
+                .iter()
+                .any(|branch| branch.name == "feature/renamed")
+        );
+        let deleted = executor
+            .delete_branch(&local, "refs/heads/feature/renamed")
+            .expect("delete merged branch");
+        assert!(
+            deleted
+                .branches
+                .iter()
+                .all(|branch| branch.name != "feature/renamed")
+        );
+        assert!(matches!(
+            executor.delete_branch(&local, "refs/heads/main"),
+            Err(GitError::Conflict(_))
+        ));
+
+        executor
+            .create_branch(&local, "feature/publish")
+            .expect("new branch");
+        fs::write(local.join("published.txt"), b"published\n").expect("publish file");
+        executor.stage_all(&local).expect("stage publish");
+        let published_commit = executor
+            .commit(&local, "feat: publish")
+            .expect("publish commit");
+        let published = executor
+            .push(&local, Some("origin"))
+            .expect("publish branch");
+        assert_eq!(
+            published.head.upstream.as_deref(),
+            Some("origin/feature/publish")
+        );
+        assert_eq!(
+            rev_parse(&git, &bare, "refs/heads/feature/publish"),
+            published_commit.head.oid.expect("published oid")
+        );
+        let renamed_published = executor
+            .rename_branch(
+                &local,
+                "refs/heads/feature/publish",
+                "feature/published-renamed",
+            )
+            .expect("rename published branch");
+        assert_eq!(
+            renamed_published.head.name.as_deref(),
+            Some("feature/published-renamed")
+        );
+        assert_eq!(
+            renamed_published.head.upstream.as_deref(),
+            Some("origin/feature/publish")
+        );
+        fs::write(local.join("published.txt"), b"published\nsecond\n").expect("second file");
+        executor.stage_all(&local).expect("stage second");
+        let pushed_commit = executor.commit(&local, "feat: push").expect("push commit");
+        executor.push(&local, None).expect("tracked push");
+        assert_eq!(
+            rev_parse(&git, &bare, "refs/heads/feature/publish"),
+            pushed_commit.head.oid.expect("pushed oid")
+        );
+        assert!(matches!(
+            executor.push(&local, Some("missing")),
+            Err(GitError::InvalidInput)
+        ));
+
+        executor.switch_branch(&local, "main").expect("return main");
+        fs::write(seed.join("main.txt"), b"initial\nremote\n").expect("remote update");
+        run_git_test(&git, ["-C", path(&seed), "add", "main.txt"]);
+        run_git_test(&git, ["-C", path(&seed), "commit", "-m", "remote update"]);
+        run_git_test(&git, ["-C", path(&seed), "push", "origin", "main"]);
+        let pulled = executor.pull(&local).expect("ff-only pull");
+        assert_eq!(
+            pulled.head.oid.as_deref(),
+            Some(rev_parse(&git, &bare, "refs/heads/main").as_str())
+        );
+
+        fs::write(local.join("local-only.txt"), b"local\n").expect("local divergence");
+        executor.stage_all(&local).expect("stage divergence");
+        let local_diverged = executor
+            .commit(&local, "local divergence")
+            .expect("local commit");
+        fs::write(seed.join("remote-only.txt"), b"remote\n").expect("remote divergence");
+        run_git_test(&git, ["-C", path(&seed), "add", "remote-only.txt"]);
+        run_git_test(
+            &git,
+            ["-C", path(&seed), "commit", "-m", "remote divergence"],
+        );
+        run_git_test(&git, ["-C", path(&seed), "push", "origin", "main"]);
+        assert!(matches!(
+            executor.pull(&local),
+            Err(GitError::CommandFailed(_) | GitError::Conflict(_))
+        ));
+        assert_eq!(
+            executor
+                .snapshot(&local)
+                .expect("diverged snapshot")
+                .head
+                .oid,
+            local_diverged.head.oid
+        );
+
+        executor
+            .create_branch(&local, "feature/unmerged")
+            .expect("unmerged branch");
+        fs::write(local.join("unmerged.txt"), b"unmerged\n").expect("unmerged file");
+        executor.stage_all(&local).expect("stage unmerged");
+        executor
+            .commit(&local, "unmerged commit")
+            .expect("commit unmerged");
+        executor
+            .switch_branch(&local, "main")
+            .expect("leave unmerged");
+        assert!(matches!(
+            executor.delete_branch(&local, "refs/heads/feature/unmerged"),
+            Err(GitError::CommandFailed(_))
+        ));
+        assert!(
+            executor
+                .snapshot(&local)
+                .expect("safe delete refusal")
+                .branches
+                .iter()
+                .any(|branch| branch.name == "feature/unmerged")
+        );
+    }
+
+    #[test]
     fn failed_commit_does_not_create_history() {
         let executor = SystemGitExecutor::with_executable(which_git());
         let directory = tempdir().expect("repo");
@@ -1079,6 +1490,36 @@ refs/remotes/origin/HEAD\0origin/HEAD\0abc\0 \0\0\0refs/remotes/origin/main\n",
             "Git fixture failed: {}",
             String::from_utf8_lossy(&output.stderr)
         );
+    }
+
+    fn configure_identity(git: &std::path::Path, repository: &std::path::Path) {
+        run_git_test(
+            git,
+            ["-C", path(repository), "config", "user.name", "Qterm Test"],
+        );
+        run_git_test(
+            git,
+            [
+                "-C",
+                path(repository),
+                "config",
+                "user.email",
+                "qterm@example.invalid",
+            ],
+        );
+    }
+
+    fn rev_parse(git: &std::path::Path, repository: &std::path::Path, reference: &str) -> String {
+        let output = Command::new(git)
+            .args(["-C", path(repository), "rev-parse", reference])
+            .output()
+            .expect("rev-parse");
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        String::from_utf8_lossy(&output.stdout).trim().to_owned()
     }
 
     fn path(value: &std::path::Path) -> &str {
