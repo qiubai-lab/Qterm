@@ -35,7 +35,7 @@
 - `src/files/FileBrowserPane.tsx`、`FileList.tsx`、`fileBrowserModel.ts`、`CodeEditor.tsx`、`MarkdownPreview.tsx`：内部文件窗口的目录导航、虚拟列表/排序纯规则、下载、瞬时预览编辑状态与按需编辑/渲染组件；不依赖 TerminalRuntime，不直接读取本地文件或实现 SFTP。
 - `src/lib/tauri/profiles.ts`：连接配置、有序跃点候选/route 要求、不兼容存储清除与 SSH Config 导入 IPC 客户端契约；不包含配置路径、私钥路径、强制删除参数或领域校验。
 - `src/lib/tauri/credentials.ts`：密码/私钥凭证库的窄 IPC 契约；不实现 KDF、加密或 JSON 访问。
-- `src/lib/tauri/settings.ts`：配置根选择、派生存储布局快照，以及设备安全、外观、更新和远程终端集成偏好的窄 IPC 契约；不开放分区路径写入、Shell cache 或执行锁定/探测策略。
+- `src/lib/tauri/settings.ts`：配置根选择、当前构建模式默认根与派生存储布局快照，以及设备安全、外观、更新和远程终端集成偏好的窄 IPC 契约；不开放 locator 路径、构建模式、分区路径写入、Shell cache 或执行锁定/探测策略。
 - `src/lib/updateCheck.ts`：固定 GitHub Latest Release 的超时请求、稳定 SemVer 比较、进程内启动单次去重与固定 Releases opener；不持久化偏好、自动安装或接受任意 URL。
 - `src/lib/tauri/sessions.ts`、`localSessions.ts`：远程/本地终端建连、可选一次性初始目录、远程剪贴板暂存 opaque task/progress/cancel，以及本地剪贴板一次性最终路径文本的窄 IPC 契约；不传输文件字节、解析 route、验证文件系统路径、执行 Shell 命令或持久化启动上下文。
 - `src/lib/tauri/transfers.ts`：单文件 SFTP 选择、启动、进度和取消 IPC 契约；不直接访问本地或远程文件系统。
@@ -46,11 +46,11 @@
 - `src/lib/tauri/workspaces.ts`：版本化 Workspace 文档的 load/save IPC 契约；不包含运行时会话字段。
 - `src/lib/tauri/window.ts`：桌面平台判定与当前窗口控制适配；不拥有 Workspace 状态或窗口视觉样式。
 - `src-tauri/src/main.rs`：原生可执行入口，只委托给库组合根。
-- `src-tauri/src/lib.rs`：Tauri 组合根，注册 commands、装配 adapters，先从 home locator 解析配置根，再派生并初始化 root/data/device/cache 后构造全部 repositories；不读取旧 AppData 位置或在 repository 内重复计算全局路径。
+- `src-tauri/src/lib.rs`：Tauri 组合根，注册 commands、装配 adapters，按 Rust debug/release 模式选择互不 fallback 的 home locator/default-root，再派生并初始化 root/data/device/cache 后构造全部 repositories；不写程序目录、不读取另一模式或旧 AppData 位置，也不在 repository 内重复计算全局路径。
 - `src-tauri/src/domain/profile.rs`：连接配置、最多 4 个显式有序跃点、候选资格与引用完整性规则；不包含 IPC、凭证明文或 JSON 序列化模型。
 - `src-tauri/src/domain/auth.rs`：短期凭据包装、可执行认证请求与稳定认证失败；不表达 profile 的 `manual` 策略，也不依赖 `russh` 或 Tauri。
 - `src-tauri/src/domain/credential.rs`、`ports/credential_vault.rs`、`application/credential_service.rs`：vault 领域语义、外部存储端口与用例边界；不依赖具体密码学文件格式或 UI。
-- `src-tauri/src/domain/settings.rs`、`ports/settings_repository.rs`、`application/settings_service.rs`：安全、外观、更新与终端集成设置的默认值、范围、存储端口与用例；不依赖 JSON、Tauri、SSH 或 Windows API。
+- `src-tauri/src/domain/settings.rs`、`ports/settings_repository.rs`、`application/settings_service.rs`：安全、外观、更新与终端集成设置的默认值、范围、注入配置根、存储端口与用例；domain 只展开/校验输入并使用组合根注入的默认目录，application snapshot 投影默认/配置/活动根，不依赖 JSON、Tauri、Cargo build mode、SSH 或 Windows API。
 - `src-tauri/src/domain/shell_integration.rs`、`ports/remote_shell_cache.rs`：受支持远程 Shell、目标签名、固定探测输出解析、当前会话 Hook、Shell 专属初始目录字面量编码与可丢弃 cache 契约；不依赖 russh、JSON 或 Tauri。
 - `src-tauri/src/application/credential_lifecycle.rs`：统一拥有凭证解锁时间、deadline generation、锁定原因与 data-key 生命周期编排；不依赖 Tokio timer、Tauri event 或 Win32 类型。
 - `src-tauri/src/application/credential_workflow.rs`：恢复重置与私钥草稿的 opaque pending 状态、替换、完成和取消语义；secret bytes 保持 zeroizing 且不进入 DTO。

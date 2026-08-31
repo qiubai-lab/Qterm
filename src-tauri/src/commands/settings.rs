@@ -115,6 +115,7 @@ pub struct SettingsSnapshotDto {
 #[serde(rename_all = "camelCase")]
 struct GeneralSettingsOutputDto {
     root_directory: String,
+    default_root_directory: String,
     active_root_directory: String,
     data_directory: String,
     device_directory: String,
@@ -180,8 +181,9 @@ pub fn settings_update_configuration_directory(
         .path()
         .home_dir()
         .map_err(|_| crate::domain::settings::SettingsError::StorageUnavailable)?;
-    let directory = ConfigurationDirectory::from_input(&input.path, &home)?;
-    let snapshot = state.service.update_configuration_directory(directory)?;
+    let snapshot = state
+        .service
+        .update_configuration_directory_from_input(&input.path, &home)?;
     Ok(SettingsSnapshotDto::new(snapshot))
 }
 
@@ -251,6 +253,7 @@ impl SettingsSnapshotDto {
         Self {
             general: GeneralSettingsOutputDto {
                 root_directory: display_path(root),
+                default_root_directory: display_path(value.default_configuration_directory.path()),
                 active_root_directory: display_path(value.active_configuration_directory.path()),
                 data_directory: display_path(&root.join("data")),
                 device_directory: display_path(&root.join("device")),
@@ -389,13 +392,13 @@ mod tests {
     #[test]
     fn settings_output_distinguishes_configured_root_from_active_and_derives_partitions() {
         let directory = tempdir().expect("directory");
-        let root = directory.path().join(".qterm");
+        let root = directory.path().join(".qterm-dev");
         let default_root = ConfigurationDirectory::from_absolute_path(root.clone()).expect("root");
         let active_root = default_root.clone();
         let service = SettingsService::new(
             JsonSettingsRepository::new(root.join("device/settings.json")),
             JsonConfigurationDirectoryRepository::new(
-                directory.path().join(".qterm-location.json"),
+                directory.path().join(".qterm-location.dev.json"),
             ),
             default_root,
             active_root,
@@ -408,6 +411,10 @@ mod tests {
             .expect("serialize snapshot");
 
         assert_eq!(value["general"]["rootDirectory"], json!(display(&root)));
+        assert_eq!(
+            value["general"]["defaultRootDirectory"],
+            json!(display(&root))
+        );
         assert_eq!(
             value["general"]["dataDirectory"],
             json!(display(&root.join("data")))
@@ -450,6 +457,19 @@ mod tests {
         assert_eq!(updated["appearance"]["theme"], "dark");
         assert_eq!(updated["updates"]["autoCheckOnStartup"], false);
         assert_eq!(updated["terminal"]["remoteShellIntegrationEnabled"], true);
+
+        let reset = service
+            .update_configuration_directory_from_input("~", directory.path())
+            .expect("restore injected default");
+        assert_eq!(reset.configuration_directory.path(), root);
+
+        let explicit_production_root = service
+            .update_configuration_directory_from_input("~/.qterm", directory.path())
+            .expect("explicit production root remains selectable");
+        assert_eq!(
+            explicit_production_root.configuration_directory.path(),
+            directory.path().join(".qterm")
+        );
     }
 
     fn display(path: &std::path::Path) -> String {

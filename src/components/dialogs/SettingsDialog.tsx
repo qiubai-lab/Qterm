@@ -145,10 +145,10 @@ export function SettingsDialog({ onClose, onSecuritySettingsChanged, onTerminalS
                 value={configurationDirectory}
                 disabled={busy}
                 onChoose={() => void chooseConfigurationDirectory()}
-                onReset={() => setConfigurationDirectory("~/.qterm")}
+                onReset={() => setConfigurationDirectory(general.defaultRootDirectory)}
               />
               <div className="settings-storage-note" role="note"><Icon name="help" size={12}/><span>切换目录不会迁移或覆盖旧文件</span></div>
-              <ConfigurationPaths rootDirectory={configurationDirectory || "~/.qterm"}/>
+              <ConfigurationPaths rootDirectory={configurationDirectory || general.defaultRootDirectory}/>
             </div> : <p className="dialog-note">正在读取设置…</p>}
           </div> : category === "appearance" ? <div className="settings-appearance-view">
             <div className="settings-section-heading"><h3 id="appearance-settings-title">外观</h3><p>选择 Qterm 的内置界面主题。</p></div>

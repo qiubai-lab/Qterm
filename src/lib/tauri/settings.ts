@@ -21,6 +21,7 @@ export interface TerminalSettings {
 
 export interface GeneralSettings {
   rootDirectory: string;
+  defaultRootDirectory: string;
   activeRootDirectory: string;
   dataDirectory: string;
   deviceDirectory: string;

@@ -86,6 +86,51 @@ fn persisted_window_state_flags() -> StateFlags {
     StateFlags::SIZE | StateFlags::MAXIMIZED
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum BuildMode {
+    Development,
+    Production,
+}
+
+impl BuildMode {
+    fn current() -> Self {
+        if cfg!(debug_assertions) {
+            Self::Development
+        } else {
+            Self::Production
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct ConfigurationStoragePaths {
+    location: std::path::PathBuf,
+    default_root: std::path::PathBuf,
+}
+
+impl ConfigurationStoragePaths {
+    fn for_mode(home: &std::path::Path, mode: BuildMode) -> Self {
+        let (location, default_root) = match mode {
+            BuildMode::Development => (".qterm-location.dev.json", ".qterm-dev"),
+            BuildMode::Production => (".qterm-location.json", ".qterm"),
+        };
+        Self {
+            location: home.join(location),
+            default_root: home.join(default_root),
+        }
+    }
+}
+
+fn resolve_active_configuration<R: ConfigurationDirectoryRepository>(
+    repository: &R,
+    default: &ConfigurationDirectory,
+) -> ConfigurationDirectory {
+    repository
+        .load()
+        .unwrap_or(None)
+        .unwrap_or_else(|| default.clone())
+}
+
 #[derive(Debug, PartialEq, Eq)]
 struct DataPaths {
     root: std::path::PathBuf,
@@ -159,14 +204,16 @@ pub fn run() {
         })
         .setup(|app| {
             let home = app.path().home_dir()?;
-            let default_configuration = ConfigurationDirectory::default_for(&home);
-            let configuration_location_path = home.join(".qterm-location.json");
+            let configuration_storage =
+                ConfigurationStoragePaths::for_mode(&home, BuildMode::current());
+            let default_configuration =
+                ConfigurationDirectory::from_absolute_path(configuration_storage.default_root)
+                    .map_err(|_| std::io::Error::other("Qterm home directory must be absolute"))?;
+            let configuration_location_path = configuration_storage.location;
             let configuration_repository =
                 JsonConfigurationDirectoryRepository::new(configuration_location_path.clone());
-            let active_configuration = configuration_repository
-                .load()
-                .unwrap_or(None)
-                .unwrap_or_else(|| default_configuration.clone());
+            let active_configuration =
+                resolve_active_configuration(&configuration_repository, &default_configuration);
             let paths = DataPaths::from_root(active_configuration.path().to_path_buf());
             paths.initialize()?;
             app.manage(ClipboardState::new(paths.cache.join("clipboard")));
@@ -309,10 +356,196 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::{DataPaths, persisted_window_state_flags};
+    use super::{
+        BuildMode, ConfigurationStoragePaths, DataPaths, persisted_window_state_flags,
+        resolve_active_configuration,
+    };
+    use crate::{
+        domain::settings::{ConfigurationDirectory, SettingsError},
+        infrastructure::persistence::json_settings_repository::JsonConfigurationDirectoryRepository,
+        ports::settings_repository::ConfigurationDirectoryRepository,
+    };
     use std::fs;
     use tauri_plugin_window_state::StateFlags;
     use tempfile::tempdir;
+
+    struct FailingConfigurationRepository(SettingsError);
+
+    impl ConfigurationDirectoryRepository for FailingConfigurationRepository {
+        fn load(&self) -> Result<Option<ConfigurationDirectory>, SettingsError> {
+            Err(self.0)
+        }
+
+        fn save(&self, _directory: &ConfigurationDirectory) -> Result<(), SettingsError> {
+            Err(self.0)
+        }
+    }
+
+    #[test]
+    fn configuration_storage_paths_are_isolated_by_build_mode() {
+        let home = std::path::Path::new("/users/demo");
+
+        let development = ConfigurationStoragePaths::for_mode(home, BuildMode::Development);
+        let production = ConfigurationStoragePaths::for_mode(home, BuildMode::Production);
+
+        assert_eq!(development.location, home.join(".qterm-location.dev.json"));
+        assert_eq!(development.default_root, home.join(".qterm-dev"));
+        assert_eq!(production.location, home.join(".qterm-location.json"));
+        assert_eq!(production.default_root, home.join(".qterm"));
+    }
+
+    #[test]
+    fn current_build_mode_matches_debug_assertions() {
+        let expected = if cfg!(debug_assertions) {
+            BuildMode::Development
+        } else {
+            BuildMode::Production
+        };
+
+        assert_eq!(BuildMode::current(), expected);
+    }
+
+    #[test]
+    fn configuration_storage_development_ignores_production_locator() {
+        let home = tempdir().expect("home");
+        let development = ConfigurationStoragePaths::for_mode(home.path(), BuildMode::Development);
+        let production = ConfigurationStoragePaths::for_mode(home.path(), BuildMode::Production);
+        let production_root =
+            ConfigurationDirectory::from_absolute_path(home.path().join("production-custom"))
+                .expect("production root");
+        JsonConfigurationDirectoryRepository::new(production.location.clone())
+            .save(&production_root)
+            .expect("production locator");
+        let development_default =
+            ConfigurationDirectory::from_absolute_path(development.default_root.clone())
+                .expect("development default");
+
+        let active = resolve_active_configuration(
+            &JsonConfigurationDirectoryRepository::new(development.location.clone()),
+            &development_default,
+        );
+
+        assert_eq!(active, development_default);
+        assert!(!development.location.exists());
+        assert!(production.location.is_file());
+    }
+
+    #[test]
+    fn configuration_storage_corrupt_development_locator_preserves_both_files() {
+        let home = tempdir().expect("home");
+        let development = ConfigurationStoragePaths::for_mode(home.path(), BuildMode::Development);
+        let production = ConfigurationStoragePaths::for_mode(home.path(), BuildMode::Production);
+        let development_bytes = br#"{"schemaVersion":2,"configurationDirectory":"future"}"#;
+        let production_bytes = br#"{"schemaVersion":1,"configurationDirectory":"/production"}"#;
+        fs::write(&development.location, development_bytes).expect("development fixture");
+        fs::write(&production.location, production_bytes).expect("production fixture");
+        let development_default =
+            ConfigurationDirectory::from_absolute_path(development.default_root.clone())
+                .expect("development default");
+
+        let active = resolve_active_configuration(
+            &JsonConfigurationDirectoryRepository::new(development.location.clone()),
+            &development_default,
+        );
+
+        assert_eq!(active, development_default);
+        assert_eq!(
+            fs::read(development.location).expect("development bytes"),
+            development_bytes
+        );
+        assert_eq!(
+            fs::read(production.location).expect("production bytes"),
+            production_bytes
+        );
+    }
+
+    #[test]
+    fn configuration_storage_repository_errors_fall_back_to_the_owned_default() {
+        let home = tempdir().expect("home");
+        let development = ConfigurationStoragePaths::for_mode(home.path(), BuildMode::Development);
+        let development_default =
+            ConfigurationDirectory::from_absolute_path(development.default_root)
+                .expect("development default");
+
+        for error in [
+            SettingsError::Corrupt,
+            SettingsError::UnsupportedVersion,
+            SettingsError::StorageUnavailable,
+        ] {
+            assert_eq!(
+                resolve_active_configuration(
+                    &FailingConfigurationRepository(error),
+                    &development_default,
+                ),
+                development_default
+            );
+        }
+    }
+
+    #[test]
+    fn configuration_storage_production_ignores_development_locator() {
+        let home = tempdir().expect("home");
+        let development = ConfigurationStoragePaths::for_mode(home.path(), BuildMode::Development);
+        let production = ConfigurationStoragePaths::for_mode(home.path(), BuildMode::Production);
+        let development_root =
+            ConfigurationDirectory::from_absolute_path(home.path().join("development-custom"))
+                .expect("development root");
+        JsonConfigurationDirectoryRepository::new(development.location.clone())
+            .save(&development_root)
+            .expect("development locator");
+        let production_default =
+            ConfigurationDirectory::from_absolute_path(production.default_root.clone())
+                .expect("production default");
+
+        let active = resolve_active_configuration(
+            &JsonConfigurationDirectoryRepository::new(production.location.clone()),
+            &production_default,
+        );
+
+        assert_eq!(active, production_default);
+        assert!(!production.location.exists());
+        assert!(development.location.is_file());
+    }
+
+    #[test]
+    fn configuration_storage_saves_only_the_owned_locator_and_target() {
+        let home = tempdir().expect("home");
+        let development = ConfigurationStoragePaths::for_mode(home.path(), BuildMode::Development);
+        let production = ConfigurationStoragePaths::for_mode(home.path(), BuildMode::Production);
+        let development_root =
+            ConfigurationDirectory::from_absolute_path(home.path().join("development-custom"))
+                .expect("development root");
+        let production_root =
+            ConfigurationDirectory::from_absolute_path(home.path().join("production-custom"))
+                .expect("production root");
+        let development_repository =
+            JsonConfigurationDirectoryRepository::new(development.location.clone());
+        let production_repository =
+            JsonConfigurationDirectoryRepository::new(production.location.clone());
+
+        development_repository
+            .save(&development_root)
+            .expect("save development root");
+        let development_locator_bytes =
+            fs::read(&development.location).expect("development locator bytes");
+        assert!(!production.location.exists());
+        for partition in ["data", "device", "cache"] {
+            assert!(development_root.path().join(partition).is_dir());
+            assert!(!production_root.path().join(partition).exists());
+        }
+
+        production_repository
+            .save(&production_root)
+            .expect("save production root");
+        assert_eq!(
+            fs::read(&development.location).expect("unchanged development locator"),
+            development_locator_bytes
+        );
+        assert!(production.location.is_file());
+        for partition in ["data", "device", "cache"] {
+            assert!(production_root.path().join(partition).is_dir());
+        }
+    }
 
     #[test]
     fn data_paths_are_partitioned_under_the_users_qterm_root() {

@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use crate::{
     domain::settings::{
         AppearanceSettings, ConfigurationDirectory, SecuritySettings, SettingsError,
@@ -19,6 +21,7 @@ pub enum SettingsWarning {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SettingsSnapshot {
     pub configuration_directory: ConfigurationDirectory,
+    pub default_configuration_directory: ConfigurationDirectory,
     pub active_configuration_directory: ConfigurationDirectory,
     pub security: SecuritySettings,
     pub appearance: AppearanceSettings,
@@ -95,6 +98,7 @@ impl<
         };
         SettingsSnapshot {
             configuration_directory,
+            default_configuration_directory: self.default_configuration_directory.clone(),
             active_configuration_directory: self.active_configuration_directory.clone(),
             security,
             appearance,
@@ -122,6 +126,16 @@ impl<
     ) -> Result<SettingsSnapshot, SettingsError> {
         self.configuration_repository.save(&directory)?;
         Ok(self.snapshot())
+    }
+
+    pub fn update_configuration_directory_from_input(
+        &self,
+        input: &str,
+        home: &Path,
+    ) -> Result<SettingsSnapshot, SettingsError> {
+        let directory =
+            ConfigurationDirectory::from_input(input, home, &self.default_configuration_directory)?;
+        self.update_configuration_directory(directory)
     }
 
     pub fn update_appearance(

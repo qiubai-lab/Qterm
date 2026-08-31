@@ -76,14 +76,14 @@ impl SecuritySettings {
 pub struct ConfigurationDirectory(PathBuf);
 
 impl ConfigurationDirectory {
-    pub fn default_for(home: &Path) -> Self {
-        Self(home.join(".qterm"))
-    }
-
-    pub fn from_input(input: &str, home: &Path) -> Result<Self, SettingsError> {
+    pub fn from_input(
+        input: &str,
+        home: &Path,
+        default: &ConfigurationDirectory,
+    ) -> Result<Self, SettingsError> {
         let input = input.trim().replace('\\', "/");
-        if input.is_empty() || matches!(input.as_str(), "~" | "~/.qterm") {
-            return Ok(Self::default_for(home));
+        if input.is_empty() || input == "~" {
+            return Ok(default.clone());
         }
         let path = if let Some(suffix) = input.strip_prefix("~/") {
             home.join(suffix)
@@ -153,30 +153,39 @@ mod tests {
     }
 
     #[test]
-    fn configuration_directory_defaults_to_qterm_under_home() {
+    fn configuration_directory_uses_the_injected_default() {
         let home = std::path::Path::new("/users/demo");
-        let expected = home.join(".qterm");
-        for input in ["", "   ", "~", "~/.qterm", "~\\.qterm"] {
+        let development_default =
+            ConfigurationDirectory::from_absolute_path(home.join(".qterm-dev")).expect("default");
+        for input in ["", "   ", "~"] {
             assert_eq!(
-                ConfigurationDirectory::from_input(input, home)
+                ConfigurationDirectory::from_input(input, home, &development_default)
                     .expect("configuration directory")
                     .path(),
-                expected
+                development_default.path()
             );
         }
+        assert_eq!(
+            ConfigurationDirectory::from_input("~/.qterm", home, &development_default)
+                .expect("explicit production path")
+                .path(),
+            home.join(".qterm")
+        );
     }
 
     #[test]
     fn configuration_directory_expands_tilde_and_rejects_relative_paths() {
         let home = std::env::temp_dir().join("qterm-core-data-home");
+        let default =
+            ConfigurationDirectory::from_absolute_path(home.join(".qterm-dev")).expect("default");
         assert_eq!(
-            ConfigurationDirectory::from_input("~/portable/qterm", &home)
+            ConfigurationDirectory::from_input("~/portable/qterm", &home, &default)
                 .expect("path")
                 .path(),
             home.join("portable/qterm")
         );
         assert_eq!(
-            ConfigurationDirectory::from_input("relative/qterm", &home),
+            ConfigurationDirectory::from_input("relative/qterm", &home, &default),
             Err(SettingsError::InvalidConfigurationDirectory)
         );
     }

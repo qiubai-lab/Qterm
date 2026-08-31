@@ -48,6 +48,7 @@ afterEach(() => { cleanup(); vi.clearAllMocks(); });
 function storageLayout() {
   return {
     rootDirectory: "C:\\Users\\demo\\.qterm",
+    defaultRootDirectory: "C:\\Users\\demo\\.qterm",
     activeRootDirectory: "C:\\Users\\demo\\.qterm",
     dataDirectory: "C:\\Users\\demo\\.qterm\\data",
     deviceDirectory: "C:\\Users\\demo\\.qterm\\device",
@@ -151,7 +152,7 @@ describe("SettingsDialog", () => {
     await user.click(screen.getByRole("button", { name: "选择 Qterm 配置目录" }));
     expect(input).toHaveValue("D:\\Custom");
     await user.click(screen.getByRole("button", { name: "恢复默认 Qterm 配置目录" }));
-    expect(input).toHaveValue("~/.qterm");
+    expect(input).toHaveValue("C:\\Users\\demo\\.qterm");
     expect(screen.queryByRole("textbox", { name: "核心数据目录" })).not.toBeInTheDocument();
     expect(screen.queryByRole("textbox", { name: "设备数据目录" })).not.toBeInTheDocument();
     expect(screen.queryByRole("textbox", { name: "缓存目录" })).not.toBeInTheDocument();
@@ -161,6 +162,30 @@ describe("SettingsDialog", () => {
     expect(note.querySelector('[data-icon="help"]')).not.toBeNull();
     expect(note.previousElementSibling).toHaveAttribute("aria-label", "配置目录设置");
     expect(note.nextElementSibling).toHaveAttribute("aria-label", "配置路径");
+  });
+
+  it("restores the build-specific development root supplied by the backend", async () => {
+    const user = userEvent.setup();
+    mocks.getSettings.mockResolvedValue({
+      general: {
+        ...storageLayout(),
+        rootDirectory: "/tmp/custom-qterm",
+        defaultRootDirectory: "/Users/demo/.qterm-dev",
+      },
+      security: { credentialAutoLockAfterSeconds: 3600, terminalAutoLockAfterSeconds: null },
+      appearance: { theme: "dark" },
+      terminal: { remoteShellIntegrationEnabled: true },
+      warning: null,
+    });
+    renderSettings();
+
+    const input = await screen.findByRole("textbox", { name: "Qterm 配置目录" });
+    await user.click(screen.getByRole("button", { name: "恢复默认 Qterm 配置目录" }));
+
+    expect(input).toHaveValue("/Users/demo/.qterm-dev");
+    expect(screen.getByText("/Users/demo/.qterm-dev/data")).toBeInTheDocument();
+    expect(screen.getByText("/Users/demo/.qterm-dev/device")).toBeInTheDocument();
+    expect(screen.getByText("/Users/demo/.qterm-dev/cache")).toBeInTheDocument();
   });
 
   it("shows the new defaults and persists both independent lock policies", async () => {

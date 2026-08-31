@@ -250,6 +250,12 @@ Status: accepted
 
 组合根不再读取系统 app-config `storage-location.json`。它先读取用户 home 下固定的 `~/.qterm-location.json`，缺失时使用默认 `~/.qterm`，再从选定根统一派生 `data/`、`device/` 与 `cache/`：三类核心文件进入 `data/`，known-host、Workspace 与安全设置进入 `device/`，可再生浏览器代理 profile 进入 `cache/`。UI 只允许修改整个配置根，不能分别重定位子目录。保存新根只创建目标分区并要求重启，不读取、复制、合并、覆盖或删除旧目录数据。用户明确接受放弃旧配置和现有严格 schema 策略；Tauri window-state 与 WebView 引擎缓存继续由框架管理，不纳入此布局。
 
+## 2026-08-31 — 开发构建与正式构建隔离配置根
+
+Status: accepted by explicit user decision
+
+启用 Rust `debug_assertions` 的构建使用 `~/.qterm-location.dev.json` 和默认根 `~/.qterm-dev`；未启用该配置的正式构建继续使用 `~/.qterm-location.json` 和默认根 `~/.qterm`。两种模式只读取和写入自己的 locator，缺失、损坏、未来版本或存储不可用均只回退本模式默认根，不互相 fallback、迁移、复制、覆盖或删除数据。构建模式与物理文件名由 Rust 组合根决定并注入 settings；domain、command 与 React 不推断通道，设置快照只返回当前模式默认根供恢复默认和派生路径预览。开发者仍可明确选择任意绝对自定义根，包括 `~/.qterm`，但默认流程不会引导两个模式共享。该决策不改变 Tauri identifier、window-state 或 WebView framework data。
+
 ## 2026-08-20 — 终端锁采用进程内遮罩并与凭证同时解锁
 
 Status: accepted
