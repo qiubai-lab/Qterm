@@ -3,8 +3,8 @@ use std::path::{Path, PathBuf};
 use crate::{
     domain::git::{
         GitCommitFile, GitError, GitSnapshot, validate_branch_name, validate_commit_message,
-        validate_commit_oid, validate_paths, validate_remote_repository_path,
-        validate_repository_path,
+        validate_commit_oid, validate_paths, validate_remote_branch_ref,
+        validate_remote_repository_path, validate_repository_path,
     },
     ports::git_executor::GitExecutor,
     ports::remote_git_executor::RemoteGitExecutor,
@@ -97,6 +97,20 @@ impl<E: GitExecutor> GitService<E> {
     pub fn switch_branch(&self, repository: String, name: String) -> Result<GitSnapshot, GitError> {
         validate_branch_name(&name)?;
         self.executor.switch_branch(&input_path(repository)?, &name)
+    }
+
+    pub fn fetch(&self, repository: String) -> Result<GitSnapshot, GitError> {
+        self.executor.fetch(&input_path(repository)?)
+    }
+
+    pub fn track_remote_branch(
+        &self,
+        repository: String,
+        ref_name: String,
+    ) -> Result<GitSnapshot, GitError> {
+        validate_remote_branch_ref(&ref_name)?;
+        self.executor
+            .track_remote_branch(&input_path(repository)?, &ref_name)
     }
 }
 

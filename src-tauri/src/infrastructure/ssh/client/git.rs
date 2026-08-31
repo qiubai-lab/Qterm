@@ -4,8 +4,8 @@ use russh::{ChannelMsg, client};
 
 use crate::{
     domain::git::{
-        GitCommitFile, GitError, GitSnapshot, RemoteGitAction, validate_commit_oid,
-        validate_remote_repository_path,
+        GitBranchKind, GitCommitFile, GitError, GitSnapshot, RemoteGitAction,
+        find_tracking_local_branch, validate_commit_oid, validate_remote_repository_path,
     },
     infrastructure::git_cli::{
         classify_failure, parse_branches, parse_commit_files, parse_commits, parse_status,
@@ -16,6 +16,7 @@ use super::ClientHandler;
 
 const READ_TIMEOUT: Duration = Duration::from_secs(10);
 const MUTATION_TIMEOUT: Duration = Duration::from_secs(60);
+const FETCH_TIMEOUT: Duration = Duration::from_secs(120);
 const OUTPUT_LIMIT: usize = 8 * 1024 * 1024;
 const ENVIRONMENT: &str = "GIT_TERMINAL_PROMPT=0 GIT_EDITOR=true GIT_PAGER=cat LC_ALL=C";
 
@@ -106,6 +107,21 @@ pub(super) async fn run_remote_git_action(
             run_git(handle, &repository, &args, Vec::new(), MUTATION_TIMEOUT).await?;
             snapshot(handle, &repository).await
         }
+        RemoteGitAction::Fetch { repository } => {
+            run_git(
+                handle,
+                &repository,
+                "fetch --all --prune --no-recurse-submodules",
+                Vec::new(),
+                FETCH_TIMEOUT,
+            )
+            .await?;
+            snapshot(handle, &repository).await
+        }
+        RemoteGitAction::TrackRemoteBranch {
+            repository,
+            ref_name,
+        } => track_remote_branch(handle, &repository, &ref_name).await,
     }
 }
 
@@ -188,7 +204,7 @@ async fn snapshot(
     let branches = run_git(
         handle,
         &repository,
-        "for-each-ref '--format=%(refname:short)%00%(objectname)%00%(HEAD)%00%(upstream:short)' refs/heads/",
+        "for-each-ref '--format=%(refname)%00%(refname:short)%00%(objectname)%00%(HEAD)%00%(upstream:short)%00%(upstream)%00%(symref)' refs/heads/ refs/remotes/",
         Vec::new(),
         READ_TIMEOUT,
     )
@@ -222,6 +238,29 @@ async fn snapshot(
         branches: parse_branches(&branches.stdout),
         commits,
     })
+}
+
+async fn track_remote_branch(
+    handle: &client::Handle<ClientHandler>,
+    repository: &str,
+    ref_name: &str,
+) -> Result<GitSnapshot, GitError> {
+    let current = snapshot(handle, repository).await?;
+    let branch_name = if let Some(local) = find_tracking_local_branch(&current.branches, ref_name) {
+        local.name.clone()
+    } else {
+        let remote = current
+            .branches
+            .iter()
+            .find(|branch| branch.kind == GitBranchKind::Remote && branch.ref_name == ref_name)
+            .ok_or(GitError::InvalidInput)?;
+        let args = format!("switch --track {}", posix_literal(&remote.name));
+        run_git(handle, repository, &args, Vec::new(), MUTATION_TIMEOUT).await?;
+        return snapshot(handle, repository).await;
+    };
+    let args = format!("switch {}", posix_literal(&branch_name));
+    run_git(handle, repository, &args, Vec::new(), MUTATION_TIMEOUT).await?;
+    snapshot(handle, repository).await
 }
 
 async fn has_head(handle: &client::Handle<ClientHandler>, repository: &str) -> bool {

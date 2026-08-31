@@ -16,8 +16,8 @@ use crate::{
     domain::{
         files::{DirectoryListing, FileEntry},
         git::{
-            GitBranch, GitChange, GitCommit, GitCommitFile, GitError, GitHead, GitSnapshot,
-            RemoteGitAction,
+            GitBranch, GitBranchKind, GitChange, GitCommit, GitCommitFile, GitError, GitHead,
+            GitSnapshot, RemoteGitAction,
         },
         transfer::RemotePath,
     },
@@ -81,10 +81,20 @@ struct GitChangeDto {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct GitBranchDto {
+    ref_name: String,
     name: String,
+    kind: GitBranchKindDto,
     oid: String,
     current: bool,
     upstream: Option<String>,
+    upstream_ref: Option<String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+enum GitBranchKindDto {
+    Local,
+    Remote,
 }
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -150,6 +160,13 @@ pub struct GitCommitFilesInput {
 pub struct GitBranchInput {
     repository: String,
     name: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitRemoteBranchInput {
+    repository: String,
+    ref_name: String,
 }
 
 #[derive(Deserialize)]
@@ -231,6 +248,13 @@ pub enum RemoteGitActionDto {
     SwitchBranch {
         repository: String,
         name: String,
+    },
+    Fetch {
+        repository: String,
+    },
+    TrackRemoteBranch {
+        repository: String,
+        ref_name: String,
     },
 }
 
@@ -423,6 +447,24 @@ pub async fn git_switch_branch(
     run(move || service.switch_branch(input.repository, input.name)).await
 }
 
+#[tauri::command]
+pub async fn git_fetch(
+    input: GitRepositoryInput,
+    state: State<'_, GitState>,
+) -> Result<GitSnapshotDto, GitIpcError> {
+    let service = Arc::clone(&state.service);
+    run(move || service.fetch(input.repository)).await
+}
+
+#[tauri::command]
+pub async fn git_track_remote_branch(
+    input: GitRemoteBranchInput,
+    state: State<'_, GitState>,
+) -> Result<GitSnapshotDto, GitIpcError> {
+    let service = Arc::clone(&state.service);
+    run(move || service.track_remote_branch(input.repository, input.ref_name)).await
+}
+
 async fn run<F>(operation: F) -> Result<GitSnapshotDto, GitIpcError>
 where
     F: FnOnce() -> Result<GitSnapshot, GitError> + Send + 'static,
@@ -564,6 +606,14 @@ impl From<RemoteGitActionDto> for RemoteGitAction {
             RemoteGitActionDto::SwitchBranch { repository, name } => {
                 Self::SwitchBranch { repository, name }
             }
+            RemoteGitActionDto::Fetch { repository } => Self::Fetch { repository },
+            RemoteGitActionDto::TrackRemoteBranch {
+                repository,
+                ref_name,
+            } => Self::TrackRemoteBranch {
+                repository,
+                ref_name,
+            },
         }
     }
 }
@@ -607,10 +657,22 @@ impl From<GitChange> for GitChangeDto {
 impl From<GitBranch> for GitBranchDto {
     fn from(value: GitBranch) -> Self {
         Self {
+            ref_name: value.ref_name,
             name: value.name,
+            kind: value.kind.into(),
             oid: value.oid,
             current: value.current,
             upstream: value.upstream,
+            upstream_ref: value.upstream_ref,
+        }
+    }
+}
+
+impl From<GitBranchKind> for GitBranchKindDto {
+    fn from(value: GitBranchKind) -> Self {
+        match value {
+            GitBranchKind::Local => Self::Local,
+            GitBranchKind::Remote => Self::Remote,
         }
     }
 }
@@ -641,7 +703,8 @@ impl From<GitCommitFile> for GitCommitFileDto {
 mod tests {
     use super::{
         GitBranchInput, GitCommitFilesInput, GitCommitInput, GitIpcError, GitPathInput,
-        GitPathsInput, RemoteGitCommitFilesInput, RemoteGitDirectoryInput, RemoteGitInput,
+        GitPathsInput, GitRemoteBranchInput, RemoteGitCommitFilesInput, RemoteGitDirectoryInput,
+        RemoteGitInput,
     };
     use crate::domain::git::GitError;
 
@@ -700,6 +763,26 @@ mod tests {
             .is_err()
         );
         assert!(
+            serde_json::from_value::<GitRemoteBranchInput>(serde_json::json!({
+                "repository": "D:/work/project",
+                "refName": "refs/remotes/origin/main",
+                "args": ["reset", "--hard"]
+            }))
+            .is_err()
+        );
+        assert!(
+            serde_json::from_value::<RemoteGitInput>(serde_json::json!({
+                "sessionId": "git-session",
+                "profileId": "profile-1",
+                "action": {
+                    "type": "fetch",
+                    "repository": "/srv/project",
+                    "remote": "attacker"
+                }
+            }))
+            .is_err()
+        );
+        assert!(
             serde_json::from_value::<GitCommitFilesInput>(serde_json::json!({
                 "repository": "D:/work/project",
                 "oid": "0123456789abcdef0123456789abcdef01234567",
@@ -725,6 +808,40 @@ mod tests {
                 "readFile": "/etc/passwd"
             }))
             .is_err()
+        );
+    }
+
+    #[test]
+    fn remote_fetch_and_tracking_actions_deserialize_only_the_closed_contract() {
+        let fetch = serde_json::from_value::<RemoteGitInput>(serde_json::json!({
+            "sessionId": "git-session",
+            "profileId": "profile-1",
+            "action": { "type": "fetch", "repository": "/srv/project" }
+        }))
+        .expect("fetch input");
+        assert_eq!(
+            crate::domain::git::RemoteGitAction::from(fetch.action),
+            crate::domain::git::RemoteGitAction::Fetch {
+                repository: "/srv/project".into()
+            }
+        );
+
+        let track = serde_json::from_value::<RemoteGitInput>(serde_json::json!({
+            "sessionId": "git-session",
+            "profileId": "profile-1",
+            "action": {
+                "type": "trackRemoteBranch",
+                "repository": "/srv/project",
+                "refName": "refs/remotes/origin/feature/test"
+            }
+        }))
+        .expect("track input");
+        assert_eq!(
+            crate::domain::git::RemoteGitAction::from(track.action),
+            crate::domain::git::RemoteGitAction::TrackRemoteBranch {
+                repository: "/srv/project".into(),
+                ref_name: "refs/remotes/origin/feature/test".into()
+            }
         );
     }
 

@@ -5,9 +5,9 @@ import { Icon } from "../components/Icon";
 import { RequiredFieldLabel } from "../components/RequiredFieldLabel";
 import {
   commitGitChanges, createGitBranch, gitAvailable, gitError, initializeGitRepository,
-  executeRemoteGit, loadGitCommitFiles, loadGitSnapshot, loadRemoteGitCommitFiles, stageAllGitChanges, stageGitPaths,
-  switchGitBranch, unstageAllGitChanges, unstageGitPaths,
-  type GitChange, type GitCommit, type GitCommitFile, type GitSnapshot, type RemoteGitAction,
+  executeRemoteGit, fetchGitRepository, loadGitCommitFiles, loadGitSnapshot, loadRemoteGitCommitFiles, stageAllGitChanges, stageGitPaths,
+  switchGitBranch, trackGitRemoteBranch, unstageAllGitChanges, unstageGitPaths,
+  type GitBranch, type GitChange, type GitCommit, type GitCommitFile, type GitSnapshot, type RemoteGitAction,
 } from "../lib/tauri/git";
 import { gitRepositoryHistoryEntryKey } from "../workspace/gitRepositoryHistory";
 import type { GitRepositoryHistoryEntry, GitTarget } from "../workspace/model";
@@ -80,13 +80,13 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
   const [repositoryOverlay, setRepositoryOverlay] = useState<GitRepositoryOverlay | null>(null);
   const [collapsed, setCollapsed] = useState({ repository: false, changes: false, graph: true });
   const epoch = useRef(0);
+  const busyRef = useRef("");
   const messageRef = useRef<HTMLTextAreaElement>(null);
   const onTargetChangeRef = useRef(onTargetChange);
   const onRepositoryOpenedRef = useRef(onRepositoryOpened);
   const reportedRepositoryKeyRef = useRef<string | null>(null);
   const targetKeyRef = useRef(gitTargetKey(target));
   const branchButtonRef = useRef<HTMLButtonElement>(null);
-  const createBranchButtonRef = useRef<HTMLButtonElement>(null);
   const repositoryOverlayRef = useRef<HTMLElement | null>(null);
   const commitAnchorRefs = useRef(new Map<string, HTMLButtonElement>());
   const commitTooltipRef = useRef<HTMLDivElement>(null);
@@ -98,6 +98,11 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
   const remoteStatus = runtime?.status;
   const remoteReady = !remote || runtime?.status === "connected";
   const available = remote ? true : localAvailable;
+
+  const updateBusy = useCallback((value: string) => {
+    busyRef.current = value;
+    setBusy(value);
+  }, []);
 
   useEffect(() => {
     onTargetChangeRef.current = onTargetChange;
@@ -132,6 +137,7 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
   }, [remote, remoteProfileId, remoteSessionId, remoteStatus]);
 
   const loadSnapshot = useCallback((path: string) => remote ? remoteExecute({ type: "snapshot", path }) : loadGitSnapshot(path), [remote, remoteExecute]);
+  const fetchSnapshot = useCallback((repository: string) => remote ? remoteExecute({ type: "fetch", repository }) : fetchGitRepository(repository), [remote, remoteExecute]);
   const initialize = useCallback((path: string) => remote ? remoteExecute({ type: "initialize", path }) : initializeGitRepository(path), [remote, remoteExecute]);
   const stagePaths = useCallback((repository: string, paths: string[]) => remote ? remoteExecute({ type: "stage", repository, paths }) : stageGitPaths(repository, paths), [remote, remoteExecute]);
   const stageAll = useCallback((repository: string) => remote ? remoteExecute({ type: "stageAll", repository }) : stageAllGitChanges(repository), [remote, remoteExecute]);
@@ -140,20 +146,37 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
   const commit = useCallback((repository: string, message: string) => remote ? remoteExecute({ type: "commit", repository, message }) : commitGitChanges(repository, message), [remote, remoteExecute]);
   const createBranch = useCallback((repository: string, name: string) => remote ? remoteExecute({ type: "createBranch", repository, name }) : createGitBranch(repository, name), [remote, remoteExecute]);
   const switchBranch = useCallback((repository: string, name: string) => remote ? remoteExecute({ type: "switchBranch", repository, name }) : switchGitBranch(repository, name), [remote, remoteExecute]);
+  const trackRemoteBranch = useCallback((repository: string, refName: string) => remote ? remoteExecute({ type: "trackRemoteBranch", repository, refName }) : trackGitRemoteBranch(repository, refName), [remote, remoteExecute]);
 
-  const refresh = useCallback(async () => {
+  const refreshSnapshot = useCallback(async () => {
     if (!repositoryPath || !visible || !remoteReady) return;
+    if (busyRef.current && busyRef.current !== "refresh") return;
     const request = ++epoch.current;
-    setBusy("refresh");
+    updateBusy("refresh");
     try {
       const next = await loadSnapshot(repositoryPath);
       if (request === epoch.current) applySnapshot(next);
     } catch (cause) {
       if (request === epoch.current) { setSnapshot(null); setError(gitError(cause)); }
     } finally {
-      if (request === epoch.current) setBusy("");
+      if (request === epoch.current) updateBusy("");
     }
-  }, [applySnapshot, loadSnapshot, remoteReady, repositoryPath, visible]);
+  }, [applySnapshot, loadSnapshot, remoteReady, repositoryPath, updateBusy, visible]);
+
+  const fetchAndRefresh = useCallback(async () => {
+    if (!repositoryPath || !visible || !remoteReady || busyRef.current) return;
+    const request = ++epoch.current;
+    updateBusy("fetch");
+    setError(null);
+    try {
+      const next = await fetchSnapshot(repositoryPath);
+      if (request === epoch.current) applySnapshot(next);
+    } catch (cause) {
+      if (request === epoch.current) setError(gitError(cause));
+    } finally {
+      if (request === epoch.current) updateBusy("");
+    }
+  }, [applySnapshot, fetchSnapshot, remoteReady, repositoryPath, updateBusy, visible]);
 
   useEffect(() => {
     if (remote) return;
@@ -161,15 +184,15 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
   }, [remote]);
   useEffect(() => {
     if (!visible || !available) return;
-    const timer = window.setTimeout(() => void refresh(), 0);
+    const timer = window.setTimeout(() => void refreshSnapshot(), 0);
     return () => window.clearTimeout(timer);
-  }, [available, refresh, visible]);
+  }, [available, refreshSnapshot, visible]);
   useEffect(() => {
     if (!visible) return;
-    const onFocus = () => void refresh();
+    const onFocus = () => void refreshSnapshot();
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
-  }, [refresh, visible]);
+  }, [refreshSnapshot, visible]);
   useLayoutEffect(() => {
     const textarea = messageRef.current;
     if (!textarea) return;
@@ -186,8 +209,9 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
   }, [message]);
 
   async function mutate(label: string, operation: () => Promise<GitSnapshot>, clearMessage = false): Promise<boolean> {
+    if (busyRef.current) return false;
     const request = ++epoch.current;
-    setBusy(label); setError(null);
+    updateBusy(label); setError(null);
     try {
       const next = await operation();
       if (request !== epoch.current) return false;
@@ -198,7 +222,7 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
       if (request === epoch.current) setError(gitError(cause));
       return false;
     } finally {
-      if (request === epoch.current) setBusy("");
+      if (request === epoch.current) updateBusy("");
     }
   }
 
@@ -224,8 +248,9 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
   const branchLabel = snapshot?.head.detached ? "detached HEAD" : snapshot?.head.name ?? "未命名分支";
   const branchOptions = useMemo(() => {
     if (!snapshot) return [];
-    if (!snapshot.head.unborn || !snapshot.head.name || snapshot.branches.some((branch) => branch.name === snapshot.head.name)) return snapshot.branches;
-    return [{ name: snapshot.head.name, oid: snapshot.head.oid ?? "", current: true, upstream: snapshot.head.upstream }, ...snapshot.branches];
+    const headRefName = snapshot.head.name ? `refs/heads/${snapshot.head.name}` : null;
+    if (!snapshot.head.unborn || !snapshot.head.name || snapshot.branches.some((branch) => branch.refName === headRefName)) return snapshot.branches;
+    return [{ refName: headRefName!, name: snapshot.head.name, kind: "local" as const, oid: snapshot.head.oid ?? "", current: true, upstream: snapshot.head.upstream, upstreamRef: null }, ...snapshot.branches];
   }, [snapshot]);
   const visibleBranches = useMemo(() => {
     const query = branchQuery.trim().toLocaleLowerCase();
@@ -236,6 +261,8 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
         .some((value) => value?.toLocaleLowerCase().includes(query));
     });
   }, [branchOptions, branchQuery, snapshot?.commits]);
+  const visibleLocalBranches = useMemo(() => visibleBranches.filter((branch) => branch.kind === "local"), [visibleBranches]);
+  const visibleRemoteBranches = useMemo(() => visibleBranches.filter((branch) => branch.kind === "remote"), [visibleBranches]);
 
   function commitFilesKey(oid: string): string | null {
     if (!root) return null;
@@ -304,13 +331,12 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
     void requestCommitFiles(commitToToggle);
   }
 
-  function repositoryAnchor(kind: GitRepositoryOverlayKind): HTMLButtonElement | null {
-    if (kind === "branches") return branchButtonRef.current;
-    return createBranchButtonRef.current;
+  function repositoryAnchor(): HTMLButtonElement | null {
+    return branchButtonRef.current;
   }
 
   function closeRepositoryOverlay(restoreFocus = false) {
-    const anchor = repositoryOverlay ? repositoryAnchor(repositoryOverlay.kind) : null;
+    const anchor = repositoryOverlay ? repositoryAnchor() : null;
     setRepositoryOverlay(null);
     if (restoreFocus) window.requestAnimationFrame(() => anchor?.focus());
   }
@@ -320,7 +346,7 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
       closeRepositoryOverlay(true);
       return;
     }
-    const anchor = repositoryAnchor(kind);
+    const anchor = repositoryAnchor();
     if (!anchor) return;
     if (kind === "createBranch") {
       setNewBranch("");
@@ -328,15 +354,13 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
     }
     if (kind === "branches") setBranchQuery("");
     const estimatedWidth = kind === "createBranch" ? 270 : 336;
-    const estimatedHeight = kind === "createBranch" ? 138 : Math.min(376, 92 + branchOptions.length * 44);
+    const estimatedHeight = kind === "createBranch" ? 138 : Math.min(376, 118 + branchOptions.length * 44);
     setRepositoryOverlay({ kind, ...fitRepositoryOverlay(anchor.getBoundingClientRect(), estimatedWidth, estimatedHeight) });
   }
 
   useLayoutEffect(() => {
     if (!repositoryOverlay || !repositoryOverlayRef.current) return;
-    const anchor = repositoryOverlay.kind === "branches"
-      ? branchButtonRef.current
-      : createBranchButtonRef.current;
+    const anchor = repositoryAnchor();
     if (!anchor) return;
     const overlay = repositoryOverlayRef.current;
     const next = fitRepositoryOverlay(anchor.getBoundingClientRect(), overlay.offsetWidth, overlay.offsetHeight);
@@ -349,9 +373,7 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
 
   useEffect(() => {
     if (!repositoryOverlay) return;
-    const anchor = repositoryOverlay.kind === "branches"
-      ? branchButtonRef.current
-      : createBranchButtonRef.current;
+    const anchor = repositoryAnchor();
     const closeOnOutsidePointer = (event: PointerEvent) => {
       const node = event.target as Node;
       if (!repositoryOverlayRef.current?.contains(node) && !anchor?.contains(node)) setRepositoryOverlay(null);
@@ -362,7 +384,11 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
       setRepositoryOverlay(null);
       window.requestAnimationFrame(() => anchor?.focus());
     };
-    const closeOnViewportChange = () => setRepositoryOverlay(null);
+    const closeOnViewportChange = (event: Event) => {
+      const node = event.target;
+      if (node instanceof Node && repositoryOverlayRef.current?.contains(node)) return;
+      setRepositoryOverlay(null);
+    };
     document.addEventListener("pointerdown", closeOnOutsidePointer);
     document.addEventListener("keydown", closeOnEscape);
     window.addEventListener("resize", closeOnViewportChange);
@@ -388,27 +414,55 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
     else items[(current - 1 + items.length) % items.length].focus();
   }
 
+  function renderBranchOption(branch: GitBranch) {
+    const current = branch.kind === "local"
+      && (branch.current || (!snapshot?.head.detached && branch.name === snapshot?.head.name));
+    const commit = snapshot?.commits.find((item) => item.oid === branch.oid);
+    const branchName = `${branch.name}${snapshot?.head.unborn && branch.kind === "local" && branch.name === snapshot.head.name ? "（未提交）" : ""}`;
+    const kindLabel = current ? "当前" : branch.kind === "remote" ? "远程" : "本地";
+    return <button
+      type="button"
+      role="option"
+      aria-selected={current}
+      data-kind={branch.kind}
+      key={branch.refName}
+      title={branch.name}
+      onClick={() => {
+        closeRepositoryOverlay(false);
+        if (!root || current) return;
+        if (branch.kind === "remote") {
+          void mutate("trackRemoteBranch", () => trackRemoteBranch(root, branch.refName));
+        } else {
+          void mutate("switch", () => switchBranch(root, branch.name));
+        }
+      }}
+    >
+      <span className="git-branch-option-primary"><Icon name={branch.kind === "remote" ? "network" : "git"} size={12}/><strong>{branchName}</strong>{commit && <span className="git-branch-time">{formatRelativeCommitTime(commit.timestamp)}</span>}<span className="git-branch-kind">{kindLabel}</span></span>
+      <span className="git-branch-option-meta">{commit?.author && <span className="git-branch-author" title={commit.author}>{commit.author}</span>}<span className="git-branch-oid" title={branch.oid}>{branch.oid.slice(0, 7)}</span>{commit?.subject && <span className="git-branch-subject" title={commit.subject}>{commit.subject}</span>}</span>
+    </button>;
+  }
+
   if (available === false) return <GitEmpty icon="git" title="未找到系统 Git" detail="安装 Git 并重新打开 Qterm 后即可使用 Git 管理。"/>;
   if (!repositoryPath) return <GitEmpty icon="git" title="选择本机仓库" detail="Git Block 一次管理一个本机或 SSH 工作区仓库。" action="选择文件夹" onAction={onRequestRepositoryChange}/>;
   if (remote && !remoteReady && !snapshot) return <GitEmpty icon="git" title={runtime?.status === "connecting" || runtime?.status === "authenticating" ? "正在连接远程 Git…" : "远程 Git 尚未连接"} detail={runtime?.notice || repositoryPath} secondary="更换远程路径" onSecondary={onRequestRepositoryChange}/>;
   if (error?.code === "notGitRepository") return <GitEmpty icon="git" title="尚未初始化存储库" detail={repositoryPath} action="初始化存储库" secondary={remote ? "更换远程路径" : "更换文件夹"} onAction={() => void mutate("initialize", () => initialize(repositoryPath))} onSecondary={onRequestRepositoryChange}/>;
-  if (error && !snapshot) return <GitEmpty icon="git" title={gitFailureTitle(error.code)} detail={error.message} action={error.code === "gitMissing" || error.code === "gitUnsupportedRemote" ? undefined : "重试"} secondary={remote ? "更换远程路径" : "更换文件夹"} onAction={() => void refresh()} onSecondary={onRequestRepositoryChange}/>;
+  if (error && !snapshot) return <GitEmpty icon="git" title={gitFailureTitle(error.code)} detail={error.message} action={error.code === "gitMissing" || error.code === "gitUnsupportedRemote" ? undefined : "重试"} secondary={remote ? "更换远程路径" : "更换文件夹"} onAction={() => void refreshSnapshot()} onSecondary={onRequestRepositoryChange}/>;
 
   return <><div className="git-pane" data-block-id={blockId} data-busy={disabled || undefined} aria-busy={disabled}>
     <GitSection className="git-repository-section" title="存储库" meta={root ?? repositoryPath} collapsed={collapsed.repository} onToggle={() => setCollapsed((value) => ({ ...value, repository: !value.repository }))}>
       <div className="git-repository-card">
         <div className="git-repository-row">
-          <Icon name="git" size={15}/><span className="git-repository-name">{snapshot?.repositoryName ?? repositoryPath}</span>
-          {snapshot && <button ref={branchButtonRef} type="button" className="git-branch-trigger" aria-label={`切换分支，当前 ${branchLabel}`} title={`切换分支 · ${branchLabel}`} aria-haspopup="dialog" aria-expanded={repositoryOverlay?.kind === "branches"} disabled={disabled} onClick={() => openRepositoryOverlay("branches")}>
+          <Icon name="git" size={15}/>
+          <span className="git-repository-name">{snapshot?.repositoryName ?? repositoryPath}</span>
+          {snapshot && <button ref={branchButtonRef} type="button" className="git-branch-trigger" aria-label={`切换分支，当前 ${branchLabel}`} title={`切换分支 · ${branchLabel}`} aria-haspopup="dialog" aria-expanded={Boolean(repositoryOverlay)} disabled={disabled} onClick={() => openRepositoryOverlay("branches")}>
             <Icon name="git" size={12}/><span>{branchLabel}</span>
           </button>}
           <div className="git-repository-actions">
-            <button ref={createBranchButtonRef} type="button" aria-label="创建分支" title="创建分支" aria-haspopup="dialog" aria-expanded={repositoryOverlay?.kind === "createBranch"} disabled={disabled || !snapshot} onClick={() => openRepositoryOverlay("createBranch")}><Icon name="plus" size={12}/></button>
-            <button type="button" aria-label="刷新 Git 状态" title="刷新" disabled={disabled} onClick={() => void refresh()}><Icon name="refresh" size={13}/></button>
+            {snapshot?.head.upstream && <span className="git-repository-sync" aria-label={`领先 ${snapshot.head.ahead} 个提交，落后 ${snapshot.head.behind} 个提交`} title={`领先 ${snapshot.head.ahead} · 落后 ${snapshot.head.behind}`}><span>↑{snapshot.head.ahead}</span><span>↓{snapshot.head.behind}</span></span>}
+            <button type="button" aria-label="刷新 Git 状态" title="获取远程更新并刷新" disabled={disabled} onClick={() => void fetchAndRefresh()}><Icon name="refresh" size={13}/></button>
           </div>
         </div>
         {remote && runtime?.stale && <div className="git-feedback stale" role="status">连接已断开，当前内容可能已过期；重新连接后将自动刷新。</div>}
-        {snapshot?.head.upstream && <div className="git-upstream">{snapshot.head.upstream} · ↑{snapshot.head.ahead} ↓{snapshot.head.behind}</div>}
       </div>
     </GitSection>
 
@@ -499,20 +553,15 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
       : <div ref={(node) => { repositoryOverlayRef.current = node; }} className="git-repository-popover git-branch-popover" data-placement={repositoryOverlay.placement} role="dialog" aria-label="切换分支" style={{ left: repositoryOverlay.left, top: repositoryOverlay.top }} onKeyDown={navigateRepositoryMenu}>
           <div className="git-branch-search-shell"><Icon name="search" size={12}/><input className="git-branch-search" type="search" role="searchbox" aria-label="筛选分支" value={branchQuery} placeholder="筛选要签出的分支" onChange={(event) => setBranchQuery(event.target.value)}/></div>
           <div className="git-branch-actions"><button type="button" onClick={() => openRepositoryOverlay("createBranch")}><Icon name="plus" size={12}/><span>创建新分支…</span></button></div>
-          <div className="git-branch-list-header"><span>分支</span><span>{visibleBranches.length}</span></div>
           <div className="git-branch-list" role="listbox" aria-label="选择分支">
-            {visibleBranches.map((branch) => {
-              const current = branch.current || (!snapshot?.head.detached && branch.name === snapshot?.head.name);
-              const commit = snapshot?.commits.find((item) => item.oid === branch.oid);
-              const branchName = `${branch.name}${snapshot?.head.unborn && branch.name === snapshot.head.name ? "（未提交）" : ""}`;
-              return <button type="button" role="option" aria-selected={current} key={branch.name} title={branch.name} onClick={() => {
-                closeRepositoryOverlay(false);
-                if (root && !current) void mutate("switch", () => switchBranch(root, branch.name));
-              }}>
-                <span className="git-branch-option-primary"><Icon name="git" size={12}/><strong>{branchName}</strong>{commit && <span className="git-branch-time">{formatRelativeCommitTime(commit.timestamp)}</span>}<span className="git-branch-kind">{current ? "当前" : "分支"}</span></span>
-                <span className="git-branch-option-meta">{commit?.author && <span>{commit.author}</span>}<span>{branch.oid.slice(0, 7)}</span>{commit?.subject && <span>{commit.subject}</span>}{branch.upstream && <span className="git-branch-upstream"><Icon name="network" size={10}/>{branch.upstream}</span>}</span>
-              </button>;
-            })}
+            <div className="git-branch-list-group" role="group" aria-label="本地分支">
+              <div className="git-branch-list-header" role="presentation"><span>本地分支</span><span>{visibleLocalBranches.length}</span></div>
+              {visibleLocalBranches.map(renderBranchOption)}
+            </div>
+            <div className="git-branch-list-group" role="group" aria-label="远程分支">
+              <div className="git-branch-list-header" role="presentation"><span>远程分支</span><span>{visibleRemoteBranches.length}</span></div>
+              {visibleRemoteBranches.map(renderBranchOption)}
+            </div>
             {visibleBranches.length === 0 && <div className="git-branch-empty">没有匹配“{branchQuery.trim()}”的分支</div>}
           </div>
         </div>, document.body)}

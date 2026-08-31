@@ -364,6 +364,31 @@ async fn git_actions_require_a_connected_git_purpose_session_owned_by_the_profil
         Err(crate::domain::git::GitError::Missing)
     );
 
+    for action in [
+        crate::domain::git::RemoteGitAction::Fetch {
+            repository: "/srv/project".into(),
+        },
+        crate::domain::git::RemoteGitAction::TrackRemoteBranch {
+            repository: "/srv/project".into(),
+            ref_name: "refs/remotes/origin/feature/test".into(),
+        },
+    ] {
+        let expected = action.clone();
+        let action_request = {
+            let manager = Arc::clone(&manager);
+            tokio::spawn(async move { manager.execute("git-1", "profile-1", action).await })
+        };
+        let Some(SessionControl::RunGit { action, reply }) = control_receiver.recv().await else {
+            panic!("Git fetch/track control")
+        };
+        assert_eq!(action, expected);
+        let _ = reply.send(Err(crate::domain::git::GitError::Missing));
+        assert_eq!(
+            action_request.await.expect("action request"),
+            Err(crate::domain::git::GitError::Missing)
+        );
+    }
+
     assert_eq!(
         manager
             .commit_files(
@@ -844,7 +869,7 @@ fn local_openssh_connects_to_a_target_through_a_jump_profile() {
 
 #[test]
 #[ignore = "requires /usr/sbin/sshd, ssh-keygen, and Git 2.25+ on a POSIX host"]
-fn local_openssh_exercises_remote_git_init_stage_commit_branch_and_snapshot() {
+fn local_openssh_exercises_remote_git_init_stage_commit_fetch_track_branch_and_snapshot() {
     let directory = tempdir().expect("temporary integration directory");
     let port = reserve_loopback_port();
     let client_key = directory.path().join("git-client-key");
@@ -963,6 +988,59 @@ fn local_openssh_exercises_remote_git_init_stage_commit_branch_and_snapshot() {
             .map(|commit| commit.subject.as_str()),
         Some("feat: remote Git")
     );
+    let origin = directory.path().join("origin.git");
+    assert!(
+        Command::new("git")
+            .args(["init", "--bare"])
+            .arg(&origin)
+            .status()
+            .expect("bare origin")
+            .success()
+    );
+    assert!(
+        Command::new("git")
+            .args(["-C", &repository_path, "remote", "add", "origin"])
+            .arg(&origin)
+            .status()
+            .expect("origin")
+            .success()
+    );
+    assert!(
+        Command::new("git")
+            .args(["-C", &repository_path, "push", "-u", "origin", "HEAD"])
+            .status()
+            .expect("push origin")
+            .success()
+    );
+    assert!(
+        Command::new("git")
+            .args(["-C"])
+            .arg(&origin)
+            .args([
+                "update-ref",
+                "refs/heads/remote-only",
+                committed.head.oid.as_deref().expect("commit oid"),
+            ])
+            .status()
+            .expect("remote-only ref")
+            .success()
+    );
+    let fetched = run(crate::domain::git::RemoteGitAction::Fetch {
+        repository: repository_path.clone(),
+    })
+    .expect("remote fetch");
+    assert!(
+        fetched
+            .branches
+            .iter()
+            .any(|branch| branch.ref_name == "refs/remotes/origin/remote-only")
+    );
+    let tracked = run(crate::domain::git::RemoteGitAction::TrackRemoteBranch {
+        repository: repository_path.clone(),
+        ref_name: "refs/remotes/origin/remote-only".into(),
+    })
+    .expect("remote track branch");
+    assert_eq!(tracked.head.name.as_deref(), Some("remote-only"));
     let branched = run(crate::domain::git::RemoteGitAction::CreateBranch {
         repository: repository_path,
         name: "feature/remote".into(),

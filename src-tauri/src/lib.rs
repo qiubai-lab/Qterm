@@ -25,10 +25,10 @@ use commands::files::{
     files_rename_entry, files_session_connect, files_write_text,
 };
 use commands::git::{
-    GitState, git_available, git_commit, git_commit_files, git_create_branch, git_initialize,
-    git_remote_commit_files, git_remote_execute, git_remote_list_directory,
+    GitState, git_available, git_commit, git_commit_files, git_create_branch, git_fetch,
+    git_initialize, git_remote_commit_files, git_remote_execute, git_remote_list_directory,
     git_select_repository_directory, git_session_connect, git_snapshot, git_stage, git_stage_all,
-    git_switch_branch, git_unstage, git_unstage_all,
+    git_switch_branch, git_track_remote_branch, git_unstage, git_unstage_all,
 };
 use commands::local_session::{
     LocalSessionState, local_session_close, local_session_connect, local_session_resize,
@@ -348,7 +348,9 @@ pub fn run() {
             git_commit,
             git_commit_files,
             git_create_branch,
-            git_switch_branch
+            git_switch_branch,
+            git_fetch,
+            git_track_remote_branch
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Qterm");

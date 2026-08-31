@@ -126,7 +126,7 @@ describe("Git pane style contracts", () => {
 
   it("groups repository content and each graph commit in compact material containers", () => {
     const repository = declarations(".git-repository-card");
-    expect(repository).toContain("margin: 7px 8px");
+    expect(repository).toContain("margin: 5px 8px");
     expect(repository).toContain("overflow: hidden");
     expect(repository).toContain("border: 1px solid var(--subtle)");
     expect(repository).toContain("border-radius: 7px");
@@ -152,7 +152,7 @@ describe("Git pane style contracts", () => {
     expect(commit).toContain("border: 1px solid");
     expect(commit).toContain("border-radius: 6px");
     expect(commit).toContain("background: color-mix(in srgb, var(--raised) 42%, var(--surface))");
-    const scrollers = declarations(".git-change-scroll,\n.git-graph-scroll");
+    const scrollers = declarations(".git-change-scroll,\n.git-graph-scroll,\n.git-branch-list");
     expect(scrollers).toContain("flex: 1");
     expect(scrollers).toContain("min-height: 0");
     expect(declarations(".git-graph-section .git-section-content")).toContain("flex: 1");
@@ -162,20 +162,20 @@ describe("Git pane style contracts", () => {
   });
 
   it("matches the file manager scrollbar and reserves the graph card lane", () => {
-    const scrollers = declarations(".git-change-scroll,\n.git-graph-scroll");
+    const scrollers = declarations(".git-change-scroll,\n.git-graph-scroll,\n.git-branch-list");
     expect(scrollers).toContain("scrollbar-color: var(--scrollbar-thumb) transparent");
     expect(scrollers).toContain("scrollbar-width: thin");
     expect(fileBrowserStyles).toContain("scrollbar-color:var(--scrollbar-thumb) transparent");
-    const scrollbar = declarations(".git-change-scroll::-webkit-scrollbar,\n.git-graph-scroll::-webkit-scrollbar");
+    const scrollbar = declarations(".git-change-scroll::-webkit-scrollbar,\n.git-graph-scroll::-webkit-scrollbar,\n.git-branch-list::-webkit-scrollbar");
     expect(scrollbar).toContain("width: 5px");
     expect(scrollbar).toContain("height: 5px");
-    expect(declarations(".git-change-scroll::-webkit-scrollbar-track,\n.git-graph-scroll::-webkit-scrollbar-track")).toContain("background: transparent");
-    const thumb = declarations(".git-change-scroll::-webkit-scrollbar-thumb,\n.git-graph-scroll::-webkit-scrollbar-thumb");
+    expect(declarations(".git-change-scroll::-webkit-scrollbar-track,\n.git-graph-scroll::-webkit-scrollbar-track,\n.git-branch-list::-webkit-scrollbar-track")).toContain("background: transparent");
+    const thumb = declarations(".git-change-scroll::-webkit-scrollbar-thumb,\n.git-graph-scroll::-webkit-scrollbar-thumb,\n.git-branch-list::-webkit-scrollbar-thumb");
     expect(thumb).toContain("border: 1px solid transparent");
     expect(thumb).toContain("border-radius: 999px");
     expect(thumb).toContain("background: var(--scrollbar-thumb)");
     expect(thumb).toContain("background-clip: padding-box");
-    expect(declarations(".git-change-scroll::-webkit-scrollbar-thumb:hover,\n.git-graph-scroll::-webkit-scrollbar-thumb:hover")).toContain("color-mix(in srgb, var(--scrollbar-thumb) 82%, var(--accent))");
+    expect(declarations(".git-change-scroll::-webkit-scrollbar-thumb:hover,\n.git-graph-scroll::-webkit-scrollbar-thumb:hover,\n.git-branch-list::-webkit-scrollbar-thumb:hover")).toContain("color-mix(in srgb, var(--scrollbar-thumb) 82%, var(--accent))");
     expect(cyberTheme).toContain("--scrollbar-thumb:#168996");
     expect(cyberTheme).toContain("--accent:#00ddeb");
   });
@@ -196,9 +196,16 @@ describe("Git pane style contracts", () => {
 
   it("uses an icon-and-text branch trigger and portaled floating layers", () => {
     expect(declarations(".git-repository-actions")).toContain("display: flex");
-    expect(declarations(".git-repository-actions")).toContain("gap: 2px");
+    expect(declarations(".git-repository-actions")).toContain("gap: 3px");
+    expect(declarations(".git-repository-row")).toContain("padding: 4px 6px");
+    expect(declarations(".git-repository-sync")).toContain("display: inline-flex");
+    expect(declarations(".git-repository-sync")).toContain("color: var(--accent)");
+    expect(declarations(".git-repository-sync")).toContain("background: color-mix(in srgb, var(--accent) 9%, transparent)");
+    expect(declarations(".git-repository-sync")).toContain("border: 1px solid color-mix(in srgb, var(--accent) 32%, var(--subtle))");
     expect(declarations(".git-branch-trigger")).toContain("display: flex");
     expect(declarations(".git-branch-trigger")).toContain("width: max-content");
+    expect(declarations(".git-branch-trigger")).toContain("height: 19px");
+    expect(declarations(".git-repository-sync")).toContain("height: 19px");
     expect(declarations(".git-branch-trigger")).toContain("background: var(--primary-action)");
     expect(declarations(".git-branch-trigger")).toContain("color: var(--primary-action-contrast)");
     expect(declarations(".git-branch-trigger svg")).toContain("color: currentColor");
@@ -209,16 +216,51 @@ describe("Git pane style contracts", () => {
     expect(popover).toContain("background: var(--floating-material)");
     expect(declarations(".git-branch-popover")).toContain("width: 336px");
     expect(declarations(".git-branch-popover")).toContain("padding: 0");
-    expect(declarations(".git-branch-list")).toContain("width: 100%");
-    expect(declarations(".git-branch-list")).toContain("gap: 3px");
-    expect(declarations(".git-branch-list")).toContain("padding: 4px");
-    expect(declarations(".git-branch-list")).toContain("scrollbar-gutter: auto");
+    expect(declarations(".git-branch-popover")).toContain("background: color-mix(in srgb, var(--raised) 96%, var(--canvas))");
+    const branchSearch = declarations(".git-branch-search");
+    expect(branchSearch).toContain("width: 0");
+    expect(branchSearch).toContain("margin: 0");
+    expect(branchSearch).toContain("border-radius: 0");
+    expect(branchSearch).toContain("box-shadow: none");
+    const branchSearchFocus = declarations(".git-branch-search:focus,\n.git-branch-search:focus-visible");
+    expect(branchSearchFocus).toContain("border: 0");
+    expect(branchSearchFocus).toContain("outline: 0");
+    expect(branchSearchFocus).toContain("box-shadow: none");
+    const branchList = lastDeclarations(".git-branch-list");
+    expect(branchList).toContain("width: 100%");
+    expect(branchList).toContain("gap: 3px");
+    expect(branchList).toContain("padding: 4px 9px 4px 4px");
+    expect(branchList).toContain("scrollbar-gutter: stable");
+    expect(branchList).toContain("overscroll-behavior: contain");
+    expect(declarations(".git-branch-list-group")).toContain("display: flex");
+    expect(declarations(".git-branch-list-group")).toContain("flex-direction: column");
+    expect(declarations(".git-branch-list-group")).toContain("gap: 3px");
+    const branchGroupHeader = declarations(".git-branch-list-header");
+    expect(branchGroupHeader).toContain("position: sticky");
+    expect(branchGroupHeader).toContain("height: 22px");
+    expect(branchGroupHeader).toContain("border: 1px solid color-mix(in srgb, var(--accent) 38%, var(--border))");
+    expect(branchGroupHeader).toContain("color: var(--accent)");
+    expect(branchGroupHeader).toContain("background: color-mix(in srgb, var(--accent) 15%, var(--raised))");
+    const branchGroupCount = declarations(".git-branch-list-header span:last-child");
+    expect(branchGroupCount).toContain("color: var(--accent)");
+    expect(branchGroupCount).toContain("background: color-mix(in srgb, var(--accent) 14%, var(--surface))");
     const option = declarations('.git-branch-popover [role="option"]');
     expect(option).toContain("box-sizing: border-box");
     expect(option).toContain("width: 100%");
     expect(option).toContain("border-radius: 6px");
     expect(declarations('.git-branch-popover [role="option"][aria-selected="true"]')).toContain("var(--primary-action)");
     expect(declarations('.git-branch-popover [role="option"][aria-selected="true"]:hover')).toContain("repeating-linear-gradient");
+    expect(lastDeclarations(".git-branch-option-meta")).toContain("display: block");
+    expect(lastDeclarations(".git-branch-option-meta")).toContain("padding-left: 0");
+    expect(lastDeclarations(".git-branch-option-meta")).toContain("color: color-mix(in srgb, var(--muted) 72%, var(--dim))");
+    expect(lastDeclarations(".git-branch-option-meta")).toContain("text-overflow: ellipsis");
+    const metadataIdentity = declarations(".git-branch-author,\n.git-branch-oid");
+    expect(metadataIdentity).toContain("color: color-mix(in srgb, var(--text) 24%, var(--muted))");
+    expect(metadataIdentity).toContain("font-weight: 550");
+    expect(metadataIdentity).not.toContain("width:");
+    expect(metadataIdentity).not.toContain("flex:");
+    expect(declarations('.git-branch-popover [role="option"][data-kind="remote"] .git-branch-option-primary > svg')).toContain("var(--accent) 64%");
+    expect(styles).not.toContain(".git-branch-upstream");
   });
 
   it("presents graph commits as selectable two-line rows with themed decorations", () => {

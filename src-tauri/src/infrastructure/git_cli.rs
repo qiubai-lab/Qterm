@@ -8,12 +8,16 @@ use std::{
 };
 
 use crate::{
-    domain::git::{GitBranch, GitChange, GitCommit, GitCommitFile, GitError, GitHead, GitSnapshot},
+    domain::git::{
+        GitBranch, GitBranchKind, GitChange, GitCommit, GitCommitFile, GitError, GitHead,
+        GitSnapshot, find_tracking_local_branch, validate_remote_branch_ref,
+    },
     ports::git_executor::GitExecutor,
 };
 
 const READ_TIMEOUT: Duration = Duration::from_secs(10);
 const MUTATION_TIMEOUT: Duration = Duration::from_secs(60);
+const FETCH_TIMEOUT: Duration = Duration::from_secs(120);
 const OUTPUT_LIMIT: usize = 8 * 1024 * 1024;
 
 pub struct SystemGitExecutor {
@@ -119,9 +123,10 @@ impl GitExecutor for SystemGitExecutor {
                 repository.as_os_str().to_owned(),
                 OsString::from("for-each-ref"),
                 OsString::from(
-                    "--format=%(refname:short)%00%(objectname)%00%(HEAD)%00%(upstream:short)",
+                    "--format=%(refname)%00%(refname:short)%00%(objectname)%00%(HEAD)%00%(upstream:short)%00%(upstream)%00%(symref)",
                 ),
                 OsString::from("refs/heads/"),
+                OsString::from("refs/remotes/"),
             ],
             READ_TIMEOUT,
         )?;
@@ -251,6 +256,48 @@ impl GitExecutor for SystemGitExecutor {
 
     fn switch_branch(&self, repository: &Path, name: &str) -> Result<GitSnapshot, GitError> {
         self.mutate(repository, [OsStr::new("switch"), OsStr::new(name)])
+    }
+
+    fn fetch(&self, repository: &Path) -> Result<GitSnapshot, GitError> {
+        let repository = self.repository_root(repository)?;
+        self.git(
+            [
+                OsString::from("-C"),
+                repository.as_os_str().to_owned(),
+                OsString::from("fetch"),
+                OsString::from("--all"),
+                OsString::from("--prune"),
+                OsString::from("--no-recurse-submodules"),
+            ],
+            FETCH_TIMEOUT,
+        )?;
+        self.snapshot(&repository)
+    }
+
+    fn track_remote_branch(
+        &self,
+        repository: &Path,
+        ref_name: &str,
+    ) -> Result<GitSnapshot, GitError> {
+        validate_remote_branch_ref(ref_name)?;
+        let snapshot = self.snapshot(repository)?;
+        if let Some(local) = find_tracking_local_branch(&snapshot.branches, ref_name) {
+            return self.switch_branch(repository, &local.name);
+        }
+        let remote_name = snapshot
+            .branches
+            .iter()
+            .find(|branch| branch.kind == GitBranchKind::Remote && branch.ref_name == ref_name)
+            .map(|branch| branch.name.clone())
+            .ok_or(GitError::InvalidInput)?;
+        self.mutate(
+            repository,
+            [
+                OsStr::new("switch"),
+                OsStr::new("--track"),
+                OsStr::new(&remote_name),
+            ],
+        )
     }
 }
 
@@ -519,16 +566,29 @@ pub(crate) fn parse_branches(bytes: &[u8]) -> Vec<GitBranch> {
         .lines()
         .filter_map(|line| {
             let fields = line.split('\0').collect::<Vec<_>>();
-            let name = fields.first()?.trim();
-            if name.is_empty() {
+            let ref_name = fields.first()?.trim();
+            let (kind, name) = if let Some(name) = ref_name.strip_prefix("refs/heads/") {
+                (GitBranchKind::Local, name)
+            } else {
+                let name = ref_name.strip_prefix("refs/remotes/")?;
+                (GitBranchKind::Remote, name)
+            };
+            if name.is_empty() || fields.get(6).is_some_and(|value| !value.trim().is_empty()) {
                 return None;
             }
             Some(GitBranch {
+                ref_name: ref_name.into(),
                 name: name.into(),
-                oid: fields.get(1).unwrap_or(&"").to_string(),
-                current: fields.get(2).is_some_and(|value| value.trim() == "*"),
+                kind,
+                oid: fields.get(2).unwrap_or(&"").to_string(),
+                current: kind == GitBranchKind::Local
+                    && fields.get(3).is_some_and(|value| value.trim() == "*"),
                 upstream: fields
-                    .get(3)
+                    .get(4)
+                    .filter(|value| !value.trim().is_empty())
+                    .map(|value| value.trim().into()),
+                upstream_ref: fields
+                    .get(5)
                     .filter(|value| !value.trim().is_empty())
                     .map(|value| value.trim().into()),
             })
@@ -616,7 +676,7 @@ mod tests {
         OUTPUT_LIMIT, SystemGitExecutor, classify_failure, parse_branches, parse_commit_files,
         parse_commits, parse_status, read_bounded, run_process,
     };
-    use crate::domain::git::GitError;
+    use crate::domain::git::{GitBranchKind, GitError, find_tracking_local_branch};
     use crate::ports::git_executor::GitExecutor;
     use std::{fs, io::Cursor, process::Command};
     use tempfile::tempdir;
@@ -660,10 +720,29 @@ mod tests {
                 .any(|change| change.path == "-leading 中文.txt")
         );
 
-        let branches = parse_branches(b"main\0abc\0*\0origin/main\nfeature/test\0def\0 \0\n");
-        assert_eq!(branches.len(), 2);
+        let branches = parse_branches(
+            b"refs/heads/main\0main\0abc\0*\0origin/main\0refs/remotes/origin/main\0\n\
+refs/heads/origin/main\0origin/main\0local\0 \0\0\0\n\
+refs/remotes/origin/main\0origin/main\0abc\0 \0\0\0\n\
+refs/remotes/origin/HEAD\0origin/HEAD\0abc\0 \0\0\0refs/remotes/origin/main\n",
+        );
+        assert_eq!(branches.len(), 3);
+        assert_eq!(branches[0].ref_name, "refs/heads/main");
+        assert_eq!(branches[0].kind, GitBranchKind::Local);
         assert!(branches[0].current);
         assert_eq!(branches[0].upstream.as_deref(), Some("origin/main"));
+        assert_eq!(
+            branches[0].upstream_ref.as_deref(),
+            Some("refs/remotes/origin/main")
+        );
+        assert_eq!(branches[1].name, branches[2].name);
+        assert_ne!(branches[1].ref_name, branches[2].ref_name);
+        assert_eq!(branches[2].kind, GitBranchKind::Remote);
+        assert_eq!(
+            find_tracking_local_branch(&branches, "refs/remotes/origin/main")
+                .map(|branch| branch.ref_name.as_str()),
+            Some("refs/heads/main")
+        );
 
         let commits = parse_commits(b"merge\x1fleft right\x1fHEAD -> main, tag: v1\x1fmerge subject\x1fQterm\x1f1700000000\x1fFirst paragraph.\n\n- detail one\n- detail two\n\x1e");
         assert_eq!(commits[0].parents, ["left", "right"]);
@@ -804,6 +883,148 @@ mod tests {
     }
 
     #[test]
+    fn real_git_fetch_lists_tracks_and_prunes_remote_branches_without_changing_the_worktree() {
+        let git = which_git();
+        let executor = SystemGitExecutor::with_executable(git.clone());
+        let directory = tempdir().expect("remote fixture");
+        let bare = directory.path().join("origin.git");
+        let seed = directory.path().join("seed");
+        let local = directory.path().join("local");
+
+        run_git_test(&git, ["init", "--bare", path(&bare)]);
+        run_git_test(&git, ["init", path(&seed)]);
+        run_git_test(
+            &git,
+            ["-C", path(&seed), "config", "user.name", "Qterm Test"],
+        );
+        run_git_test(
+            &git,
+            [
+                "-C",
+                path(&seed),
+                "config",
+                "user.email",
+                "qterm@example.invalid",
+            ],
+        );
+        fs::write(seed.join("main.txt"), b"initial\n").expect("initial file");
+        run_git_test(&git, ["-C", path(&seed), "add", "main.txt"]);
+        run_git_test(&git, ["-C", path(&seed), "commit", "-m", "initial"]);
+        run_git_test(&git, ["-C", path(&seed), "branch", "-M", "main"]);
+        run_git_test(
+            &git,
+            ["-C", path(&seed), "remote", "add", "origin", path(&bare)],
+        );
+        run_git_test(&git, ["-C", path(&seed), "push", "-u", "origin", "main"]);
+        run_git_test(
+            &git,
+            ["-C", path(&bare), "symbolic-ref", "HEAD", "refs/heads/main"],
+        );
+        run_git_test(&git, ["clone", path(&bare), path(&local)]);
+
+        run_git_test(&git, ["-C", path(&seed), "switch", "-c", "feature/remote"]);
+        fs::write(seed.join("feature.txt"), b"feature\n").expect("feature file");
+        run_git_test(&git, ["-C", path(&seed), "add", "feature.txt"]);
+        run_git_test(&git, ["-C", path(&seed), "commit", "-m", "feature"]);
+        run_git_test(
+            &git,
+            ["-C", path(&seed), "push", "-u", "origin", "feature/remote"],
+        );
+        run_git_test(&git, ["-C", path(&seed), "switch", "main"]);
+
+        let stale = executor.snapshot(&local).expect("snapshot before fetch");
+        assert!(
+            stale
+                .branches
+                .iter()
+                .all(|branch| branch.ref_name != "refs/remotes/origin/feature/remote")
+        );
+        let fetched = executor.fetch(&local).expect("fetch new remote branch");
+        assert!(fetched.branches.iter().any(|branch| {
+            branch.ref_name == "refs/remotes/origin/feature/remote"
+                && branch.kind == GitBranchKind::Remote
+        }));
+        assert!(
+            fetched
+                .branches
+                .iter()
+                .all(|branch| branch.name != "origin/HEAD")
+        );
+
+        run_git_test(&git, ["-C", path(&local), "branch", "feature/remote"]);
+        assert!(matches!(
+            executor.track_remote_branch(&local, "refs/remotes/origin/feature/remote"),
+            Err(GitError::CommandFailed(_))
+        ));
+        assert_eq!(
+            executor
+                .snapshot(&local)
+                .expect("snapshot after collision")
+                .head
+                .name
+                .as_deref(),
+            Some("main")
+        );
+        run_git_test(&git, ["-C", path(&local), "branch", "-D", "feature/remote"]);
+
+        run_git_test(
+            &git,
+            [
+                "-C",
+                path(&local),
+                "branch",
+                "--track",
+                "review",
+                "origin/feature/remote",
+            ],
+        );
+        let reused = executor
+            .track_remote_branch(&local, "refs/remotes/origin/feature/remote")
+            .expect("reuse tracking branch");
+        assert_eq!(reused.head.name.as_deref(), Some("review"));
+        executor.switch_branch(&local, "main").expect("switch main");
+        run_git_test(&git, ["-C", path(&local), "branch", "-D", "review"]);
+        let created = executor
+            .track_remote_branch(&local, "refs/remotes/origin/feature/remote")
+            .expect("create tracking branch");
+        assert_eq!(created.head.name.as_deref(), Some("feature/remote"));
+        assert_eq!(
+            created.head.upstream.as_deref(),
+            Some("origin/feature/remote")
+        );
+        executor.switch_branch(&local, "main").expect("return main");
+
+        run_git_test(
+            &git,
+            [
+                "-C",
+                path(&seed),
+                "push",
+                "origin",
+                "--delete",
+                "feature/remote",
+            ],
+        );
+        fs::write(seed.join("main.txt"), b"initial\nremote update\n").expect("remote update");
+        run_git_test(&git, ["-C", path(&seed), "add", "main.txt"]);
+        run_git_test(&git, ["-C", path(&seed), "commit", "-m", "remote update"]);
+        run_git_test(&git, ["-C", path(&seed), "push", "origin", "main"]);
+
+        let pruned = executor.fetch(&local).expect("fetch and prune");
+        assert!(
+            pruned
+                .branches
+                .iter()
+                .all(|branch| branch.ref_name != "refs/remotes/origin/feature/remote")
+        );
+        assert_eq!(pruned.head.behind, 1);
+        assert_eq!(
+            fs::read_to_string(local.join("main.txt")).expect("worktree"),
+            "initial\n"
+        );
+    }
+
+    #[test]
     fn failed_commit_does_not_create_history() {
         let executor = SystemGitExecutor::with_executable(which_git());
         let directory = tempdir().expect("repo");
@@ -842,5 +1063,25 @@ mod tests {
                 .next()
                 .expect("git path"),
         )
+    }
+
+    fn run_git_test<I, S>(git: &std::path::Path, args: I)
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<std::ffi::OsStr>,
+    {
+        let output = Command::new(git)
+            .args(args)
+            .output()
+            .expect("run Git fixture");
+        assert!(
+            output.status.success(),
+            "Git fixture failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    fn path(value: &std::path::Path) -> &str {
+        value.to_str().expect("UTF-8 fixture path")
     }
 }
