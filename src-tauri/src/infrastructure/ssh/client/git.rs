@@ -200,7 +200,7 @@ async fn snapshot(
         let log = run_git(
             handle,
             &repository,
-            "log --all --topo-order --decorate=short -n 100 '--format=%H%x1f%P%x1f%D%x1f%s%x1f%an%x1f%at%x1e'",
+            "log --all --topo-order --decorate=short -n 100 '--format=%H%x1f%P%x1f%D%x1f%s%x1f%an%x1f%at%x1f%b%x1e'",
             Vec::new(),
             READ_TIMEOUT,
         )

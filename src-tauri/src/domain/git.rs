@@ -73,6 +73,7 @@ pub struct GitCommit {
     pub parents: Vec<String>,
     pub decorations: Vec<String>,
     pub subject: String,
+    pub body: String,
     pub author: String,
     pub timestamp: i64,
 }

@@ -54,7 +54,7 @@
 
 .git-graph-section {
   z-index: 1;
-  flex: .75 1 140px;
+  flex: 1 1 140px;
   margin-top: 0;
   border-bottom: 0;
 }
@@ -187,7 +187,16 @@
 }
 
 .git-repository-section .git-section-content {
-  background: color-mix(in srgb, var(--raised) 34%, transparent);
+  background: transparent;
+}
+
+.git-repository-card {
+  margin: 7px 8px;
+  overflow: hidden;
+  border: 1px solid var(--subtle);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--raised) 64%, var(--surface));
+  box-shadow: inset 0 1px color-mix(in srgb, var(--text) 4%, transparent);
 }
 
 .git-repository-row {
@@ -275,7 +284,7 @@
 }
 
 .git-upstream {
-  padding: 0 8px 6px 29px;
+  padding: 0 8px 7px 29px;
   overflow: hidden;
   color: var(--muted);
   font: 9px/1.35 SFMono-Regular, Consolas, monospace;
@@ -382,12 +391,46 @@
   background: color-mix(in srgb, var(--hover) 70%, transparent);
 }
 
+.git-repository-card .git-feedback {
+  margin: 0 7px 6px;
+}
+
 .git-change-scroll,
 .git-graph-scroll {
   flex: 1;
   min-height: 0;
-  overflow: auto;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
   scrollbar-width: thin;
+}
+
+.git-change-scroll::-webkit-scrollbar,
+.git-graph-scroll::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+.git-change-scroll::-webkit-scrollbar-track,
+.git-graph-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.git-change-scroll::-webkit-scrollbar-thumb,
+.git-graph-scroll::-webkit-scrollbar-thumb {
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: var(--scrollbar-thumb);
+  background-clip: padding-box;
+}
+
+.git-change-scroll::-webkit-scrollbar-thumb:hover,
+.git-graph-scroll::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--scrollbar-thumb) 82%, var(--accent));
+  background-clip: padding-box;
+}
+
+.git-change-scroll::-webkit-scrollbar-corner,
+.git-graph-scroll::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 .git-change-scroll {
@@ -489,10 +532,25 @@
 }
 
 .git-graph-scroll {
-  position: relative;
-  padding: 0;
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  align-self: stretch;
+  margin: 7px 2px 7px 8px;
+  padding: 0 6px 0 0;
+  overflow-x: hidden;
+  overflow-y: auto;
   background: transparent;
-  box-shadow: inset 0 1px var(--subtle);
+}
+
+.git-graph-section .git-section-body {
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.git-graph-section .git-section-content {
+  height: 100%;
+  flex: 1;
+  min-height: 0;
 }
 
 .git-commit-row {
@@ -507,33 +565,44 @@
   min-height: 36px;
   padding: 0;
   border: 0;
-  border-bottom: 1px solid color-mix(in srgb, var(--subtle) 62%, transparent);
+  border-bottom: 0;
   border-radius: 0;
   color: var(--text);
   background: transparent;
   font: inherit;
   text-align: left;
-  transition: background-color 120ms ease-out, box-shadow 120ms ease-out;
 }
 
-.git-commit-row:hover {
+.git-commit-row:hover .git-commit-card {
   background: color-mix(in srgb, var(--primary-action) 8%, var(--hover));
 }
 
-.git-commit-row[aria-pressed="true"] {
-  background: color-mix(in srgb, var(--primary-action) 13%, var(--raised));
-  box-shadow: inset 2px 0 var(--primary-action);
+.git-commit-row[aria-pressed="true"] .git-commit-card {
+  border-color: var(--primary-action);
+  color: var(--primary-action-contrast);
+  background: var(--primary-action);
+  box-shadow: none;
 }
 
 .git-commit-row:focus-visible {
   position: relative;
   z-index: 1;
+  outline: none;
+}
+
+.git-commit-row:focus-visible .git-commit-card {
   outline: 2px solid var(--focus);
   outline-offset: -2px;
 }
 
-.git-commit-row[aria-pressed="true"] .git-commit-subject {
-  color: var(--primary-action);
+.git-commit-row[aria-pressed="true"] .git-commit-subject,
+.git-commit-row[aria-pressed="true"] .git-commit-meta,
+.git-commit-row[aria-pressed="true"] .git-commit-expander {
+  color: var(--primary-action-contrast);
+}
+
+.git-commit-row[aria-pressed="true"] .git-commit-meta span + span::before {
+  color: color-mix(in srgb, var(--primary-action-contrast) 58%, transparent);
 }
 
 .git-commit-row[aria-pressed="true"] .git-graph-lanes circle {
@@ -541,7 +610,19 @@
 }
 
 .git-commit-entry {
+  flex: 0 0 auto;
   min-width: 0;
+}
+
+.git-commit-card {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--subtle) 82%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--raised) 42%, var(--surface));
+  transition: background-color 120ms ease-out, box-shadow 120ms ease-out;
 }
 
 .git-graph-rail {
@@ -550,8 +631,70 @@
   align-self: stretch;
   justify-content: center;
   padding: 0 5px 0 3px;
-  border-right: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
-  background: color-mix(in srgb, var(--raised) 62%, var(--surface));
+  background: transparent;
+}
+
+.git-commit-details-shell {
+  display: grid;
+  grid-template-rows: 0fr;
+  pointer-events: none;
+  transition: grid-template-rows 180ms cubic-bezier(.22, 1, .36, 1);
+}
+
+.git-commit-details-shell.expanded {
+  grid-template-rows: 1fr;
+  pointer-events: auto;
+}
+
+.git-commit-details {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  min-width: 0;
+  overflow: hidden;
+}
+
+.git-graph-continuation {
+  position: relative;
+  display: block;
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  color: color-mix(in srgb, var(--accent) 72%, var(--border));
+}
+
+.git-graph-continuation svg {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 3px;
+  display: block;
+  height: 100%;
+  overflow: visible;
+}
+
+.git-graph-continuation line {
+  stroke: currentColor;
+  stroke-width: 1.35;
+}
+
+.git-graph-bridge {
+  display: flex;
+  box-sizing: content-box;
+  width: max-content;
+  height: 7px;
+  justify-content: center;
+  margin: -1px 0;
+  padding: 0 5px 0 3px;
+  color: color-mix(in srgb, var(--accent) 72%, var(--border));
+}
+
+.git-graph-bridge svg {
+  display: block;
+  overflow: visible;
+}
+
+.git-graph-bridge line {
+  stroke: currentColor;
+  stroke-width: 1.35;
 }
 
 .git-graph-lanes {
@@ -577,6 +720,7 @@
 
 .git-commit-content {
   display: flex;
+  width: 100%;
   flex-direction: column;
   justify-content: center;
   min-width: 0;
@@ -643,6 +787,132 @@
   content: "·";
 }
 
+.git-commit-tooltip {
+  --git-commit-tooltip-enter-y: 3px;
+  position: fixed;
+  z-index: 130;
+  display: grid;
+  box-sizing: border-box;
+  width: min(380px, calc(100vw - 16px));
+  max-height: calc(100vh - 16px);
+  gap: 8px;
+  padding: 10px;
+  overflow: hidden;
+  border: 1px solid var(--floating-border);
+  border-radius: 8px;
+  color: var(--text);
+  background: var(--floating-material);
+  box-shadow: 0 14px 38px var(--shadow-strong), inset 0 1px color-mix(in srgb, var(--text) 6%, transparent);
+  backdrop-filter: blur(16px) saturate(120%);
+  -webkit-backdrop-filter: blur(16px) saturate(120%);
+  pointer-events: none;
+  animation: git-commit-tooltip-in 140ms cubic-bezier(.2, .8, .2, 1);
+}
+
+.git-commit-tooltip[data-placement="above"] {
+  --git-commit-tooltip-enter-y: -3px;
+}
+
+.git-commit-tooltip-author {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 26px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+}
+
+.git-commit-tooltip-avatar {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--accent) 42%, var(--border));
+  border-radius: 6px;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent-bg) 78%, var(--raised));
+  font-size: 10px;
+  font-weight: 760;
+}
+
+.git-commit-tooltip-author > span:last-child {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.git-commit-tooltip-author strong,
+.git-commit-tooltip-author time {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.git-commit-tooltip-author strong {
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.git-commit-tooltip-author time {
+  color: var(--dim);
+  font-size: 8.5px;
+}
+
+.git-commit-tooltip-subject {
+  color: var(--text-strong);
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.git-commit-tooltip-body {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 8;
+}
+
+.git-commit-tooltip-context {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.git-commit-tooltip-context span {
+  max-width: 100%;
+  padding: 2px 5px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--raised) 76%, transparent);
+  font-size: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.git-commit-tooltip-footer {
+  display: flex;
+  min-width: 0;
+  gap: 5px;
+  align-items: center;
+  padding-top: 7px;
+  border-top: 1px solid var(--subtle);
+  color: var(--accent);
+}
+
+.git-commit-tooltip-footer code {
+  color: inherit;
+  font: 8.5px SFMono-Regular, Consolas, monospace;
+}
+
 .git-decorations {
   display: flex;
   min-width: 0;
@@ -693,32 +963,46 @@
   background: color-mix(in srgb, var(--warning) 10%, var(--raised));
 }
 
+.git-commit-row[aria-pressed="true"] .git-decorations span {
+  border-color: color-mix(in srgb, var(--primary-action-contrast) 32%, var(--primary-action));
+  color: var(--primary-action-contrast);
+  background: color-mix(in srgb, var(--primary-action-contrast) 12%, var(--primary-action));
+}
+
 .git-commit-files,
 .git-commit-files-state {
-  margin-left: 32px;
-  border-left: 1px solid color-mix(in srgb, var(--accent) 38%, var(--border));
-  background: var(--surface);
-  animation: git-commit-files-in 150ms cubic-bezier(.2, .7, .2, 1) both;
+  min-width: 0;
+  margin: 0;
+  background: transparent;
+}
+
+.git-commit-file-panel {
+  min-width: 0;
+  opacity: 0;
+  transform: translateY(-3px);
+  transition: opacity 160ms ease-out, transform 180ms cubic-bezier(.22, 1, .36, 1);
+}
+
+.git-commit-details-shell.expanded .git-commit-file-panel {
+  opacity: 1;
+  transform: none;
 }
 
 .git-commit-files {
-  padding: 2px 0 3px;
+  padding: 3px 4px 4px;
 }
 
 .git-commit-file-row {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   min-width: 0;
-  min-height: 27px;
+  min-height: 25px;
   align-items: center;
   gap: 6px;
-  padding: 2px 9px 2px 8px;
-  border-bottom: 1px solid color-mix(in srgb, var(--subtle) 42%, transparent);
+  padding: 2px 7px;
+  border: 0;
+  border-radius: 4px;
   color: var(--text);
-}
-
-.git-commit-file-row:last-child {
-  border-bottom: 0;
 }
 
 .git-commit-file-row:hover {
@@ -781,7 +1065,6 @@
 
 .git-commit-files-state {
   display: flex;
-  min-height: 38px;
   align-items: center;
   justify-content: center;
   gap: 7px;
@@ -812,11 +1095,6 @@
   border-top-color: var(--accent);
   border-radius: 50%;
   animation: git-commit-files-spin 700ms linear infinite;
-}
-
-@keyframes git-commit-files-in {
-  from { opacity: 0; transform: translateY(-3px); }
-  to { opacity: 1; transform: none; }
 }
 
 @keyframes git-commit-files-spin {
@@ -1354,6 +1632,11 @@
   to { opacity: 1; transform: none; }
 }
 
+@keyframes git-commit-tooltip-in {
+  from { opacity: 0; transform: translateY(var(--git-commit-tooltip-enter-y)) scale(.985); }
+  to { opacity: 1; transform: none; }
+}
+
 @media (max-height: 560px) {
   .git-changes-section {
     flex-basis: 112px;
@@ -1391,10 +1674,23 @@
     animation: none;
   }
 
+  .git-commit-tooltip {
+    animation: none;
+  }
+
   .git-commit-files,
   .git-commit-files-state,
   .git-commit-files-spinner {
     animation: none;
+  }
+
+  .git-commit-details-shell,
+  .git-commit-file-panel {
+    transition: none;
+  }
+
+  .git-commit-file-panel {
+    transform: none;
   }
 
   .git-commit-expander svg {
@@ -1406,5 +1702,13 @@
   .git-commit-row {
     transform: none;
     transition: none;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .git-commit-tooltip {
+    background: var(--raised);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
   }
 }

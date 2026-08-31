@@ -8,6 +8,7 @@ const commit = (oid: string, parents: string[]): GitCommit => ({
   parents,
   decorations: [],
   subject: oid,
+  body: "",
   author: "Qterm",
   timestamp: 0,
 });
@@ -17,6 +18,7 @@ describe("buildGitGraphRows", () => {
     const rows = buildGitGraphRows([commit("c", ["b"]), commit("b", ["a"]), commit("a", [])]);
     expect(rows.map((row) => row.laneCount)).toEqual([1, 1, 1]);
     expect(rows.map((row) => row.currentLane)).toEqual([0, 0, 0]);
+    expect(rows.map((row) => row.continuingLanes)).toEqual([[0], [0], []]);
   });
 
   it("draws distinguishable fork and merge connections", () => {
@@ -34,5 +36,6 @@ describe("buildGitGraphRows", () => {
     expect(rows[1].segments).toContainEqual({ from: 1, to: 1, kind: "through" });
     expect(rows[2].segments).toContainEqual({ from: 1, to: 0, kind: "parent" });
     expect(rows[2].laneCount).toBe(2);
+    expect(rows.map((row) => row.continuingLanes)).toEqual([[0, 1], [0, 1], [0], []]);
   });
 });

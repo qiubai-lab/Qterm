@@ -135,7 +135,7 @@ impl GitExecutor for SystemGitExecutor {
                 OsString::from("--decorate=short"),
                 OsString::from("-n"),
                 OsString::from("100"),
-                OsString::from("--format=%H%x1f%P%x1f%D%x1f%s%x1f%an%x1f%at%x1e"),
+                OsString::from("--format=%H%x1f%P%x1f%D%x1f%s%x1f%an%x1f%at%x1f%b%x1e"),
             ],
             READ_TIMEOUT,
         );
@@ -559,6 +559,10 @@ pub(crate) fn parse_commits(bytes: &[u8]) -> Vec<GitCommit> {
                 subject: fields[3].into(),
                 author: fields[4].into(),
                 timestamp: fields[5].parse().unwrap_or(0),
+                body: fields
+                    .get(6..)
+                    .map(|parts| parts.join("\u{1f}").trim_end_matches('\n').to_owned())
+                    .unwrap_or_default(),
             })
         })
         .collect()
@@ -661,9 +665,13 @@ mod tests {
         assert!(branches[0].current);
         assert_eq!(branches[0].upstream.as_deref(), Some("origin/main"));
 
-        let commits = parse_commits(b"merge\x1fleft right\x1fHEAD -> main, tag: v1\x1fmerge subject\x1fQterm\x1f1700000000\x1e");
+        let commits = parse_commits(b"merge\x1fleft right\x1fHEAD -> main, tag: v1\x1fmerge subject\x1fQterm\x1f1700000000\x1fFirst paragraph.\n\n- detail one\n- detail two\n\x1e");
         assert_eq!(commits[0].parents, ["left", "right"]);
         assert_eq!(commits[0].decorations, ["HEAD -> main", "tag: v1"]);
+        assert_eq!(
+            commits[0].body,
+            "First paragraph.\n\n- detail one\n- detail two"
+        );
     }
 
     #[test]

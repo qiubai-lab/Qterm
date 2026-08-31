@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { Icon } from "../components/Icon";
@@ -11,6 +11,7 @@ import {
 } from "../lib/tauri/git";
 import type { GitTarget } from "../workspace/model";
 import type { GitRuntime } from "../workspace/WorkspaceProvider";
+import { calculateGitCommitTooltipPosition } from "./gitCommitTooltipPosition";
 import { buildGitGraphRows, type GitGraphRow } from "./gitGraph";
 
 interface GitPaneProps { blockId: string; target: GitTarget; runtime?: GitRuntime; visible: boolean; onTargetChange: (target: GitTarget) => void }
@@ -28,6 +29,17 @@ interface GitCommitFilesState {
   status: "loading" | "ready" | "error";
   files: GitCommitFile[];
   message?: string;
+}
+
+const gitGraphLaneGap = 11;
+const gitGraphLaneOffset = 7;
+
+function gitGraphRailWidth(laneCount: number): number {
+  return laneCount * gitGraphLaneGap + 6;
+}
+
+function gitGraphLaneX(lane: number): number {
+  return lane * gitGraphLaneGap + gitGraphLaneOffset;
 }
 
 function fitRepositoryOverlay(anchor: DOMRect, width: number, height: number): Omit<GitRepositoryOverlay, "kind"> {
@@ -48,6 +60,8 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange }: G
   const [newBranch, setNewBranch] = useState("");
   const [branchQuery, setBranchQuery] = useState("");
   const [selectedCommitOid, setSelectedCommitOid] = useState<string | null>(null);
+  const [hoveredCommitOid, setHoveredCommitOid] = useState<string | null>(null);
+  const [focusedCommitOid, setFocusedCommitOid] = useState<string | null>(null);
   const [expandedCommitKey, setExpandedCommitKey] = useState<string | null>(null);
   const [commitFilesCache, setCommitFilesCache] = useState<Record<string, GitCommitFilesState>>({});
   const [editingPath, setEditingPath] = useState(false);
@@ -61,6 +75,9 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange }: G
   const createBranchButtonRef = useRef<HTMLButtonElement>(null);
   const repositoryMenuButtonRef = useRef<HTMLButtonElement>(null);
   const repositoryOverlayRef = useRef<HTMLElement | null>(null);
+  const commitAnchorRefs = useRef(new Map<string, HTMLButtonElement>());
+  const commitTooltipRef = useRef<HTMLDivElement>(null);
+  const commitTooltipId = useId();
   const repositoryPath = target.type === "unbound" ? null : target.path;
   const remote = target.type === "remote";
   const remoteProfileId = target.type === "remote" ? target.profileId : null;
@@ -185,6 +202,7 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange }: G
   const unstaged = useMemo(() => snapshot?.changes.filter((change) => !change.staged && !change.conflict) ?? [], [snapshot]);
   const conflicts = useMemo(() => snapshot?.changes.filter((change) => change.conflict) ?? [], [snapshot]);
   const graphRows = useMemo(() => buildGitGraphRows(snapshot?.commits ?? []), [snapshot]);
+  const graphLaneCount = useMemo(() => Math.max(1, ...graphRows.map((row) => row.laneCount)), [graphRows]);
   const activeCommitOid = selectedCommitOid && snapshot?.commits.some((commit) => commit.oid === selectedCommitOid)
     ? selectedCommitOid
     : snapshot?.head.oid ?? null;
@@ -210,6 +228,39 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange }: G
     if (!root) return null;
     return JSON.stringify([remote ? "remote" : "local", remoteProfileId ?? "", root, oid]);
   }
+
+  const inspectedCommitOid = focusedCommitOid ?? hoveredCommitOid;
+  const inspectedCommit = visible && inspectedCommitOid
+    ? snapshot?.commits.find((commit) => commit.oid === inspectedCommitOid) ?? null
+    : null;
+  const inspectedCommitCacheKey = inspectedCommit ? commitFilesKey(inspectedCommit.oid) : null;
+  const inspectedCommitFileState = inspectedCommitCacheKey ? commitFilesCache[inspectedCommitCacheKey] : undefined;
+  const inspectedCommitFileCount = inspectedCommitFileState?.status === "ready" ? inspectedCommitFileState.files.length : undefined;
+
+  useLayoutEffect(() => {
+    if (!inspectedCommit) return;
+    const updatePosition = () => {
+      const anchor = commitAnchorRefs.current.get(inspectedCommit.oid);
+      const tooltip = commitTooltipRef.current;
+      if (!anchor || !tooltip) return;
+      const next = calculateGitCommitTooltipPosition(
+        anchor.getBoundingClientRect(),
+        tooltip.getBoundingClientRect(),
+        { width: window.innerWidth, height: window.innerHeight },
+      );
+      tooltip.style.top = `${next.top}px`;
+      tooltip.style.left = `${next.left}px`;
+      tooltip.style.visibility = "visible";
+      tooltip.dataset.placement = next.placement;
+    };
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [inspectedCommit, inspectedCommitFileCount]);
 
   async function requestCommitFiles(commitToLoad: GitCommit, force = false) {
     const repository = root;
@@ -340,21 +391,23 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange }: G
 
   return <><div className="git-pane" data-block-id={blockId} data-busy={disabled || undefined} aria-busy={disabled}>
     <GitSection className="git-repository-section" title="存储库" meta={root ?? repositoryPath} collapsed={collapsed.repository} onToggle={() => setCollapsed((value) => ({ ...value, repository: !value.repository }))}>
-      <div className="git-repository-row">
-        <Icon name="git" size={15}/><span className="git-repository-name">{snapshot?.repositoryName ?? repositoryPath}</span>
-        {snapshot && <button ref={branchButtonRef} type="button" className="git-branch-trigger" aria-label={`切换分支，当前 ${branchLabel}`} title={`切换分支 · ${branchLabel}`} aria-haspopup="dialog" aria-expanded={repositoryOverlay?.kind === "branches"} disabled={disabled} onClick={() => openRepositoryOverlay("branches")}>
-          <Icon name="git" size={12}/><span>{branchLabel}</span>
-        </button>}
-        <div className="git-repository-actions">
-          <button ref={createBranchButtonRef} type="button" aria-label="创建分支" title="创建分支" aria-haspopup="dialog" aria-expanded={repositoryOverlay?.kind === "createBranch"} disabled={disabled || !snapshot} onClick={() => openRepositoryOverlay("createBranch")}><Icon name="plus" size={12}/></button>
-          <button type="button" aria-label="刷新 Git 状态" title="刷新" disabled={disabled} onClick={() => void refresh()}><Icon name="refresh" size={13}/></button>
-          <div className="git-repository-menu">
-            <button ref={repositoryMenuButtonRef} type="button" aria-label="更多存储库操作" title="更多操作" aria-haspopup="menu" aria-expanded={repositoryOverlay?.kind === "more"} onClick={() => openRepositoryOverlay("more")}><Icon name="more" size={13}/></button>
+      <div className="git-repository-card">
+        <div className="git-repository-row">
+          <Icon name="git" size={15}/><span className="git-repository-name">{snapshot?.repositoryName ?? repositoryPath}</span>
+          {snapshot && <button ref={branchButtonRef} type="button" className="git-branch-trigger" aria-label={`切换分支，当前 ${branchLabel}`} title={`切换分支 · ${branchLabel}`} aria-haspopup="dialog" aria-expanded={repositoryOverlay?.kind === "branches"} disabled={disabled} onClick={() => openRepositoryOverlay("branches")}>
+            <Icon name="git" size={12}/><span>{branchLabel}</span>
+          </button>}
+          <div className="git-repository-actions">
+            <button ref={createBranchButtonRef} type="button" aria-label="创建分支" title="创建分支" aria-haspopup="dialog" aria-expanded={repositoryOverlay?.kind === "createBranch"} disabled={disabled || !snapshot} onClick={() => openRepositoryOverlay("createBranch")}><Icon name="plus" size={12}/></button>
+            <button type="button" aria-label="刷新 Git 状态" title="刷新" disabled={disabled} onClick={() => void refresh()}><Icon name="refresh" size={13}/></button>
+            <div className="git-repository-menu">
+              <button ref={repositoryMenuButtonRef} type="button" aria-label="更多存储库操作" title="更多操作" aria-haspopup="menu" aria-expanded={repositoryOverlay?.kind === "more"} onClick={() => openRepositoryOverlay("more")}><Icon name="more" size={13}/></button>
+            </div>
           </div>
         </div>
+        {remote && runtime?.stale && <div className="git-feedback stale" role="status">连接已断开，当前内容可能已过期；重新连接后将自动刷新。</div>}
+        {snapshot?.head.upstream && <div className="git-upstream">{snapshot.head.upstream} · ↑{snapshot.head.ahead} ↓{snapshot.head.behind}</div>}
       </div>
-      {remote && runtime?.stale && <div className="git-feedback stale" role="status">连接已断开，当前内容可能已过期；重新连接后将自动刷新。</div>}
-      {snapshot?.head.upstream && <div className="git-upstream">{snapshot.head.upstream} · ↑{snapshot.head.ahead} ↓{snapshot.head.behind}</div>}
     </GitSection>
 
     <GitSection className="git-changes-section" title={`更改${snapshot ? ` ${snapshot.changes.length}` : ""}`} collapsed={collapsed.changes} onToggle={() => toggleExclusiveSection("changes")} actions={<>
@@ -380,18 +433,50 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange }: G
         {snapshot?.commits.map((commit, index) => {
           const cacheKey = commitFilesKey(commit.oid);
           const expanded = cacheKey === expandedCommitKey;
+          const fileState = cacheKey ? commitFilesCache[cacheKey] : undefined;
+          const retainDetails = expanded || Boolean(fileState);
+          const graphRow = graphRows[index];
           return <div className="git-commit-entry" role="listitem" key={commit.oid}>
-            <button type="button" className="git-commit-row" aria-pressed={commit.oid === activeCommitOid} aria-expanded={expanded} title={`${commit.subject} · ${formatCommitTime(commit.timestamp)}`} onClick={() => toggleCommitFiles(commit)}>
-              <GitGraph row={graphRows[index]}/>
-              <span className="git-commit-content"><span className="git-commit-summary"><span className="git-commit-expander"><Icon name="chevronDown" size={9}/></span><span className="git-commit-subject">{commit.subject}</span>{commit.decorations.length > 0 && <span className="git-decorations">{commit.decorations.slice(0, 3).map((decoration) => <span data-kind={gitDecorationKind(decoration)} key={decoration}><Icon name={decoration.includes("origin/") ? "network" : "git"} size={9}/>{formatGitDecoration(decoration)}</span>)}</span>}</span><span className="git-commit-meta"><span>{commit.author}</span><span>{formatRelativeCommitTime(commit.timestamp)}</span><span>{commit.oid.slice(0, 7)}</span></span></span>
+            <button
+              ref={(node) => {
+                if (node) commitAnchorRefs.current.set(commit.oid, node);
+                else commitAnchorRefs.current.delete(commit.oid);
+              }}
+              type="button"
+              className="git-commit-row"
+              aria-pressed={commit.oid === activeCommitOid}
+              aria-expanded={expanded}
+              aria-describedby={inspectedCommit?.oid === commit.oid ? commitTooltipId : undefined}
+              onPointerEnter={() => setHoveredCommitOid(commit.oid)}
+              onPointerLeave={() => setHoveredCommitOid((value) => value === commit.oid ? null : value)}
+              onFocus={() => setFocusedCommitOid(commit.oid)}
+              onBlur={() => setFocusedCommitOid((value) => value === commit.oid ? null : value)}
+              onClick={() => toggleCommitFiles(commit)}
+            >
+              <GitGraph row={graphRow} laneCount={graphLaneCount}/>
+              <span className="git-commit-card">
+                <span className="git-commit-content"><span className="git-commit-summary"><span className="git-commit-expander"><Icon name="chevronDown" size={9}/></span><span className="git-commit-subject">{commit.subject}</span>{commit.decorations.length > 0 && <span className="git-decorations">{commit.decorations.slice(0, 3).map((decoration) => <span data-kind={gitDecorationKind(decoration)} key={decoration}><Icon name={decoration.includes("origin/") ? "network" : "git"} size={9}/>{formatGitDecoration(decoration)}</span>)}</span>}</span><span className="git-commit-meta"><span>{commit.author}</span><span>{formatRelativeCommitTime(commit.timestamp)}</span><span>{commit.oid.slice(0, 7)}</span></span></span>
+              </span>
             </button>
-            {expanded && <GitCommitFiles commit={commit} state={cacheKey ? commitFilesCache[cacheKey] : undefined} onRetry={() => void requestCommitFiles(commit, true)}/>}
+            <div className={`git-commit-details-shell${expanded ? " expanded" : ""}`} aria-hidden={!expanded} inert={!expanded || undefined}>
+              <div className="git-commit-details">
+                <GitGraphContinuation row={graphRow} laneCount={graphLaneCount}/>
+                <div className="git-commit-file-panel">{retainDetails && <GitCommitFiles commit={commit} state={fileState} onRetry={() => void requestCommitFiles(commit, true)}/>}</div>
+              </div>
+            </div>
+            {index < snapshot.commits.length - 1 && <GitGraphBridge row={graphRow} laneCount={graphLaneCount}/>}
           </div>;
         })}
         {snapshot && snapshot.commits.length === 0 && <div className="git-clean-state">提交后将在这里显示分支图</div>}
       </div>
     </GitSection>
   </div>
+    {inspectedCommit && createPortal(<GitCommitTooltip
+      commit={inspectedCommit}
+      fileCount={inspectedCommitFileCount}
+      tooltipId={commitTooltipId}
+      tooltipRef={commitTooltipRef}
+    />, document.body)}
     {visible && repositoryOverlay && createPortal(repositoryOverlay.kind === "createBranch"
       ? <form ref={(node) => { repositoryOverlayRef.current = node; }} className="git-repository-popover git-branch-create-popover" data-placement={repositoryOverlay.placement} role="dialog" aria-label="新建分支" style={{ left: repositoryOverlay.left, top: repositoryOverlay.top }} onSubmit={async (event) => {
         event.preventDefault();
@@ -436,17 +521,65 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange }: G
   </>;
 }
 
-function GitGraph({ row }: { row: GitGraphRow }) {
-  const laneGap = 11;
-  const centerY = 17;
-  const width = row.laneCount * laneGap + 6;
-  const x = (lane: number) => lane * laneGap + 7;
-  return <span className="git-graph-rail"><svg className="git-graph-lanes" aria-hidden="true" width={width} height="34" viewBox={`0 0 ${width} 34`}>
-    {row.incoming && <path d={`M ${x(row.currentLane)} 0 L ${x(row.currentLane)} ${centerY}`}/>}
+function GitCommitTooltip({ commit, fileCount, tooltipId, tooltipRef }: {
+  commit: GitCommit;
+  fileCount?: number;
+  tooltipId: string;
+  tooltipRef: React.RefObject<HTMLDivElement | null>;
+}) {
+  const body = commit.body.trim();
+  const exactTime = commit.timestamp ? new Date(commit.timestamp * 1000) : null;
+  const authorMark = Array.from(commit.author.trim())[0]?.toLocaleUpperCase() ?? "?";
+  const references = commit.decorations.map(formatGitDecoration).filter(Boolean);
+  const parentSummary = commit.parents.length === 0
+    ? "初始提交"
+    : `${commit.parents.length} 个父提交`;
+  return <div
+    ref={tooltipRef}
+    id={tooltipId}
+    className="git-commit-tooltip"
+    role="tooltip"
+    data-placement="below"
+    style={{ visibility: "hidden" }}
+  >
+    <div className="git-commit-tooltip-author">
+      <span className="git-commit-tooltip-avatar" aria-hidden="true">{authorMark}</span>
+      <span><strong>{commit.author}</strong>{exactTime && <time dateTime={exactTime.toISOString()}>{formatCommitDateTime(commit.timestamp)}</time>}</span>
+    </div>
+    <strong className="git-commit-tooltip-subject">{commit.subject}</strong>
+    {body && <div className="git-commit-tooltip-body">{body}</div>}
+    <div className="git-commit-tooltip-context">
+      <span>{parentSummary}</span>
+      {fileCount !== undefined && <span>{fileCount} 个文件</span>}
+      {references.length > 0 && <span>{references.join(" · ")}</span>}
+    </div>
+    <div className="git-commit-tooltip-footer"><Icon name="git" size={10}/><code>{commit.oid.slice(0, 8)}</code></div>
+  </div>;
+}
+
+function GitGraph({ row, laneCount }: { row: GitGraphRow; laneCount: number }) {
+  const centerY = 18;
+  const width = gitGraphRailWidth(laneCount);
+  return <span className="git-graph-rail"><svg className="git-graph-lanes" aria-hidden="true" width={width} height="36" viewBox={`0 0 ${width} 36`}>
+    {row.incoming && <path d={`M ${gitGraphLaneX(row.currentLane)} 0 L ${gitGraphLaneX(row.currentLane)} ${centerY}`}/>}
     {row.segments.map((segment, index) => <path key={`${segment.kind}:${segment.from}:${segment.to}:${index}`} data-kind={segment.kind} d={segment.kind === "through"
-      ? `M ${x(segment.from)} 0 L ${x(segment.to)} 34`
-      : `M ${x(segment.from)} ${centerY} C ${x(segment.from)} 24, ${x(segment.to)} 27, ${x(segment.to)} 34`}/>) }
-    <circle cx={x(row.currentLane)} cy={centerY} r="4"/>
+      ? `M ${gitGraphLaneX(segment.from)} 0 L ${gitGraphLaneX(segment.to)} 36`
+      : `M ${gitGraphLaneX(segment.from)} ${centerY} C ${gitGraphLaneX(segment.from)} 25, ${gitGraphLaneX(segment.to)} 29, ${gitGraphLaneX(segment.to)} 36`}/>) }
+    <circle cx={gitGraphLaneX(row.currentLane)} cy={centerY} r="4"/>
+  </svg></span>;
+}
+
+function GitGraphContinuation({ row, laneCount }: { row: GitGraphRow; laneCount: number }) {
+  const width = gitGraphRailWidth(laneCount);
+  return <span className="git-graph-continuation" aria-hidden="true" style={{ width: width + 8 }}><svg width={width}>
+    {row.continuingLanes.map((lane) => <line key={lane} x1={gitGraphLaneX(lane)} y1="0" x2={gitGraphLaneX(lane)} y2="100%"/>)}
+  </svg></span>;
+}
+
+function GitGraphBridge({ row, laneCount }: { row: GitGraphRow; laneCount: number }) {
+  const width = gitGraphRailWidth(laneCount);
+  return <span className="git-graph-bridge" aria-hidden="true"><svg width={width} height="100%">
+    {row.continuingLanes.map((lane) => <line key={lane} x1={gitGraphLaneX(lane)} y1="0" x2={gitGraphLaneX(lane)} y2="100%"/>)}
   </svg></span>;
 }
 
@@ -504,9 +637,9 @@ function GitEmpty({ icon, title, detail, action, secondary, onAction, onSecondar
   return <div className="git-empty"><Icon name={icon} size={28}/><strong>{title}</strong><span>{detail}</span><div>{action && <button type="button" onClick={onAction}>{action}</button>}{secondary && <button type="button" className="secondary" onClick={onSecondary}>{secondary}</button>}</div></div>;
 }
 
-function formatCommitTime(timestamp: number): string {
+function formatCommitDateTime(timestamp: number): string {
   if (!timestamp) return "";
-  return new Intl.DateTimeFormat(undefined, { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(new Date(timestamp * 1000));
+  return new Intl.DateTimeFormat(undefined, { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(new Date(timestamp * 1000));
 }
 
 function formatRelativeCommitTime(timestamp: number): string {

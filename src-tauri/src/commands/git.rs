@@ -85,6 +85,7 @@ struct GitCommitDto {
     parents: Vec<String>,
     decorations: Vec<String>,
     subject: String,
+    body: String,
     author: String,
     timestamp: i64,
 }
@@ -532,6 +533,7 @@ impl From<GitCommit> for GitCommitDto {
             parents: value.parents,
             decorations: value.decorations,
             subject: value.subject,
+            body: value.body,
             author: value.author,
             timestamp: value.timestamp,
         }

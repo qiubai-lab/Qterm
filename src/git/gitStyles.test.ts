@@ -5,9 +5,18 @@ import { readFileSync } from "node:fs";
 
 const styles = readFileSync("src/git/git.css", "utf8");
 const cyberTheme = readFileSync("src/app/styles/themes/cyberpunk.css", "utf8");
+const fileBrowserStyles = readFileSync("src/files/fileBrowser.css", "utf8");
 
 function declarations(selector: string): string {
   const start = styles.indexOf(`${selector} {`);
+  if (start < 0) return "";
+  const open = styles.indexOf("{", start);
+  const close = styles.indexOf("}", open);
+  return styles.slice(open + 1, close).replace(/\s+/g, " ");
+}
+
+function lastDeclarations(selector: string): string {
+  const start = styles.lastIndexOf(`${selector} {`);
   if (start < 0) return "";
   const open = styles.indexOf("{", start);
   const close = styles.indexOf("}", open);
@@ -18,7 +27,7 @@ describe("Git pane style contracts", () => {
   it("inherits the terminal workbench background across Git content surfaces", () => {
     expect(declarations(".git-block")).toContain("background: var(--workbench-panel)");
     expect(declarations(".git-pane")).toContain("background: transparent");
-    expect(styles).toMatch(/\.git-graph-scroll\s*\{[^}]*background:\s*transparent;/);
+    expect(declarations(".git-repository-section .git-section-content")).toContain("background: transparent");
   });
 
   it("keeps visual position independent from collapsed state", () => {
@@ -28,7 +37,8 @@ describe("Git pane style contracts", () => {
     expect(declarations(".git-changes-section")).not.toContain("order:");
     expect(declarations(".git-graph-section")).not.toContain("order:");
     expect(declarations(".git-changes-section")).toContain("flex: 1 1 160px");
-    expect(declarations(".git-graph-section")).toContain("flex: .75 1 140px");
+    expect(declarations(".git-graph-section")).toContain("flex: 1 1 140px");
+    expect(declarations(".git-graph-section")).not.toContain("flex: .75 1 140px");
     expect(declarations(".git-graph-section")).toContain("margin-top: 0");
     expect(styles).not.toContain(".git-changes-section.collapsed {");
     expect(declarations(".git-graph-section.collapsed")).toContain("margin-top: auto");
@@ -54,7 +64,7 @@ describe("Git pane style contracts", () => {
     expect(reducedMotion).toContain("transform: none");
   });
 
-  it("keeps the commit composer vertical and gives the graph its own visual rail", () => {
+  it("keeps the commit composer vertical and gives the graph an unboxed topology rail", () => {
     expect(declarations(".git-commit-box")).toContain("flex-direction: column");
     expect(styles).toContain("max-height: 92px");
     expect(declarations(".git-commit-button")).toContain("width: 100%");
@@ -72,8 +82,69 @@ describe("Git pane style contracts", () => {
     expect(cyberTheme).toContain("--primary-action:#fcee0a");
     expect(styles).toContain(".git-commit-box > button:not(.git-commit-button)");
     expect(cyberTheme).toContain("--accent:#00ddeb");
-    expect(styles).toMatch(/\.git-graph-scroll\s*\{\s*position:\s*relative;\s*padding:\s*0;/);
-    expect(declarations(".git-graph-rail")).toContain("border-right:");
+    expect(lastDeclarations(".git-graph-scroll")).toContain("display: flex");
+    expect(lastDeclarations(".git-graph-scroll")).toContain("padding: 0");
+    const rail = declarations(".git-graph-rail");
+    expect(rail).toContain("background: transparent");
+    expect(rail).not.toContain("border:");
+    expect(rail).not.toContain("border-radius:");
+    expect(rail).not.toContain("overflow:");
+  });
+
+  it("groups repository content and each graph commit in compact material containers", () => {
+    const repository = declarations(".git-repository-card");
+    expect(repository).toContain("margin: 7px 8px");
+    expect(repository).toContain("overflow: hidden");
+    expect(repository).toContain("border: 1px solid var(--subtle)");
+    expect(repository).toContain("border-radius: 7px");
+    expect(repository).toContain("background: color-mix(in srgb, var(--raised) 64%, var(--surface))");
+    expect(repository).toContain("box-shadow: inset 0 1px");
+
+    const graph = lastDeclarations(".git-graph-scroll");
+    expect(graph).toContain("display: flex");
+    expect(graph).toContain("flex-direction: column");
+    expect(graph).toContain("flex: 1 1 0");
+    expect(graph).toContain("margin: 7px 2px 7px 8px");
+    expect(graph).toContain("padding: 0 6px 0 0");
+    expect(graph).toContain("background: transparent");
+    expect(graph).toContain("align-self: stretch");
+    expect(graph).toContain("overflow-x: hidden");
+    expect(graph).toContain("overflow-y: auto");
+    expect(graph).not.toContain("height:");
+    expect(graph).not.toContain("max-height:");
+    expect(graph).not.toContain("border:");
+    expect(graph).not.toContain("box-shadow:");
+    const commit = lastDeclarations(".git-commit-card");
+    expect(commit).toContain("overflow: hidden");
+    expect(commit).toContain("border: 1px solid");
+    expect(commit).toContain("border-radius: 6px");
+    expect(commit).toContain("background: color-mix(in srgb, var(--raised) 42%, var(--surface))");
+    const scrollers = declarations(".git-change-scroll,\n.git-graph-scroll");
+    expect(scrollers).toContain("flex: 1");
+    expect(scrollers).toContain("min-height: 0");
+    expect(declarations(".git-graph-section .git-section-content")).toContain("flex: 1");
+    expect(declarations(".git-graph-section .git-section-content")).toContain("min-height: 0");
+    expect(declarations(".git-graph-section .git-section-content")).toContain("height: 100%");
+    expect(declarations(".git-graph-section .git-section-body")).toContain("grid-template-rows: minmax(0, 1fr)");
+  });
+
+  it("matches the file manager scrollbar and reserves the graph card lane", () => {
+    const scrollers = declarations(".git-change-scroll,\n.git-graph-scroll");
+    expect(scrollers).toContain("scrollbar-color: var(--scrollbar-thumb) transparent");
+    expect(scrollers).toContain("scrollbar-width: thin");
+    expect(fileBrowserStyles).toContain("scrollbar-color:var(--scrollbar-thumb) transparent");
+    const scrollbar = declarations(".git-change-scroll::-webkit-scrollbar,\n.git-graph-scroll::-webkit-scrollbar");
+    expect(scrollbar).toContain("width: 5px");
+    expect(scrollbar).toContain("height: 5px");
+    expect(declarations(".git-change-scroll::-webkit-scrollbar-track,\n.git-graph-scroll::-webkit-scrollbar-track")).toContain("background: transparent");
+    const thumb = declarations(".git-change-scroll::-webkit-scrollbar-thumb,\n.git-graph-scroll::-webkit-scrollbar-thumb");
+    expect(thumb).toContain("border: 1px solid transparent");
+    expect(thumb).toContain("border-radius: 999px");
+    expect(thumb).toContain("background: var(--scrollbar-thumb)");
+    expect(thumb).toContain("background-clip: padding-box");
+    expect(declarations(".git-change-scroll::-webkit-scrollbar-thumb:hover,\n.git-graph-scroll::-webkit-scrollbar-thumb:hover")).toContain("color-mix(in srgb, var(--scrollbar-thumb) 82%, var(--accent))");
+    expect(cyberTheme).toContain("--scrollbar-thumb:#168996");
+    expect(cyberTheme).toContain("--accent:#00ddeb");
   });
 
   it("uses independent cards for each change list without an outer card", () => {
@@ -121,19 +192,84 @@ describe("Git pane style contracts", () => {
     const row = declarations(".git-commit-row");
     expect(row).toContain("grid-template-columns: auto minmax(0, 1fr)");
     expect(row).toContain("width: 100%");
-    expect(declarations('.git-commit-row[aria-pressed="true"]')).toContain("var(--primary-action)");
+    const selected = declarations('.git-commit-row[aria-pressed="true"] .git-commit-card');
+    expect(selected).toContain("border-color: var(--primary-action)");
+    expect(selected).toContain("color: var(--primary-action-contrast)");
+    expect(selected).toContain("background: var(--primary-action)");
+    expect(selected).not.toContain("inset 2px");
+    const selectedCopy = declarations('.git-commit-row[aria-pressed="true"] .git-commit-subject,\n.git-commit-row[aria-pressed="true"] .git-commit-meta,\n.git-commit-row[aria-pressed="true"] .git-commit-expander');
+    expect(selectedCopy).toContain("color: var(--primary-action-contrast)");
     expect(declarations(".git-commit-summary")).toContain("display: flex");
     expect(declarations('.git-decorations span[data-kind="head"]')).toContain("var(--primary-action)");
     expect(declarations('.git-decorations span[data-kind="remote"]')).toContain("var(--accent)");
   });
 
+  it("uses a viewport-safe floating material for commit hover details", () => {
+    const tooltip = declarations(".git-commit-tooltip");
+    expect(tooltip).toContain("position: fixed");
+    expect(tooltip).toContain("z-index: 130");
+    expect(tooltip).toContain("width: min(380px, calc(100vw - 16px))");
+    expect(tooltip).toContain("border: 1px solid var(--floating-border)");
+    expect(tooltip).toContain("background: var(--floating-material)");
+    expect(tooltip).toContain("pointer-events: none");
+    expect(tooltip).toContain("animation: git-commit-tooltip-in 140ms");
+    const reducedMotion = styles.slice(styles.indexOf("@media (prefers-reduced-motion: reduce)"));
+    expect(reducedMotion).toContain(".git-commit-tooltip");
+    expect(reducedMotion).toContain("animation: none");
+  });
+
   it("shows lazy commit files as an indented themed continuation of the graph", () => {
-    expect(declarations(".git-commit-files")).toContain("padding: 2px 0 3px");
-    expect(declarations(".git-commit-files,\n.git-commit-files-state")).toContain("background: var(--surface)");
+    const shell = declarations(".git-commit-details-shell");
+    expect(shell).toContain("display: grid");
+    expect(shell).toContain("grid-template-rows: 0fr");
+    expect(shell).toContain("transition: grid-template-rows 180ms cubic-bezier(.22, 1, .36, 1)");
+    expect(shell).not.toContain("opacity:");
+    expect(shell).not.toContain("transform:");
+    expect(declarations(".git-commit-details-shell.expanded")).toContain("grid-template-rows: 1fr");
+    const details = declarations(".git-commit-details");
+    expect(details).toContain("display: grid");
+    expect(details).toContain("grid-template-columns: auto minmax(0, 1fr)");
+    expect(details).toContain("overflow: hidden");
+    expect(details).not.toContain("opacity:");
+    expect(details).not.toContain("transform:");
+    expect(details).not.toContain("min-height:");
+    expect(details).not.toContain("max-height:");
+    const continuation = declarations(".git-graph-continuation");
+    expect(continuation).toContain("position: relative");
+    expect(continuation).not.toContain("min-height:");
+    expect(continuation).not.toContain("max-height:");
+    expect(continuation).not.toContain("background:");
+    expect(continuation).not.toContain("border:");
+    const continuationSvg = declarations(".git-graph-continuation svg");
+    expect(continuationSvg).toContain("position: absolute");
+    expect(continuationSvg).toContain("height: 100%");
+    expect(declarations(".git-graph-continuation line")).toContain("stroke: currentColor");
+    expect(declarations(".git-graph-bridge")).toContain("height: 7px");
+    expect(declarations(".git-graph-bridge")).toContain("margin: -1px 0");
+    expect(declarations(".git-commit-files")).toContain("padding: 3px 4px 4px");
+    expect(declarations(".git-commit-files,\n.git-commit-files-state")).toContain("background: transparent");
+    expect(declarations(".git-commit-files,\n.git-commit-files-state")).not.toContain("min-height:");
+    expect(declarations(".git-commit-files,\n.git-commit-files-state")).not.toContain("max-height:");
+    expect(declarations(".git-commit-files-state")).not.toContain("min-height:");
+    expect(declarations(".git-commit-files-state")).not.toContain("max-height:");
+    const filePanel = declarations(".git-commit-file-panel");
+    expect(filePanel).toContain("opacity: 0");
+    expect(filePanel).toContain("transform: translateY(-3px)");
+    expect(filePanel).toContain("transition: opacity 160ms ease-out, transform 180ms cubic-bezier(.22, 1, .36, 1)");
+    const expandedFilePanel = declarations(".git-commit-details-shell.expanded .git-commit-file-panel");
+    expect(expandedFilePanel).toContain("opacity: 1");
+    expect(expandedFilePanel).toContain("transform: none");
+    expect(declarations(".git-commit-file-row")).toContain("min-height: 25px");
+    expect(declarations(".git-commit-file-row")).toContain("border-radius: 4px");
     expect(declarations(".git-commit-file-row > svg")).toContain("color: var(--accent)");
     expect(declarations(".git-commit-file-path > span:first-child")).toContain("color: var(--text)");
     expect(declarations('.git-commit-file-status[data-tone="deleted"],\n.git-commit-file-status[data-tone="conflict"]')).toContain("var(--danger)");
     expect(declarations('.git-commit-row[aria-expanded="true"] .git-commit-expander svg')).toContain("rotate(0)");
+    const reducedMotion = styles.slice(styles.indexOf("@media (prefers-reduced-motion: reduce)"));
+    expect(reducedMotion).toContain(".git-commit-details-shell");
+    expect(reducedMotion).toContain("transition: none");
+    expect(reducedMotion).toContain(".git-commit-file-panel");
+    expect(reducedMotion).toContain("transform: none");
   });
 
   it("uses the theme accent for change-file icons and file-browser-strength text", () => {

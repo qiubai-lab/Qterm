@@ -35,7 +35,7 @@ const snapshot: GitSnapshot = {
     { path: "src/new.ts", originalPath: null, status: "U", staged: false, conflict: false },
   ],
   branches: [{ name: "main", oid: "abcdef012345", current: true, upstream: "origin/main" }],
-  commits: [{ oid: "abcdef012345", parents: [], decorations: ["HEAD -> main"], subject: "feat: initial", author: "Qterm", timestamp: 1_700_000_000 }],
+  commits: [{ oid: "abcdef012345", parents: [], decorations: ["HEAD -> main"], subject: "feat: initial", body: "Introduces the first Qterm workflow.\n\nKeeps the terminal interaction compact.", author: "Qterm", timestamp: 1_700_000_000 }],
 };
 
 describe("GitPane", () => {
@@ -75,7 +75,7 @@ describe("GitPane", () => {
       ...snapshot,
       commits: [
         snapshot.commits[0],
-        { oid: "123456789abc", parents: [], decorations: ["origin/archive"], subject: "fix: older commit", author: "Koppa", timestamp: 1_690_000_000 },
+        { oid: "123456789abc", parents: [], decorations: ["origin/archive"], subject: "fix: older commit", body: "", author: "Koppa", timestamp: 1_690_000_000 },
       ],
     });
     render(<GitPane blockId="git-1" target={{ type: "local", path: "D:/work/project" }} visible onTargetChange={vi.fn()}/>);
@@ -83,6 +83,12 @@ describe("GitPane", () => {
     fireEvent.click(screen.getByRole("button", { name: "图表" }));
     const current = screen.getByRole("button", { name: /feat: initial/ });
     const older = screen.getByRole("button", { name: /fix: older commit/ });
+    const rail = current.querySelector<HTMLElement>(":scope > .git-graph-rail");
+    const card = current.querySelector<HTMLElement>(":scope > .git-commit-card");
+    expect(rail).toBeInTheDocument();
+    expect(card).toBeInTheDocument();
+    expect(card).toContainElement(current.querySelector(".git-commit-content"));
+    expect(card).not.toContainElement(rail);
     expect(current).toHaveAttribute("aria-pressed", "true");
     expect(current.querySelector('[data-kind="head"]')).toHaveTextContent("main");
     expect(current.querySelector('[data-kind="head"]')).not.toHaveTextContent("HEAD ->");
@@ -93,15 +99,84 @@ describe("GitPane", () => {
     expect(current).toHaveAttribute("aria-pressed", "false");
   });
 
+  it("shows accessible portaled commit details on hover and keyboard focus without loading files", async () => {
+    render(<GitPane blockId="git-1" target={{ type: "local", path: "D:/work/project" }} visible onTargetChange={vi.fn()}/>);
+    await screen.findByText("project");
+    fireEvent.click(screen.getByRole("button", { name: "图表" }));
+    const commit = screen.getByRole("button", { name: /feat: initial/ });
+    expect(commit).not.toHaveAttribute("title");
+
+    fireEvent.pointerEnter(commit);
+    const tooltip = screen.getByRole("tooltip");
+    expect(tooltip.parentElement).toBe(document.body);
+    expect(commit).toHaveAttribute("aria-describedby", tooltip.id);
+    expect(tooltip).toHaveTextContent("Qterm");
+    expect(tooltip).toHaveTextContent("feat: initial");
+    expect(tooltip).toHaveTextContent("Introduces the first Qterm workflow.");
+    expect(tooltip).toHaveTextContent("Keeps the terminal interaction compact.");
+    expect(tooltip).toHaveTextContent("abcdef0");
+    expect(tooltip).toHaveTextContent("main");
+    expect(tooltip.querySelector("time")).toHaveAttribute("dateTime", "2023-11-14T22:13:20.000Z");
+    expect(api.commitFiles).not.toHaveBeenCalled();
+
+    fireEvent.pointerLeave(commit);
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+    fireEvent.focus(commit);
+    expect(screen.getByRole("tooltip")).toBeInTheDocument();
+    fireEvent.blur(commit);
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+  });
+
+  it("repositions commit details after viewport and ancestor-scroll changes", async () => {
+    let anchorTop = 120;
+    const rect = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+      if (this.classList.contains("git-commit-row")) return {
+        top: anchorTop, right: 430, bottom: anchorTop + 36, left: 20, width: 410, height: 36,
+        x: 20, y: anchorTop, toJSON: () => ({}),
+      } as DOMRect;
+      if (this.classList.contains("git-commit-tooltip")) return {
+        top: 0, right: 320, bottom: 180, left: 0, width: 320, height: 180,
+        x: 0, y: 0, toJSON: () => ({}),
+      } as DOMRect;
+      return { top: 0, right: 0, bottom: 0, left: 0, width: 0, height: 0, x: 0, y: 0, toJSON: () => ({}) } as DOMRect;
+    });
+    try {
+      render(<GitPane blockId="git-1" target={{ type: "local", path: "D:/work/project" }} visible onTargetChange={vi.fn()}/>);
+      await screen.findByText("project");
+      fireEvent.click(screen.getByRole("button", { name: "图表" }));
+      fireEvent.pointerEnter(screen.getByRole("button", { name: /feat: initial/ }));
+      const tooltip = screen.getByRole("tooltip");
+      expect(tooltip).toHaveStyle({ left: "436px", top: "120px", visibility: "visible" });
+
+      anchorTop = 180;
+      fireEvent.resize(window);
+      expect(tooltip).toHaveStyle({ top: "180px" });
+      anchorTop = 220;
+      fireEvent.scroll(document);
+      expect(tooltip).toHaveStyle({ top: "220px" });
+    } finally {
+      rect.mockRestore();
+    }
+  });
+
   it("loads commit files lazily, shows rename context, and reuses the cached result", async () => {
     render(<GitPane blockId="git-1" target={{ type: "local", path: "D:/work/project" }} visible onTargetChange={vi.fn()}/>);
     await screen.findByText("project");
     fireEvent.click(screen.getByRole("button", { name: "图表" }));
     const commit = screen.getByRole("button", { name: /feat: initial/ });
+    const entry = commit.closest<HTMLElement>(".git-commit-entry");
+    const detailsShell = entry?.querySelector<HTMLElement>(".git-commit-details-shell") ?? null;
+    expect(detailsShell).toBeInTheDocument();
+    expect(detailsShell).not.toHaveClass("expanded");
+    expect(detailsShell).toHaveAttribute("aria-hidden", "true");
+    expect(detailsShell).toHaveAttribute("inert");
     expect(api.commitFiles).not.toHaveBeenCalled();
 
     fireEvent.click(commit);
     const files = await screen.findByRole("list", { name: "feat: initial 的文件" });
+    expect(detailsShell).toHaveClass("expanded");
+    expect(detailsShell).toHaveAttribute("aria-hidden", "false");
+    expect(detailsShell).not.toHaveAttribute("inert");
     expect(api.commitFiles).toHaveBeenCalledWith("D:/work/project", "abcdef012345");
     expect(files).toHaveTextContent("new-file.ts");
     expect(files).toHaveTextContent("src");
@@ -109,12 +184,50 @@ describe("GitPane", () => {
     expect(files.querySelector('[data-tone="added"]')).toHaveTextContent("A");
     expect(files.querySelector('[data-tone="renamed"]')).toHaveTextContent("R");
     expect(screen.queryByRole("button", { name: /diff|比较|查看改动/i })).not.toBeInTheDocument();
+    fireEvent.pointerEnter(commit);
+    expect(screen.getByRole("tooltip")).toHaveTextContent("2 个文件");
+    fireEvent.pointerLeave(commit);
 
     fireEvent.click(commit);
     expect(screen.queryByRole("list", { name: "feat: initial 的文件" })).not.toBeInTheDocument();
+    expect(detailsShell).not.toHaveClass("expanded");
+    expect(detailsShell).toHaveAttribute("aria-hidden", "true");
+    expect(detailsShell).toHaveAttribute("inert");
+    expect(files).toBeInTheDocument();
     fireEvent.click(commit);
     expect(await screen.findByRole("list", { name: "feat: initial 的文件" })).toBeInTheDocument();
     expect(api.commitFiles).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps every live graph lane continuous through expanded commit files", async () => {
+    const parent = { oid: "123456789abc", parents: [], decorations: [], subject: "fix: parent", body: "", author: "Koppa", timestamp: 1_690_000_000 };
+    const secondParent = { ...parent, oid: "fedcba987654", subject: "fix: second parent" };
+    api.snapshot.mockResolvedValueOnce({
+      ...snapshot,
+      commits: [{ ...snapshot.commits[0], parents: [parent.oid, secondParent.oid] }, parent, secondParent],
+    });
+    render(<GitPane blockId="git-1" target={{ type: "local", path: "D:/work/project" }} visible onTargetChange={vi.fn()}/>);
+    await screen.findByText("project");
+    fireEvent.click(screen.getByRole("button", { name: "图表" }));
+    const commit = screen.getByRole("button", { name: /feat: initial/ });
+    fireEvent.click(commit);
+    const files = await screen.findByRole("list", { name: "feat: initial 的文件" });
+    const entry = commit.closest<HTMLElement>(".git-commit-entry");
+    const details = entry?.querySelector<HTMLElement>(".git-commit-details") ?? null;
+    const card = entry?.querySelector<HTMLElement>(".git-commit-card") ?? null;
+    const rail = commit.querySelector<HTMLElement>(":scope > .git-graph-rail");
+    const railSvg = rail?.querySelector(".git-graph-lanes") ?? null;
+    expect(commit.querySelector<HTMLElement>(":scope > .git-commit-card")).toBe(card);
+    expect(commit.querySelector<HTMLElement>(":scope > .git-graph-rail")).toBe(rail);
+    expect(railSvg).toHaveAttribute("height", "36");
+    expect(railSvg).toHaveAttribute("viewBox", "0 0 28 36");
+    expect(railSvg?.querySelector("circle")).toHaveAttribute("cy", "18");
+    expect(Array.from(railSvg?.querySelectorAll("path") ?? []).some((path) => path.getAttribute("d")?.endsWith("36"))).toBe(true);
+    expect(card).not.toContainElement(rail);
+    expect(card).not.toContainElement(details);
+    expect(details).toContainElement(files);
+    expect(details?.querySelectorAll(".git-graph-continuation line")).toHaveLength(2);
+    expect(entry?.querySelectorAll(":scope > .git-graph-bridge line")).toHaveLength(2);
   });
 
   it("keeps commit-file cache entries isolated by repository", async () => {
@@ -221,6 +334,7 @@ describe("GitPane", () => {
     const repositoryName = await screen.findByText("project");
     const repositoryRow = repositoryName.closest(".git-repository-row");
     const branchTrigger = screen.getByRole("button", { name: "切换分支，当前 main" });
+    expect(repositoryRow?.closest(".git-repository-card")).toBeInTheDocument();
     expect(repositoryRow).toContainElement(branchTrigger);
     expect(branchTrigger).toContainElement(branchTrigger.querySelector('[data-icon="git"]'));
     expect(screen.queryByRole("combobox")).not.toBeInTheDocument();

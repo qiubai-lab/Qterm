@@ -10,6 +10,7 @@ export interface GitGraphRow {
   currentLane: number;
   laneCount: number;
   incoming: boolean;
+  continuingLanes: number[];
   segments: GitGraphSegment[];
 }
 
@@ -42,6 +43,7 @@ export function buildGitGraphRows(commits: GitCommit[]): GitGraphRow[] {
       currentLane,
       laneCount: Math.max(before.length, after.length, 1),
       incoming,
+      continuingLanes: after.map((_, lane) => lane),
       segments,
     };
   });

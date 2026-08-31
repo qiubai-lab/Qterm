@@ -5,7 +5,7 @@ import type { SessionConnectInput, SessionEvent } from "./sessions";
 export interface GitHead { name: string | null; oid: string | null; detached: boolean; unborn: boolean; upstream: string | null; ahead: number; behind: number }
 export interface GitChange { path: string; originalPath: string | null; status: string; staged: boolean; conflict: boolean }
 export interface GitBranch { name: string; oid: string; current: boolean; upstream: string | null }
-export interface GitCommit { oid: string; parents: string[]; decorations: string[]; subject: string; author: string; timestamp: number }
+export interface GitCommit { oid: string; parents: string[]; decorations: string[]; subject: string; body: string; author: string; timestamp: number }
 export interface GitCommitFile { path: string; originalPath: string | null; status: string }
 export interface GitSnapshot { repositoryPath: string; repositoryName: string; head: GitHead; changes: GitChange[]; branches: GitBranch[]; commits: GitCommit[] }
 
