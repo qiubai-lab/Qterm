@@ -7,6 +7,8 @@ export interface GitChange { path: string; originalPath: string | null; status: 
 export interface GitBranch { name: string; oid: string; current: boolean; upstream: string | null }
 export interface GitCommit { oid: string; parents: string[]; decorations: string[]; subject: string; body: string; author: string; timestamp: number }
 export interface GitCommitFile { path: string; originalPath: string | null; status: string }
+export interface GitDirectoryEntry { name: string; path: string; isSymlink: boolean }
+export interface GitDirectoryListing { path: string; entries: GitDirectoryEntry[] }
 export interface GitSnapshot { repositoryPath: string; repositoryName: string; head: GitHead; changes: GitChange[]; branches: GitBranch[]; commits: GitCommit[] }
 
 export type RemoteGitAction =
@@ -43,6 +45,10 @@ export function executeRemoteGit(sessionId: string, profileId: string, action: R
 
 export function loadRemoteGitCommitFiles(sessionId: string, profileId: string, repository: string, oid: string): Promise<GitCommitFile[]> {
   return invoke("git_remote_commit_files", { input: { sessionId, profileId, repository, oid } });
+}
+
+export function listRemoteGitDirectory(sessionId: string, profileId: string, path: string): Promise<GitDirectoryListing> {
+  return invoke("git_remote_list_directory", { input: { sessionId, profileId, path } });
 }
 
 export function gitError(error: unknown): { code: string; message: string } {

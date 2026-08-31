@@ -8,15 +8,23 @@ use crate::{
     application::git_service::{GitService, execute_remote_git, execute_remote_git_commit_files},
     commands::{
         credential::CredentialState,
+        error::IpcError,
         native_dialog,
         profile::ProfileState,
         session::{SessionConnectDto, SessionEventDto, SessionState, build_connect_request},
     },
-    domain::git::{
-        GitBranch, GitChange, GitCommit, GitCommitFile, GitError, GitHead, GitSnapshot,
-        RemoteGitAction,
+    domain::{
+        files::{DirectoryListing, FileEntry},
+        git::{
+            GitBranch, GitChange, GitCommit, GitCommitFile, GitError, GitHead, GitSnapshot,
+            RemoteGitAction,
+        },
+        transfer::RemotePath,
     },
-    infrastructure::{git_cli::SystemGitExecutor, ssh::client::SessionPurpose},
+    infrastructure::{
+        git_cli::SystemGitExecutor,
+        ssh::client::{SessionControlError, SessionPurpose},
+    },
 };
 
 pub struct GitState {
@@ -162,6 +170,29 @@ pub struct RemoteGitCommitFilesInput {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RemoteGitDirectoryInput {
+    session_id: String,
+    profile_id: String,
+    path: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitDirectoryListingDto {
+    path: String,
+    entries: Vec<GitDirectoryEntryDto>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitDirectoryEntryDto {
+    name: String,
+    path: String,
+    is_symlink: bool,
+}
+
+#[derive(Deserialize)]
 #[serde(
     tag = "type",
     rename_all = "camelCase",
@@ -262,6 +293,21 @@ pub async fn git_remote_commit_files(
     .await
     .map(|files| files.into_iter().map(Into::into).collect())
     .map_err(GitIpcError::from)
+}
+
+#[tauri::command]
+pub async fn git_remote_list_directory(
+    input: RemoteGitDirectoryInput,
+    session_state: State<'_, SessionState>,
+) -> Result<GitDirectoryListingDto, IpcError> {
+    let path = RemotePath::new(input.path)
+        .map_err(|_| IpcError::new("invalidFilePath", "远程仓库路径无效", false))?;
+    session_state
+        .manager()
+        .list_git_directory(&input.session_id, &input.profile_id, path)
+        .await
+        .map(GitDirectoryListingDto::from)
+        .map_err(git_directory_error)
 }
 
 #[tauri::command]
@@ -386,6 +432,48 @@ where
         .map_err(|_| GitIpcError::from(GitError::Io))?
         .map(GitSnapshotDto::from)
         .map_err(GitIpcError::from)
+}
+
+fn git_directory_error(error: SessionControlError) -> IpcError {
+    match error {
+        SessionControlError::SessionNotFound => {
+            IpcError::new("sessionNotFound", "远程 Git 连接不存在，请重新连接", true)
+        }
+        SessionControlError::SessionNotConnected => IpcError::new(
+            "sessionNotConnected",
+            "远程 Git 尚未连接，请重新连接后浏览目录",
+            true,
+        ),
+        _ => IpcError::new(
+            "directoryUnavailable",
+            "无法浏览远程目录，请直接输入路径",
+            true,
+        ),
+    }
+}
+
+impl From<DirectoryListing> for GitDirectoryListingDto {
+    fn from(value: DirectoryListing) -> Self {
+        Self {
+            path: value.path,
+            entries: value
+                .entries
+                .into_iter()
+                .filter(|entry| entry.is_directory)
+                .map(GitDirectoryEntryDto::from)
+                .collect(),
+        }
+    }
+}
+
+impl From<FileEntry> for GitDirectoryEntryDto {
+    fn from(value: FileEntry) -> Self {
+        Self {
+            name: value.name,
+            path: value.path,
+            is_symlink: value.is_symlink,
+        }
+    }
 }
 
 impl From<GitError> for GitIpcError {
@@ -553,7 +641,7 @@ impl From<GitCommitFile> for GitCommitFileDto {
 mod tests {
     use super::{
         GitBranchInput, GitCommitFilesInput, GitCommitInput, GitIpcError, GitPathInput,
-        GitPathsInput, RemoteGitCommitFilesInput, RemoteGitInput,
+        GitPathsInput, RemoteGitCommitFilesInput, RemoteGitDirectoryInput, RemoteGitInput,
     };
     use crate::domain::git::GitError;
 
@@ -626,6 +714,15 @@ mod tests {
                 "repository": "/srv/project",
                 "oid": "0123456789abcdef0123456789abcdef01234567",
                 "command": "cat /etc/passwd"
+            }))
+            .is_err()
+        );
+        assert!(
+            serde_json::from_value::<RemoteGitDirectoryInput>(serde_json::json!({
+                "sessionId": "git-session",
+                "profileId": "profile-1",
+                "path": "/srv/project",
+                "readFile": "/etc/passwd"
             }))
             .is_err()
         );

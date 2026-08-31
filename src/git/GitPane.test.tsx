@@ -53,12 +53,11 @@ describe("GitPane", () => {
     api.remoteCommitFiles.mockResolvedValue([]);
   });
 
-  it("shows a recoverable unbound state and selects a local directory", async () => {
-    api.select.mockResolvedValue("D:/work/project");
-    const onPath = vi.fn();
-    render(<GitPane blockId="git-1" target={{ type: "unbound" }} visible onTargetChange={onPath}/>);
+  it("shows a recoverable unbound state and delegates repository selection to its owner", async () => {
+    const onRequestRepositoryChange = vi.fn();
+    render(<GitPane blockId="git-1" target={{ type: "unbound" }} visible onTargetChange={vi.fn()} onRequestRepositoryChange={onRequestRepositoryChange}/>);
     fireEvent.click(await screen.findByRole("button", { name: "选择文件夹" }));
-    await waitFor(() => expect(onPath).toHaveBeenCalledWith({ type: "local", path: "D:/work/project" }));
+    expect(onRequestRepositoryChange).toHaveBeenCalledOnce();
   });
 
   it("renders repository changes and graph without exposing a diff action", async () => {
@@ -366,14 +365,10 @@ describe("GitPane", () => {
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "新建分支" })).not.toBeInTheDocument());
   });
 
-  it("portals and closes the repository more-actions menu so section overflow cannot clip it", async () => {
+  it("does not keep repository retargeting in the repository-card actions", async () => {
     render(<GitPane blockId="git-1" target={{ type: "local", path: "D:/work/project" }} visible onTargetChange={vi.fn()}/>);
     await screen.findByText("project");
-    fireEvent.click(screen.getByRole("button", { name: "更多存储库操作" }));
-    const menu = screen.getByRole("menu", { name: "存储库操作" });
-    expect(menu.parentElement).toBe(document.body);
-    expect(screen.getByRole("menuitem", { name: "更换本机仓库" })).toBeInTheDocument();
-    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("button", { name: "更多存储库操作" })).not.toBeInTheDocument();
     expect(screen.queryByRole("menu", { name: "存储库操作" })).not.toBeInTheDocument();
   });
 

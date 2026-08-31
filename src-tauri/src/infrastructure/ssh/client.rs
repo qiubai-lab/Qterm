@@ -520,9 +520,38 @@ impl SshSessionManager {
         path: RemotePath,
     ) -> Result<DirectoryListing, SessionControlError> {
         let entry = self.entry(session_id)?;
+        if !matches!(
+            entry.purpose,
+            SessionPurpose::Files | SessionPurpose::Terminal
+        ) {
+            return Err(SessionControlError::DirectoryUnavailable);
+        }
         if entry.state() != SessionState::Connected {
             return Err(SessionControlError::SessionNotConnected);
         }
+        Self::request_directory_listing(&entry, path).await
+    }
+
+    pub async fn list_git_directory(
+        &self,
+        session_id: &str,
+        profile_id: &str,
+        path: RemotePath,
+    ) -> Result<DirectoryListing, SessionControlError> {
+        let entry = self.entry(session_id)?;
+        if entry.purpose != SessionPurpose::Git || entry.profile_id.as_deref() != Some(profile_id) {
+            return Err(SessionControlError::DirectoryUnavailable);
+        }
+        if entry.state() != SessionState::Connected {
+            return Err(SessionControlError::SessionNotConnected);
+        }
+        Self::request_directory_listing(&entry, path).await
+    }
+
+    async fn request_directory_listing(
+        entry: &SessionEntry,
+        path: RemotePath,
+    ) -> Result<DirectoryListing, SessionControlError> {
         let (reply, response) = oneshot::channel();
         entry
             .control

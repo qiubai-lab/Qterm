@@ -390,7 +390,17 @@ pub(super) async fn run_session(
                     Some(SessionControl::StartNetworkRule { reply, .. } | SessionControl::StopNetworkRule { reply, .. }) => {
                         let _ = reply.send(Err(SessionControlError::NetworkUnavailable));
                     }
-                    Some(SessionControl::ListDirectory { reply, .. }) => { let _ = reply.send(Err(())); }
+                    Some(SessionControl::ListDirectory { path, reply }) => {
+                        match handle.channel_open_session().await {
+                            Ok(channel) if channel.request_subsystem(true, "sftp").await.is_ok() => {
+                                tauri::async_runtime::spawn(async move {
+                                    let result = list_remote_directory(channel.into_stream(), path).await;
+                                    let _ = reply.send(result);
+                                });
+                            }
+                            _ => { let _ = reply.send(Err(())); }
+                        }
+                    }
                     Some(SessionControl::ReadFile { reply, .. } | SessionControl::WriteTextFile { reply, .. }) => {
                         let _ = reply.send(Err(SessionControlError::FileUnavailable));
                     }

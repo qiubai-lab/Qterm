@@ -5,7 +5,7 @@ import { Icon } from "../components/Icon";
 import { RequiredFieldLabel } from "../components/RequiredFieldLabel";
 import {
   commitGitChanges, createGitBranch, gitAvailable, gitError, initializeGitRepository,
-  executeRemoteGit, loadGitCommitFiles, loadGitSnapshot, loadRemoteGitCommitFiles, selectGitRepositoryDirectory, stageAllGitChanges, stageGitPaths,
+  executeRemoteGit, loadGitCommitFiles, loadGitSnapshot, loadRemoteGitCommitFiles, stageAllGitChanges, stageGitPaths,
   switchGitBranch, unstageAllGitChanges, unstageGitPaths,
   type GitChange, type GitCommit, type GitCommitFile, type GitSnapshot, type RemoteGitAction,
 } from "../lib/tauri/git";
@@ -14,9 +14,16 @@ import type { GitRuntime } from "../workspace/WorkspaceProvider";
 import { calculateGitCommitTooltipPosition } from "./gitCommitTooltipPosition";
 import { buildGitGraphRows, type GitGraphRow } from "./gitGraph";
 
-interface GitPaneProps { blockId: string; target: GitTarget; runtime?: GitRuntime; visible: boolean; onTargetChange: (target: GitTarget) => void }
+interface GitPaneProps {
+  blockId: string;
+  target: GitTarget;
+  runtime?: GitRuntime;
+  visible: boolean;
+  onTargetChange: (target: GitTarget) => void;
+  onRequestRepositoryChange?: () => void;
+}
 
-type GitRepositoryOverlayKind = "branches" | "createBranch" | "more";
+type GitRepositoryOverlayKind = "branches" | "createBranch";
 
 interface GitRepositoryOverlay {
   kind: GitRepositoryOverlayKind;
@@ -51,7 +58,7 @@ function fitRepositoryOverlay(anchor: DOMRect, width: number, height: number): O
   return { left, top: Math.max(gutter, anchor.top - height - offset), placement: "above" };
 }
 
-export function GitPane({ blockId, target, runtime, visible, onTargetChange }: GitPaneProps) {
+export function GitPane({ blockId, target, runtime, visible, onTargetChange, onRequestRepositoryChange }: GitPaneProps) {
   const [snapshot, setSnapshot] = useState<GitSnapshot | null>(null);
   const [localAvailable, setLocalAvailable] = useState<boolean | null>(null);
   const [busy, setBusy] = useState("");
@@ -64,8 +71,6 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange }: G
   const [focusedCommitOid, setFocusedCommitOid] = useState<string | null>(null);
   const [expandedCommitKey, setExpandedCommitKey] = useState<string | null>(null);
   const [commitFilesCache, setCommitFilesCache] = useState<Record<string, GitCommitFilesState>>({});
-  const [editingPath, setEditingPath] = useState(false);
-  const [pathDraft, setPathDraft] = useState("");
   const [repositoryOverlay, setRepositoryOverlay] = useState<GitRepositoryOverlay | null>(null);
   const [collapsed, setCollapsed] = useState({ repository: false, changes: false, graph: true });
   const epoch = useRef(0);
@@ -73,7 +78,6 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange }: G
   const onTargetChangeRef = useRef(onTargetChange);
   const branchButtonRef = useRef<HTMLButtonElement>(null);
   const createBranchButtonRef = useRef<HTMLButtonElement>(null);
-  const repositoryMenuButtonRef = useRef<HTMLButtonElement>(null);
   const repositoryOverlayRef = useRef<HTMLElement | null>(null);
   const commitAnchorRefs = useRef(new Map<string, HTMLButtonElement>());
   const commitTooltipRef = useRef<HTMLDivElement>(null);
@@ -154,23 +158,6 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange }: G
     textarea.style.height = `${Math.min(contentHeight, maximumHeight)}px`;
     textarea.style.overflowY = contentHeight > maximumHeight ? "auto" : "hidden";
   }, [message]);
-
-  async function selectDirectory() {
-    const path = await selectGitRepositoryDirectory(repositoryPath);
-    if (!path) return;
-    epoch.current += 1;
-    setSnapshot(null); setError(null); onTargetChange({ type: "local", path });
-  }
-
-  function changeRepository() {
-    setRepositoryOverlay(null);
-    if (target.type === "remote") {
-      setPathDraft(target.path);
-      setEditingPath(true);
-      return;
-    }
-    void selectDirectory();
-  }
 
   async function mutate(label: string, operation: () => Promise<GitSnapshot>, clearMessage = false): Promise<boolean> {
     const request = ++epoch.current;
@@ -293,8 +280,7 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange }: G
 
   function repositoryAnchor(kind: GitRepositoryOverlayKind): HTMLButtonElement | null {
     if (kind === "branches") return branchButtonRef.current;
-    if (kind === "createBranch") return createBranchButtonRef.current;
-    return repositoryMenuButtonRef.current;
+    return createBranchButtonRef.current;
   }
 
   function closeRepositoryOverlay(restoreFocus = false) {
@@ -315,8 +301,8 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange }: G
       setError(null);
     }
     if (kind === "branches") setBranchQuery("");
-    const estimatedWidth = kind === "createBranch" ? 270 : kind === "branches" ? 336 : 170;
-    const estimatedHeight = kind === "createBranch" ? 138 : kind === "branches" ? Math.min(376, 92 + branchOptions.length * 44) : 38;
+    const estimatedWidth = kind === "createBranch" ? 270 : 336;
+    const estimatedHeight = kind === "createBranch" ? 138 : Math.min(376, 92 + branchOptions.length * 44);
     setRepositoryOverlay({ kind, ...fitRepositoryOverlay(anchor.getBoundingClientRect(), estimatedWidth, estimatedHeight) });
   }
 
@@ -324,7 +310,7 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange }: G
     if (!repositoryOverlay || !repositoryOverlayRef.current) return;
     const anchor = repositoryOverlay.kind === "branches"
       ? branchButtonRef.current
-      : repositoryOverlay.kind === "createBranch" ? createBranchButtonRef.current : repositoryMenuButtonRef.current;
+      : createBranchButtonRef.current;
     if (!anchor) return;
     const overlay = repositoryOverlayRef.current;
     const next = fitRepositoryOverlay(anchor.getBoundingClientRect(), overlay.offsetWidth, overlay.offsetHeight);
@@ -339,7 +325,7 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange }: G
     if (!repositoryOverlay) return;
     const anchor = repositoryOverlay.kind === "branches"
       ? branchButtonRef.current
-      : repositoryOverlay.kind === "createBranch" ? createBranchButtonRef.current : repositoryMenuButtonRef.current;
+      : createBranchButtonRef.current;
     const closeOnOutsidePointer = (event: PointerEvent) => {
       const node = event.target as Node;
       if (!repositoryOverlayRef.current?.contains(node) && !anchor?.contains(node)) setRepositoryOverlay(null);
@@ -356,7 +342,6 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange }: G
     window.addEventListener("resize", closeOnViewportChange);
     window.addEventListener("scroll", closeOnViewportChange, true);
     if (repositoryOverlay.kind === "branches") window.requestAnimationFrame(() => repositoryOverlayRef.current?.querySelector<HTMLInputElement>('.git-branch-search')?.focus());
-    else if (repositoryOverlay.kind === "more") window.requestAnimationFrame(() => repositoryOverlayRef.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus());
     return () => {
       document.removeEventListener("pointerdown", closeOnOutsidePointer);
       document.removeEventListener("keydown", closeOnEscape);
@@ -378,16 +363,10 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange }: G
   }
 
   if (available === false) return <GitEmpty icon="git" title="未找到系统 Git" detail="安装 Git 并重新打开 Qterm 后即可使用 Git 管理。"/>;
-  if (!repositoryPath) return <GitEmpty icon="git" title="选择本机仓库" detail="Git Block 一次管理一个本机或 SSH 工作区仓库。" action="选择文件夹" onAction={() => void selectDirectory()}/>;
-  if (remote && editingPath && target.type === "remote") return <form className="git-target-config" onSubmit={(event) => { event.preventDefault(); const path = pathDraft.trim(); if (!path) return; setSnapshot(null); setError(null); setEditingPath(false); onTargetChange({ ...target, path }); }}>
-    <Icon name="git" size={28}/><strong>更换远程仓库路径</strong><span>仅切换当前 Git Block；不会修改或移动服务器上的目录。</span>
-    <label htmlFor={`git-path-${blockId}`}><RequiredFieldLabel>远程仓库路径</RequiredFieldLabel></label>
-    <input id={`git-path-${blockId}`} required value={pathDraft} autoFocus maxLength={4096} placeholder="/srv/project" onChange={(event) => setPathDraft(event.target.value)}/>
-    <div><button type="button" className="secondary" onClick={() => setEditingPath(false)}>取消</button><button type="submit" disabled={!pathDraft.trim()}>应用路径</button></div>
-  </form>;
-  if (remote && !remoteReady && !snapshot) return <GitEmpty icon="git" title={runtime?.status === "connecting" || runtime?.status === "authenticating" ? "正在连接远程 Git…" : "远程 Git 尚未连接"} detail={runtime?.notice || repositoryPath} secondary="更换远程路径" onSecondary={() => { setPathDraft(repositoryPath); setEditingPath(true); }}/>;
-  if (error?.code === "notGitRepository") return <GitEmpty icon="git" title="尚未初始化存储库" detail={repositoryPath} action="初始化存储库" secondary={remote ? "更换远程路径" : "更换文件夹"} onAction={() => void mutate("initialize", () => initialize(repositoryPath))} onSecondary={remote ? () => { setPathDraft(repositoryPath); setEditingPath(true); } : () => void selectDirectory()}/>;
-  if (error && !snapshot) return <GitEmpty icon="git" title={gitFailureTitle(error.code)} detail={error.message} action={error.code === "gitMissing" || error.code === "gitUnsupportedRemote" ? undefined : "重试"} secondary={remote ? "更换远程路径" : "更换文件夹"} onAction={() => void refresh()} onSecondary={remote ? () => { setPathDraft(repositoryPath); setEditingPath(true); } : () => void selectDirectory()}/>;
+  if (!repositoryPath) return <GitEmpty icon="git" title="选择本机仓库" detail="Git Block 一次管理一个本机或 SSH 工作区仓库。" action="选择文件夹" onAction={onRequestRepositoryChange}/>;
+  if (remote && !remoteReady && !snapshot) return <GitEmpty icon="git" title={runtime?.status === "connecting" || runtime?.status === "authenticating" ? "正在连接远程 Git…" : "远程 Git 尚未连接"} detail={runtime?.notice || repositoryPath} secondary="更换远程路径" onSecondary={onRequestRepositoryChange}/>;
+  if (error?.code === "notGitRepository") return <GitEmpty icon="git" title="尚未初始化存储库" detail={repositoryPath} action="初始化存储库" secondary={remote ? "更换远程路径" : "更换文件夹"} onAction={() => void mutate("initialize", () => initialize(repositoryPath))} onSecondary={onRequestRepositoryChange}/>;
+  if (error && !snapshot) return <GitEmpty icon="git" title={gitFailureTitle(error.code)} detail={error.message} action={error.code === "gitMissing" || error.code === "gitUnsupportedRemote" ? undefined : "重试"} secondary={remote ? "更换远程路径" : "更换文件夹"} onAction={() => void refresh()} onSecondary={onRequestRepositoryChange}/>;
 
   return <><div className="git-pane" data-block-id={blockId} data-busy={disabled || undefined} aria-busy={disabled}>
     <GitSection className="git-repository-section" title="存储库" meta={root ?? repositoryPath} collapsed={collapsed.repository} onToggle={() => setCollapsed((value) => ({ ...value, repository: !value.repository }))}>
@@ -400,9 +379,6 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange }: G
           <div className="git-repository-actions">
             <button ref={createBranchButtonRef} type="button" aria-label="创建分支" title="创建分支" aria-haspopup="dialog" aria-expanded={repositoryOverlay?.kind === "createBranch"} disabled={disabled || !snapshot} onClick={() => openRepositoryOverlay("createBranch")}><Icon name="plus" size={12}/></button>
             <button type="button" aria-label="刷新 Git 状态" title="刷新" disabled={disabled} onClick={() => void refresh()}><Icon name="refresh" size={13}/></button>
-            <div className="git-repository-menu">
-              <button ref={repositoryMenuButtonRef} type="button" aria-label="更多存储库操作" title="更多操作" aria-haspopup="menu" aria-expanded={repositoryOverlay?.kind === "more"} onClick={() => openRepositoryOverlay("more")}><Icon name="more" size={13}/></button>
-            </div>
           </div>
         </div>
         {remote && runtime?.stale && <div className="git-feedback stale" role="status">连接已断开，当前内容可能已过期；重新连接后将自动刷新。</div>}
@@ -494,8 +470,7 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange }: G
         <div className="git-branch-create-feedback" role={error ? "alert" : "status"} aria-hidden={!error}>{error?.message ?? "\u00a0"}</div>
         <div className="git-branch-create-actions"><button type="button" className="secondary" onClick={() => closeRepositoryOverlay(true)}>取消</button><button type="submit" disabled={disabled || !newBranch.trim()}>创建并切换</button></div>
       </form>
-      : repositoryOverlay.kind === "branches"
-        ? <div ref={(node) => { repositoryOverlayRef.current = node; }} className="git-repository-popover git-branch-popover" data-placement={repositoryOverlay.placement} role="dialog" aria-label="切换分支" style={{ left: repositoryOverlay.left, top: repositoryOverlay.top }} onKeyDown={navigateRepositoryMenu}>
+      : <div ref={(node) => { repositoryOverlayRef.current = node; }} className="git-repository-popover git-branch-popover" data-placement={repositoryOverlay.placement} role="dialog" aria-label="切换分支" style={{ left: repositoryOverlay.left, top: repositoryOverlay.top }} onKeyDown={navigateRepositoryMenu}>
           <div className="git-branch-search-shell"><Icon name="search" size={12}/><input className="git-branch-search" type="search" role="searchbox" aria-label="筛选分支" value={branchQuery} placeholder="筛选要签出的分支" onChange={(event) => setBranchQuery(event.target.value)}/></div>
           <div className="git-branch-actions"><button type="button" onClick={() => openRepositoryOverlay("createBranch")}><Icon name="plus" size={12}/><span>创建新分支…</span></button></div>
           <div className="git-branch-list-header"><span>分支</span><span>{visibleBranches.length}</span></div>
@@ -514,9 +489,6 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange }: G
             })}
             {visibleBranches.length === 0 && <div className="git-branch-empty">没有匹配“{branchQuery.trim()}”的分支</div>}
           </div>
-        </div>
-        : <div ref={(node) => { repositoryOverlayRef.current = node; }} className="git-repository-popover git-repository-menu-popover" data-placement={repositoryOverlay.placement} role="menu" aria-label="存储库操作" style={{ left: repositoryOverlay.left, top: repositoryOverlay.top }} onKeyDown={navigateRepositoryMenu}>
-          <button type="button" role="menuitem" onClick={changeRepository}><Icon name="files" size={13}/><span>{remote ? "更换远程仓库路径" : "更换本机仓库"}</span></button>
         </div>, document.body)}
   </>;
 }

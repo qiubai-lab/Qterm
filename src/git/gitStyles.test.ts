@@ -24,6 +24,24 @@ function lastDeclarations(selector: string): string {
 }
 
 describe("Git pane style contracts", () => {
+  it("gives the remote repository picker one bounded directory scroller", () => {
+    expect(declarations(".git-repository-picker-dialog")).toContain("height: min(470px, calc(100vh - 48px))");
+    expect(declarations(".git-repository-picker-dialog .dialog-content")).toContain("display: flex");
+    expect(declarations(".git-repository-picker-dialog .dialog-content")).toContain("min-height: 0");
+    expect(declarations(".git-repository-picker-dialog .dialog-content")).toContain("overflow: hidden");
+    expect(declarations(".git-repository-picker")).toContain("min-height: 0");
+    expect(declarations(".git-repository-picker")).toContain("flex: 1");
+    expect(declarations(".git-repository-picker-toolbar")).toContain("flex: none");
+    expect(declarations(".git-repository-picker-list-scroll")).toContain("min-height: 0");
+    expect(declarations(".git-repository-picker-list-scroll")).toContain("flex: 1");
+    expect(declarations(".git-repository-picker-list-scroll")).toContain("overflow: auto");
+    expect(declarations(".git-repository-picker-list-scroll")).toContain("scrollbar-color: var(--scrollbar-thumb) transparent");
+    expect(declarations(".git-repository-picker-feedback")).toContain("min-height: 34px");
+    expect(declarations(".git-repository-picker-footer")).toContain("flex: none");
+    const reducedMotion = styles.slice(styles.indexOf("@media (prefers-reduced-motion: reduce)"));
+    expect(reducedMotion).toContain(".git-repository-picker-row-shell button");
+  });
+
   it("inherits the terminal workbench background across Git content surfaces", () => {
     expect(declarations(".git-block")).toContain("background: var(--workbench-panel)");
     expect(declarations(".git-pane")).toContain("background: transparent");

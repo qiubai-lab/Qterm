@@ -6,6 +6,8 @@ import { RequiredFieldLabel } from "../components/RequiredFieldLabel";
 import { ConnectionRouteProgress } from "../components/ConnectionRouteProgress";
 import { FileBrowserPane } from "../files/FileBrowserPane";
 import { GitPane } from "../git/GitPane";
+import { GitRepositoryPickerDialog } from "../git/GitRepositoryPickerDialog";
+import { selectGitRepositoryDirectory } from "../lib/tauri/git";
 import type { ConnectionProfile } from "../lib/tauri/profiles";
 import { NetworkPane } from "../network/NetworkPane";
 import { TerminalPanel } from "../terminal/TerminalPanel";
@@ -584,6 +586,8 @@ function NetworkBlock(props: BlockRenderProps & { blockId: string; profileId: st
 
 function GitBlock(props: BlockRenderProps & { blockId: string; target: GitTarget }) {
   const { document, dispatch, profiles, profileGroups = [], gitRuntimes, selectGitTarget, disconnectGitBlock } = useWorkspace();
+  const { blockId, onRequestAuthConnection, target, workspace } = props;
+  const workspaceId = workspace.id;
   const active = props.workspace.activeBlockId === props.blockId;
   const drop = props.drag?.targetId === props.blockId ? props.drag.position : null;
   const profileId = props.target.type === "remote" ? props.target.profileId : null;
@@ -594,6 +598,7 @@ function GitBlock(props: BlockRenderProps & { blockId: string; target: GitTarget
   const name = path?.replace(/[\\/]+$/, "").split(/[\\/]/).pop() || "Git 管理";
   const requestedProfileRef = useRef<string | null>(null);
   const [pendingRemote, setPendingRemote] = useState<{ profileId: string; path: string } | null>(null);
+  const [repositoryPickerProfileId, setRepositoryPickerProfileId] = useState<string | null>(null);
   const sessionActive = status !== "closed" && status !== "failed";
   const endpoint = profile && status === "connected" ? `${profile.username}@${profile.host}:${profile.port}` : null;
   const detail = props.target.type === "remote"
@@ -630,14 +635,32 @@ function GitBlock(props: BlockRenderProps & { blockId: string; target: GitTarget
 
   const retargetGit = useCallback(async (target: GitTarget) => {
     if (target.type === "remote") requestedProfileRef.current = null;
-    await selectGitTarget(props.workspace.id, props.blockId, target);
-  }, [props.blockId, props.workspace.id, selectGitTarget]);
+    await selectGitTarget(workspaceId, blockId, target);
+  }, [blockId, selectGitTarget, workspaceId]);
+
+  const requestRepositoryChange = useCallback(async () => {
+    if (pendingRemote) return;
+    if (target.type !== "remote") {
+      const initialPath = target.type === "local" ? target.path : null;
+      const nextPath = await selectGitRepositoryDirectory(initialPath);
+      if (nextPath) await retargetGit({ type: "local", path: nextPath });
+      return;
+    }
+    if (!profile) return;
+    setRepositoryPickerProfileId(profile.id);
+    if (status !== "connected" || !runtime?.sessionId) onRequestAuthConnection("git", blockId, profile);
+  }, [blockId, onRequestAuthConnection, pendingRemote, profile, retargetGit, runtime?.sessionId, status, target]);
 
   useEffect(() => {
-    if (props.target.type !== "remote" || !profile || status !== "closed" || requestedProfileRef.current === profile.id) return;
+    if (target.type !== "remote" || !profile || status !== "closed" || requestedProfileRef.current === profile.id) return;
     requestedProfileRef.current = profile.id;
-    props.onRequestAuthConnection("git", props.blockId, profile);
-  }, [profile, props, status]);
+    onRequestAuthConnection("git", blockId, profile);
+  }, [blockId, onRequestAuthConnection, profile, status, target.type]);
+
+  const repositoryPickerOpen = target.type === "remote"
+    && repositoryPickerProfileId === target.profileId
+    && runtime?.status === "connected"
+    && Boolean(runtime.sessionId);
 
   return <section
     className={`terminal-block git-block${active ? " active" : ""}`}
@@ -650,14 +673,27 @@ function GitBlock(props: BlockRenderProps & { blockId: string; target: GitTarget
     <header className="terminal-block-header" onPointerDown={(event) => props.beginDrag(event, props.blockId)}>
       <TerminalTargetPicker profiles={profiles} groups={profileGroups} recentProfileIds={document?.recentProfileIds ?? []} selectedProfileId={pendingRemote?.profileId ?? profileId} status={status} detail={detail} hideDetail={Boolean(runtime?.connectionProgress)} onSelect={(nextProfileId) => void chooseTarget(nextProfileId)} onManageConnections={props.onOpenConnectionManager} icon="git" localName="本机仓库" localDetail="管理本机 Git 工作区" ariaContext="Git 连接" onRequestDisconnect={status === "connected" && profile ? requestDisconnect : undefined} statusAction={statusAction}/>
       <ConnectionRouteProgress progress={runtime?.connectionProgress} endpoint={endpoint} profile={profile} onRequestDisconnect={status === "connected" && profile ? requestDisconnect : undefined} statusAction={runtime?.connectionProgress ? statusAction : undefined}/>
-      <div className="block-actions"><button aria-label="关闭 Git 窗口" title="关闭" onClick={() => props.onRequestClose(props.blockId)}><Icon name="close" size={13}/></button></div>
+      <div className="block-actions">
+        <button type="button" aria-label={props.target.type === "remote" ? "选择远程仓库目录" : "选择本机仓库目录"} title="选择仓库目录" disabled={Boolean(pendingRemote) || (props.target.type === "remote" && !profile)} onClick={() => void requestRepositoryChange()}><Icon name="files" size={13}/></button>
+        <button aria-label="关闭 Git 窗口" title="关闭" onClick={() => props.onRequestClose(props.blockId)}><Icon name="close" size={13}/></button>
+      </div>
     </header>
     {pendingRemote ? <form className="git-target-config" onSubmit={(event) => { event.preventDefault(); void applyRemoteTarget(); }}>
       <Icon name="git" size={28}/><strong>设置远程仓库路径</strong><span>路径位于“{profiles.find((item) => item.id === pendingRemote.profileId)?.name ?? "SSH 服务器"}”上，不会复用终端会话。</span>
       <label htmlFor={`git-remote-path-${props.blockId}`}><RequiredFieldLabel>远程工作目录</RequiredFieldLabel></label>
       <input id={`git-remote-path-${props.blockId}`} required autoFocus value={pendingRemote.path} maxLength={4096} placeholder="/srv/project" onChange={(event) => setPendingRemote({ ...pendingRemote, path: event.target.value })}/>
       <div><button type="button" className="secondary" onClick={() => setPendingRemote(null)}>取消</button><button type="submit" disabled={!pendingRemote.path.trim()}>连接并打开</button></div>
-    </form> : <GitPane blockId={props.blockId} target={props.target} runtime={runtime} visible={props.visible} onTargetChange={retargetGit}/>}
+    </form> : <GitPane blockId={props.blockId} target={props.target} runtime={runtime} visible={props.visible} onTargetChange={retargetGit} onRequestRepositoryChange={() => void requestRepositoryChange()}/>}
+    {repositoryPickerOpen && target.type === "remote" && runtime?.sessionId && <GitRepositoryPickerDialog
+      sessionId={runtime.sessionId}
+      profileId={target.profileId}
+      initialPath={target.path}
+      onClose={() => setRepositoryPickerProfileId(null)}
+      onSelect={(nextPath) => {
+        setRepositoryPickerProfileId(null);
+        if (nextPath !== target.path) void retargetGit({ ...target, path: nextPath });
+      }}
+    />}
     {runtime?.notice && <BlockNotice message={runtime.notice}/>}
     {drop && <div className={`drop-zone drop-${drop}`} />}
   </section>;

@@ -21,6 +21,7 @@ use super::{
 use crate::{
     domain::{
         auth::{AuthRequest, SecretText},
+        files::{DirectoryListing, FileEntry},
         network::ForwardRuleKind,
         session::{
             HostEndpoint, PresentedHostKey, RouteNodeMetadata, RouteNodeRole, SessionEvent,
@@ -404,6 +405,165 @@ async fn git_actions_require_a_connected_git_purpose_session_owned_by_the_profil
     }];
     let _ = reply.send(Ok(expected.clone()));
     assert_eq!(files_request.await.expect("request"), Ok(expected));
+}
+
+#[tokio::test]
+async fn git_directory_listing_requires_a_connected_git_session_owned_by_the_profile() {
+    let directory = tempdir().expect("temp directory");
+    let manager = Arc::new(SshSessionManager::new(
+        JsonKnownHostRepository::new(directory.path().join("known-hosts.json")),
+        JsonRemoteShellCache::new(directory.path().join("remote-shells.json")),
+    ));
+    let (cancel_sender, _cancel_receiver) = oneshot::channel();
+    let (control_sender, mut control_receiver) = mpsc::channel(4);
+    let entry = Arc::new(SessionEntry::new(
+        route_metadata("example.com", 22),
+        SessionPurpose::Git,
+        Some("profile-1".into()),
+        Arc::new(|_| {}),
+        cancel_sender,
+        control_sender,
+    ));
+    entry.transition(SessionState::Authenticating);
+    entry.transition(SessionState::Connected);
+    manager
+        .sessions
+        .lock()
+        .expect("sessions")
+        .insert("git-directory-1".into(), entry);
+
+    assert_eq!(
+        manager
+            .list_git_directory(
+                "git-directory-1",
+                "other-profile",
+                RemotePath::new("/srv").expect("remote path"),
+            )
+            .await,
+        Err(super::SessionControlError::DirectoryUnavailable)
+    );
+    assert!(matches!(
+        control_receiver.try_recv(),
+        Err(mpsc::error::TryRecvError::Empty)
+    ));
+
+    assert_eq!(
+        manager
+            .list_directory(
+                "git-directory-1",
+                RemotePath::new("/srv").expect("remote path"),
+            )
+            .await,
+        Err(super::SessionControlError::DirectoryUnavailable)
+    );
+    assert!(matches!(
+        control_receiver.try_recv(),
+        Err(mpsc::error::TryRecvError::Empty)
+    ));
+
+    for (index, purpose) in [
+        SessionPurpose::Files,
+        SessionPurpose::Terminal,
+        SessionPurpose::Network,
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let (cancel_sender, _cancel_receiver) = oneshot::channel();
+        let (control_sender, mut wrong_purpose_controls) = mpsc::channel(1);
+        let wrong_purpose = Arc::new(SessionEntry::new(
+            route_metadata("example.com", 22),
+            purpose,
+            Some("profile-1".into()),
+            Arc::new(|_| {}),
+            cancel_sender,
+            control_sender,
+        ));
+        wrong_purpose.transition(SessionState::Authenticating);
+        wrong_purpose.transition(SessionState::Connected);
+        let session_id = format!("git-directory-wrong-purpose-{index}");
+        manager
+            .sessions
+            .lock()
+            .expect("sessions")
+            .insert(session_id.clone(), wrong_purpose);
+
+        assert_eq!(
+            manager
+                .list_git_directory(
+                    &session_id,
+                    "profile-1",
+                    RemotePath::new("/srv").expect("remote path"),
+                )
+                .await,
+            Err(super::SessionControlError::DirectoryUnavailable)
+        );
+        assert!(matches!(
+            wrong_purpose_controls.try_recv(),
+            Err(mpsc::error::TryRecvError::Empty)
+        ));
+    }
+
+    let request = {
+        let manager = Arc::clone(&manager);
+        tokio::spawn(async move {
+            manager
+                .list_git_directory(
+                    "git-directory-1",
+                    "profile-1",
+                    RemotePath::new("/srv").expect("remote path"),
+                )
+                .await
+        })
+    };
+    let Some(SessionControl::ListDirectory { path, reply }) = control_receiver.recv().await else {
+        panic!("Git directory control")
+    };
+    assert_eq!(path.as_str(), "/srv");
+    let expected = DirectoryListing::new(
+        "/srv".into(),
+        vec![FileEntry {
+            name: "project".into(),
+            path: "/srv/project".into(),
+            is_directory: true,
+            is_symlink: false,
+            size: 0,
+            modified_at: None,
+            permission_mode: None,
+        }],
+    );
+    let _ = reply.send(Ok(expected.clone()));
+    assert_eq!(request.await.expect("request"), Ok(expected));
+
+    let (cancel_sender, _cancel_receiver) = oneshot::channel();
+    let (control_sender, mut disconnected_controls) = mpsc::channel(1);
+    let disconnected = Arc::new(SessionEntry::new(
+        route_metadata("example.com", 22),
+        SessionPurpose::Git,
+        Some("profile-1".into()),
+        Arc::new(|_| {}),
+        cancel_sender,
+        control_sender,
+    ));
+    manager
+        .sessions
+        .lock()
+        .expect("sessions")
+        .insert("git-directory-closed".into(), disconnected);
+    assert_eq!(
+        manager
+            .list_git_directory(
+                "git-directory-closed",
+                "profile-1",
+                RemotePath::new("/srv").expect("remote path"),
+            )
+            .await,
+        Err(super::SessionControlError::SessionNotConnected)
+    );
+    assert!(matches!(
+        disconnected_controls.try_recv(),
+        Err(mpsc::error::TryRecvError::Empty)
+    ));
 }
 
 #[test]

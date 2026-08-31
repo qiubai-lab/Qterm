@@ -21,6 +21,7 @@ const disconnectFileBlock = vi.fn().mockResolvedValue(undefined);
 const disconnectNetworkBlock = vi.fn().mockResolvedValue(undefined);
 const disconnectGitBlock = vi.fn().mockResolvedValue(undefined);
 const restartLocalBlock = vi.fn().mockResolvedValue(undefined);
+const gitApi = vi.hoisted(() => ({ selectDirectory: vi.fn() }));
 const terminalRegistryMocks = vi.hoisted(() => ({ openTerminalSearch: vi.fn().mockReturnValue(true) }));
 const profiles = [
   { id: "password-profile", name: "Password Server", host: "password.example", port: 22, username: "root", authPreference: "password" as const, credentialId: null, groupId: null },
@@ -58,8 +59,21 @@ vi.mock("../network/NetworkPane", () => ({
   NetworkPane: ({ onStart }: { onStart?: (rule: { id: string }) => void }) => <button onClick={() => onStart?.({ id: "rule-1" })}>启动测试规则</button>,
 }));
 
+vi.mock("../lib/tauri/git", () => ({
+  selectGitRepositoryDirectory: gitApi.selectDirectory,
+}));
+
+vi.mock("../git/GitRepositoryPickerDialog", () => ({
+  GitRepositoryPickerDialog: ({ initialPath, onClose, onSelect }: { initialPath: string; onClose: () => void; onSelect: (path: string) => void }) => <div role="dialog" aria-label="测试远程仓库选择器" data-initial-path={initialPath}>
+    <button onClick={() => onSelect("/srv/next")}>测试确认远程目录</button>
+    <button onClick={onClose}>测试取消远程目录</button>
+  </div>,
+}));
+
 vi.mock("../git/GitPane", () => ({
-  GitPane: ({ target }: { target: { type: string; path?: string } }) => <div aria-label="测试 Git 窗口" data-repository-path={target.path ?? ""}/>,
+  GitPane: ({ target, onRequestRepositoryChange }: { target: { type: string; path?: string }; onRequestRepositoryChange?: () => void }) => <div aria-label="测试 Git 窗口" data-repository-path={target.path ?? ""}>
+    <button onClick={onRequestRepositoryChange}>测试请求更换仓库</button>
+  </div>,
 }));
 
 vi.mock("./WorkspaceProvider", () => ({
@@ -109,6 +123,8 @@ describe("WorkspaceCanvas terminal actions", () => {
     disconnectFileBlock.mockClear();
     disconnectNetworkBlock.mockClear();
     restartLocalBlock.mockClear();
+    selectGitTarget.mockClear();
+    gitApi.selectDirectory.mockReset();
     terminalRegistryMocks.openTerminalSearch.mockClear();
     terminalRuntimes = { "block-1": connectedLocalRuntime };
     fileRuntimes = {};
@@ -424,6 +440,53 @@ describe("WorkspaceCanvas terminal actions", () => {
     render(<WorkspaceCanvas workspace={{ ...workspace, activeBlockId: "git-1", layout: { type: "git", blockId: "git-1", target: { type: "local", path: "D:/work/project" } } }} visible onRequestClose={vi.fn()} onRequestAuthConnection={vi.fn()}/>);
     expect(screen.getByLabelText("测试 Git 窗口")).toHaveAttribute("data-repository-path", "D:/work/project");
     expect(screen.getByRole("button", { name: "关闭 Git 窗口" })).toBeInTheDocument();
+  });
+
+  it("moves local repository selection into the Git block header before close", async () => {
+    const user = userEvent.setup();
+    gitApi.selectDirectory.mockResolvedValue("D:/work/next");
+    const view = render(<WorkspaceCanvas workspace={{ ...workspace, activeBlockId: "git-1", layout: { type: "git", blockId: "git-1", target: { type: "local", path: "D:/work/project" } } }} visible onRequestClose={vi.fn()} onRequestAuthConnection={vi.fn()}/>);
+
+    const choose = screen.getByRole("button", { name: "选择本机仓库目录" });
+    const close = screen.getByRole("button", { name: "关闭 Git 窗口" });
+    expect(choose.querySelector('[data-icon="files"]')).not.toBeNull();
+    expect(choose.compareDocumentPosition(close) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    await user.click(choose);
+
+    expect(gitApi.selectDirectory).toHaveBeenCalledWith("D:/work/project");
+    expect(selectGitTarget).toHaveBeenCalledWith("workspace-1", "git-1", { type: "local", path: "D:/work/next" });
+    expect(view.container.querySelector('[data-layout-block="git-1"] .block-actions')).toContainElement(choose);
+  });
+
+  it("opens the connected remote repository picker and commits its path once", async () => {
+    const user = userEvent.setup();
+    gitRuntimes = { "git-1": { sessionId: "git-session", status: "connected", hostKeyPrompt: null, notice: "", connectionProgress: null, stale: false } };
+    render(<WorkspaceCanvas workspace={{ ...workspace, activeBlockId: "git-1", layout: { type: "git", blockId: "git-1", target: { type: "remote", profileId: "password-profile", path: "/srv/project" } } }} visible onRequestClose={vi.fn()} onRequestAuthConnection={vi.fn()}/>);
+
+    await user.click(screen.getByRole("button", { name: "选择远程仓库目录" }));
+    expect(screen.getByRole("dialog", { name: "测试远程仓库选择器" })).toHaveAttribute("data-initial-path", "/srv/project");
+    await user.click(screen.getByRole("button", { name: "测试确认远程目录" }));
+
+    expect(selectGitTarget).toHaveBeenCalledOnce();
+    expect(selectGitTarget).toHaveBeenCalledWith("workspace-1", "git-1", { type: "remote", profileId: "password-profile", path: "/srv/next" });
+    expect(screen.queryByRole("dialog", { name: "测试远程仓库选择器" })).not.toBeInTheDocument();
+  });
+
+  it("remembers a remote picker request until the Git session reconnects", async () => {
+    const user = userEvent.setup();
+    const onRequestAuthConnection = vi.fn();
+    const remoteWorkspace: Workspace = { ...workspace, activeBlockId: "git-1", layout: { type: "git", blockId: "git-1", target: { type: "remote", profileId: "password-profile", path: "/srv/project" } } };
+    const view = render(<WorkspaceCanvas workspace={remoteWorkspace} visible onRequestClose={vi.fn()} onRequestAuthConnection={onRequestAuthConnection}/>);
+    await waitFor(() => expect(onRequestAuthConnection).toHaveBeenCalledWith("git", "git-1", profiles[0]));
+    onRequestAuthConnection.mockClear();
+
+    await user.click(screen.getByRole("button", { name: "选择远程仓库目录" }));
+    expect(onRequestAuthConnection).toHaveBeenCalledWith("git", "git-1", profiles[0]);
+    expect(screen.queryByRole("dialog", { name: "测试远程仓库选择器" })).not.toBeInTheDocument();
+
+    gitRuntimes = { "git-1": { sessionId: "git-session", status: "connected", hostKeyPrompt: null, notice: "", connectionProgress: null, stale: false } };
+    view.rerender(<WorkspaceCanvas workspace={remoteWorkspace} visible onRequestClose={vi.fn()} onRequestAuthConnection={onRequestAuthConnection}/>);
+    expect(await screen.findByRole("dialog", { name: "测试远程仓库选择器" })).toBeInTheDocument();
   });
 
   it("reconnects a persisted remote Git target with its own connection owner", async () => {
