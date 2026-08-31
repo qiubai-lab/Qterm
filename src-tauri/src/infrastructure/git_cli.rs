@@ -10,8 +10,9 @@ use std::{
 use crate::{
     domain::git::{
         GitBranch, GitBranchKind, GitChange, GitCommit, GitCommitFile, GitError, GitHead,
-        GitSnapshot, find_tracking_local_branch, validate_branch_source_ref,
-        validate_local_branch_ref, validate_remote_branch_ref, validate_remote_name,
+        GitSnapshot, find_tracking_local_branch, validate_abort_merge, validate_branch_source_ref,
+        validate_continue_merge, validate_local_branch_ref, validate_merge_preconditions,
+        validate_remote_branch_ref, validate_remote_name,
     },
     ports::git_executor::GitExecutor,
 };
@@ -109,6 +110,24 @@ impl SystemGitExecutor {
         )
         .is_ok()
     }
+
+    fn merge_in_progress(&self, repository: &Path) -> Result<bool, GitError> {
+        match self.git(
+            [
+                OsString::from("-C"),
+                repository.as_os_str().to_owned(),
+                OsString::from("rev-parse"),
+                OsString::from("--verify"),
+                OsString::from("-q"),
+                OsString::from("MERGE_HEAD"),
+            ],
+            READ_TIMEOUT,
+        ) {
+            Ok(_) => Ok(true),
+            Err(GitError::CommandFailed(_)) => Ok(false),
+            Err(error) => Err(error),
+        }
+    }
 }
 
 impl GitExecutor for SystemGitExecutor {
@@ -118,6 +137,7 @@ impl GitExecutor for SystemGitExecutor {
 
     fn snapshot(&self, path: &Path) -> Result<GitSnapshot, GitError> {
         let repository = self.repository_root(path)?;
+        let merge_in_progress = self.merge_in_progress(&repository)?;
         let status = self.git(
             [
                 OsString::from("-C"),
@@ -185,6 +205,7 @@ impl GitExecutor for SystemGitExecutor {
             branches: parse_branches(&branches.stdout),
             remotes: parse_remotes(&remotes.stdout),
             commits,
+            merge_in_progress,
         })
     }
 
@@ -434,6 +455,42 @@ impl GitExecutor for SystemGitExecutor {
                 OsStr::new(&remote_name),
             ],
         )
+    }
+
+    fn merge_branch(&self, repository: &Path, source_ref: &str) -> Result<GitSnapshot, GitError> {
+        let current = self.snapshot(repository)?;
+        validate_merge_preconditions(&current, source_ref)?;
+        let repository = self.repository_root(repository)?;
+        let result = self.git(
+            [
+                OsString::from("-C"),
+                repository.as_os_str().to_owned(),
+                OsString::from("merge"),
+                OsString::from("--no-edit"),
+                OsString::from("--"),
+                OsString::from(source_ref),
+            ],
+            MUTATION_TIMEOUT,
+        );
+        match result {
+            Ok(_) => self.snapshot(&repository),
+            Err(failure) => match self.snapshot(&repository) {
+                Ok(snapshot) if snapshot.merge_in_progress => Ok(snapshot),
+                _ => Err(failure),
+            },
+        }
+    }
+
+    fn continue_merge(&self, repository: &Path) -> Result<GitSnapshot, GitError> {
+        let current = self.snapshot(repository)?;
+        validate_continue_merge(&current)?;
+        self.mutate(repository, ["merge", "--continue"])
+    }
+
+    fn abort_merge(&self, repository: &Path) -> Result<GitSnapshot, GitError> {
+        let current = self.snapshot(repository)?;
+        validate_abort_merge(&current)?;
+        self.mutate(repository, ["merge", "--abort"])
     }
 }
 
@@ -1461,6 +1518,142 @@ refs/remotes/origin/HEAD\0origin/HEAD\0abc\0 \0\0\0refs/remotes/origin/main\n",
         let snapshot = executor.snapshot(directory.path()).expect("snapshot");
         assert!(snapshot.head.unborn);
         assert!(snapshot.changes.iter().any(|change| change.staged));
+    }
+
+    #[test]
+    fn real_git_merge_supports_success_conflict_continue_abort_and_safe_preconditions() {
+        let git = which_git();
+        let executor = SystemGitExecutor::with_executable(git.clone());
+        let directory = tempdir().expect("merge fixture");
+        let repository = directory.path();
+        executor.initialize(repository).expect("init");
+        configure_identity(&git, repository);
+        fs::write(repository.join("shared.txt"), b"base\n").expect("base file");
+        executor.stage_all(repository).expect("stage base");
+        let initial = executor
+            .commit(repository, "initial")
+            .expect("initial commit");
+        let main = initial.head.name.clone().expect("main branch");
+
+        executor
+            .create_branch(repository, "feature/merge")
+            .expect("feature branch");
+        fs::write(repository.join("feature.txt"), b"feature\n").expect("feature file");
+        executor.stage_all(repository).expect("stage feature");
+        executor
+            .commit(repository, "feature commit")
+            .expect("feature commit");
+        executor
+            .switch_branch(repository, &main)
+            .expect("switch main");
+        fs::write(repository.join("main.txt"), b"main\n").expect("main file");
+        executor.stage_all(repository).expect("stage main");
+        executor
+            .commit(repository, "main commit")
+            .expect("main commit");
+
+        let merged = executor
+            .merge_branch(repository, "refs/heads/feature/merge")
+            .expect("merge commit");
+        assert!(!merged.merge_in_progress);
+        assert_eq!(merged.commits[0].parents.len(), 2);
+        run_git_test(
+            &git,
+            [
+                "-C",
+                path(repository),
+                "update-ref",
+                "refs/remotes/origin/feature-merge",
+                "refs/heads/feature/merge",
+            ],
+        );
+        executor
+            .merge_branch(repository, "refs/remotes/origin/feature-merge")
+            .expect("merge remote-tracking ref");
+        let up_to_date = executor
+            .merge_branch(repository, "refs/heads/feature/merge")
+            .expect("already up to date");
+        assert_eq!(up_to_date.head.oid, merged.head.oid);
+
+        executor
+            .create_branch(repository, "feature/conflict")
+            .expect("conflict branch");
+        fs::write(repository.join("shared.txt"), b"feature conflict\n").expect("feature conflict");
+        executor
+            .stage_all(repository)
+            .expect("stage conflict branch");
+        executor
+            .commit(repository, "feature conflict")
+            .expect("commit conflict branch");
+        executor
+            .switch_branch(repository, &main)
+            .expect("return main");
+        fs::write(repository.join("shared.txt"), b"main conflict\n").expect("main conflict");
+        executor.stage_all(repository).expect("stage main conflict");
+        let before_conflict = executor
+            .commit(repository, "main conflict")
+            .expect("commit main conflict");
+
+        let conflicted = executor
+            .merge_branch(repository, "refs/heads/feature/conflict")
+            .expect("conflict snapshot");
+        assert!(conflicted.merge_in_progress);
+        assert!(conflicted.changes.iter().any(|change| change.conflict));
+        assert!(
+            executor
+                .snapshot(repository)
+                .expect("reload conflict")
+                .merge_in_progress
+        );
+        assert!(matches!(
+            executor.continue_merge(repository),
+            Err(GitError::Conflict(_))
+        ));
+        let aborted = executor.abort_merge(repository).expect("abort merge");
+        assert!(!aborted.merge_in_progress);
+        assert_eq!(aborted.head.oid, before_conflict.head.oid);
+
+        fs::write(repository.join("dirty.txt"), b"dirty\n").expect("dirty file");
+        assert!(matches!(
+            executor.merge_branch(repository, "refs/heads/feature/conflict"),
+            Err(GitError::Conflict(_))
+        ));
+        assert_eq!(
+            executor
+                .snapshot(repository)
+                .expect("snapshot after dirty rejection")
+                .head
+                .oid,
+            before_conflict.head.oid
+        );
+        fs::remove_file(repository.join("dirty.txt")).expect("clean fixture");
+
+        let conflicted = executor
+            .merge_branch(repository, "refs/heads/feature/conflict")
+            .expect("second conflict snapshot");
+        assert!(conflicted.merge_in_progress);
+        fs::write(repository.join("shared.txt"), b"resolved\n").expect("resolve conflict");
+        executor.stage_all(repository).expect("stage resolution");
+        let continued = executor.continue_merge(repository).expect("continue merge");
+        assert!(!continued.merge_in_progress);
+        assert_eq!(continued.commits[0].parents.len(), 2);
+
+        executor
+            .create_branch(repository, "feature/fast-forward")
+            .expect("fast-forward branch");
+        fs::write(repository.join("fast.txt"), b"fast\n").expect("fast file");
+        executor.stage_all(repository).expect("stage fast");
+        let fast_commit = executor
+            .commit(repository, "fast commit")
+            .expect("commit fast");
+        executor
+            .switch_branch(repository, &main)
+            .expect("return for fast-forward");
+        let fast_forwarded = executor
+            .merge_branch(repository, "refs/heads/feature/fast-forward")
+            .expect("fast-forward");
+        assert_eq!(fast_forwarded.head.oid, fast_commit.head.oid);
+        assert_eq!(fast_forwarded.commits[0].parents.len(), 1);
     }
 
     fn which_git() -> std::path::PathBuf {

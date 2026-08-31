@@ -57,6 +57,7 @@ pub struct GitSnapshotDto {
     branches: Vec<GitBranchDto>,
     remotes: Vec<String>,
     commits: Vec<GitCommitDto>,
+    merge_in_progress: bool,
 }
 
 #[derive(Serialize)]
@@ -202,6 +203,13 @@ pub struct GitRemoteBranchInput {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitMergeBranchInput {
+    repository: String,
+    source_ref: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RemoteGitInput {
     session_id: String,
     profile_id: String,
@@ -307,6 +315,16 @@ pub enum RemoteGitActionDto {
     TrackRemoteBranch {
         repository: String,
         ref_name: String,
+    },
+    MergeBranch {
+        repository: String,
+        source_ref: String,
+    },
+    ContinueMerge {
+        repository: String,
+    },
+    AbortMerge {
+        repository: String,
     },
 }
 
@@ -562,6 +580,33 @@ pub async fn git_track_remote_branch(
     run(move || service.track_remote_branch(input.repository, input.ref_name)).await
 }
 
+#[tauri::command]
+pub async fn git_merge_branch(
+    input: GitMergeBranchInput,
+    state: State<'_, GitState>,
+) -> Result<GitSnapshotDto, GitIpcError> {
+    let service = Arc::clone(&state.service);
+    run(move || service.merge_branch(input.repository, input.source_ref)).await
+}
+
+#[tauri::command]
+pub async fn git_continue_merge(
+    input: GitRepositoryInput,
+    state: State<'_, GitState>,
+) -> Result<GitSnapshotDto, GitIpcError> {
+    let service = Arc::clone(&state.service);
+    run(move || service.continue_merge(input.repository)).await
+}
+
+#[tauri::command]
+pub async fn git_abort_merge(
+    input: GitRepositoryInput,
+    state: State<'_, GitState>,
+) -> Result<GitSnapshotDto, GitIpcError> {
+    let service = Arc::clone(&state.service);
+    run(move || service.abort_merge(input.repository)).await
+}
+
 async fn run<F>(operation: F) -> Result<GitSnapshotDto, GitIpcError>
 where
     F: FnOnce() -> Result<GitSnapshot, GitError> + Send + 'static,
@@ -738,6 +783,15 @@ impl From<RemoteGitActionDto> for RemoteGitAction {
                 repository,
                 ref_name,
             },
+            RemoteGitActionDto::MergeBranch {
+                repository,
+                source_ref,
+            } => Self::MergeBranch {
+                repository,
+                source_ref,
+            },
+            RemoteGitActionDto::ContinueMerge { repository } => Self::ContinueMerge { repository },
+            RemoteGitActionDto::AbortMerge { repository } => Self::AbortMerge { repository },
         }
     }
 }
@@ -752,6 +806,7 @@ impl From<GitSnapshot> for GitSnapshotDto {
             branches: value.branches.into_iter().map(Into::into).collect(),
             remotes: value.remotes,
             commits: value.commits.into_iter().map(Into::into).collect(),
+            merge_in_progress: value.merge_in_progress,
         }
     }
 }
@@ -827,9 +882,9 @@ impl From<GitCommitFile> for GitCommitFileDto {
 #[cfg(test)]
 mod tests {
     use super::{
-        GitBranchInput, GitCommitFilesInput, GitCommitInput, GitIpcError, GitPathInput,
-        GitPathsInput, GitRemoteBranchInput, RemoteGitCommitFilesInput, RemoteGitDirectoryInput,
-        RemoteGitInput,
+        GitBranchInput, GitCommitFilesInput, GitCommitInput, GitIpcError, GitMergeBranchInput,
+        GitPathInput, GitPathsInput, GitRemoteBranchInput, RemoteGitCommitFilesInput,
+        RemoteGitDirectoryInput, RemoteGitInput,
     };
     use crate::domain::git::GitError;
 
@@ -896,6 +951,14 @@ mod tests {
             .is_err()
         );
         assert!(
+            serde_json::from_value::<GitMergeBranchInput>(serde_json::json!({
+                "repository": "D:/work/project",
+                "sourceRef": "refs/heads/feature/test",
+                "strategy": "ours"
+            }))
+            .is_err()
+        );
+        assert!(
             serde_json::from_value::<RemoteGitInput>(serde_json::json!({
                 "sessionId": "git-session",
                 "profileId": "profile-1",
@@ -950,6 +1013,50 @@ mod tests {
                 repository: "/srv/project".into()
             }
         );
+
+        let merge = serde_json::from_value::<RemoteGitInput>(serde_json::json!({
+            "sessionId": "git-session",
+            "profileId": "profile-1",
+            "action": {
+                "type": "mergeBranch",
+                "repository": "/srv/project",
+                "sourceRef": "refs/remotes/origin/feature/test"
+            }
+        }))
+        .expect("merge input");
+        assert_eq!(
+            crate::domain::git::RemoteGitAction::from(merge.action),
+            crate::domain::git::RemoteGitAction::MergeBranch {
+                repository: "/srv/project".into(),
+                source_ref: "refs/remotes/origin/feature/test".into(),
+            }
+        );
+
+        for (kind, expected) in [
+            (
+                "continueMerge",
+                crate::domain::git::RemoteGitAction::ContinueMerge {
+                    repository: "/srv/project".into(),
+                },
+            ),
+            (
+                "abortMerge",
+                crate::domain::git::RemoteGitAction::AbortMerge {
+                    repository: "/srv/project".into(),
+                },
+            ),
+        ] {
+            let input = serde_json::from_value::<RemoteGitInput>(serde_json::json!({
+                "sessionId": "git-session",
+                "profileId": "profile-1",
+                "action": { "type": kind, "repository": "/srv/project" }
+            }))
+            .expect("merge lifecycle input");
+            assert_eq!(
+                crate::domain::git::RemoteGitAction::from(input.action),
+                expected
+            );
+        }
 
         let track = serde_json::from_value::<RemoteGitInput>(serde_json::json!({
             "sessionId": "git-session",
@@ -1018,6 +1125,25 @@ mod tests {
                     "repository": "/srv/project",
                     "refName": "refs/heads/main",
                     "command": "branch -D main"
+                }
+            }),
+            serde_json::json!({
+                "sessionId": "git-session",
+                "profileId": "profile-1",
+                "action": {
+                    "type": "mergeBranch",
+                    "repository": "/srv/project",
+                    "sourceRef": "refs/heads/feature/test",
+                    "strategy": "ours"
+                }
+            }),
+            serde_json::json!({
+                "sessionId": "git-session",
+                "profileId": "profile-1",
+                "action": {
+                    "type": "abortMerge",
+                    "repository": "/srv/project",
+                    "args": ["reset", "--hard"]
                 }
             }),
         ] {

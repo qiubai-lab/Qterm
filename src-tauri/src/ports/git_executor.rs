@@ -35,4 +35,7 @@ pub trait GitExecutor: Send + Sync + 'static {
         repository: &Path,
         ref_name: &str,
     ) -> Result<GitSnapshot, GitError>;
+    fn merge_branch(&self, repository: &Path, source_ref: &str) -> Result<GitSnapshot, GitError>;
+    fn continue_merge(&self, repository: &Path) -> Result<GitSnapshot, GitError>;
+    fn abort_merge(&self, repository: &Path) -> Result<GitSnapshot, GitError>;
 }

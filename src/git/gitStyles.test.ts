@@ -194,6 +194,19 @@ describe("Git pane style contracts", () => {
     expect(group).toContain("background:");
   });
 
+  it("uses a stable semantic merge state bar with restrained attention and explicit actions", () => {
+    const mergeState = declarations(".git-merge-state");
+    expect(mergeState).toContain("display: grid");
+    expect(mergeState).toContain("border: 1px solid color-mix(in srgb, var(--warning)");
+    expect(mergeState).toContain("background: color-mix(in srgb, var(--warning)");
+    expect(mergeState).toContain("color: var(--text)");
+    expect(declarations(".git-merge-state-copy")).toContain("min-width: 0");
+    expect(declarations(".git-merge-state-actions")).toContain("display: flex");
+    expect(declarations(".git-merge-state-actions .danger")).toContain("color: var(--danger)");
+    expect(declarations('.git-operation-row[data-status="attention"] .git-operation-status')).toContain("color: var(--warning)");
+    expect(mergeState).not.toMatch(/#[0-9a-f]{3,8}/i);
+  });
+
   it("uses an icon-and-text branch trigger and portaled floating layers", () => {
     expect(declarations(".git-repository-actions")).toContain("display: flex");
     expect(declarations(".git-repository-actions")).toContain("gap: 3px");

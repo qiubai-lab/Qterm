@@ -4,9 +4,9 @@ import { createPortal } from "react-dom";
 import { Icon } from "../components/Icon";
 import { RequiredFieldLabel } from "../components/RequiredFieldLabel";
 import {
-  commitGitChanges, createGitBranch, createGitBranchFrom, deleteGitBranch, gitAvailable, gitError, initializeGitRepository,
+  abortGitMerge, commitGitChanges, continueGitMerge, createGitBranch, createGitBranchFrom, deleteGitBranch, gitAvailable, gitError, initializeGitRepository,
   executeRemoteGit, fetchGitRepository, loadGitCommitFiles, loadGitSnapshot, loadRemoteGitCommitFiles, stageAllGitChanges, stageGitPaths,
-  pullGitRepository, pushGitRepository, renameGitBranch, switchGitBranch, trackGitRemoteBranch, unstageAllGitChanges, unstageGitPaths,
+  mergeGitBranch, pullGitRepository, pushGitRepository, renameGitBranch, switchGitBranch, trackGitRemoteBranch, unstageAllGitChanges, unstageGitPaths,
   type GitBranch, type GitChange, type GitCommit, type GitCommitFile, type GitSnapshot, type RemoteGitAction,
 } from "../lib/tauri/git";
 import { gitRepositoryHistoryEntryKey } from "../workspace/gitRepositoryHistory";
@@ -32,6 +32,8 @@ type GitRepositoryOverlayKind =
   | "renameBranch"
   | "deleteBranch"
   | "repositoryActions"
+  | "mergeBranch"
+  | "abortMerge"
   | "publishBranch"
   | "operationLog";
 
@@ -57,7 +59,7 @@ interface GitCommitFilesState {
 interface GitOperationRecord {
   id: number;
   name: string;
-  status: "running" | "success" | "error";
+  status: "running" | "success" | "attention" | "error";
   startedAt: number;
   durationMs?: number;
   detail: string;
@@ -111,6 +113,7 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
   const [branchSourceRef, setBranchSourceRef] = useState("");
   const [selectedBranchRef, setSelectedBranchRef] = useState("");
   const [selectedRemote, setSelectedRemote] = useState("");
+  const [mergeSourceRef, setMergeSourceRef] = useState("");
   const [branchQuery, setBranchQuery] = useState("");
   const [operations, setOperations] = useState<GitOperationRecord[]>([]);
   const [selectedCommitOid, setSelectedCommitOid] = useState<string | null>(null);
@@ -133,6 +136,8 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
   const repositoryOverlayRef = useRef<HTMLElement | null>(null);
   const repositorySubmenuRef = useRef<HTMLElement | null>(null);
   const branchManagementItemRef = useRef<HTMLButtonElement>(null);
+  const mergeAbortButtonRef = useRef<HTMLButtonElement>(null);
+  const previousMergeStateRef = useRef(false);
   const operationSequence = useRef(0);
   const commitAnchorRefs = useRef(new Map<string, HTMLButtonElement>());
   const commitTooltipRef = useRef<HTMLDivElement>(null);
@@ -165,6 +170,7 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
     updateBusy("");
     setRepositoryOverlay(null);
     setRepositorySubmenu(null);
+    setMergeSourceRef("");
     setOperations([]);
     if (reportedRepositoryKeyRef.current !== nextTargetKey) reportedRepositoryKeyRef.current = null;
   }, [target, updateBusy]);
@@ -204,6 +210,9 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
   const pullRepository = useCallback((repository: string) => remote ? remoteExecute({ type: "pull", repository }) : pullGitRepository(repository), [remote, remoteExecute]);
   const pushRepository = useCallback((repository: string, selectedRemote?: string | null) => remote ? remoteExecute({ type: "push", repository, remote: selectedRemote ?? null }) : pushGitRepository(repository, selectedRemote ?? null), [remote, remoteExecute]);
   const trackRemoteBranch = useCallback((repository: string, refName: string) => remote ? remoteExecute({ type: "trackRemoteBranch", repository, refName }) : trackGitRemoteBranch(repository, refName), [remote, remoteExecute]);
+  const mergeBranch = useCallback((repository: string, sourceRef: string) => remote ? remoteExecute({ type: "mergeBranch", repository, sourceRef }) : mergeGitBranch(repository, sourceRef), [remote, remoteExecute]);
+  const continueMerge = useCallback((repository: string) => remote ? remoteExecute({ type: "continueMerge", repository }) : continueGitMerge(repository), [remote, remoteExecute]);
+  const abortMerge = useCallback((repository: string) => remote ? remoteExecute({ type: "abortMerge", repository }) : abortGitMerge(repository), [remote, remoteExecute]);
 
   const refreshSnapshot = useCallback(async () => {
     if (!repositoryPath || !visible || !remoteReady) return;
@@ -290,7 +299,7 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
     return id;
   }
 
-  function finishOperation(id: number, status: "success" | "error", detail: string) {
+  function finishOperation(id: number, status: "success" | "attention" | "error", detail: string) {
     const finishedAt = Date.now();
     setOperations((value) => value.map((record) => record.id === id
       ? { ...record, status, durationMs: Math.max(0, finishedAt - record.startedAt), detail: visibleOperationDetail(detail) }
@@ -324,6 +333,35 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
       if (request !== epoch.current) return false;
       applySnapshot(next);
       finishOperation(recordId, "success", successDetail);
+      return true;
+    } catch (cause) {
+      const failure = gitError(cause);
+      if (request === epoch.current) {
+        setError(failure);
+        finishOperation(recordId, "error", failure.message);
+        await recoverSnapshotAfterFailure(request, failure);
+      }
+      return false;
+    } finally {
+      if (request === epoch.current) updateBusy("");
+    }
+  }
+
+  async function runMergeOperation(sourceRef: string): Promise<boolean> {
+    if (!root || busyRef.current) return false;
+    const request = ++epoch.current;
+    const recordId = beginOperation("合并分支");
+    updateBusy("merge");
+    setError(null);
+    try {
+      const next = await mergeBranch(root, sourceRef);
+      if (request !== epoch.current) return false;
+      applySnapshot(next);
+      finishOperation(
+        recordId,
+        next.mergeInProgress ? "attention" : "success",
+        next.mergeInProgress ? "合并存在冲突，等待解决" : "分支合并已完成",
+      );
       return true;
     } catch (cause) {
       const failure = gitError(cause);
@@ -410,6 +448,17 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
   const visibleRemoteBranches = useMemo(() => visibleBranches.filter((branch) => branch.kind === "remote"), [visibleBranches]);
   const localBranchOptions = useMemo(() => branchOptions.filter((branch) => branch.kind === "local"), [branchOptions]);
   const deletableBranchOptions = useMemo(() => localBranchOptions.filter((branch) => !branch.current), [localBranchOptions]);
+  const mergeSourceOptions = useMemo(() => branchOptions.filter((branch) => !branch.current), [branchOptions]);
+  const selectedMergeSource = mergeSourceOptions.find((branch) => branch.refName === mergeSourceRef) ?? null;
+  const mergeInProgress = Boolean(snapshot?.mergeInProgress);
+  const mergeWorktreeClean = snapshot?.changes.length === 0;
+
+  useEffect(() => {
+    if (mergeInProgress && !previousMergeStateRef.current) {
+      setCollapsed((value) => ({ ...value, changes: false, graph: true }));
+    }
+    previousMergeStateRef.current = mergeInProgress;
+  }, [mergeInProgress]);
 
   function commitFilesKey(oid: string): string | null {
     if (!root) return null;
@@ -479,9 +528,8 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
   }
 
   const repositoryAnchor = useCallback((kind = repositoryOverlay?.kind): HTMLButtonElement | null => {
-    return kind && branchOverlayKinds.has(kind)
-      ? branchButtonRef.current
-      : repositoryActionsButtonRef.current;
+    if (kind === "abortMerge") return mergeAbortButtonRef.current;
+    return kind && branchOverlayKinds.has(kind) ? branchButtonRef.current : repositoryActionsButtonRef.current;
   }, [repositoryOverlay?.kind]);
 
   function closeRepositoryOverlay(restoreFocus = false) {
@@ -499,7 +547,7 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
     const anchor = repositoryAnchor(kind);
     if (!anchor) return;
     setRepositorySubmenu(null);
-    if (["createBranch", "createBranchFrom", "renameBranch", "deleteBranch", "publishBranch"].includes(kind)) {
+    if (["createBranch", "createBranchFrom", "renameBranch", "deleteBranch", "publishBranch", "mergeBranch", "abortMerge"].includes(kind)) {
       setNewBranch("");
       setError(null);
     }
@@ -508,10 +556,11 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
     if (kind === "renameBranch") setSelectedBranchRef(localBranchOptions[0]?.refName ?? "");
     if (kind === "deleteBranch") setSelectedBranchRef(deletableBranchOptions[0]?.refName ?? "");
     if (kind === "publishBranch") setSelectedRemote(snapshot?.remotes[0] ?? "");
+    if (kind === "mergeBranch") setMergeSourceRef(mergeSourceOptions[0]?.refName ?? "");
     const estimatedWidth = kind === "branches" ? 336 : kind === "repositoryActions" ? 210 : 292;
     const estimatedHeight = kind === "branches"
       ? Math.min(376, 118 + branchOptions.length * 44)
-      : kind === "operationLog" ? 300 : kind === "repositoryActions" ? 190 : 190;
+      : kind === "operationLog" ? 300 : kind === "repositoryActions" ? 222 : 190;
     setRepositoryOverlay({ kind, ...fitRepositoryOverlay(anchor.getBoundingClientRect(), estimatedWidth, estimatedHeight) });
   }
 
@@ -678,22 +727,23 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
       const tracked = Boolean(snapshot?.head.upstream);
       return <><div ref={overlayRef} className="git-repository-popover git-repository-action-popover" role="menu" aria-label="存储库操作" onKeyDown={navigateRepositoryMenu} {...common}>
         <div className="git-repository-popover-title"><Icon name="git" size={13}/><strong>存储库操作</strong></div>
-        <button type="button" className="git-repository-action-item" role="menuitem" disabled={disabled || !tracked} onPointerEnter={() => setRepositorySubmenu(null)} onClick={() => {
+        <button type="button" className="git-repository-action-item" role="menuitem" disabled={disabled || mergeInProgress || !tracked} onPointerEnter={() => setRepositorySubmenu(null)} onClick={() => {
           closeRepositoryOverlay(false);
           if (root) void runRecordedOperation("拉取", () => pullRepository(root), "FF-only Pull 已完成");
         }}><Icon name="download" size={12}/><span>拉取</span></button>
         {tracked
-          ? <button type="button" className="git-repository-action-item" role="menuitem" disabled={disabled} onPointerEnter={() => setRepositorySubmenu(null)} onClick={() => {
+          ? <button type="button" className="git-repository-action-item" role="menuitem" disabled={disabled || mergeInProgress} onPointerEnter={() => setRepositorySubmenu(null)} onClick={() => {
             closeRepositoryOverlay(false);
             if (root) void runRecordedOperation("推送", () => pushRepository(root, null), "Push 已完成");
           }}><Icon name="upload" size={12}/><span>推送</span></button>
-          : <button type="button" className="git-repository-action-item" role="menuitem" disabled={disabled || !snapshot?.remotes.length} onPointerEnter={() => setRepositorySubmenu(null)} onClick={() => openRepositoryOverlay("publishBranch")}><Icon name="upload" size={12}/><span>发布分支…</span></button>}
-        <button type="button" className="git-repository-action-item" role="menuitem" disabled={disabled || !tracked} onPointerEnter={() => setRepositorySubmenu(null)} onClick={() => {
+          : <button type="button" className="git-repository-action-item" role="menuitem" disabled={disabled || mergeInProgress || !snapshot?.remotes.length} onPointerEnter={() => setRepositorySubmenu(null)} onClick={() => openRepositoryOverlay("publishBranch")}><Icon name="upload" size={12}/><span>发布分支…</span></button>}
+        <button type="button" className="git-repository-action-item" role="menuitem" disabled={disabled || mergeInProgress || !tracked} onPointerEnter={() => setRepositorySubmenu(null)} onClick={() => {
           closeRepositoryOverlay(false);
           void synchronizeRepository();
         }}><Icon name="refresh" size={12}/><span>同步</span></button>
+        <button type="button" className="git-repository-action-item" role="menuitem" disabled={disabled || mergeInProgress || mergeSourceOptions.length === 0} onPointerEnter={() => setRepositorySubmenu(null)} onClick={() => openRepositoryOverlay("mergeBranch")}><Icon name="git" size={12}/><span>合并分支…</span></button>
         <div className="git-repository-action-separator" role="separator"/>
-        <button ref={branchManagementItemRef} type="button" className="git-repository-action-item" role="menuitem" aria-haspopup="menu" aria-expanded={Boolean(repositorySubmenu)} aria-controls={repositorySubmenuId} onPointerEnter={() => openBranchManagementSubmenu(false)} onKeyDown={(event) => {
+        <button ref={branchManagementItemRef} type="button" className="git-repository-action-item" role="menuitem" disabled={mergeInProgress} aria-haspopup="menu" aria-expanded={Boolean(repositorySubmenu)} aria-controls={repositorySubmenuId} onPointerEnter={() => openBranchManagementSubmenu(false)} onKeyDown={(event) => {
           if (event.key !== "ArrowRight") return;
           event.preventDefault();
           event.stopPropagation();
@@ -721,13 +771,47 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
         <div className="git-repository-popover-title"><Icon name="menu" size={13}/><strong>Git 操作记录</strong><span>{operations.length}/20</span></div>
         <div className="git-operation-list" role="list">
           {operations.map((record) => <div className="git-operation-row" data-status={record.status} role="listitem" key={record.id}>
-            <span className="git-operation-status" aria-label={operationStatusLabel(record.status)}><Icon name={record.status === "success" ? "checkCircle" : record.status === "error" ? "clear" : "refresh"} size={11}/></span>
+            <span className="git-operation-status" aria-label={operationStatusLabel(record.status)}><Icon name={record.status === "success" ? "checkCircle" : record.status === "error" ? "clear" : record.status === "attention" ? "git" : "refresh"} size={11}/></span>
             <span><strong>{record.name}</strong><small title={record.detail}>{record.detail}</small></span>
             <time>{record.status === "running" ? "进行中" : `${record.durationMs ?? 0} ms`}</time>
           </div>)}
-          {operations.length === 0 && <div className="git-operation-empty">当前尚无 P0 Git 操作</div>}
+          {operations.length === 0 && <div className="git-operation-empty">当前尚无 Git 操作</div>}
         </div>
       </div>;
+    }
+    if (repositoryOverlay.kind === "mergeBranch") {
+      const localSources = mergeSourceOptions.filter((branch) => branch.kind === "local");
+      const remoteSources = mergeSourceOptions.filter((branch) => branch.kind === "remote");
+      return <form ref={overlayRef} className="git-repository-popover git-branch-management-popover git-merge-popover" role="dialog" aria-label="合并分支" onSubmit={async (event) => {
+        event.preventDefault();
+        if (!root || !mergeSourceRef || !mergeWorktreeClean || mergeInProgress) return;
+        const succeeded = await runMergeOperation(mergeSourceRef);
+        if (succeeded) closeRepositoryOverlay(true);
+      }} {...common}>
+        <div className="git-repository-popover-title"><Icon name="git" size={13}/><strong>合并分支</strong></div>
+        <label htmlFor={`git-merge-source-${blockId}`}><RequiredFieldLabel>源分支</RequiredFieldLabel></label>
+        <select id={`git-merge-source-${blockId}`} aria-label="源分支" value={mergeSourceRef} onChange={(event) => setMergeSourceRef(event.target.value)}>
+          {localSources.length > 0 && <optgroup label="本地分支">{localSources.map((branch) => <option value={branch.refName} key={branch.refName}>{branch.name}</option>)}</optgroup>}
+          {remoteSources.length > 0 && <optgroup label="远程分支">{remoteSources.map((branch) => <option value={branch.refName} key={branch.refName}>{branch.name}</option>)}</optgroup>}
+        </select>
+        <div className="git-merge-direction" aria-label={`${selectedMergeSource?.name ?? "未选择"} → ${branchLabel}`}><span>{selectedMergeSource?.name ?? "未选择"}</span><strong aria-hidden="true">→</strong><span>{branchLabel}</span></div>
+        <p className={mergeWorktreeClean ? "" : "git-merge-precondition"}>{mergeWorktreeClean ? "使用 Git 默认策略合并；不会自动 Fetch 或 Stash。" : "开始合并前请先提交或清理工作区更改。"}</p>
+        <div className="git-branch-create-feedback" role={error ? "alert" : "status"} aria-hidden={!error}>{error?.message ?? "\u00a0"}</div>
+        <div className="git-branch-create-actions"><button type="button" className="secondary" onClick={() => closeRepositoryOverlay(true)}>取消</button><button type="submit" disabled={disabled || mergeInProgress || !mergeWorktreeClean || !mergeSourceRef}>合并到 {branchLabel}</button></div>
+      </form>;
+    }
+    if (repositoryOverlay.kind === "abortMerge") {
+      return <form ref={overlayRef} className="git-repository-popover git-branch-management-popover git-merge-abort-popover" role="dialog" aria-label="中止合并" onSubmit={async (event) => {
+        event.preventDefault();
+        if (!root || !mergeInProgress) return;
+        const succeeded = await runRecordedOperation("中止合并", () => abortMerge(root), "未完成的合并已中止");
+        if (succeeded) closeRepositoryOverlay(true);
+      }} {...common}>
+        <div className="git-repository-popover-title"><Icon name="trash" size={13}/><strong>中止合并</strong></div>
+        <p className="git-branch-management-danger">中止会恢复合并前状态，并可能放弃已经完成的冲突解决编辑。此操作不会执行额外 reset。</p>
+        <div className="git-branch-create-feedback" role={error ? "alert" : "status"} aria-hidden={!error}>{error?.message ?? "\u00a0"}</div>
+        <div className="git-branch-create-actions"><button type="button" className="secondary" autoFocus onClick={() => closeRepositoryOverlay(true)}>取消</button><button type="submit" className="danger" disabled={disabled || !mergeInProgress}>确认中止</button></div>
+      </form>;
     }
 
     const formTitle = repositoryOverlay.kind === "createBranchFrom"
@@ -799,13 +883,13 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
         <div className="git-repository-row">
           <Icon name="git" size={15}/>
           <span className="git-repository-name">{snapshot?.repositoryName ?? repositoryPath}</span>
-          {snapshot && <button ref={branchButtonRef} type="button" className="git-branch-trigger" aria-label={`切换分支，当前 ${branchLabel}`} title={`切换分支 · ${branchLabel}`} aria-haspopup="dialog" aria-expanded={Boolean(repositoryOverlay && branchOverlayKinds.has(repositoryOverlay.kind))} disabled={disabled} onClick={() => openRepositoryOverlay("branches")}>
+          {snapshot && <button ref={branchButtonRef} type="button" className="git-branch-trigger" aria-label={`切换分支，当前 ${branchLabel}`} title={mergeInProgress ? "完成或中止当前合并后才能切换分支" : `切换分支 · ${branchLabel}`} aria-haspopup="dialog" aria-expanded={Boolean(repositoryOverlay && branchOverlayKinds.has(repositoryOverlay.kind))} disabled={disabled || mergeInProgress} onClick={() => openRepositoryOverlay("branches")}>
             <Icon name="git" size={12}/><span>{branchLabel}</span>
           </button>}
           <div className="git-repository-actions">
             {snapshot?.head.upstream && <span className="git-repository-sync" aria-label={`领先 ${snapshot.head.ahead} 个提交，落后 ${snapshot.head.behind} 个提交`} title={`领先 ${snapshot.head.ahead} · 落后 ${snapshot.head.behind}`}><span>↑{snapshot.head.ahead}</span><span>↓{snapshot.head.behind}</span></span>}
-            <button type="button" className="git-repository-refresh" data-updating={busy === "fetch" || busy === "refresh" || undefined} aria-label={busy === "fetch" || busy === "refresh" ? "正在更新 Git 状态" : "刷新 Git 状态"} title={busy === "fetch" || busy === "refresh" ? "正在获取远程更新" : "获取远程更新并刷新"} disabled={disabled} onClick={() => void fetchAndRefresh()}><Icon name="refresh" size={13}/></button>
-            {snapshot && <button ref={repositoryActionsButtonRef} type="button" aria-label="Git 仓库操作" title="Pull、Push、同步、本地分支管理与操作记录" aria-haspopup="menu" aria-expanded={Boolean(repositoryOverlay && !branchOverlayKinds.has(repositoryOverlay.kind))} disabled={!remoteReady} onClick={() => openRepositoryOverlay("repositoryActions")}><Icon name="more" size={13}/></button>}
+            <button type="button" className="git-repository-refresh" data-updating={busy === "fetch" || busy === "refresh" || undefined} aria-label={busy === "fetch" || busy === "refresh" ? "正在更新 Git 状态" : "刷新 Git 状态"} title={mergeInProgress ? "完成或中止当前合并后才能获取远程更新" : busy === "fetch" || busy === "refresh" ? "正在获取远程更新" : "获取远程更新并刷新"} disabled={disabled || mergeInProgress} onClick={() => void fetchAndRefresh()}><Icon name="refresh" size={13}/></button>
+            {snapshot && <button ref={repositoryActionsButtonRef} type="button" aria-label="Git 仓库操作" title="Pull、Push、同步、合并、分支管理与操作记录" aria-haspopup="menu" aria-expanded={Boolean(repositoryOverlay && !branchOverlayKinds.has(repositoryOverlay.kind))} disabled={!remoteReady} onClick={() => openRepositoryOverlay("repositoryActions")}><Icon name="more" size={13}/></button>}
           </div>
         </div>
         {remote && runtime?.stale && <div className="git-feedback stale" role="status">连接已断开，当前内容可能已过期；重新连接后将自动刷新。</div>}
@@ -817,9 +901,14 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
       <button type="button" aria-label="暂存全部更改" title="暂存全部" disabled={disabled || !root || unstaged.length + conflicts.length === 0} onClick={() => root && void mutate("stageAll", () => stageAll(root))}><Icon name="plus" size={12}/></button>
       <button type="button" aria-label="取消暂存全部更改" title="取消暂存全部" disabled={disabled || !root || staged.length === 0} onClick={() => root && void mutate("unstageAll", () => unstageAll(root))}><Icon name="clear" size={12}/></button>
     </>}>
+      {mergeInProgress && <div className="git-merge-state" role="status">
+        <Icon name="git" size={15}/>
+        <div className="git-merge-state-copy"><strong>合并未完成</strong><span>{conflicts.length > 0 ? `${conflicts.length} 个冲突等待解决` : "冲突已解决，可以继续合并"}</span></div>
+        <div className="git-merge-state-actions"><button type="button" className="secondary" disabled={disabled || conflicts.length > 0} onClick={() => root && void runRecordedOperation("继续合并", () => continueMerge(root), "合并提交已完成")}>继续合并</button><button ref={mergeAbortButtonRef} type="button" className="danger" disabled={disabled} onClick={() => openRepositoryOverlay("abortMerge")}>中止合并</button></div>
+      </div>}
       <div className="git-commit-box">
         <textarea ref={messageRef} aria-label="提交消息" rows={1} data-max-rows="5" value={message} maxLength={10_000} placeholder="提交消息" onChange={(event) => setMessage(event.target.value)}/>
-        <button type="button" className="git-commit-button" disabled={disabled || !root || !message.trim() || staged.length === 0} onClick={() => root && void mutate("commit", () => commit(root, message.trim()), true)}>提交</button>
+        <button type="button" className="git-commit-button" disabled={disabled || mergeInProgress || !root || !message.trim() || staged.length === 0} onClick={() => root && void mutate("commit", () => commit(root, message.trim()), true)}>提交</button>
       </div>
       {error && <div className="git-feedback" role="alert">{error.message}</div>}
       <div className="git-change-scroll" role="list" aria-label="Git 更改">
@@ -1014,6 +1103,7 @@ function visibleOperationDetail(detail: string): string {
 function operationStatusLabel(status: GitOperationRecord["status"]): string {
   if (status === "running") return "进行中";
   if (status === "success") return "成功";
+  if (status === "attention") return "需要处理";
   return "失败";
 }
 

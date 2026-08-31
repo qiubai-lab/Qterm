@@ -5,7 +5,7 @@ import { GitPane } from "./GitPane";
 import type { GitSnapshot } from "../lib/tauri/git";
 
 const api = vi.hoisted(() => ({
-  available: vi.fn(), select: vi.fn(), snapshot: vi.fn(), fetch: vi.fn(), pull: vi.fn(), push: vi.fn(), initialize: vi.fn(), stage: vi.fn(), stageAll: vi.fn(), unstage: vi.fn(), unstageAll: vi.fn(), commit: vi.fn(), commitFiles: vi.fn(), createBranch: vi.fn(), createBranchFrom: vi.fn(), renameBranch: vi.fn(), deleteBranch: vi.fn(), switchBranch: vi.fn(), trackRemoteBranch: vi.fn(), remote: vi.fn(), remoteCommitFiles: vi.fn(),
+  available: vi.fn(), select: vi.fn(), snapshot: vi.fn(), fetch: vi.fn(), pull: vi.fn(), push: vi.fn(), initialize: vi.fn(), stage: vi.fn(), stageAll: vi.fn(), unstage: vi.fn(), unstageAll: vi.fn(), commit: vi.fn(), commitFiles: vi.fn(), createBranch: vi.fn(), createBranchFrom: vi.fn(), renameBranch: vi.fn(), deleteBranch: vi.fn(), switchBranch: vi.fn(), trackRemoteBranch: vi.fn(), mergeBranch: vi.fn(), continueMerge: vi.fn(), abortMerge: vi.fn(), remote: vi.fn(), remoteCommitFiles: vi.fn(),
 }));
 
 vi.mock("../lib/tauri/git", () => ({
@@ -28,6 +28,9 @@ vi.mock("../lib/tauri/git", () => ({
   deleteGitBranch: api.deleteBranch,
   switchGitBranch: api.switchBranch,
   trackGitRemoteBranch: api.trackRemoteBranch,
+  mergeGitBranch: api.mergeBranch,
+  continueGitMerge: api.continueMerge,
+  abortGitMerge: api.abortMerge,
   executeRemoteGit: api.remote,
   loadRemoteGitCommitFiles: api.remoteCommitFiles,
   gitError: (error: unknown) => error as { code: string; message: string },
@@ -44,6 +47,7 @@ const snapshot: GitSnapshot = {
   branches: [{ refName: "refs/heads/main", name: "main", kind: "local", oid: "abcdef012345", current: true, upstream: "origin/main", upstreamRef: "refs/remotes/origin/main" }],
   remotes: ["origin"],
   commits: [{ oid: "abcdef012345", parents: [], decorations: ["HEAD -> main"], subject: "feat: initial", body: "Introduces the first Qterm workflow.\n\nKeeps the terminal interaction compact.", author: "Qterm", timestamp: 1_700_000_000 }],
+  mergeInProgress: false,
 };
 
 describe("GitPane", () => {
@@ -62,6 +66,9 @@ describe("GitPane", () => {
     api.deleteBranch.mockResolvedValue(snapshot);
     api.switchBranch.mockResolvedValue(snapshot);
     api.trackRemoteBranch.mockResolvedValue(snapshot);
+    api.mergeBranch.mockResolvedValue(snapshot);
+    api.continueMerge.mockResolvedValue(snapshot);
+    api.abortMerge.mockResolvedValue(snapshot);
     api.commitFiles.mockResolvedValue([
       { path: "src/new-file.ts", originalPath: null, status: "A" },
       { path: "src/renamed.ts", originalPath: "src/old.ts", status: "R100" },
@@ -673,6 +680,103 @@ describe("GitPane", () => {
     fireEvent.change(within(dialog).getByRole("combobox", { name: "待删除分支" }), { target: { value: "refs/heads/feature/old" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "确认安全删除" }));
     await waitFor(() => expect(api.deleteBranch).toHaveBeenCalledWith("D:/work/project", "refs/heads/feature/old"));
+  });
+
+  it("confirms merge direction for local or remote refs and records conflicts as attention", async () => {
+    const cleanSnapshot = {
+      ...snapshot,
+      changes: [],
+      branches: [
+        ...snapshot.branches,
+        { refName: "refs/heads/feature/local", name: "feature/local", kind: "local", oid: "111111111111", current: false, upstream: null, upstreamRef: null },
+        { refName: "refs/remotes/origin/release", name: "origin/release", kind: "remote", oid: "222222222222", current: false, upstream: null, upstreamRef: null },
+      ],
+    } satisfies GitSnapshot;
+    const conflicted = {
+      ...cleanSnapshot,
+      mergeInProgress: true,
+      changes: [{ path: "src/conflict.ts", originalPath: null, status: "!", staged: false, conflict: true }],
+    } satisfies GitSnapshot;
+    api.snapshot.mockResolvedValueOnce(cleanSnapshot);
+    api.mergeBranch.mockResolvedValueOnce(conflicted);
+    render(<GitPane blockId="git-1" target={{ type: "local", path: "D:/work/project" }} visible onTargetChange={vi.fn()}/>);
+    await screen.findByText("project");
+
+    fireEvent.click(screen.getByRole("button", { name: "Git 仓库操作" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "合并分支…" }));
+    const dialog = screen.getByRole("dialog", { name: "合并分支" });
+    const source = within(dialog).getByRole("combobox", { name: "源分支" });
+    expect(within(source).queryByRole("option", { name: /main/ })).not.toBeInTheDocument();
+    fireEvent.change(source, { target: { value: "refs/remotes/origin/release" } });
+    expect(within(dialog).getByLabelText("origin/release → main")).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "合并到 main" }));
+    await waitFor(() => expect(api.mergeBranch).toHaveBeenCalledWith("D:/work/project", "refs/remotes/origin/release"));
+
+    expect(await screen.findByText("合并未完成")).toBeInTheDocument();
+    expect(screen.getByText("1 个冲突等待解决")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "继续合并" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Git 仓库操作" }));
+    expect(screen.getByRole("menuitem", { name: "拉取" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("menuitem", { name: "操作记录" }));
+    expect(within(screen.getByRole("dialog", { name: "Git 操作记录" })).getByLabelText("需要处理")).toBeInTheDocument();
+  });
+
+  it("requires a clean worktree before merge and explains the disabled confirmation", async () => {
+    const dirtySnapshot = {
+      ...snapshot,
+      branches: [
+        ...snapshot.branches,
+        { refName: "refs/heads/feature/dirty", name: "feature/dirty", kind: "local", oid: "111111111111", current: false, upstream: null, upstreamRef: null },
+      ],
+    } satisfies GitSnapshot;
+    api.snapshot.mockResolvedValueOnce(dirtySnapshot);
+    render(<GitPane blockId="git-1" target={{ type: "local", path: "D:/work/project" }} visible onTargetChange={vi.fn()}/>);
+    await screen.findByText("project");
+    fireEvent.click(screen.getByRole("button", { name: "Git 仓库操作" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "合并分支…" }));
+    const dialog = screen.getByRole("dialog", { name: "合并分支" });
+    expect(within(dialog).getByText("开始合并前请先提交或清理工作区更改。")).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "合并到 main" })).toBeDisabled();
+    expect(api.mergeBranch).not.toHaveBeenCalled();
+  });
+
+  it("continues a resolved merge and confirms abort while restoring focus", async () => {
+    const conflicted = {
+      ...snapshot,
+      mergeInProgress: true,
+      changes: [{ path: "src/conflict.ts", originalPath: null, status: "!", staged: false, conflict: true }],
+    } satisfies GitSnapshot;
+    const resolved = {
+      ...conflicted,
+      changes: [{ path: "src/conflict.ts", originalPath: null, status: "M", staged: true, conflict: false }],
+    } satisfies GitSnapshot;
+    const completed = { ...snapshot, changes: [], mergeInProgress: false } satisfies GitSnapshot;
+    api.snapshot.mockResolvedValueOnce(conflicted);
+    api.stage.mockResolvedValueOnce(resolved);
+    api.continueMerge.mockResolvedValueOnce(completed);
+    const view = render(<GitPane blockId="git-1" target={{ type: "local", path: "D:/work/project" }} visible onTargetChange={vi.fn()}/>);
+    await screen.findByText("合并未完成");
+    fireEvent.click(screen.getByRole("button", { name: "暂存已解决文件 src/conflict.ts" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "继续合并" })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: "继续合并" }));
+    await waitFor(() => expect(api.continueMerge).toHaveBeenCalledWith("D:/work/project"));
+    expect(screen.queryByText("合并未完成")).not.toBeInTheDocument();
+
+    view.unmount();
+    api.snapshot.mockResolvedValueOnce(conflicted);
+    api.abortMerge.mockResolvedValueOnce(completed);
+    render(<GitPane blockId="git-2" target={{ type: "local", path: "D:/work/project" }} visible onTargetChange={vi.fn()}/>);
+    await screen.findByText("合并未完成");
+    const abort = screen.getByRole("button", { name: "中止合并" });
+    fireEvent.click(abort);
+    const confirmation = screen.getByRole("dialog", { name: "中止合并" });
+    expect(within(confirmation).getByText(/可能放弃已经完成的冲突解决编辑/)).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("dialog", { name: "中止合并" })).not.toBeInTheDocument();
+    await waitFor(() => expect(abort).toHaveFocus());
+    fireEvent.click(abort);
+    fireEvent.click(within(screen.getByRole("dialog", { name: "中止合并" })).getByRole("button", { name: "确认中止" }));
+    await waitFor(() => expect(api.abortMerge).toHaveBeenCalledWith("D:/work/project"));
   });
 
   it("records sync partial success without losing the pulled snapshot", async () => {

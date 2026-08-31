@@ -65,6 +65,16 @@ pub enum RemoteGitAction {
         repository: String,
         ref_name: String,
     },
+    MergeBranch {
+        repository: String,
+        source_ref: String,
+    },
+    ContinueMerge {
+        repository: String,
+    },
+    AbortMerge {
+        repository: String,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -131,6 +141,7 @@ pub struct GitSnapshot {
     pub branches: Vec<GitBranch>,
     pub remotes: Vec<String>,
     pub commits: Vec<GitCommit>,
+    pub merge_in_progress: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -159,9 +170,10 @@ impl RemoteGitAction {
                 validate_remote_repository_path(repository)?;
                 validate_paths(paths)
             }
-            Self::StageAll { repository } | Self::UnstageAll { repository } => {
-                validate_remote_repository_path(repository)
-            }
+            Self::StageAll { repository }
+            | Self::UnstageAll { repository }
+            | Self::ContinueMerge { repository }
+            | Self::AbortMerge { repository } => validate_remote_repository_path(repository),
             Self::Fetch { repository } | Self::Pull { repository } => {
                 validate_remote_repository_path(repository)
             }
@@ -214,6 +226,13 @@ impl RemoteGitAction {
             } => {
                 validate_remote_repository_path(repository)?;
                 validate_remote_branch_ref(ref_name)
+            }
+            Self::MergeBranch {
+                repository,
+                source_ref,
+            } => {
+                validate_remote_repository_path(repository)?;
+                validate_branch_source_ref(source_ref)
             }
         }
     }
@@ -285,6 +304,62 @@ pub fn validate_branch_source_ref(ref_name: &str) -> Result<(), GitError> {
     }
 }
 
+pub fn validate_merge_preconditions(
+    snapshot: &GitSnapshot,
+    source_ref: &str,
+) -> Result<(), GitError> {
+    validate_branch_source_ref(source_ref)?;
+    if snapshot.head.detached || snapshot.head.unborn {
+        return Err(GitError::Conflict(
+            "当前 HEAD 未指向可合并的本地分支".into(),
+        ));
+    }
+    if snapshot.merge_in_progress {
+        return Err(GitError::Conflict("当前仓库已有未完成的合并".into()));
+    }
+    if !snapshot.changes.is_empty() {
+        return Err(GitError::Conflict(
+            "开始合并前请先提交或清理工作区更改".into(),
+        ));
+    }
+    let current = snapshot
+        .branches
+        .iter()
+        .find(|branch| branch.kind == GitBranchKind::Local && branch.current)
+        .ok_or_else(|| GitError::Conflict("当前 HEAD 未指向可合并的本地分支".into()))?;
+    if current.ref_name == source_ref {
+        return Err(GitError::Conflict("不能将当前分支合并到自身".into()));
+    }
+    if !snapshot
+        .branches
+        .iter()
+        .any(|branch| branch.ref_name == source_ref)
+    {
+        return Err(GitError::InvalidInput);
+    }
+    Ok(())
+}
+
+pub fn validate_continue_merge(snapshot: &GitSnapshot) -> Result<(), GitError> {
+    if !snapshot.merge_in_progress {
+        return Err(GitError::Conflict("当前仓库没有未完成的合并".into()));
+    }
+    if snapshot.changes.iter().any(|change| change.conflict) {
+        return Err(GitError::Conflict(
+            "仍有未解决的冲突，解决并暂存后才能继续合并".into(),
+        ));
+    }
+    Ok(())
+}
+
+pub fn validate_abort_merge(snapshot: &GitSnapshot) -> Result<(), GitError> {
+    if snapshot.merge_in_progress {
+        Ok(())
+    } else {
+        Err(GitError::Conflict("当前仓库没有未完成的合并".into()))
+    }
+}
+
 pub fn validate_remote_name(name: &str) -> Result<(), GitError> {
     validate_branch_name(name)
 }
@@ -335,9 +410,10 @@ pub fn validate_paths(paths: &[String]) -> Result<(), GitError> {
 #[cfg(test)]
 mod tests {
     use super::{
-        RemoteGitAction, validate_branch_name, validate_branch_source_ref, validate_commit_message,
-        validate_commit_oid, validate_local_branch_ref, validate_paths, validate_remote_branch_ref,
-        validate_remote_name,
+        GitBranch, GitBranchKind, GitHead, GitSnapshot, RemoteGitAction, validate_branch_name,
+        validate_branch_source_ref, validate_commit_message, validate_commit_oid,
+        validate_local_branch_ref, validate_merge_preconditions, validate_paths,
+        validate_remote_branch_ref, validate_remote_name,
     };
 
     #[test]
@@ -478,5 +554,103 @@ mod tests {
             .validate()
             .is_err()
         );
+        assert!(
+            RemoteGitAction::MergeBranch {
+                repository: "/srv/repo".into(),
+                source_ref: "refs/remotes/origin/feature/test".into(),
+            }
+            .validate()
+            .is_ok()
+        );
+        assert!(
+            RemoteGitAction::MergeBranch {
+                repository: "/srv/repo".into(),
+                source_ref: "--strategy=ours".into(),
+            }
+            .validate()
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn merge_preconditions_require_a_clean_current_branch_and_distinct_existing_source() {
+        let snapshot = merge_snapshot();
+        assert!(validate_merge_preconditions(&snapshot, "refs/heads/feature/test").is_ok());
+        assert!(
+            validate_merge_preconditions(&snapshot, "refs/remotes/origin/feature/test").is_ok()
+        );
+        for source in ["refs/heads/main", "refs/heads/missing", "refs/tags/v1"] {
+            assert!(
+                validate_merge_preconditions(&snapshot, source).is_err(),
+                "{source}"
+            );
+        }
+
+        let mut dirty = snapshot.clone();
+        dirty.changes.push(super::GitChange {
+            path: "dirty.txt".into(),
+            original_path: None,
+            status: "U".into(),
+            staged: false,
+            conflict: false,
+        });
+        assert!(validate_merge_preconditions(&dirty, "refs/heads/feature/test").is_err());
+
+        let mut merging = snapshot.clone();
+        merging.merge_in_progress = true;
+        assert!(validate_merge_preconditions(&merging, "refs/heads/feature/test").is_err());
+
+        let mut detached = snapshot;
+        detached.head.detached = true;
+        assert!(validate_merge_preconditions(&detached, "refs/heads/feature/test").is_err());
+
+        let mut unborn = merge_snapshot();
+        unborn.head.unborn = true;
+        unborn.head.oid = None;
+        assert!(validate_merge_preconditions(&unborn, "refs/heads/feature/test").is_err());
+    }
+
+    fn merge_snapshot() -> GitSnapshot {
+        let branch = |ref_name: &str, name: &str, kind, current| GitBranch {
+            ref_name: ref_name.into(),
+            name: name.into(),
+            kind,
+            oid: "0123456789abcdef0123456789abcdef01234567".into(),
+            current,
+            upstream: None,
+            upstream_ref: None,
+        };
+        GitSnapshot {
+            repository_path: "/srv/repo".into(),
+            repository_name: "repo".into(),
+            head: GitHead {
+                name: Some("main".into()),
+                oid: Some("0123456789abcdef0123456789abcdef01234567".into()),
+                detached: false,
+                unborn: false,
+                upstream: None,
+                ahead: 0,
+                behind: 0,
+            },
+            changes: Vec::new(),
+            branches: vec![
+                branch("refs/heads/main", "main", GitBranchKind::Local, true),
+                branch(
+                    "refs/heads/feature/test",
+                    "feature/test",
+                    GitBranchKind::Local,
+                    false,
+                ),
+                branch(
+                    "refs/remotes/origin/feature/test",
+                    "origin/feature/test",
+                    GitBranchKind::Remote,
+                    false,
+                ),
+            ],
+            remotes: vec!["origin".into()],
+            commits: Vec::new(),
+            merge_in_progress: false,
+        }
     }
 }

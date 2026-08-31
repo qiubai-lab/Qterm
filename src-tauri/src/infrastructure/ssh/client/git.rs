@@ -5,8 +5,9 @@ use russh::{ChannelMsg, client};
 use crate::{
     domain::git::{
         GitBranch, GitBranchKind, GitCommitFile, GitError, GitSnapshot, RemoteGitAction,
-        find_tracking_local_branch, validate_branch_name, validate_branch_source_ref,
-        validate_commit_oid, validate_local_branch_ref, validate_remote_name,
+        find_tracking_local_branch, validate_abort_merge, validate_branch_name,
+        validate_branch_source_ref, validate_commit_oid, validate_continue_merge,
+        validate_local_branch_ref, validate_merge_preconditions, validate_remote_name,
         validate_remote_repository_path,
     },
     infrastructure::git_cli::{
@@ -142,6 +143,12 @@ pub(super) async fn run_remote_git_action(
             repository,
             ref_name,
         } => track_remote_branch(handle, &repository, &ref_name).await,
+        RemoteGitAction::MergeBranch {
+            repository,
+            source_ref,
+        } => merge_branch(handle, &repository, &source_ref).await,
+        RemoteGitAction::ContinueMerge { repository } => continue_merge(handle, &repository).await,
+        RemoteGitAction::AbortMerge { repository } => abort_merge(handle, &repository).await,
     }
 }
 
@@ -221,6 +228,7 @@ async fn snapshot(
         READ_TIMEOUT,
     )
     .await?;
+    let merge_in_progress = merge_in_progress(handle, &repository).await?;
     let branches = run_git(
         handle,
         &repository,
@@ -259,6 +267,7 @@ async fn snapshot(
         branches: parse_branches(&branches.stdout),
         remotes: parse_remotes(&remotes.stdout),
         commits,
+        merge_in_progress,
     })
 }
 
@@ -445,6 +454,76 @@ async fn track_remote_branch(
     let args = format!("switch {}", posix_literal(&branch_name));
     run_git(handle, repository, &args, Vec::new(), MUTATION_TIMEOUT).await?;
     snapshot(handle, repository).await
+}
+
+async fn merge_branch(
+    handle: &client::Handle<ClientHandler>,
+    repository: &str,
+    source_ref: &str,
+) -> Result<GitSnapshot, GitError> {
+    let current = snapshot(handle, repository).await?;
+    validate_merge_preconditions(&current, source_ref)?;
+    let args = format!("merge --no-edit -- {}", posix_literal(source_ref));
+    match run_git(handle, repository, &args, Vec::new(), MUTATION_TIMEOUT).await {
+        Ok(_) => snapshot(handle, repository).await,
+        Err(failure) => match snapshot(handle, repository).await {
+            Ok(snapshot) if snapshot.merge_in_progress => Ok(snapshot),
+            _ => Err(failure),
+        },
+    }
+}
+
+async fn continue_merge(
+    handle: &client::Handle<ClientHandler>,
+    repository: &str,
+) -> Result<GitSnapshot, GitError> {
+    let current = snapshot(handle, repository).await?;
+    validate_continue_merge(&current)?;
+    run_git(
+        handle,
+        repository,
+        "merge --continue",
+        Vec::new(),
+        MUTATION_TIMEOUT,
+    )
+    .await?;
+    snapshot(handle, repository).await
+}
+
+async fn abort_merge(
+    handle: &client::Handle<ClientHandler>,
+    repository: &str,
+) -> Result<GitSnapshot, GitError> {
+    let current = snapshot(handle, repository).await?;
+    validate_abort_merge(&current)?;
+    run_git(
+        handle,
+        repository,
+        "merge --abort",
+        Vec::new(),
+        MUTATION_TIMEOUT,
+    )
+    .await?;
+    snapshot(handle, repository).await
+}
+
+async fn merge_in_progress(
+    handle: &client::Handle<ClientHandler>,
+    repository: &str,
+) -> Result<bool, GitError> {
+    match run_git(
+        handle,
+        repository,
+        "rev-parse --verify -q MERGE_HEAD",
+        Vec::new(),
+        READ_TIMEOUT,
+    )
+    .await
+    {
+        Ok(_) => Ok(true),
+        Err(GitError::CommandFailed(_)) => Ok(false),
+        Err(error) => Err(error),
+    }
 }
 
 async fn has_head(handle: &client::Handle<ClientHandler>, repository: &str) -> bool {

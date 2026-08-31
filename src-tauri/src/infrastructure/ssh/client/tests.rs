@@ -393,6 +393,16 @@ async fn git_actions_require_a_connected_git_purpose_session_owned_by_the_profil
             repository: "/srv/project".into(),
             remote: Some("origin".into()),
         },
+        crate::domain::git::RemoteGitAction::MergeBranch {
+            repository: "/srv/project".into(),
+            source_ref: "refs/remotes/origin/feature/test".into(),
+        },
+        crate::domain::git::RemoteGitAction::ContinueMerge {
+            repository: "/srv/project".into(),
+        },
+        crate::domain::git::RemoteGitAction::AbortMerge {
+            repository: "/srv/project".into(),
+        },
     ] {
         let expected = action.clone();
         let action_request = {

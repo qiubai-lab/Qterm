@@ -163,6 +163,24 @@ impl<E: GitExecutor> GitService<E> {
         self.executor
             .track_remote_branch(&input_path(repository)?, &ref_name)
     }
+
+    pub fn merge_branch(
+        &self,
+        repository: String,
+        source_ref: String,
+    ) -> Result<GitSnapshot, GitError> {
+        validate_branch_source_ref(&source_ref)?;
+        self.executor
+            .merge_branch(&input_path(repository)?, &source_ref)
+    }
+
+    pub fn continue_merge(&self, repository: String) -> Result<GitSnapshot, GitError> {
+        self.executor.continue_merge(&input_path(repository)?)
+    }
+
+    pub fn abort_merge(&self, repository: String) -> Result<GitSnapshot, GitError> {
+        self.executor.abort_merge(&input_path(repository)?)
+    }
 }
 
 fn input_path(value: String) -> Result<PathBuf, GitError> {

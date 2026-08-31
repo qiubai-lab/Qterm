@@ -9,7 +9,7 @@ export interface GitCommit { oid: string; parents: string[]; decorations: string
 export interface GitCommitFile { path: string; originalPath: string | null; status: string }
 export interface GitDirectoryEntry { name: string; path: string; isSymlink: boolean }
 export interface GitDirectoryListing { path: string; entries: GitDirectoryEntry[] }
-export interface GitSnapshot { repositoryPath: string; repositoryName: string; head: GitHead; changes: GitChange[]; branches: GitBranch[]; remotes: string[]; commits: GitCommit[] }
+export interface GitSnapshot { repositoryPath: string; repositoryName: string; head: GitHead; changes: GitChange[]; branches: GitBranch[]; remotes: string[]; commits: GitCommit[]; mergeInProgress: boolean }
 
 export type RemoteGitAction =
   | { type: "snapshot"; path: string }
@@ -27,7 +27,10 @@ export type RemoteGitAction =
   | { type: "fetch"; repository: string }
   | { type: "pull"; repository: string }
   | { type: "push"; repository: string; remote?: string | null }
-  | { type: "trackRemoteBranch"; repository: string; refName: string };
+  | { type: "trackRemoteBranch"; repository: string; refName: string }
+  | { type: "mergeBranch"; repository: string; sourceRef: string }
+  | { type: "continueMerge"; repository: string }
+  | { type: "abortMerge"; repository: string };
 
 export function gitAvailable(): Promise<boolean> { return invoke("git_available"); }
 export function selectGitRepositoryDirectory(initialPath?: string | null): Promise<string | null> { return invoke("git_select_repository_directory", { input: { initialPath: initialPath ?? null } }); }
@@ -48,6 +51,9 @@ export function renameGitBranch(repository: string, refName: string, newName: st
 export function deleteGitBranch(repository: string, refName: string): Promise<GitSnapshot> { return invoke("git_delete_branch", { input: { repository, refName } }); }
 export function switchGitBranch(repository: string, name: string): Promise<GitSnapshot> { return invoke("git_switch_branch", { input: { repository, name } }); }
 export function trackGitRemoteBranch(repository: string, refName: string): Promise<GitSnapshot> { return invoke("git_track_remote_branch", { input: { repository, refName } }); }
+export function mergeGitBranch(repository: string, sourceRef: string): Promise<GitSnapshot> { return invoke("git_merge_branch", { input: { repository, sourceRef } }); }
+export function continueGitMerge(repository: string): Promise<GitSnapshot> { return invoke("git_continue_merge", { input: { repository } }); }
+export function abortGitMerge(repository: string): Promise<GitSnapshot> { return invoke("git_abort_merge", { input: { repository } }); }
 
 export function connectGitSession(input: SessionConnectInput, onEvent: (event: SessionEvent) => void): Promise<string> {
   return invoke<string>("git_session_connect", { input, onEvent: new Channel<SessionEvent>(onEvent) });
