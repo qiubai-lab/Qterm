@@ -3,7 +3,22 @@ import { describe, expect, it } from "vitest";
 // @ts-expect-error Node built-in types are intentionally absent from the browser production config.
 import { readFileSync } from "node:fs";
 
-const styles = readFileSync("src/git/git.css", "utf8").replace(/\r\n/g, "\n");
+const gitStyleFiles = [
+  "gitShell.css",
+  "gitGraph.css",
+  "gitTargetConfig.css",
+  "gitBranchOverlays.css",
+  "gitMergeOverlays.css",
+  "gitOperationOverlay.css",
+  "gitRepositoryPicker.css",
+  "gitRepositoryHistory.css",
+  "gitMedia.css",
+] as const;
+const gitStyleManifest = readFileSync("src/git/git.css", "utf8").replace(/\r\n/g, "\n");
+const styles = gitStyleFiles
+  .map((file) => readFileSync(`src/git/styles/${file}`, "utf8"))
+  .join("\n")
+  .replace(/\r\n/g, "\n");
 const cyberTheme = readFileSync("src/app/styles/themes/cyberpunk.css", "utf8").replace(/\r\n/g, "\n");
 const fileBrowserStyles = readFileSync("src/files/fileBrowser.css", "utf8").replace(/\r\n/g, "\n");
 
@@ -24,6 +39,16 @@ function lastDeclarations(selector: string): string {
 }
 
 describe("Git pane style contracts", () => {
+  it("loads focused style modules in their original cascade order", () => {
+    const imports = gitStyleManifest.match(/@import "\.\/styles\/(.+?)";/g) ?? [];
+    expect(imports).toEqual(gitStyleFiles.map((file) => `@import "./styles/${file}";`));
+
+    for (const file of gitStyleFiles) {
+      const lineCount = readFileSync(`src/git/styles/${file}`, "utf8").split(/\r?\n/).length - 1;
+      expect(lineCount, file).toBeLessThanOrEqual(900);
+    }
+  });
+
   it("gives repository history one bounded themed popover scroller", () => {
     const popover = declarations(".git-repository-history-popover");
     expect(popover).toContain("position: fixed");

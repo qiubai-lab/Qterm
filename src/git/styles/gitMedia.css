@@ -1,0 +1,109 @@
+@media (max-height: 560px) {
+  .git-changes-section {
+    flex-basis: 112px;
+  }
+
+  .git-graph-section {
+    flex-basis: 92px;
+  }
+
+  .git-commit-box {
+    margin-top: 5px;
+    padding: 5px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .git-section {
+    transition: none;
+  }
+
+  .git-section-body {
+    transition: opacity 100ms ease-out;
+  }
+
+  .git-section-content {
+    transform: none;
+    transition: none;
+  }
+
+  .git-section-toggle svg {
+    transition: none;
+  }
+
+  .git-repository-popover {
+    animation: none;
+  }
+
+  .git-repository-history-popover {
+    animation: none;
+  }
+
+  .git-commit-tooltip {
+    animation: none;
+  }
+
+  .git-commit-files,
+  .git-commit-files-state,
+  .git-commit-files-spinner {
+    animation: none;
+  }
+
+  .git-commit-details-shell,
+  .git-commit-file-panel {
+    transition: none;
+  }
+
+  .git-commit-file-panel {
+    transform: none;
+  }
+
+  .git-commit-expander svg {
+    transition: none;
+  }
+
+  .git-branch-trigger,
+  .git-repository-history-item,
+  .git-branch-popover [role="option"],
+  .git-commit-row,
+  .git-repository-picker-row-shell button,
+  .git-repository-picker-toolbar > button {
+    transform: none;
+    transition: none;
+  }
+
+  .git-repository-picker-spinner,
+  .git-repository-refresh[data-updating="true"] svg {
+    animation: none;
+  }
+
+  .git-merge-flow-packet {
+    animation: none;
+    opacity: .72;
+    transform: translateX(0);
+  }
+}
+
+@media (prefers-contrast: more) {
+  .git-commit-row[aria-pressed="true"] :is(.git-commit-card) {
+    border-color: var(--selection-marker);
+    box-shadow: inset 0 0 0 1px var(--selection-marker);
+  }
+
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .git-commit-row[aria-pressed="true"] :is(.git-commit-card) {
+    background: color-mix(in srgb, var(--selection-marker) 9%, var(--raised));
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  .git-commit-tooltip,
+  .git-repository-history-popover,
+  .git-repository-picker-loading {
+    background: var(--raised);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}

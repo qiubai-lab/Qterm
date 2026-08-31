@@ -1,0 +1,126 @@
+.git-branch-create-actions button.danger {
+  border-color: color-mix(in srgb, var(--danger) 68%, var(--border));
+  color: var(--primary-action-contrast);
+  background: var(--danger);
+}
+
+.git-operation-popover {
+  width: 320px;
+  min-width: min(260px, calc(100vw - 16px));
+  padding: 0;
+  background: color-mix(in srgb, var(--raised) 98%, var(--canvas));
+}
+
+.git-operation-popover .git-repository-popover-title > span {
+  margin-left: auto;
+  color: var(--dim);
+  font: 8px/1 SFMono-Regular, Consolas, monospace;
+}
+
+.git-operation-list {
+  display: flex;
+  min-height: 64px;
+  max-height: min(260px, calc(100vh - 88px));
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 8px 4px 4px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+}
+
+.git-operation-list::-webkit-scrollbar {
+  width: 5px;
+}
+
+.git-operation-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.git-operation-list::-webkit-scrollbar-thumb {
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: var(--scrollbar-thumb);
+  background-clip: padding-box;
+}
+
+.git-operation-row {
+  display: grid;
+  min-height: 42px;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 6px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--raised) 48%, transparent);
+}
+
+.git-operation-row > span:nth-child(2) {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.git-operation-row strong,
+.git-operation-row small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.git-operation-row strong {
+  color: var(--text);
+  font-size: 9.5px;
+}
+
+.git-operation-row small,
+.git-operation-row time {
+  color: var(--dim);
+  font: 8px/1.25 SFMono-Regular, Consolas, monospace;
+}
+
+.git-operation-row[data-status="success"] .git-operation-status {
+  color: var(--accent);
+}
+
+.git-operation-row[data-status="error"] {
+  border-color: color-mix(in srgb, var(--danger) 30%, transparent);
+  color: var(--danger);
+}
+
+.git-operation-row[data-status="error"] .git-operation-status {
+  color: var(--danger);
+}
+
+.git-operation-row[data-status="attention"] .git-operation-status {
+  color: var(--warning);
+}
+
+.git-operation-row[data-status="running"] .git-operation-status {
+  color: var(--accent);
+  animation: git-repository-picker-spin 700ms linear infinite;
+}
+
+.git-operation-empty {
+  display: grid;
+  min-height: 56px;
+  place-items: center;
+  color: var(--dim);
+  font-size: 9px;
+}
+
+@keyframes git-repository-popover-in {
+  from { opacity: 0; transform: translateY(-3px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes git-commit-tooltip-in {
+  from { opacity: 0; transform: translateY(var(--git-commit-tooltip-enter-y)) scale(.985); }
+  to { opacity: 1; transform: none; }
+}
+
