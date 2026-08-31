@@ -179,6 +179,8 @@ describe("GitPane", () => {
     expect(current.querySelector('[data-kind="head"]')).toHaveTextContent("main");
     expect(current.querySelector('[data-kind="head"]')).not.toHaveTextContent("HEAD ->");
     expect(older.querySelector('[data-kind="remote"]')).toHaveTextContent("origin/archive");
+    expect(current.querySelector('[data-kind="head"] .git-decoration-label')).toHaveTextContent("main");
+    expect(older.querySelector('[data-kind="remote"] .git-decoration-label')).toHaveTextContent("origin/archive");
 
     fireEvent.click(older);
     expect(older).toHaveAttribute("aria-pressed", "true");
@@ -705,11 +707,39 @@ describe("GitPane", () => {
     fireEvent.click(screen.getByRole("button", { name: "Git 仓库操作" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "合并分支…" }));
     const dialog = screen.getByRole("dialog", { name: "合并分支" });
-    const source = within(dialog).getByRole("combobox", { name: "源分支" });
+    const sourceGroup = within(dialog).getByRole("group", { name: "源分支" });
+    const targetGroup = within(dialog).getByRole("group", { name: "目标分支" });
+    expect(sourceGroup).toBeInTheDocument();
+    expect(targetGroup).toHaveTextContent("当前main");
+    expect(sourceGroup.querySelector(".git-merge-node-title")).toHaveTextContent("源分支");
+    expect(targetGroup.querySelector(".git-merge-node-title")).toHaveTextContent("目标分支");
+    const source = within(sourceGroup).getByRole("combobox", { name: "源分支" });
+    expect(within(targetGroup).queryByRole("combobox")).not.toBeInTheDocument();
+    expect(within(targetGroup).getByLabelText("目标分支 main")).toHaveTextContent("main");
     expect(within(source).queryByRole("option", { name: /main/ })).not.toBeInTheDocument();
     fireEvent.change(source, { target: { value: "refs/remotes/origin/release" } });
+    expect(sourceGroup).toHaveTextContent("远程");
     expect(within(dialog).getByLabelText("origin/release → main")).toBeInTheDocument();
-    fireEvent.click(within(dialog).getByRole("button", { name: "合并到 main" }));
+    expect(within(dialog).getByText("使用 Git 默认策略合并；不会自动 Fetch 或 Stash。")).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "取消合并" })).toBeInTheDocument();
+    const requestMerge = within(dialog).getByRole("button", { name: "合并到 main" });
+    requestMerge.focus();
+    fireEvent.click(requestMerge);
+    let confirmation = screen.getByRole("dialog", { name: "确认合并分支？" });
+    expect(confirmation.closest(".dialog-scrim")).toHaveClass("git-merge-confirmation-scrim");
+    expect(dialog).toHaveAttribute("inert");
+    expect(dialog).toHaveAttribute("aria-hidden", "true");
+    expect(confirmation).toHaveTextContent("origin/release → main");
+    expect(within(confirmation).getByRole("button", { name: "返回" })).toHaveFocus();
+    expect(api.mergeBranch).not.toHaveBeenCalled();
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.queryByRole("dialog", { name: "确认合并分支？" })).not.toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "合并分支" })).not.toHaveAttribute("inert");
+    expect(requestMerge).toHaveFocus();
+
+    fireEvent.click(requestMerge);
+    confirmation = screen.getByRole("dialog", { name: "确认合并分支？" });
+    fireEvent.click(within(confirmation).getByRole("button", { name: "确认合并" }));
     await waitFor(() => expect(api.mergeBranch).toHaveBeenCalledWith("D:/work/project", "refs/remotes/origin/release"));
 
     expect(await screen.findByText("合并未完成")).toBeInTheDocument();

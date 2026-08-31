@@ -3,9 +3,9 @@ import { describe, expect, it } from "vitest";
 // @ts-expect-error Node built-in types are intentionally absent from the browser production config.
 import { readFileSync } from "node:fs";
 
-const styles = readFileSync("src/git/git.css", "utf8");
-const cyberTheme = readFileSync("src/app/styles/themes/cyberpunk.css", "utf8");
-const fileBrowserStyles = readFileSync("src/files/fileBrowser.css", "utf8");
+const styles = readFileSync("src/git/git.css", "utf8").replace(/\r\n/g, "\n");
+const cyberTheme = readFileSync("src/app/styles/themes/cyberpunk.css", "utf8").replace(/\r\n/g, "\n");
+const fileBrowserStyles = readFileSync("src/files/fileBrowser.css", "utf8").replace(/\r\n/g, "\n");
 
 function declarations(selector: string): string {
   const start = styles.indexOf(`${selector} {`);
@@ -300,6 +300,44 @@ describe("Git pane style contracts", () => {
     expect(submenu).toContain("z-index: 131");
     const form = declarations(".git-branch-management-popover");
     expect(form).toContain("width: 292px");
+    expect(declarations(".git-merge-popover")).toContain("width: 420px");
+    expect(declarations(".git-merge-popover-title")).toContain("min-height: 39px");
+    expect(declarations(".git-merge-popover-title small")).toContain("text-overflow: ellipsis");
+    expect(declarations(".git-merge-flow")).toContain("grid-template-columns: minmax(0, 1fr) 54px minmax(0, 1fr)");
+    const mergeNode = declarations(".git-merge-node");
+    expect(mergeNode).toContain("min-height: 68px");
+    expect(mergeNode).toContain("var(--accent) 42%");
+    const mergeNodeTitle = declarations(".git-merge-node-title");
+    expect(mergeNodeTitle).toContain("height: 15px");
+    expect(mergeNodeTitle).toContain("align-self: center");
+    expect(mergeNodeTitle).toContain("margin: 0");
+    expect(mergeNodeTitle).toContain("line-height: 1");
+    const branchField = declarations(".git-merge-branch-field");
+    expect(branchField).toContain("width: 100%");
+    expect(branchField).toContain("height: 29px");
+    expect(branchField).toContain("background: var(--control-bg)");
+    const branchValue = declarations(".git-merge-branch-field > select,\n.git-merge-branch-value");
+    expect(branchValue).toContain("height: 100%");
+    expect(branchValue).toContain("border: 0");
+    expect(branchValue).toContain("background: transparent");
+    expect(branchValue).toContain("text-overflow: ellipsis");
+    const mergeSourceSelect = declarations(".git-merge-branch-field > select");
+    expect(mergeSourceSelect).toContain("appearance: none");
+    expect(mergeSourceSelect).toContain("color-scheme: dark");
+    const mergeOptions = declarations(".git-merge-branch-field > select optgroup,\n.git-merge-branch-field > select option");
+    expect(mergeOptions).toContain("color: var(--text)");
+    expect(mergeOptions).toContain("background: var(--canvas)");
+    expect(declarations(".git-merge-branch-field > select option:checked")).toContain("background: var(--hover)");
+    expect(declarations(".git-merge-source-node")).toBe("");
+    expect(declarations(".git-merge-target-node")).toBe("");
+    expect(declarations(".git-merge-flow-track::before")).toContain("linear-gradient");
+    expect(declarations(".git-merge-flow-track::after")).toBe("");
+    expect(declarations(".git-merge-flow-connector")).toContain("position: relative");
+    expect(declarations(".git-merge-flow-track")).toContain("top: 50%");
+    expect(declarations(".git-merge-flow-connector > svg")).toContain("transform: translateY(-50%)");
+    expect(declarations(".git-merge-flow-packet")).toContain("animation: git-merge-flow-packet 1.8s ease-in-out infinite");
+    expect(declarations(".git-merge-actions .git-merge-cancel")).toContain("var(--danger)");
+    expect(declarations(".dialog-scrim.git-merge-confirmation-scrim")).toContain("z-index: 140");
     expect(declarations(".git-operation-list")).toContain("overflow-y: auto");
     expect(declarations(".git-operation-list")).toContain("scrollbar-color: var(--scrollbar-thumb) transparent");
     expect(declarations('.git-operation-row[data-status="error"]')).toContain("var(--danger)");
@@ -307,27 +345,61 @@ describe("Git pane style contracts", () => {
     expect(declarations('.git-repository-refresh[data-updating="true"] svg')).toContain("animation: git-repository-picker-spin 700ms linear infinite");
     const reducedMotion = styles.slice(styles.indexOf("@media (prefers-reduced-motion: reduce)"));
     expect(reducedMotion).toContain('.git-repository-refresh[data-updating="true"] svg');
+    expect(reducedMotion).toContain(".git-merge-flow-packet");
   });
 
-  it("presents graph commits as selectable two-line rows with themed decorations", () => {
+  it("presents graph commits as selectable two-line rows with a legible glass selection", () => {
     const row = declarations(".git-commit-row");
     expect(row).toContain("grid-template-columns: auto minmax(0, 1fr)");
     expect(row).toContain("width: 100%");
     const selected = declarations('.git-commit-row[aria-pressed="true"] .git-commit-card');
-    expect(selected).toContain("border-color: var(--primary-action)");
-    expect(selected).toContain("color: var(--primary-action-contrast)");
-    expect(selected).toContain("background: var(--primary-action)");
-    expect(selected).not.toContain("inset 2px");
-    const selectedCopy = declarations('.git-commit-row[aria-pressed="true"] .git-commit-subject,\n.git-commit-row[aria-pressed="true"] .git-commit-meta,\n.git-commit-row[aria-pressed="true"] .git-commit-expander');
-    expect(selectedCopy).toContain("color: var(--primary-action-contrast)");
+    expect(selected).toContain("border-color: var(--selection-marker)");
+    expect(selected).toContain("color: var(--text)");
+    expect(selected).toContain("background: linear-gradient");
+    expect(selected).toContain("0 0 10px color-mix(in srgb, var(--selection-marker) 24%, transparent)");
+    expect(selected).toContain("backdrop-filter: blur(12px) saturate(125%)");
+    expect(selected).not.toContain("background: var(--primary-action)");
+    const selectedSubject = declarations('.git-commit-row[aria-pressed="true"] .git-commit-subject');
+    expect(selectedSubject).toContain("color: var(--selection-marker)");
+    expect(selectedSubject).toContain("text-shadow: 0 0 8px");
+    expect(declarations('.git-commit-row[aria-pressed="true"] .git-commit-meta')).toContain("color: var(--muted)");
+    const expander = declarations(".git-commit-expander");
+    expect(expander).toContain("background: transparent");
+    expect(expander).not.toContain("border:");
+    expect(expander).not.toContain("border-radius:");
+    expect(expander).not.toContain("box-shadow:");
+    const selectedExpander = declarations('.git-commit-row[aria-pressed="true"] .git-commit-expander');
+    expect(selectedExpander).toContain("color: var(--selection-marker)");
+    expect(selectedExpander).not.toContain("border:");
+    expect(selectedExpander).not.toContain("background:");
+    expect(selectedExpander).not.toContain("box-shadow:");
+    const highContrast = styles.slice(styles.indexOf("@media (prefers-contrast: more)"));
+    expect(highContrast).toContain('.git-commit-row[aria-pressed="true"] :is(.git-commit-card)');
+    expect(highContrast).toContain("border-color: var(--selection-marker)");
     expect(declarations('.git-commit-row[aria-pressed="true"] .git-graph-lanes circle')).not.toContain("stroke:");
     expect(styles).toContain("stroke: var(--git-graph-lane-color)");
     for (let lane = 1; lane <= 6; lane += 1) {
       expect(styles).toContain(`--git-graph-lane-color: var(--git-graph-lane-${lane})`);
     }
     expect(declarations(".git-commit-summary")).toContain("display: flex");
-    expect(declarations('.git-decorations span[data-kind="head"]')).toContain("var(--primary-action)");
-    expect(declarations('.git-decorations span[data-kind="remote"]')).toContain("var(--accent)");
+    expect(declarations('.git-decorations > span[data-kind="head"]')).toContain("var(--primary-action)");
+    expect(declarations('.git-decorations > span[data-kind="remote"]')).toContain("var(--accent)");
+  });
+
+  it("falls back to an opaque selected commit when transparency is reduced", () => {
+    const selected = lastDeclarations('.git-commit-row[aria-pressed="true"] :is(.git-commit-card)');
+    expect(selected).toContain("background: color-mix");
+    expect(selected).toContain("var(--selection-marker)");
+    expect(selected).toContain("backdrop-filter: none");
+    expect(selected).toContain("-webkit-backdrop-filter: none");
+  });
+
+  it("truncates constrained branch and tag labels with an ellipsis", () => {
+    const decorationLabel = declarations(".git-decoration-label");
+    expect(decorationLabel).toContain("min-width: 0");
+    expect(decorationLabel).toContain("overflow: hidden");
+    expect(decorationLabel).toContain("text-overflow: ellipsis");
+    expect(decorationLabel).toContain("white-space: nowrap");
   });
 
   it("uses a viewport-safe floating material for commit hover details", () => {

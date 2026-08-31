@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
+import { Button } from "../components/Button";
 import { Icon } from "../components/Icon";
 import { RequiredFieldLabel } from "../components/RequiredFieldLabel";
+import { DialogActionStatus, DialogFrame } from "../components/dialogs/DialogFrame";
 import {
   abortGitMerge, commitGitChanges, continueGitMerge, createGitBranch, createGitBranchFrom, deleteGitBranch, gitAvailable, gitError, initializeGitRepository,
   executeRemoteGit, fetchGitRepository, loadGitCommitFiles, loadGitSnapshot, loadRemoteGitCommitFiles, stageAllGitChanges, stageGitPaths,
@@ -54,6 +56,12 @@ interface GitCommitFilesState {
   status: "loading" | "ready" | "error";
   files: GitCommitFile[];
   message?: string;
+}
+
+interface GitMergeConfirmation {
+  sourceRef: string;
+  sourceName: string;
+  targetName: string;
 }
 
 interface GitOperationRecord {
@@ -114,6 +122,7 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
   const [selectedBranchRef, setSelectedBranchRef] = useState("");
   const [selectedRemote, setSelectedRemote] = useState("");
   const [mergeSourceRef, setMergeSourceRef] = useState("");
+  const [mergeConfirmation, setMergeConfirmation] = useState<GitMergeConfirmation | null>(null);
   const [branchQuery, setBranchQuery] = useState("");
   const [operations, setOperations] = useState<GitOperationRecord[]>([]);
   const [selectedCommitOid, setSelectedCommitOid] = useState<string | null>(null);
@@ -171,6 +180,7 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
     setRepositoryOverlay(null);
     setRepositorySubmenu(null);
     setMergeSourceRef("");
+    setMergeConfirmation(null);
     setOperations([]);
     if (reportedRepositoryKeyRef.current !== nextTargetKey) reportedRepositoryKeyRef.current = null;
   }, [target, updateBusy]);
@@ -376,6 +386,13 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
     }
   }
 
+  async function confirmMergeOperation() {
+    const confirmation = mergeConfirmation;
+    if (!confirmation || busyRef.current) return;
+    const succeeded = await runMergeOperation(confirmation.sourceRef);
+    if (succeeded) closeRepositoryOverlay(true);
+  }
+
   async function synchronizeRepository() {
     if (!root || busyRef.current) return;
     const request = ++epoch.current;
@@ -534,6 +551,7 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
 
   function closeRepositoryOverlay(restoreFocus = false) {
     const anchor = repositoryOverlay ? repositoryAnchor(repositoryOverlay.kind) : null;
+    setMergeConfirmation(null);
     setRepositoryOverlay(null);
     setRepositorySubmenu(null);
     if (restoreFocus) window.requestAnimationFrame(() => anchor?.focus());
@@ -556,11 +574,14 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
     if (kind === "renameBranch") setSelectedBranchRef(localBranchOptions[0]?.refName ?? "");
     if (kind === "deleteBranch") setSelectedBranchRef(deletableBranchOptions[0]?.refName ?? "");
     if (kind === "publishBranch") setSelectedRemote(snapshot?.remotes[0] ?? "");
-    if (kind === "mergeBranch") setMergeSourceRef(mergeSourceOptions[0]?.refName ?? "");
-    const estimatedWidth = kind === "branches" ? 336 : kind === "repositoryActions" ? 210 : 292;
+    if (kind === "mergeBranch") {
+      setMergeConfirmation(null);
+      setMergeSourceRef(mergeSourceOptions[0]?.refName ?? "");
+    }
+    const estimatedWidth = kind === "branches" ? 336 : kind === "repositoryActions" ? 210 : kind === "mergeBranch" ? 420 : 292;
     const estimatedHeight = kind === "branches"
       ? Math.min(376, 118 + branchOptions.length * 44)
-      : kind === "operationLog" ? 300 : kind === "repositoryActions" ? 222 : 190;
+      : kind === "operationLog" ? 300 : kind === "repositoryActions" ? 222 : kind === "mergeBranch" ? 184 : 190;
     setRepositoryOverlay({ kind, ...fitRepositoryOverlay(anchor.getBoundingClientRect(), estimatedWidth, estimatedHeight) });
   }
 
@@ -591,7 +612,7 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
   }, [repositoryAnchor, repositoryOverlay, visibleBranches.length]);
 
   useEffect(() => {
-    if (!repositoryOverlay) return;
+    if (!repositoryOverlay || mergeConfirmation) return;
     const anchor = repositoryAnchor(repositoryOverlay.kind);
     const closeOnOutsidePointer = (event: PointerEvent) => {
       const node = event.target as Node;
@@ -627,7 +648,7 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
       window.removeEventListener("resize", closeOnViewportChange);
       window.removeEventListener("scroll", closeOnViewportChange, true);
     };
-  }, [repositoryAnchor, repositoryOverlay, repositorySubmenu]);
+  }, [mergeConfirmation, repositoryAnchor, repositoryOverlay, repositorySubmenu]);
 
   useEffect(() => {
     if (!repositoryOverlay) return;
@@ -782,22 +803,46 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
     if (repositoryOverlay.kind === "mergeBranch") {
       const localSources = mergeSourceOptions.filter((branch) => branch.kind === "local");
       const remoteSources = mergeSourceOptions.filter((branch) => branch.kind === "remote");
-      return <form ref={overlayRef} className="git-repository-popover git-branch-management-popover git-merge-popover" role="dialog" aria-label="合并分支" onSubmit={async (event) => {
+      return <form ref={overlayRef} className="git-repository-popover git-branch-management-popover git-merge-popover" role="dialog" aria-label="合并分支" aria-hidden={mergeConfirmation ? true : undefined} inert={mergeConfirmation ? true : undefined} onSubmit={(event) => {
         event.preventDefault();
-        if (!root || !mergeSourceRef || !mergeWorktreeClean || mergeInProgress) return;
-        const succeeded = await runMergeOperation(mergeSourceRef);
-        if (succeeded) closeRepositoryOverlay(true);
+        if (!root || !mergeSourceRef || !selectedMergeSource || !mergeWorktreeClean || mergeInProgress) return;
+        setMergeConfirmation({ sourceRef: mergeSourceRef, sourceName: selectedMergeSource.name, targetName: branchLabel });
       }} {...common}>
-        <div className="git-repository-popover-title"><Icon name="git" size={13}/><strong>合并分支</strong></div>
-        <label htmlFor={`git-merge-source-${blockId}`}><RequiredFieldLabel>源分支</RequiredFieldLabel></label>
-        <select id={`git-merge-source-${blockId}`} aria-label="源分支" value={mergeSourceRef} onChange={(event) => setMergeSourceRef(event.target.value)}>
-          {localSources.length > 0 && <optgroup label="本地分支">{localSources.map((branch) => <option value={branch.refName} key={branch.refName}>{branch.name}</option>)}</optgroup>}
-          {remoteSources.length > 0 && <optgroup label="远程分支">{remoteSources.map((branch) => <option value={branch.refName} key={branch.refName}>{branch.name}</option>)}</optgroup>}
-        </select>
-        <div className="git-merge-direction" aria-label={`${selectedMergeSource?.name ?? "未选择"} → ${branchLabel}`}><span>{selectedMergeSource?.name ?? "未选择"}</span><strong aria-hidden="true">→</strong><span>{branchLabel}</span></div>
-        <p className={mergeWorktreeClean ? "" : "git-merge-precondition"}>{mergeWorktreeClean ? "使用 Git 默认策略合并；不会自动 Fetch 或 Stash。" : "开始合并前请先提交或清理工作区更改。"}</p>
+        <div className="git-repository-popover-title git-merge-popover-title" data-state={mergeWorktreeClean ? "ready" : "blocked"}>
+          <Icon name="git" size={13}/>
+          <span><strong>合并分支</strong><small>{mergeWorktreeClean ? "使用 Git 默认策略合并；不会自动 Fetch 或 Stash。" : "开始合并前请先提交或清理工作区更改。"}</small></span>
+        </div>
+        <div className="git-merge-flow" aria-label={`${selectedMergeSource?.name ?? "未选择"} → ${branchLabel}`}>
+          <div className="git-merge-node git-merge-source-node" role="group" aria-label="源分支">
+            <div className="git-merge-node-heading">
+              <label className="git-merge-node-title" htmlFor={`git-merge-source-${blockId}`}><Icon name="git" size={12}/><RequiredFieldLabel>源分支</RequiredFieldLabel></label>
+              <span>{selectedMergeSource?.kind === "remote" ? "远程" : "本地"}</span>
+            </div>
+            <div className="git-merge-branch-field git-merge-branch-field-select">
+              <select id={`git-merge-source-${blockId}`} aria-label="源分支" required value={mergeSourceRef} onChange={(event) => setMergeSourceRef(event.target.value)}>
+                {localSources.length > 0 && <optgroup label="本地分支">{localSources.map((branch) => <option value={branch.refName} key={branch.refName}>{branch.name}</option>)}</optgroup>}
+                {remoteSources.length > 0 && <optgroup label="远程分支">{remoteSources.map((branch) => <option value={branch.refName} key={branch.refName}>{branch.name}</option>)}</optgroup>}
+              </select>
+              <Icon name="chevronDown" size={11}/>
+            </div>
+          </div>
+          <div className="git-merge-flow-connector" aria-hidden="true">
+            <span className="git-merge-flow-track"><span className="git-merge-flow-packet"/></span>
+            <Icon name="forward" size={12}/>
+            <span className="git-merge-flow-label">合并到</span>
+          </div>
+          <div className="git-merge-node git-merge-target-node" role="group" aria-label="目标分支">
+            <div className="git-merge-node-heading">
+              <span className="git-merge-node-title"><Icon name="checkCircle" size={12}/><strong>目标分支</strong></span>
+              <span>当前</span>
+            </div>
+            <div className="git-merge-branch-field">
+              <output className="git-merge-branch-value" aria-label={`目标分支 ${branchLabel}`} title={branchLabel}>{branchLabel}</output>
+            </div>
+          </div>
+        </div>
         <div className="git-branch-create-feedback" role={error ? "alert" : "status"} aria-hidden={!error}>{error?.message ?? "\u00a0"}</div>
-        <div className="git-branch-create-actions"><button type="button" className="secondary" onClick={() => closeRepositoryOverlay(true)}>取消</button><button type="submit" disabled={disabled || mergeInProgress || !mergeWorktreeClean || !mergeSourceRef}>合并到 {branchLabel}</button></div>
+        <div className="git-branch-create-actions git-merge-actions"><button type="button" className="secondary git-merge-cancel" onClick={() => closeRepositoryOverlay(true)}>取消合并</button><button type="submit" disabled={disabled || mergeInProgress || !mergeWorktreeClean || !mergeSourceRef}>合并到 {branchLabel}</button></div>
       </form>;
     }
     if (repositoryOverlay.kind === "abortMerge") {
@@ -947,7 +992,7 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
             >
               <GitGraph row={graphRow}/>
               <span className="git-commit-card">
-                <span className="git-commit-content"><span className="git-commit-summary"><span className="git-commit-expander"><Icon name="chevronDown" size={9}/></span><span className="git-commit-subject">{commit.subject}</span>{commit.decorations.length > 0 && <span className="git-decorations">{commit.decorations.slice(0, 3).map((decoration) => <span data-kind={gitDecorationKind(decoration)} key={decoration}><Icon name={decoration.includes("origin/") ? "network" : "git"} size={9}/>{formatGitDecoration(decoration)}</span>)}</span>}</span><span className="git-commit-meta"><span>{commit.author}</span><span>{formatRelativeCommitTime(commit.timestamp)}</span><span>{commit.oid.slice(0, 7)}</span></span></span>
+                <span className="git-commit-content"><span className="git-commit-summary"><span className="git-commit-expander"><Icon name="chevronDown" size={9}/></span><span className="git-commit-subject">{commit.subject}</span>{commit.decorations.length > 0 && <span className="git-decorations">{commit.decorations.slice(0, 3).map((decoration) => <span data-kind={gitDecorationKind(decoration)} key={decoration}><Icon name={decoration.includes("origin/") ? "network" : "git"} size={9}/><span className="git-decoration-label">{formatGitDecoration(decoration)}</span></span>)}</span>}</span><span className="git-commit-meta"><span>{commit.author}</span><span>{formatRelativeCommitTime(commit.timestamp)}</span><span>{commit.oid.slice(0, 7)}</span></span></span>
               </span>
             </button>
             <div className={`git-commit-details-shell${expanded ? " expanded" : ""}`} aria-hidden={!expanded} inert={!expanded || undefined}>
@@ -970,6 +1015,20 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
       tooltipRef={commitTooltipRef}
     />, document.body)}
     {visible && repositoryOverlay && createPortal(renderRepositoryOverlay(), document.body)}
+    {visible && mergeConfirmation && createPortal(<DialogFrame
+      title="确认合并分支？"
+      subtitle={`${mergeConfirmation.sourceName} → ${mergeConfirmation.targetName}`}
+      className="git-merge-confirmation"
+      scrimClassName="git-merge-confirmation-scrim"
+      compact
+      dismissible={busy !== "merge"}
+      onClose={() => { if (busy !== "merge") setMergeConfirmation(null); }}
+    >
+      <form className="git-merge-confirmation-form" onSubmit={(event) => { event.preventDefault(); void confirmMergeOperation(); }}>
+        <p className="confirm-copy git-merge-confirmation-copy">将把 <code>{mergeConfirmation.sourceName}</code> 的提交合并到当前分支 <code>{mergeConfirmation.targetName}</code>。若产生冲突，需要在当前工作区解决后继续或中止合并。</p>
+        <footer className="dialog-actions dialog-actions-with-status"><DialogActionStatus message={error?.message ?? ""}/><div><Button data-dialog-autofocus disabled={busy === "merge"} onClick={() => setMergeConfirmation(null)}>返回</Button><Button type="submit" variant="primary" loading={busy === "merge"}>确认合并</Button></div></footer>
+      </form>
+    </DialogFrame>, document.body)}
   </>;
 }
 
