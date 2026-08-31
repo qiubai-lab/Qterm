@@ -9,7 +9,8 @@ import {
   switchGitBranch, unstageAllGitChanges, unstageGitPaths,
   type GitChange, type GitCommit, type GitCommitFile, type GitSnapshot, type RemoteGitAction,
 } from "../lib/tauri/git";
-import type { GitTarget } from "../workspace/model";
+import { gitRepositoryHistoryEntryKey } from "../workspace/gitRepositoryHistory";
+import type { GitRepositoryHistoryEntry, GitTarget } from "../workspace/model";
 import type { GitRuntime } from "../workspace/WorkspaceProvider";
 import { calculateGitCommitTooltipPosition } from "./gitCommitTooltipPosition";
 import { buildGitGraphRows, type GitGraphRow } from "./gitGraph";
@@ -21,6 +22,7 @@ interface GitPaneProps {
   visible: boolean;
   onTargetChange: (target: GitTarget) => void;
   onRequestRepositoryChange?: () => void;
+  onRepositoryOpened?: (repository: GitRepositoryHistoryEntry) => void;
 }
 
 type GitRepositoryOverlayKind = "branches" | "createBranch";
@@ -49,6 +51,10 @@ function gitGraphLaneX(lane: number): number {
   return lane * gitGraphLaneGap + gitGraphLaneOffset;
 }
 
+function gitTargetKey(target: GitTarget): string {
+  return target.type === "unbound" ? "unbound" : gitRepositoryHistoryEntryKey(target);
+}
+
 function fitRepositoryOverlay(anchor: DOMRect, width: number, height: number): Omit<GitRepositoryOverlay, "kind"> {
   const gutter = 8;
   const offset = 4;
@@ -58,7 +64,7 @@ function fitRepositoryOverlay(anchor: DOMRect, width: number, height: number): O
   return { left, top: Math.max(gutter, anchor.top - height - offset), placement: "above" };
 }
 
-export function GitPane({ blockId, target, runtime, visible, onTargetChange, onRequestRepositoryChange }: GitPaneProps) {
+export function GitPane({ blockId, target, runtime, visible, onTargetChange, onRequestRepositoryChange, onRepositoryOpened }: GitPaneProps) {
   const [snapshot, setSnapshot] = useState<GitSnapshot | null>(null);
   const [localAvailable, setLocalAvailable] = useState<boolean | null>(null);
   const [busy, setBusy] = useState("");
@@ -76,6 +82,9 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
   const epoch = useRef(0);
   const messageRef = useRef<HTMLTextAreaElement>(null);
   const onTargetChangeRef = useRef(onTargetChange);
+  const onRepositoryOpenedRef = useRef(onRepositoryOpened);
+  const reportedRepositoryKeyRef = useRef<string | null>(null);
+  const targetKeyRef = useRef(gitTargetKey(target));
   const branchButtonRef = useRef<HTMLButtonElement>(null);
   const createBranchButtonRef = useRef<HTMLButtonElement>(null);
   const repositoryOverlayRef = useRef<HTMLElement | null>(null);
@@ -93,12 +102,29 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
   useEffect(() => {
     onTargetChangeRef.current = onTargetChange;
   }, [onTargetChange]);
+  useEffect(() => {
+    onRepositoryOpenedRef.current = onRepositoryOpened;
+  }, [onRepositoryOpened]);
+  useEffect(() => {
+    const nextTargetKey = gitTargetKey(target);
+    if (targetKeyRef.current === nextTargetKey) return;
+    targetKeyRef.current = nextTargetKey;
+    if (reportedRepositoryKeyRef.current !== nextTargetKey) reportedRepositoryKeyRef.current = null;
+  }, [target]);
 
   const applySnapshot = useCallback((next: GitSnapshot) => {
     setSnapshot(next);
     setError(null);
-    if (next.repositoryPath !== repositoryPath && target.type !== "remote") onTargetChangeRef.current({ type: "local", path: next.repositoryPath });
-  }, [repositoryPath, target.type]);
+    const repository: GitRepositoryHistoryEntry = remote && remoteProfileId
+      ? { type: "remote", profileId: remoteProfileId, path: next.repositoryPath }
+      : { type: "local", path: next.repositoryPath };
+    const repositoryKey = gitRepositoryHistoryEntryKey(repository);
+    if (reportedRepositoryKeyRef.current !== repositoryKey) {
+      reportedRepositoryKeyRef.current = repositoryKey;
+      onRepositoryOpenedRef.current?.(repository);
+    }
+    if (next.repositoryPath !== repositoryPath && !remote) onTargetChangeRef.current({ type: "local", path: next.repositoryPath });
+  }, [remote, remoteProfileId, repositoryPath]);
 
   const remoteExecute = useCallback((action: RemoteGitAction) => {
     if (!remote || !remoteProfileId || !remoteSessionId || remoteStatus !== "connected") return Promise.reject(new Error("远程 Git 连接尚未建立"));

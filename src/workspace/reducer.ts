@@ -1,9 +1,11 @@
 import { blockIds, clearTerminalRestoreDirectories, closeTerminal, findLeaf, moveTerminal, setFilesPath, setFilesProfile, setGitTarget, setNetworkProfile, setTerminalProfile, setTerminalRestoreDirectory, splitTerminal, terminalBlockIds, updateSplitRatio, type DropPosition } from "./layout";
-import { createFilesNode, createGitNode, createId, createNetworkNode, createTerminalNode, createWorkspace, isValidTerminalRestoreDirectory, type GitTarget, type SplitDirection, type Workspace, type WorkspaceDocument } from "./model";
+import { recordRecentGitRepository } from "./gitRepositoryHistory";
+import { createFilesNode, createGitNode, createId, createNetworkNode, createTerminalNode, createWorkspace, isValidTerminalRestoreDirectory, type GitRepositoryHistoryEntry, type GitTarget, type SplitDirection, type Workspace, type WorkspaceDocument } from "./model";
 
 export type WorkspaceAction =
   | { type: "hydrate"; document: WorkspaceDocument }
   | { type: "recordRecentProfile"; profileId: string | null }
+  | { type: "recordRecentGitRepository"; repository: GitRepositoryHistoryEntry }
   | { type: "selectWorkspace"; workspaceId: string }
   | { type: "addWorkspace" }
   | { type: "renameWorkspace"; workspaceId: string; name: string }
@@ -31,6 +33,10 @@ export function workspaceReducer(state: WorkspaceDocument, action: WorkspaceActi
     case "recordRecentProfile": {
       if (!action.profileId) return state;
       return { ...state, recentProfileIds: [action.profileId, ...state.recentProfileIds.filter((id) => id !== action.profileId)].slice(0, 6) };
+    }
+    case "recordRecentGitRepository": {
+      const recentGitRepositories = recordRecentGitRepository(state.recentGitRepositories, action.repository);
+      return recentGitRepositories === state.recentGitRepositories ? state : { ...state, recentGitRepositories };
     }
     case "selectWorkspace": return state.workspaces.some((workspace) => workspace.id === action.workspaceId) ? { ...state, activeWorkspaceId: action.workspaceId } : state;
     case "addWorkspace": {

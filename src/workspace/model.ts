@@ -31,6 +31,10 @@ export type GitTarget =
   | { type: "local"; path: string }
   | { type: "remote"; profileId: string; path: string };
 
+export type GitRepositoryHistoryEntry =
+  | { type: "local"; path: string }
+  | { type: "remote"; profileId: string; path: string };
+
 export interface SplitNode {
   type: "split";
   id: string;
@@ -51,9 +55,10 @@ export interface Workspace {
 }
 
 export interface WorkspaceDocument {
-  schemaVersion: 9;
+  schemaVersion: 10;
   activeWorkspaceId: string;
   recentProfileIds: string[];
+  recentGitRepositories: GitRepositoryHistoryEntry[];
   workspaces: Workspace[];
 }
 
@@ -84,7 +89,7 @@ export function createWorkspace(name = "Workspace 1"): Workspace {
 
 export function createWorkspaceDocument(): WorkspaceDocument {
   const workspace = createWorkspace();
-  return { schemaVersion: 9, activeWorkspaceId: workspace.id, recentProfileIds: [], workspaces: [workspace] };
+  return { schemaVersion: 10, activeWorkspaceId: workspace.id, recentProfileIds: [], recentGitRepositories: [], workspaces: [workspace] };
 }
 
 export function isValidTerminalRestoreDirectory(value: string): boolean {

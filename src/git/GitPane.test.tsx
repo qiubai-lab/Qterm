@@ -44,6 +44,7 @@ describe("GitPane", () => {
     vi.clearAllMocks();
     api.available.mockResolvedValue(true);
     api.snapshot.mockResolvedValue(snapshot);
+    api.stage.mockResolvedValue(snapshot);
     api.createBranch.mockResolvedValue(snapshot);
     api.switchBranch.mockResolvedValue(snapshot);
     api.commitFiles.mockResolvedValue([
@@ -67,6 +68,69 @@ describe("GitPane", () => {
     expect(screen.getByText("src/new.ts")).toBeInTheDocument();
     expect(screen.getByText("feat: initial")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /diff|比较|查看改动/i })).not.toBeInTheDocument();
+  });
+
+  it("reports a successfully opened local repository once across refresh and mutation snapshots", async () => {
+    const onRepositoryOpened = vi.fn();
+    render(<GitPane
+      blockId="git-1"
+      target={{ type: "local", path: "D:/work/project" }}
+      visible
+      onTargetChange={vi.fn()}
+      onRepositoryOpened={onRepositoryOpened}
+    />);
+
+    await screen.findByText("project");
+    expect(onRepositoryOpened).toHaveBeenCalledOnce();
+    expect(onRepositoryOpened).toHaveBeenCalledWith({ type: "local", path: "D:/work/project" });
+
+    fireEvent.focus(window);
+    await waitFor(() => expect(api.snapshot).toHaveBeenCalledTimes(2));
+    expect(onRepositoryOpened).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "暂存 src/new.ts" }));
+    await waitFor(() => expect(api.stage).toHaveBeenCalledWith("D:/work/project", ["src/new.ts"]));
+    expect(onRepositoryOpened).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not report a repository when its snapshot fails", async () => {
+    const onRepositoryOpened = vi.fn();
+    api.snapshot.mockRejectedValue({ code: "gitCommandFailed", message: "仓库不可访问" });
+    render(<GitPane
+      blockId="git-1"
+      target={{ type: "local", path: "D:/work/missing" }}
+      visible
+      onTargetChange={vi.fn()}
+      onRepositoryOpened={onRepositoryOpened}
+    />);
+
+    expect(await screen.findByText("仓库不可访问")).toBeInTheDocument();
+    expect(onRepositoryOpened).not.toHaveBeenCalled();
+  });
+
+  it("reports each target identity again after switching away and back", async () => {
+    const onRepositoryOpened = vi.fn();
+    const otherSnapshot = { ...snapshot, repositoryPath: "D:/work/other", repositoryName: "other" };
+    api.snapshot.mockResolvedValueOnce(snapshot).mockResolvedValueOnce(otherSnapshot).mockResolvedValueOnce(snapshot);
+    const view = render(<GitPane
+      blockId="git-1"
+      target={{ type: "local", path: "D:/work/project" }}
+      visible
+      onTargetChange={vi.fn()}
+      onRepositoryOpened={onRepositoryOpened}
+    />);
+    await screen.findByText("project");
+
+    view.rerender(<GitPane blockId="git-1" target={{ type: "local", path: "D:/work/other" }} visible onTargetChange={vi.fn()} onRepositoryOpened={onRepositoryOpened}/>);
+    await screen.findByText("other");
+    view.rerender(<GitPane blockId="git-1" target={{ type: "local", path: "D:/work/project" }} visible onTargetChange={vi.fn()} onRepositoryOpened={onRepositoryOpened}/>);
+    await waitFor(() => expect(onRepositoryOpened).toHaveBeenCalledTimes(3));
+
+    expect(onRepositoryOpened.mock.calls).toEqual([
+      [{ type: "local", path: "D:/work/project" }],
+      [{ type: "local", path: "D:/work/other" }],
+      [{ type: "local", path: "D:/work/project" }],
+    ]);
   });
 
   it("renders a VS Code-style selectable commit graph with branch decorations", async () => {
@@ -416,10 +480,13 @@ describe("GitPane", () => {
   it("offers explicit initialization for a non-repository directory", async () => {
     api.snapshot.mockRejectedValue({ code: "notGitRepository", message: "not a repository" });
     api.initialize.mockResolvedValue(snapshot);
-    render(<GitPane blockId="git-1" target={{ type: "local", path: "D:/work/project" }} visible onTargetChange={vi.fn()}/>);
+    const onRepositoryOpened = vi.fn();
+    render(<GitPane blockId="git-1" target={{ type: "local", path: "D:/work/project" }} visible onTargetChange={vi.fn()} onRepositoryOpened={onRepositoryOpened}/>);
     fireEvent.click(await screen.findByRole("button", { name: "初始化存储库" }));
     await waitFor(() => expect(api.initialize).toHaveBeenCalledWith("D:/work/project"));
     expect(await screen.findByText("project")).toBeInTheDocument();
+    expect(onRepositoryOpened).toHaveBeenCalledOnce();
+    expect(onRepositoryOpened).toHaveBeenCalledWith({ type: "local", path: "D:/work/project" });
   });
 
   it("keeps the newest snapshot when an earlier refresh finishes late", async () => {
@@ -440,6 +507,7 @@ describe("GitPane", () => {
 
   it("routes remote snapshots and mutations through the owned Git session", async () => {
     const remoteSnapshot = { ...snapshot, repositoryPath: "/srv/project" };
+    const onRepositoryOpened = vi.fn();
     api.remote.mockResolvedValue(remoteSnapshot);
     render(<GitPane
       blockId="git-remote"
@@ -447,6 +515,7 @@ describe("GitPane", () => {
       runtime={{ sessionId: "git-session", status: "connected", hostKeyPrompt: null, notice: "", connectionProgress: null, stale: false }}
       visible
       onTargetChange={vi.fn()}
+      onRepositoryOpened={onRepositoryOpened}
     />);
     await waitFor(() => expect(api.remote).toHaveBeenCalledWith("git-session", "profile-1", { type: "snapshot", path: "/srv/project" }));
     fireEvent.click(await screen.findByRole("button", { name: "暂存 src/new.ts" }));
@@ -455,6 +524,8 @@ describe("GitPane", () => {
     fireEvent.click(screen.getByRole("button", { name: /feat: initial/ }));
     await waitFor(() => expect(api.remoteCommitFiles).toHaveBeenCalledWith("git-session", "profile-1", "/srv/project", "abcdef012345"));
     expect(api.snapshot).not.toHaveBeenCalled();
+    expect(onRepositoryOpened).toHaveBeenCalledOnce();
+    expect(onRepositoryOpened).toHaveBeenCalledWith({ type: "remote", profileId: "profile-1", path: "/srv/project" });
   });
 });
 

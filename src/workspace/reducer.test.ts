@@ -5,6 +5,31 @@ import { createWorkspaceDocument } from "./model";
 import { workspaceReducer } from "./reducer";
 
 describe("workspace reducer", () => {
+  it("records a valid Git repository through the bounded workspace MRU", () => {
+    const initial = createWorkspaceDocument();
+    const first = workspaceReducer(initial, {
+      type: "recordRecentGitRepository",
+      repository: { type: "remote", profileId: "profile-1", path: "/srv/project" },
+    });
+    const second = workspaceReducer(first, {
+      type: "recordRecentGitRepository",
+      repository: { type: "local", path: "D:/work/project" },
+    });
+    const moved = workspaceReducer(second, {
+      type: "recordRecentGitRepository",
+      repository: { type: "remote", profileId: "profile-1", path: "/srv/project" },
+    });
+
+    expect(moved.recentGitRepositories).toEqual([
+      { type: "remote", profileId: "profile-1", path: "/srv/project" },
+      { type: "local", path: "D:/work/project" },
+    ]);
+    expect(workspaceReducer(moved, {
+      type: "recordRecentGitRepository",
+      repository: { type: "remote", profileId: "profile bad", path: "/srv/invalid" },
+    })).toBe(moved);
+  });
+
   it("keeps six unique remote profiles in most-recent-first order", () => {
     let state = createWorkspaceDocument();
     for (const profileId of ["profile-1", "profile-2", "profile-3", "profile-4", "profile-5", "profile-6", "profile-7"]) {

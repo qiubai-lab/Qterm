@@ -241,9 +241,10 @@ describe("WorkspaceProvider multi-session routing", () => {
   it("restores a hydrated local OSC 7 directory and flushes the latest path before window close", async () => {
     Object.defineProperty(window, "__TAURI_INTERNALS__", { configurable: true, value: {} });
     vi.mocked(loadWorkspaces).mockResolvedValue({
-      schemaVersion: 9,
+      schemaVersion: 10,
       activeWorkspaceId: "workspace-restored",
       recentProfileIds: [],
+      recentGitRepositories: [],
       workspaces: [{
         id: "workspace-restored",
         name: "Restored",
@@ -268,7 +269,7 @@ describe("WorkspaceProvider multi-session routing", () => {
     await act(async () => { await mocks.closeFlush?.(); });
 
     expect(saveWorkspaces).toHaveBeenCalledWith(expect.objectContaining({
-      schemaVersion: 9,
+      schemaVersion: 10,
       workspaces: [expect.objectContaining({ layout: expect.objectContaining({ restoreDirectory: "/srv/reported" }) })],
     }));
   });
@@ -276,9 +277,10 @@ describe("WorkspaceProvider multi-session routing", () => {
   it("passes a hydrated SSH restore directory to the existing terminal connection input", async () => {
     Object.defineProperty(window, "__TAURI_INTERNALS__", { configurable: true, value: {} });
     vi.mocked(loadWorkspaces).mockResolvedValue({
-      schemaVersion: 9,
+      schemaVersion: 10,
       activeWorkspaceId: "workspace-remote",
       recentProfileIds: ["profile-1"],
+      recentGitRepositories: [],
       workspaces: [{
         id: "workspace-remote",
         name: "Remote",

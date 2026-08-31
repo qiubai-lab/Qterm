@@ -4,7 +4,9 @@ use tauri::State;
 use crate::{
     application::workspace_service::WorkspaceService,
     commands::error::IpcError,
-    domain::workspace::{GitTarget, LayoutNode, SplitDirection, Workspace, WorkspaceDocument},
+    domain::workspace::{
+        GitTarget, LayoutNode, RecentGitRepository, SplitDirection, Workspace, WorkspaceDocument,
+    },
     infrastructure::persistence::json_workspace_repository::JsonWorkspaceRepository,
 };
 
@@ -26,7 +28,20 @@ pub struct WorkspaceDocumentDto {
     schema_version: u64,
     active_workspace_id: String,
     recent_profile_ids: Vec<String>,
+    recent_git_repositories: Vec<RecentGitRepositoryDto>,
     workspaces: Vec<WorkspaceDto>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
+enum RecentGitRepositoryDto {
+    Local { path: String },
+    Remote { profile_id: String, path: String },
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -109,7 +124,7 @@ pub fn workspace_save(
     document: WorkspaceDocumentDto,
     state: State<'_, WorkspaceState>,
 ) -> Result<(), IpcError> {
-    if document.schema_version != 9 {
+    if document.schema_version != 10 {
         return Err(IpcError::from(
             crate::application::error::ApplicationError::new(
                 crate::application::error::ApplicationErrorCode::InvalidWorkspaceDocument,
@@ -127,9 +142,14 @@ pub fn workspace_save(
 impl WorkspaceDocumentDto {
     fn from_domain(document: &WorkspaceDocument) -> Self {
         Self {
-            schema_version: 9,
+            schema_version: 10,
             active_workspace_id: document.active_workspace_id.clone(),
             recent_profile_ids: document.recent_profile_ids.clone(),
+            recent_git_repositories: document
+                .recent_git_repositories
+                .iter()
+                .map(RecentGitRepositoryDto::from_domain)
+                .collect(),
             workspaces: document
                 .workspaces
                 .iter()
@@ -142,11 +162,35 @@ impl WorkspaceDocumentDto {
         WorkspaceDocument {
             active_workspace_id: self.active_workspace_id,
             recent_profile_ids: self.recent_profile_ids,
+            recent_git_repositories: self
+                .recent_git_repositories
+                .into_iter()
+                .map(RecentGitRepositoryDto::into_domain)
+                .collect(),
             workspaces: self
                 .workspaces
                 .into_iter()
                 .map(WorkspaceDto::into_domain)
                 .collect(),
+        }
+    }
+}
+
+impl RecentGitRepositoryDto {
+    fn from_domain(repository: &RecentGitRepository) -> Self {
+        match repository {
+            RecentGitRepository::Local { path } => Self::Local { path: path.clone() },
+            RecentGitRepository::Remote { profile_id, path } => Self::Remote {
+                profile_id: profile_id.clone(),
+                path: path.clone(),
+            },
+        }
+    }
+
+    fn into_domain(self) -> RecentGitRepository {
+        match self {
+            Self::Local { path } => RecentGitRepository::Local { path },
+            Self::Remote { profile_id, path } => RecentGitRepository::Remote { profile_id, path },
         }
     }
 }
@@ -314,9 +358,13 @@ mod tests {
 
     fn document() -> serde_json::Value {
         json!({
-            "schemaVersion": 9,
+            "schemaVersion": 10,
             "activeWorkspaceId": "workspace-1",
             "recentProfileIds": ["profile-1"],
+            "recentGitRepositories": [
+                { "type": "local", "path": "D:/work/project" },
+                { "type": "remote", "profileId": "profile-1", "path": "/srv/project" }
+            ],
             "workspaces": [{
                 "id": "workspace-1",
                 "name": "Workspace",
@@ -343,7 +391,7 @@ mod tests {
     }
 
     #[test]
-    fn workspace_dto_accepts_v9_terminal_restore_and_network_layout_fields() {
+    fn workspace_dto_accepts_v10_history_terminal_restore_and_network_layout_fields() {
         assert!(serde_json::from_value::<WorkspaceDocumentDto>(document()).is_ok());
     }
 
@@ -364,5 +412,9 @@ mod tests {
         let mut value = document();
         value["workspaces"][0]["layout"]["second"]["sessionId"] = json!("forbidden");
         assert!(serde_json::from_value::<WorkspaceDocumentDto>(value).is_err());
+
+        let mut history_value = document();
+        history_value["recentGitRepositories"][0]["sessionId"] = json!("forbidden");
+        assert!(serde_json::from_value::<WorkspaceDocumentDto>(history_value).is_err());
     }
 }

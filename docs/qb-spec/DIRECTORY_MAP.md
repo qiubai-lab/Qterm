@@ -14,7 +14,7 @@
 - `src/app/theme/AppThemeProvider.tsx`：应用级主题唯一状态 owner，负责 bootstrap、preview/commit/restore，以及 DOM、xterm 和原生窗口同步；不进入 Workspace persistence，也不允许任意主题值。
 - `src/app/App.tsx`：前端组合入口，只装配 App theme、Workspace provider 与 shell；不直接调用底层 SSH 库。
 - `src/workspace/WorkspaceShell.tsx`：顶部 Workspace 标签、工具轨、Terminal/Files/Network/Git 认证路由、route 凭证库解锁、关闭编排、快捷键与一次性启动更新提示入口；不请求任意更新地址、解析跳板图、布局树或 SSH 协议。
-- `src/workspace/model.ts`、`layout.ts`、`reducer.ts`：schema v9 可持久化工作区契约、Git `Unbound | Local | Remote` target、使用调用方提供稳定 ID 的纯布局树变换与低频结构状态；不持有 session、xterm、Git 快照、远程命令、一次性启动目录或凭据。
+- `src/workspace/model.ts`、`layout.ts`、`reducer.ts`、`gitRepositoryHistory.ts`：schema v10 可持久化工作区契约、Git `Unbound | Local | Remote` target、按本机或 profile 隔离的有界 Git 仓库 MRU、使用调用方提供稳定 ID 的纯布局树变换与低频结构状态；不持有 session、xterm、Git 快照、远程命令、一次性启动目录或凭据。
 - `src/workspace/WorkspaceProvider.tsx`：Workspace 持久化与按 `blockId` 隔离的 Terminal/File/Network/Git runtime 编排边界；统一创建上下文感知终端分屏，并将 OSC 7 目录快照作为目标 Block 的一次性启动上下文；Files、Network 与 Git 远程 session 相互独立且不依赖终端，运行时目录、Git 快照和活动转发状态均不持久化。
 - `src/workspace/workspaceRuntime.ts`：Workspace runtime 类型、默认值、epoch/failure key、connection intent 与 route notice 纯规则；不持有 React state 或可变全局单例。
 - `src/workspace/connectionProgress.ts`、`src/components/ConnectionRouteProgress.tsx`：Terminal/Files/Network/Git SSH Block 共用的 route 事件展示状态映射与悬浮进度组件；`src/components/HostIdentity.tsx` 统一直连/route 完成态的主机概要、视口浮层和地址复制；这些组件不管理 session、认证、凭证或持久化。
@@ -22,7 +22,7 @@
 - `src/workspace/fileWindow.ts`：终端快捷方式和右侧工具轨共用的文件窗口打开策略；不创建 session 或读取文件系统。
 - `src/workspace/networkWindow.ts`：远程终端快捷方式和右侧工具轨共用的 Network Block 打开策略；不创建 session 或启动规则。
 - `src/workspace/gitWindow.ts`：右侧工具轨共用的 Git Block 上下文打开策略；从本机或远程 Files 路径以及同 profile 的有效 Terminal OSC 7 目录派生显式 target，不解析仓库或执行 Git。
-- `src/git/GitPane.tsx`、`GitRepositoryPickerDialog.tsx`、`gitGraph.ts`：本机或 SSH 工作区单仓库 Git Block 的三段式交互、目录选择弹窗、target-aware action、请求竞态/stale 保护和 parent OID 拓扑派生；远程选择器只浏览目录并保留手动路径回退，不复用文件预览/传输，也不生成远程命令或提供 diff/Git origin 同步。
+- `src/git/GitPane.tsx`、`GitRepositoryHistoryPopover.tsx`、`GitRepositoryPickerDialog.tsx`、`gitGraph.ts`：本机或 SSH 工作区单仓库 Git Block 的三段式交互、成功打开报告、最近仓库浮层、目录选择弹窗、target-aware action、请求竞态/stale 保护和 parent OID 拓扑派生；浮层只展示 Workspace 提供的当前 scope 历史，远程选择器只浏览目录并保留手动路径回退，不拥有持久化/session 生命周期、不复用文件预览/传输，也不生成远程命令或提供 diff/Git origin 同步。
 - `src/network/NetworkPane.tsx`、`NetworkRuleDialog.tsx`、`NetworkAccessDialog.tsx`：按 profile 共享的 Local/Remote/SOCKS5 规则列表、编辑、暴露警告、访问地址复制和 Block 局部启停交互；实验浏览器区只请求受限 IPC，不传输隧道字节、启动任意进程或保存认证材料。
 - `src/components/dialogs/ConnectionAuthDialog.tsx`：一次性密码、已有凭证与 SSH Agent 的人工连接入口；本次选择不回写 profile。
 - `src/components/dialogs/CredentialDialog.tsx`、`ChangeMasterPasswordDialog.tsx`：双栏凭证库管理、锁定门、密码/私钥操作、强清库确认和主密码迁移表单；不读取私钥正文或实现加密。
@@ -60,7 +60,7 @@
 - `src-tauri/src/domain/terminal_staging.rs`、`ports/terminal_staging.rs`、`application/terminal_staging_service.rs`：file list/text/raw-image 优先级、Windows/POSIX 本地路径文本规则、本地 `Empty/Text/Paths` 准备用例、无敏感进度事件，以及 Terminal-only 远端暂存/取消端口与 opaque task 启动用例；不依赖 arboard、Tauri Channel、russh-sftp 或 WebView DTO。
 - `src-tauri/src/domain/files.rs`：稳定目录列表、文件条目与排序/数量边界；不依赖文件系统、SFTP 或 Tauri。
 - `src-tauri/src/application/file_service.rs`：本地文件预览限制、UTF-8 校验、内容修订与原子保存用例；不依赖 Tauri UI 或 SFTP 类型。
-- `src-tauri/src/domain/workspace.rs`：Workspace/split tree、Git target 不变量与资源上限；不依赖前端状态、Tauri 或 JSON 格式。
+- `src-tauri/src/domain/workspace.rs`：Workspace/split tree、Git target、按 profile 隔离的最近仓库 identity 与 per-scope/global 资源上限；不依赖前端状态、Tauri 或 JSON 格式。
 - `src-tauri/src/domain/git.rs`、`ports/{git_executor,remote_git_executor}.rs`、`application/git_service.rs`：Git 元数据、本机/远程 action 输入边界、同步本机与异步 profile-bound 远程能力端口及用例编排；不依赖 Tauri、process API、shell 或具体 Git 输出格式。
 - `src-tauri/src/commands/git.rs`：Git 稳定 DTO、Git-purpose SSH 建连、profile/session ownership 调用、只返回目录项的远程浏览、错误映射、非阻塞本机目录选择和阻塞用例调度 IPC；不拥有 Git 规则、输出解析、文件读写或任意命令执行入口。
 - `src-tauri/src/infrastructure/git_cli.rs`：系统 Git 发现、固定结构化参数、超时/输出上限及 machine-readable status/branch/log 解析；不经 shell、不接收 WebView 命令片段或持久化仓库状态。
@@ -70,6 +70,7 @@
 - `src-tauri/src/commands/browser.rs`：Chrome/Edge 白名单 DTO、SOCKS5 规则类型复核与浏览器 adapter 调用；不接受可执行路径、命令参数或实现平台探测。
 - `src-tauri/src/infrastructure/browser/`：共享 SOCKS5 greeting、固定 Chromium 参数和机器本地隔离 Profile，并以 Windows、macOS、Linux adapter 受限探测和无 Shell 启动 Chrome/Edge；不修改系统代理、支持沙箱化 Linux 浏览器、复用日常 Profile 或管理浏览器退出。
 - `src-tauri/src/infrastructure/persistence/json_network_repository.rs`：`network-forwards.json` schema v1 的严格、无敏感字段、原子持久化适配器。
+- `src-tauri/src/infrastructure/persistence/json_workspace_repository.rs`：`workspaces.json` schema v10 的严格、无敏感字段、原子持久化与受支持旧版本显式迁移适配器；不保存 session、Git snapshot、仓库内容或连接凭据。
 - `src-tauri/src/ports/settings_repository.rs`、`src-tauri/src/infrastructure/persistence/json_{appearance,update,terminal}_settings_repository.rs`：设备外观/更新/终端集成偏好 ports 与独立 schema v1 适配器；只保存封闭预设或布尔偏好，不覆盖损坏/未来文件，也不修改 security settings。
 - `src-tauri/src/infrastructure/persistence/json_remote_shell_cache.rs`：`cache/remote-shells.json` 的严格、原子、可丢弃适配器；只保存目标签名和 Shell 枚举，不保存探测输出、Hook、终端内容或凭据。
 - `src-tauri/src/infrastructure/ssh/forwarding.rs`：本地 listener、SOCKS5 CONNECT、Remote target 路由、有界转发任务与 TCP/SSH 双向数据泵；第三方 channel 类型不得离开 infrastructure。
@@ -85,11 +86,11 @@
 ## Module Responsibilities
 
 - `src/app/`：负责顶层布局、feature 组合与应用级预设主题生命周期；不承载认证、连接或传输规则。
-- `src/workspace/`：负责工作区结构模型、布局树变换、顶部 Workspace 导航和 block runtime 编排；不读取本地文件或实现 SSH/SFTP。
+- `src/workspace/`：负责工作区结构模型、布局树变换、顶部 Workspace 导航、按连接的有界 Git 仓库历史和 block runtime 编排；不读取本地文件、验证仓库有效性或实现 SSH/SFTP。
 - `src/terminal/`：负责 xterm 实例及终端 I/O 适配；不持久化 buffer 或拥有 Workspace 生命周期。
 - `src/files/`：负责内部文件窗口展示、导航、下载反馈与瞬时预览编辑状态；不直接访问本地文件系统或 SSH infrastructure。
 - `src/network/`：负责网络规则配置 UI、共享刷新、运行状态展示、安全暴露提示和可复制访问地址派生；不实现 SSH/SOCKS5 协议、浏览器进程启动或持久化。
-- `src/git/`：负责单仓库 Git Block 展示、Local/Remote action 选择、受限目录浏览弹窗、局部交互状态、刷新代次和提交图拓扑；不直接启动 Git、创建 SSH channel、读取文件内容、承接文件管理能力或实现 diff/origin sync。
+- `src/git/`：负责单仓库 Git Block 展示、Local/Remote action 选择、成功 snapshot 报告、最近仓库浮层、受限目录浏览弹窗、局部交互状态、刷新代次和提交图拓扑；不拥有 Workspace 持久化或 session 生命周期，不直接启动 Git、创建 SSH channel、读取文件内容、承接文件管理能力或实现 diff/origin sync。
 - `src/components/`：负责跨 feature 的小型展示与交互原语；不吸收 feature 状态、业务编排或领域规则。
 - `src/components/dialogs/`：负责连接、传输、设置、帮助与确认弹窗；不定义领域规则或直接操作 Rust infrastructure。
 - `src/test/`：负责前端测试运行环境；不放置生产代码。

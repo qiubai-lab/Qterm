@@ -10,11 +10,13 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::{
-    domain::workspace::{GitTarget, LayoutNode, SplitDirection, Workspace, WorkspaceDocument},
+    domain::workspace::{
+        GitTarget, LayoutNode, RecentGitRepository, SplitDirection, Workspace, WorkspaceDocument,
+    },
     ports::workspace_repository::{WorkspaceRepository, WorkspaceRepositoryError},
 };
 
-const SCHEMA_VERSION: u64 = 9;
+const SCHEMA_VERSION: u64 = 10;
 const MAX_DOCUMENT_BYTES: u64 = 4 * 1024 * 1024;
 
 pub struct JsonWorkspaceRepository {
@@ -57,13 +59,14 @@ impl JsonWorkspaceRepository {
             .ok_or(WorkspaceRepositoryError::CorruptData)?;
         match version {
             SCHEMA_VERSION => {}
-            5..=8 => {
+            5..=9 => {
                 let object = value
                     .as_object_mut()
                     .ok_or(WorkspaceRepositoryError::CorruptData)?;
                 if version == 5 {
                     object.insert("recentProfileIds".into(), Value::Array(Vec::new()));
                 }
+                object.insert("recentGitRepositories".into(), Value::Array(Vec::new()));
                 object.insert("schemaVersion".into(), Value::from(SCHEMA_VERSION));
                 if version < 7 {
                     add_terminal_restore_directories(&mut value);
@@ -119,7 +122,20 @@ struct DocumentRecord {
     schema_version: u64,
     active_workspace_id: String,
     recent_profile_ids: Vec<String>,
+    recent_git_repositories: Vec<RecentGitRepositoryRecord>,
     workspaces: Vec<WorkspaceRecord>,
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
+enum RecentGitRepositoryRecord {
+    Local { path: String },
+    Remote { profile_id: String, path: String },
 }
 
 #[derive(Deserialize, Serialize)]
@@ -192,6 +208,11 @@ impl DocumentRecord {
             schema_version: SCHEMA_VERSION,
             active_workspace_id: document.active_workspace_id.clone(),
             recent_profile_ids: document.recent_profile_ids.clone(),
+            recent_git_repositories: document
+                .recent_git_repositories
+                .iter()
+                .map(RecentGitRepositoryRecord::from_domain)
+                .collect(),
             workspaces: document
                 .workspaces
                 .iter()
@@ -204,11 +225,35 @@ impl DocumentRecord {
         WorkspaceDocument {
             active_workspace_id: self.active_workspace_id,
             recent_profile_ids: self.recent_profile_ids,
+            recent_git_repositories: self
+                .recent_git_repositories
+                .into_iter()
+                .map(RecentGitRepositoryRecord::into_domain)
+                .collect(),
             workspaces: self
                 .workspaces
                 .into_iter()
                 .map(WorkspaceRecord::into_domain)
                 .collect(),
+        }
+    }
+}
+
+impl RecentGitRepositoryRecord {
+    fn from_domain(repository: &RecentGitRepository) -> Self {
+        match repository {
+            RecentGitRepository::Local { path } => Self::Local { path: path.clone() },
+            RecentGitRepository::Remote { profile_id, path } => Self::Remote {
+                profile_id: profile_id.clone(),
+                path: path.clone(),
+            },
+        }
+    }
+
+    fn into_domain(self) -> RecentGitRepository {
+        match self {
+            Self::Local { path } => RecentGitRepository::Local { path },
+            Self::Remote { profile_id, path } => RecentGitRepository::Remote { profile_id, path },
         }
     }
 }
@@ -434,7 +479,7 @@ mod tests {
 
     use super::JsonWorkspaceRepository;
     use crate::{
-        domain::workspace::{LayoutNode, Workspace, WorkspaceDocument},
+        domain::workspace::{LayoutNode, RecentGitRepository, Workspace, WorkspaceDocument},
         ports::workspace_repository::{WorkspaceRepository, WorkspaceRepositoryError},
     };
 
@@ -442,6 +487,15 @@ mod tests {
         WorkspaceDocument {
             active_workspace_id: "workspace-1".into(),
             recent_profile_ids: vec!["profile-1".into()],
+            recent_git_repositories: vec![
+                RecentGitRepository::Local {
+                    path: "D:/work/project".into(),
+                },
+                RecentGitRepository::Remote {
+                    profile_id: "profile-1".into(),
+                    path: "/srv/project".into(),
+                },
+            ],
             workspaces: vec![Workspace {
                 id: "workspace-1".into(),
                 name: "Workspace".into(),
@@ -465,7 +519,7 @@ mod tests {
     }
 
     #[test]
-    fn round_trips_v9_terminal_restore_without_runtime_or_secret_fields() {
+    fn round_trips_v10_git_history_without_runtime_or_secret_fields() {
         let directory = tempdir().expect("temporary directory");
         let path = directory.path().join("workspaces.json");
         let repository = JsonWorkspaceRepository::new(path.clone());
@@ -473,8 +527,11 @@ mod tests {
 
         assert_eq!(repository.load().expect("load workspace"), Some(document()));
         let json = fs::read_to_string(path).expect("workspace json");
-        assert!(json.contains("\"schemaVersion\": 9"));
+        assert!(json.contains("\"schemaVersion\": 10"));
         assert!(json.contains("\"recentProfileIds\""));
+        assert!(json.contains("\"recentGitRepositories\""));
+        assert!(json.contains("\"path\": \"D:/work/project\""));
+        assert!(json.contains("\"path\": \"/srv/project\""));
         assert!(json.contains("\"type\": \"network\""));
         assert!(json.contains("\"blockId\": \"block-1\""));
         assert!(json.contains("\"profileId\": \"profile-1\""));
@@ -494,6 +551,10 @@ mod tests {
             let mut value = serde_json::to_value(super::DocumentRecord::from_domain(&document()))
                 .expect("workspace fixture");
             value["schemaVersion"] = serde_json::json!(version);
+            value
+                .as_object_mut()
+                .expect("object")
+                .remove("recentGitRepositories");
             if version < 7 {
                 value["workspaces"][0]["layout"]["first"]
                     .as_object_mut()
@@ -511,6 +572,7 @@ mod tests {
             let repository = JsonWorkspaceRepository::new(path.clone());
 
             let mut expected = document();
+            expected.recent_git_repositories.clear();
             if version < 7
                 && let LayoutNode::Split { first, .. } = &mut expected.workspaces[0].layout
                 && let LayoutNode::Terminal {
@@ -525,6 +587,32 @@ mod tests {
             assert_eq!(repository.load(), Ok(Some(expected)));
             assert_eq!(fs::read(path).expect("preserved"), fixture);
         }
+    }
+
+    #[test]
+    fn migrates_v9_to_empty_git_history_without_overwriting_until_save() {
+        let directory = tempdir().expect("temporary directory");
+        let path = directory.path().join("workspaces.json");
+        let mut value = serde_json::to_value(super::DocumentRecord::from_domain(&document()))
+            .expect("workspace fixture");
+        value["schemaVersion"] = serde_json::json!(9);
+        value
+            .as_object_mut()
+            .expect("object")
+            .remove("recentGitRepositories");
+        let fixture = serde_json::to_vec_pretty(&value).expect("serialize fixture");
+        fs::write(&path, &fixture).expect("legacy fixture");
+        let repository = JsonWorkspaceRepository::new(path.clone());
+
+        let mut expected = document();
+        expected.recent_git_repositories.clear();
+        assert_eq!(repository.load(), Ok(Some(expected.clone())));
+        assert_eq!(fs::read(&path).expect("preserved"), fixture);
+
+        repository.save(&expected).expect("save v10");
+        let saved = fs::read_to_string(path).expect("saved");
+        assert!(saved.contains("\"schemaVersion\": 10"));
+        assert!(saved.contains("\"recentGitRepositories\": []"));
     }
 
     #[test]
@@ -589,7 +677,7 @@ mod tests {
     }
 
     #[test]
-    fn migrates_v8_git_repository_path_to_v9_target_without_overwriting_until_save() {
+    fn migrates_v8_git_repository_path_to_v10_target_without_overwriting_until_save() {
         let directory = tempdir().expect("temporary directory");
         let path = directory.path().join("workspaces.json");
         let fixture = br#"{
@@ -625,7 +713,8 @@ mod tests {
         assert_eq!(fs::read(&path).expect("preserved"), fixture);
         repository.save(&document).expect("save v9");
         let saved = fs::read_to_string(path).expect("saved");
-        assert!(saved.contains("\"schemaVersion\": 9"));
+        assert!(saved.contains("\"schemaVersion\": 10"));
+        assert!(saved.contains("\"recentGitRepositories\": []"));
         assert!(!saved.contains("repositoryPath"));
     }
 

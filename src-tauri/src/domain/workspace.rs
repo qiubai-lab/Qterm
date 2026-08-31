@@ -1,16 +1,25 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 const MAX_NAME_CHARS: usize = 80;
 const MAX_TREE_DEPTH: usize = 16;
 const MAX_BLOCKS: usize = 64;
 const MAX_RECENT_PROFILE_IDS: usize = 6;
+const MAX_RECENT_GIT_REPOSITORIES: usize = 64;
+const MAX_RECENT_GIT_REPOSITORIES_PER_SCOPE: usize = 8;
 const MAX_RESTORE_DIRECTORY_BYTES: usize = 4 * 1024;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct WorkspaceDocument {
     pub active_workspace_id: String,
     pub recent_profile_ids: Vec<String>,
+    pub recent_git_repositories: Vec<RecentGitRepository>,
     pub workspaces: Vec<Workspace>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum RecentGitRepository {
+    Local { path: String },
+    Remote { profile_id: String, path: String },
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -80,6 +89,32 @@ impl WorkspaceDocument {
         for profile_id in &self.recent_profile_ids {
             validate_id(profile_id)?;
             if !recent_profile_ids.insert(profile_id.as_str()) {
+                return Err(WorkspaceValidationError::Document);
+            }
+        }
+        if self.recent_git_repositories.len() > MAX_RECENT_GIT_REPOSITORIES {
+            return Err(WorkspaceValidationError::Document);
+        }
+        let mut recent_git_repositories = HashSet::new();
+        let mut recent_git_repository_scopes = HashMap::new();
+        for repository in &self.recent_git_repositories {
+            let scope = match repository {
+                RecentGitRepository::Local { path } => {
+                    validate_recent_git_path(path)?;
+                    None
+                }
+                RecentGitRepository::Remote { profile_id, path } => {
+                    validate_id(profile_id)?;
+                    validate_recent_git_path(path)?;
+                    Some(profile_id.as_str())
+                }
+            };
+            if !recent_git_repositories.insert(repository) {
+                return Err(WorkspaceValidationError::Document);
+            }
+            let count = recent_git_repository_scopes.entry(scope).or_insert(0usize);
+            *count += 1;
+            if *count > MAX_RECENT_GIT_REPOSITORIES_PER_SCOPE {
                 return Err(WorkspaceValidationError::Document);
             }
         }
@@ -228,6 +263,14 @@ fn validate_remote_git_path(path: &str) -> Result<(), WorkspaceValidationError> 
     }
 }
 
+fn validate_recent_git_path(path: &str) -> Result<(), WorkspaceValidationError> {
+    if path.is_empty() || path.len() > 4096 || path.chars().any(char::is_control) {
+        Err(WorkspaceValidationError::Document)
+    } else {
+        Ok(())
+    }
+}
+
 fn validate_id(value: &str) -> Result<(), WorkspaceValidationError> {
     if value.is_empty()
         || value.len() > 128
@@ -255,12 +298,21 @@ fn validate_name(value: &str) -> Result<(), WorkspaceValidationError> {
 
 #[cfg(test)]
 mod tests {
-    use super::{LayoutNode, SplitDirection, Workspace, WorkspaceDocument};
+    use super::{LayoutNode, RecentGitRepository, SplitDirection, Workspace, WorkspaceDocument};
 
     fn document() -> WorkspaceDocument {
         WorkspaceDocument {
             active_workspace_id: "workspace-1".into(),
             recent_profile_ids: vec!["profile-1".into()],
+            recent_git_repositories: vec![
+                RecentGitRepository::Local {
+                    path: "D:/work/project".into(),
+                },
+                RecentGitRepository::Remote {
+                    profile_id: "profile-1".into(),
+                    path: "/srv/project".into(),
+                },
+            ],
             workspaces: vec![Workspace {
                 id: "workspace-1".into(),
                 name: "Production".into(),
@@ -314,6 +366,7 @@ mod tests {
         let only_files = WorkspaceDocument {
             active_workspace_id: "workspace-files".into(),
             recent_profile_ids: Vec::new(),
+            recent_git_repositories: Vec::new(),
             workspaces: vec![Workspace {
                 id: "workspace-files".into(),
                 name: "Files".into(),
@@ -341,6 +394,75 @@ mod tests {
         let mut bounded = document();
         bounded.recent_profile_ids = (0..6).map(|index| format!("profile-{index}")).collect();
         assert!(bounded.validate().is_ok());
+    }
+
+    #[test]
+    fn validates_bounded_unique_git_repository_history_per_scope_and_globally() {
+        let mut duplicate = document();
+        duplicate.recent_git_repositories = vec![
+            RecentGitRepository::Remote {
+                profile_id: "profile-1".into(),
+                path: "/srv/project".into(),
+            },
+            RecentGitRepository::Remote {
+                profile_id: "profile-1".into(),
+                path: "/srv/project".into(),
+            },
+        ];
+        assert!(duplicate.validate().is_err());
+
+        let mut excessive_scope = document();
+        excessive_scope.recent_git_repositories = (0..9)
+            .map(|index| RecentGitRepository::Remote {
+                profile_id: "profile-1".into(),
+                path: format!("/srv/repo-{index}"),
+            })
+            .collect();
+        assert!(excessive_scope.validate().is_err());
+
+        let mut bounded = document();
+        bounded.recent_git_repositories = (0..8)
+            .flat_map(|profile_index| {
+                (0..8).map(move |repository_index| RecentGitRepository::Remote {
+                    profile_id: format!("profile-{profile_index}"),
+                    path: format!("/srv/{profile_index}/{repository_index}"),
+                })
+            })
+            .collect();
+        assert!(bounded.validate().is_ok());
+
+        bounded
+            .recent_git_repositories
+            .push(RecentGitRepository::Local {
+                path: "/local/overflow".into(),
+            });
+        assert!(bounded.validate().is_err());
+    }
+
+    #[test]
+    fn rejects_invalid_git_repository_history_identity_fields() {
+        let invalid_entries = [
+            RecentGitRepository::Local {
+                path: String::new(),
+            },
+            RecentGitRepository::Local {
+                path: "bad\npath".into(),
+            },
+            RecentGitRepository::Remote {
+                profile_id: "profile bad".into(),
+                path: "/srv/project".into(),
+            },
+            RecentGitRepository::Remote {
+                profile_id: "profile-1".into(),
+                path: "bad\0path".into(),
+            },
+        ];
+
+        for entry in invalid_entries {
+            let mut invalid = document();
+            invalid.recent_git_repositories = vec![entry];
+            assert!(invalid.validate().is_err());
+        }
     }
 
     #[test]

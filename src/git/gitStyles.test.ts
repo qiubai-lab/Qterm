@@ -24,6 +24,21 @@ function lastDeclarations(selector: string): string {
 }
 
 describe("Git pane style contracts", () => {
+  it("gives repository history one bounded themed popover scroller", () => {
+    const popover = declarations(".git-repository-history-popover");
+    expect(popover).toContain("position: fixed");
+    expect(popover).toContain("z-index: 130");
+    expect(popover).toContain("overflow: hidden");
+    expect(popover).toContain("background: var(--floating-material)");
+    expect(declarations(".git-repository-history-scroll")).toContain("max-height: min(320px, calc(100vh - 132px))");
+    expect(declarations(".git-repository-history-scroll")).toContain("overflow-y: auto");
+    expect(declarations(".git-repository-history-scroll")).toContain("scrollbar-color: var(--scrollbar-thumb) transparent");
+    expect(declarations(".git-repository-history-browse")).toContain("flex: none");
+    expect(declarations('.git-repository-history-item[aria-current="true"]')).toContain("var(--selection-surface)");
+    const reducedMotion = styles.slice(styles.indexOf("@media (prefers-reduced-motion: reduce)"));
+    expect(reducedMotion).toContain(".git-repository-history-popover");
+  });
+
   it("gives the remote repository picker one bounded directory scroller", () => {
     expect(declarations(".git-repository-picker-dialog")).toContain("height: min(470px, calc(100vh - 48px))");
     expect(declarations(".git-repository-picker-dialog .dialog-content")).toContain("display: flex");
