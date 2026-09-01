@@ -4,14 +4,18 @@ use russh::{ChannelMsg, client};
 
 use crate::{
     domain::git::{
-        GitBranch, GitBranchKind, GitCommitFile, GitError, GitSnapshot, RemoteGitAction,
+        GitBranch, GitBranchKind, GitChangeDiff, GitCommitFile, GitCommitFileDiff,
+        GitConflictContentKind, GitConflictDetail, GitConflictKind, GitConflictResolution,
+        GitConflictResult, GitConflictVersion, GitDiffScope, GitDiffSource, GitError, GitSnapshot,
+        MAX_CONFLICT_TEXT_BYTES, MAX_GIT_DIFF_TEXT_BYTES, RemoteGitAction,
         find_tracking_local_branch, validate_abort_merge, validate_branch_name,
         validate_branch_source_ref, validate_commit_oid, validate_continue_merge,
-        validate_local_branch_ref, validate_merge_preconditions, validate_remote_name,
-        validate_remote_repository_path,
+        validate_local_branch_ref, validate_merge_preconditions, validate_posix_paths,
+        validate_remote_name, validate_remote_repository_path, validate_stage_all,
     },
     infrastructure::git_cli::{
-        classify_failure, parse_branches, parse_commit_files, parse_commits, parse_status,
+        build_conflict_detail, classify_failure, parse_branches, parse_commit_files, parse_commits,
+        parse_status,
     },
 };
 
@@ -56,6 +60,8 @@ pub(super) async fn run_remote_git_action(
             snapshot(handle, &repository).await
         }
         RemoteGitAction::StageAll { repository } => {
+            let current = snapshot(handle, &repository).await?;
+            validate_stage_all(&current)?;
             run_git(
                 handle,
                 &repository,
@@ -178,6 +184,487 @@ pub(super) async fn commit_files(
     Ok(parse_commit_files(&output.stdout))
 }
 
+pub(super) async fn commit_file_diff(
+    handle: &client::Handle<ClientHandler>,
+    repository: &str,
+    oid: &str,
+    path: &str,
+) -> Result<GitCommitFileDiff, GitError> {
+    validate_remote_repository_path(repository)?;
+    validate_commit_oid(oid)?;
+    validate_posix_paths(&[path.to_owned()])?;
+    let file = commit_files(handle, repository, oid)
+        .await?
+        .into_iter()
+        .find(|file| file.path == path)
+        .ok_or_else(|| GitError::Conflict("该文件不属于所选提交".into()))?;
+    let parent_oid = remote_commit_parent_oid(handle, repository, oid).await?;
+    let baseline_path = file.original_path.as_deref().unwrap_or(path);
+    let before = match parent_oid.as_deref() {
+        Some(parent) => remote_tree_version(handle, repository, parent, baseline_path).await?,
+        None => missing_version(),
+    };
+    let after = remote_tree_version(handle, repository, oid, path).await?;
+    Ok(GitCommitFileDiff {
+        commit_oid: oid.to_owned(),
+        parent_oid,
+        path: file.path,
+        original_path: file.original_path,
+        status: file.status,
+        before,
+        after,
+    })
+}
+
+pub(super) async fn change_diff(
+    handle: &client::Handle<ClientHandler>,
+    repository: &str,
+    path: &str,
+    staged: bool,
+    worktree: Option<GitConflictVersion>,
+) -> Result<GitChangeDiff, GitError> {
+    validate_remote_repository_path(repository)?;
+    validate_posix_paths(&[path.to_owned()])?;
+    let current = snapshot(handle, repository).await?;
+    let change = current
+        .changes
+        .iter()
+        .find(|change| change.path == path && change.staged == staged && !change.conflict)
+        .cloned()
+        .ok_or_else(|| GitError::Conflict("该更改已变化，请刷新后重试".into()))?;
+    let baseline_path = change.original_path.as_deref().unwrap_or(path);
+    let (scope, before_source, after_source, before, after) = if staged {
+        (
+            GitDiffScope::Staged,
+            GitDiffSource::Head,
+            GitDiffSource::Index,
+            remote_head_version(handle, repository, baseline_path).await?,
+            remote_index_version(handle, repository, path).await?,
+        )
+    } else {
+        (
+            GitDiffScope::Unstaged,
+            GitDiffSource::Index,
+            GitDiffSource::Worktree,
+            remote_index_version(handle, repository, baseline_path).await?,
+            worktree.ok_or(GitError::Io)?,
+        )
+    };
+    Ok(GitChangeDiff {
+        path: change.path,
+        original_path: change.original_path,
+        status: change.status,
+        scope,
+        before_source,
+        after_source,
+        before,
+        after,
+    })
+}
+
+struct RemoteBlobEntry {
+    oid: String,
+    mode: u32,
+}
+
+fn missing_version() -> GitConflictVersion {
+    GitConflictVersion {
+        kind: GitConflictContentKind::Missing,
+        content: None,
+        size: 0,
+        mode: None,
+    }
+}
+
+async fn remote_head_version(
+    handle: &client::Handle<ClientHandler>,
+    repository: &str,
+    path: &str,
+) -> Result<GitConflictVersion, GitError> {
+    if !has_head(handle, repository).await {
+        return Ok(missing_version());
+    }
+    remote_tree_version(handle, repository, "HEAD", path).await
+}
+
+async fn remote_tree_version(
+    handle: &client::Handle<ClientHandler>,
+    repository: &str,
+    revision: &str,
+    path: &str,
+) -> Result<GitConflictVersion, GitError> {
+    let args = format!(
+        "--literal-pathspecs ls-tree -z {} -- {}",
+        posix_literal(revision),
+        posix_literal(path)
+    );
+    let output = run_git(handle, repository, &args, Vec::new(), READ_TIMEOUT).await?;
+    match parse_remote_tree_entry(&output.stdout, path)? {
+        Some(entry) => remote_blob_version(handle, repository, entry).await,
+        None => Ok(missing_version()),
+    }
+}
+
+async fn remote_commit_parent_oid(
+    handle: &client::Handle<ClientHandler>,
+    repository: &str,
+    oid: &str,
+) -> Result<Option<String>, GitError> {
+    let args = format!("rev-list --parents -n 1 {}", posix_literal(oid));
+    let output = run_git(handle, repository, &args, Vec::new(), READ_TIMEOUT).await?;
+    let line = String::from_utf8_lossy(&output.stdout);
+    let mut fields = line.split_whitespace();
+    let commit = fields.next().ok_or(GitError::Io)?;
+    if commit != oid {
+        return Err(GitError::Io);
+    }
+    Ok(fields.next().map(str::to_owned))
+}
+
+async fn remote_index_version(
+    handle: &client::Handle<ClientHandler>,
+    repository: &str,
+    path: &str,
+) -> Result<GitConflictVersion, GitError> {
+    let args = format!(
+        "--literal-pathspecs ls-files --stage -z -- {}",
+        posix_literal(path)
+    );
+    let output = run_git(handle, repository, &args, Vec::new(), READ_TIMEOUT).await?;
+    match parse_remote_index_entry(&output.stdout, path)? {
+        Some(entry) => remote_blob_version(handle, repository, entry).await,
+        None => Ok(missing_version()),
+    }
+}
+
+fn parse_remote_tree_entry(bytes: &[u8], path: &str) -> Result<Option<RemoteBlobEntry>, GitError> {
+    let Some(record) = bytes
+        .split(|byte| *byte == 0)
+        .find(|record| !record.is_empty())
+    else {
+        return Ok(None);
+    };
+    let mut pieces = record.splitn(2, |byte| *byte == b'\t');
+    let metadata = pieces.next().ok_or(GitError::Io)?;
+    if pieces.next().ok_or(GitError::Io)? != path.as_bytes() {
+        return Ok(None);
+    }
+    let metadata = String::from_utf8_lossy(metadata);
+    let fields = metadata.split_whitespace().collect::<Vec<_>>();
+    Ok(Some(RemoteBlobEntry {
+        mode: fields
+            .first()
+            .and_then(|value| u32::from_str_radix(value, 8).ok())
+            .ok_or(GitError::Io)?,
+        oid: fields.get(2).ok_or(GitError::Io)?.to_string(),
+    }))
+}
+
+fn parse_remote_index_entry(bytes: &[u8], path: &str) -> Result<Option<RemoteBlobEntry>, GitError> {
+    for record in bytes
+        .split(|byte| *byte == 0)
+        .filter(|record| !record.is_empty())
+    {
+        let mut pieces = record.splitn(2, |byte| *byte == b'\t');
+        let metadata = pieces.next().ok_or(GitError::Io)?;
+        if pieces.next().ok_or(GitError::Io)? != path.as_bytes() {
+            continue;
+        }
+        let metadata = String::from_utf8_lossy(metadata);
+        let fields = metadata.split_whitespace().collect::<Vec<_>>();
+        if fields.get(2) != Some(&"0") {
+            continue;
+        }
+        return Ok(Some(RemoteBlobEntry {
+            mode: fields
+                .first()
+                .and_then(|value| u32::from_str_radix(value, 8).ok())
+                .ok_or(GitError::Io)?,
+            oid: fields.get(1).ok_or(GitError::Io)?.to_string(),
+        }));
+    }
+    Ok(None)
+}
+
+async fn remote_blob_version(
+    handle: &client::Handle<ClientHandler>,
+    repository: &str,
+    entry: RemoteBlobEntry,
+) -> Result<GitConflictVersion, GitError> {
+    if !is_regular_mode(entry.mode) {
+        return Ok(GitConflictVersion {
+            kind: GitConflictContentKind::Unsupported,
+            content: None,
+            size: 0,
+            mode: Some(entry.mode),
+        });
+    }
+    let size_args = format!("cat-file -s {}", posix_literal(&entry.oid));
+    let size_output = run_git(handle, repository, &size_args, Vec::new(), READ_TIMEOUT).await?;
+    let size = String::from_utf8_lossy(&size_output.stdout)
+        .trim()
+        .parse::<u64>()
+        .map_err(|_| GitError::Io)?;
+    if size > MAX_GIT_DIFF_TEXT_BYTES as u64 {
+        return Ok(GitConflictVersion {
+            kind: GitConflictContentKind::Unsupported,
+            content: None,
+            size,
+            mode: Some(entry.mode),
+        });
+    }
+    let args = format!("cat-file blob {}", posix_literal(&entry.oid));
+    let output = run_git(handle, repository, &args, Vec::new(), READ_TIMEOUT).await?;
+    let content = std::str::from_utf8(&output.stdout)
+        .ok()
+        .filter(|_| !output.stdout.contains(&0))
+        .map(str::to_owned);
+    Ok(GitConflictVersion {
+        kind: if content.is_some() {
+            GitConflictContentKind::Text
+        } else {
+            GitConflictContentKind::Binary
+        },
+        content,
+        size,
+        mode: Some(entry.mode),
+    })
+}
+
+pub(super) async fn conflict_detail(
+    handle: &client::Handle<ClientHandler>,
+    repository: &str,
+    path: &str,
+    result: GitConflictResult,
+) -> Result<GitConflictDetail, GitError> {
+    validate_remote_repository_path(repository)?;
+    validate_posix_paths(&[path.to_owned()])?;
+    let snapshot = snapshot(handle, repository).await?;
+    if !snapshot.merge_in_progress {
+        return Err(GitError::Conflict("当前仓库没有未完成的合并".into()));
+    }
+    if snapshot.merge_head_oid.is_none() {
+        return Err(GitError::Conflict(
+            "多来源合并冲突需要使用终端或外部 Git 工具处理".into(),
+        ));
+    }
+    let change = snapshot
+        .changes
+        .iter()
+        .find(|change| change.conflict && change.path == path)
+        .ok_or_else(|| GitError::Conflict("该路径不再是未解决冲突".into()))?;
+    let stages = conflict_stages(handle, repository, path).await?;
+    let base = conflict_stage_version(handle, repository, path, &stages, 1).await?;
+    let current = conflict_stage_version(handle, repository, path, &stages, 2).await?;
+    let incoming = conflict_stage_version(handle, repository, path, &stages, 3).await?;
+    Ok(build_conflict_detail(
+        path.to_owned(),
+        change.conflict_kind.unwrap_or(GitConflictKind::Other),
+        base,
+        current,
+        incoming,
+        result,
+    ))
+}
+
+pub(super) async fn resolve_conflict(
+    handle: &client::Handle<ClientHandler>,
+    repository: &str,
+    path: &str,
+    resolution: &GitConflictResolution,
+) -> Result<GitSnapshot, GitError> {
+    validate_remote_repository_path(repository)?;
+    validate_posix_paths(&[path.to_owned()])?;
+    let detail = conflict_detail(
+        handle,
+        repository,
+        path,
+        GitConflictResult {
+            kind: GitConflictContentKind::Missing,
+            content: None,
+            revision: "missing".into(),
+            size: 0,
+            mode: None,
+        },
+    )
+    .await?;
+    match resolution {
+        GitConflictResolution::UseCurrent => {
+            ensure_regular_side(&detail.current, "当前版本不存在或不支持直接采用")?;
+            checkout_side(handle, repository, path, "--ours").await?;
+            stage_conflict(handle, repository, path).await?;
+        }
+        GitConflictResolution::UseIncoming => {
+            ensure_regular_side(&detail.incoming, "传入版本不存在或不支持直接采用")?;
+            checkout_side(handle, repository, path, "--theirs").await?;
+            stage_conflict(handle, repository, path).await?;
+        }
+        GitConflictResolution::Delete => {
+            if detail.current.kind != GitConflictContentKind::Missing
+                && detail.incoming.kind != GitConflictContentKind::Missing
+            {
+                return Err(GitError::Conflict("该冲突不能直接选择删除结果".into()));
+            }
+            let args = format!("--literal-pathspecs rm -f -- {}", posix_literal(path));
+            run_git(handle, repository, &args, Vec::new(), MUTATION_TIMEOUT).await?;
+        }
+        GitConflictResolution::MarkResolved => {
+            stage_conflict(handle, repository, path).await?;
+        }
+        GitConflictResolution::SaveText { .. } => return Err(GitError::InvalidInput),
+    }
+    snapshot(handle, repository).await
+}
+
+#[derive(Clone, Copy)]
+struct ConflictStage {
+    stage: u8,
+    mode: u32,
+}
+
+async fn conflict_stages(
+    handle: &client::Handle<ClientHandler>,
+    repository: &str,
+    path: &str,
+) -> Result<Vec<ConflictStage>, GitError> {
+    let args = format!(
+        "--literal-pathspecs ls-files --unmerged -z -- {}",
+        posix_literal(path)
+    );
+    let output = run_git(handle, repository, &args, Vec::new(), READ_TIMEOUT).await?;
+    let mut stages = Vec::new();
+    for record in output
+        .stdout
+        .split(|byte| *byte == 0)
+        .filter(|record| !record.is_empty())
+    {
+        let mut parts = record.splitn(2, |byte| *byte == b'\t');
+        let metadata = parts.next().ok_or(GitError::Io)?;
+        let record_path = parts.next().ok_or(GitError::Io)?;
+        if record_path != path.as_bytes() {
+            continue;
+        }
+        let metadata = String::from_utf8_lossy(metadata);
+        let fields = metadata.split_whitespace().collect::<Vec<_>>();
+        let mode = fields
+            .first()
+            .and_then(|value| u32::from_str_radix(value, 8).ok())
+            .ok_or(GitError::Io)?;
+        let stage = fields
+            .get(2)
+            .and_then(|value| value.parse::<u8>().ok())
+            .ok_or(GitError::Io)?;
+        stages.push(ConflictStage { stage, mode });
+    }
+    if stages.is_empty() {
+        return Err(GitError::Conflict("该路径不再是未解决冲突".into()));
+    }
+    Ok(stages)
+}
+
+async fn conflict_stage_version(
+    handle: &client::Handle<ClientHandler>,
+    repository: &str,
+    path: &str,
+    stages: &[ConflictStage],
+    stage: u8,
+) -> Result<GitConflictVersion, GitError> {
+    let Some(entry) = stages.iter().find(|entry| entry.stage == stage) else {
+        return Ok(GitConflictVersion {
+            kind: GitConflictContentKind::Missing,
+            content: None,
+            size: 0,
+            mode: None,
+        });
+    };
+    if !is_regular_mode(entry.mode) {
+        return Ok(GitConflictVersion {
+            kind: GitConflictContentKind::Unsupported,
+            content: None,
+            size: 0,
+            mode: Some(entry.mode),
+        });
+    }
+    let object = format!(":{stage}:{path}");
+    let size_args = format!("cat-file -s {}", posix_literal(&object));
+    let size_output = run_git(handle, repository, &size_args, Vec::new(), READ_TIMEOUT).await?;
+    let size = String::from_utf8_lossy(&size_output.stdout)
+        .trim()
+        .parse::<u64>()
+        .map_err(|_| GitError::Io)?;
+    if size > MAX_CONFLICT_TEXT_BYTES as u64 {
+        return Ok(GitConflictVersion {
+            kind: GitConflictContentKind::Unsupported,
+            content: None,
+            size,
+            mode: Some(entry.mode),
+        });
+    }
+    let args = format!("cat-file blob {}", posix_literal(&object));
+    let output = run_git(handle, repository, &args, Vec::new(), READ_TIMEOUT).await?;
+    let content = std::str::from_utf8(&output.stdout)
+        .ok()
+        .filter(|_| !output.stdout.contains(&0))
+        .map(str::to_owned);
+    Ok(GitConflictVersion {
+        kind: if content.is_some() {
+            GitConflictContentKind::Text
+        } else {
+            GitConflictContentKind::Binary
+        },
+        content,
+        size,
+        mode: Some(entry.mode),
+    })
+}
+
+async fn checkout_side(
+    handle: &client::Handle<ClientHandler>,
+    repository: &str,
+    path: &str,
+    side: &str,
+) -> Result<(), GitError> {
+    let args = format!(
+        "--literal-pathspecs checkout {side} -- {}",
+        posix_literal(path)
+    );
+    run_git(handle, repository, &args, Vec::new(), MUTATION_TIMEOUT).await?;
+    Ok(())
+}
+
+async fn stage_conflict(
+    handle: &client::Handle<ClientHandler>,
+    repository: &str,
+    path: &str,
+) -> Result<(), GitError> {
+    run_git(
+        handle,
+        repository,
+        STAGE_PATHS_ARGS,
+        nul_payload(&[path.to_owned()]),
+        MUTATION_TIMEOUT,
+    )
+    .await?;
+    Ok(())
+}
+
+fn ensure_regular_side(version: &GitConflictVersion, message: &str) -> Result<(), GitError> {
+    if version.mode.is_some_and(is_regular_mode)
+        && matches!(
+            version.kind,
+            GitConflictContentKind::Text | GitConflictContentKind::Binary
+        )
+    {
+        Ok(())
+    } else {
+        Err(GitError::Conflict(message.into()))
+    }
+}
+
+fn is_regular_mode(mode: u32) -> bool {
+    matches!(mode, 0o100644 | 0o100755)
+}
+
 async fn ensure_capability(handle: &client::Handle<ClientHandler>) -> Result<(), GitError> {
     let output = match run_command(
         handle,
@@ -238,7 +725,7 @@ async fn snapshot(
         READ_TIMEOUT,
     )
     .await?;
-    let merge_in_progress = merge_in_progress(handle, &repository).await?;
+    let (merge_in_progress, merge_head_oid) = merge_head_state(handle, &repository).await?;
     let branches = run_git(
         handle,
         &repository,
@@ -278,6 +765,7 @@ async fn snapshot(
         remotes: parse_remotes(&remotes.stdout),
         commits,
         merge_in_progress,
+        merge_head_oid,
     })
 }
 
@@ -534,10 +1022,10 @@ async fn abort_merge(
     snapshot(handle, repository).await
 }
 
-async fn merge_in_progress(
+async fn merge_head_state(
     handle: &client::Handle<ClientHandler>,
     repository: &str,
-) -> Result<bool, GitError> {
+) -> Result<(bool, Option<String>), GitError> {
     match run_git(
         handle,
         repository,
@@ -547,8 +1035,20 @@ async fn merge_in_progress(
     )
     .await
     {
-        Ok(_) => Ok(true),
-        Err(GitError::CommandFailed(_)) => Ok(false),
+        Ok(output) => {
+            let oids = String::from_utf8_lossy(&output.stdout)
+                .lines()
+                .map(str::trim)
+                .filter(|oid| !oid.is_empty())
+                .map(str::to_owned)
+                .collect::<Vec<_>>();
+            if oids.iter().all(|oid| validate_commit_oid(oid).is_ok()) && !oids.is_empty() {
+                Ok((true, (oids.len() == 1).then(|| oids[0].clone())))
+            } else {
+                Err(GitError::Io)
+            }
+        }
+        Err(GitError::CommandFailed(_)) => Ok((false, None)),
         Err(error) => Err(error),
     }
 }
@@ -665,7 +1165,7 @@ pub(crate) fn posix_literal(value: &str) -> String {
 mod tests {
     use super::{
         STAGE_PATHS_ARGS, UNSTAGE_PATHS_WITH_HEAD_ARGS, UNSTAGE_PATHS_WITHOUT_HEAD_ARGS,
-        nul_payload, posix_literal,
+        nul_payload, parse_remote_index_entry, parse_remote_tree_entry, posix_literal,
     };
 
     #[test]
@@ -696,5 +1196,23 @@ mod tests {
         assert!(STAGE_PATHS_ARGS.contains("--pathspec-file-nul"));
         assert!(UNSTAGE_PATHS_WITH_HEAD_ARGS.contains("--pathspec-file-nul"));
         assert!(UNSTAGE_PATHS_WITHOUT_HEAD_ARGS.ends_with("-z --stdin"));
+    }
+
+    #[test]
+    fn parses_remote_head_and_index_entries_for_literal_unicode_paths() {
+        let path = "-目录/a b.txt";
+        let tree = format!("100644 blob aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\t{path}\0");
+        let tree_entry = parse_remote_tree_entry(tree.as_bytes(), path)
+            .expect("tree entry")
+            .expect("present tree entry");
+        assert_eq!(tree_entry.mode, 0o100644);
+        assert_eq!(tree_entry.oid, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+
+        let index = format!("100755 bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb 0\t{path}\0");
+        let index_entry = parse_remote_index_entry(index.as_bytes(), path)
+            .expect("index entry")
+            .expect("present index entry");
+        assert_eq!(index_entry.mode, 0o100755);
+        assert_eq!(index_entry.oid, "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
     }
 }

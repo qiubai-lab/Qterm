@@ -12,6 +12,8 @@ const gitStyleFiles = [
   "gitOperationOverlay.css",
   "gitRepositoryPicker.css",
   "gitRepositoryHistory.css",
+  "gitConflictResolver.css",
+  "gitChangePreview.css",
   "gitMedia.css",
 ] as const;
 const gitStyleManifest = readFileSync("src/git/git.css", "utf8").replace(/\r\n/g, "\n");
@@ -21,6 +23,8 @@ const styles = gitStyleFiles
   .replace(/\r\n/g, "\n");
 const cyberTheme = readFileSync("src/app/styles/themes/cyberpunk.css", "utf8").replace(/\r\n/g, "\n");
 const fileBrowserStyles = readFileSync("src/files/fileBrowser.css", "utf8").replace(/\r\n/g, "\n");
+const conflictStyles = readFileSync("src/git/styles/gitConflictResolver.css", "utf8").replace(/\s+/g, "");
+const changePreviewStyles = readFileSync("src/git/styles/gitChangePreview.css", "utf8").replace(/\s+/g, "");
 
 function declarations(selector: string): string {
   const start = styles.indexOf(`${selector} {`);
@@ -484,6 +488,7 @@ describe("Git pane style contracts", () => {
     expect(expandedFilePanel).toContain("transform: none");
     expect(declarations(".git-commit-file-row")).toContain("min-height: 25px");
     expect(declarations(".git-commit-file-row")).toContain("border-radius: 4px");
+    expect(declarations(".git-commit-file-row")).toContain("width: 100%");
     expect(declarations(".git-commit-file-row > svg")).toContain("color: var(--accent)");
     expect(declarations(".git-commit-file-path > span:first-child")).toContain("color: var(--text)");
     expect(declarations('.git-commit-file-status[data-tone="deleted"],\n.git-commit-file-status[data-tone="conflict"]')).toContain("var(--danger)");
@@ -500,6 +505,10 @@ describe("Git pane style contracts", () => {
     const path = declarations(".git-change-path");
     expect(path).toContain("color: var(--text)");
     expect(path).toContain("font-weight: 600");
+    expect(declarations(".git-change-row.previewable")).toContain("grid-template-columns: minmax(0, 1fr) auto");
+    const previewTrigger = declarations(".git-change-row > .git-change-preview-trigger");
+    expect(previewTrigger).toContain("width: 100%");
+    expect(previewTrigger).toContain("grid-template-columns: auto minmax(0, 1fr) auto");
   });
 
   it("uses semantic menu roles and a stable source card for commit branch creation", () => {
@@ -539,5 +548,46 @@ describe("Git pane style contracts", () => {
     expect(disabled).toContain("color: var(--menu-disabled-text)");
     const reducedMotion = styles.slice(styles.indexOf("@media (prefers-reduced-motion: reduce)"));
     expect(reducedMotion).toContain(".git-primary-action-menu");
+  });
+
+  it("gives the conflict manager bounded independent scrollers and semantic focus states", () => {
+    expect(conflictStyles).toContain(".dialog-frame.dialog-wide.git-conflict-dialog{width:min(1480px,calc(100vw-48px));height:min(920px,calc(100vh-48px));max-height:calc(100vh-48px)}");
+    expect(conflictStyles).toContain(".git-conflict-dialog>.dialog-content{display:flex;min-width:0;min-height:0;flex:1;");
+    expect(conflictStyles).toContain(".git-conflict-manager{display:flex;min-width:0;min-height:0;flex:1;overflow:hidden}");
+    expect(conflictStyles).toContain(".git-conflict-sidebar{position:relative;display:flex;min-width:0;min-height:0;flex:0034px;");
+    expect(conflictStyles).toContain("overflow:visible");
+    expect(conflictStyles).not.toContain("flex-basis:");
+    expect(conflictStyles).toContain(".git-conflict-editor{display:grid;min-width:0;min-height:0;flex:110;");
+    expect(conflictStyles).toContain(".git-conflict-file-popover{position:absolute;z-index:5;top:0;bottom:0;left:34px;width:min(220px,calc(100vw-82px));");
+    expect(conflictStyles).toContain("transform-origin:lefttop;opacity:0;transform:translateX(-8px)scale(.985);visibility:hidden;pointer-events:none;");
+    expect(conflictStyles).toContain('.git-conflict-file-popover[data-open="true"]{opacity:1;transform:none;visibility:visible;pointer-events:auto;transition-delay:0s}');
+    expect(conflictStyles).toContain(".git-conflict-list{min-height:0;flex:1;overflow:auto");
+    expect(conflictStyles).toContain(".git-conflict-dialog.cm-editor{font-size:11px;line-height:1.45}");
+    expect(conflictStyles).toContain(".git-conflict-inputs{display:grid;min-width:0;min-height:0;grid-template-columns:repeat(2,minmax(0,1fr));");
+    expect(conflictStyles).toContain(".git-conflict-result{display:flex;min-width:0;min-height:0;overflow:hidden}");
+    expect(conflictStyles).toContain(".git-conflict-actions{display:grid;");
+    expect(conflictStyles).toContain(".git-conflict-sidebar-toggle:focus-visible,.git-conflict-item:focus-visible,.git-conflict-base-toggle:focus-visible,.git-conflict-nav-button:focus-visible{outline:2pxsolidvar(--focus)");
+    expect(conflictStyles).toContain(".git-conflict-comparison.cm-activeLineGutter{background:transparent;box-shadow:none}");
+    expect(conflictStyles).toContain(".git-conflict-result.cm-activeLineGutter{color:var(--editor-gutter-foreground);box-shadow:none}");
+    expect(conflictStyles).toContain(".git-conflict-result.cm-git-conflict-current,.git-conflict-result.cm-git-conflict-incoming,.git-conflict-result.cm-git-conflict-active{box-shadow:none}");
+    expect(conflictStyles).toContain(".git-conflict-dialog{animation:git-conflict-dialog-in.16scubic-bezier(.2,.8,.2,1)}");
+    expect(conflictStyles).toContain(".git-conflict-dialog--closing{animation:git-conflict-dialog-out.13sease-inforwards;");
+    expect(conflictStyles).toContain("@keyframesgit-conflict-dialog-in");
+    expect(conflictStyles).toContain("@keyframesgit-conflict-dialog-out");
+    expect(conflictStyles).toContain("@media(max-width:820px)");
+    expect(conflictStyles).toContain("@media(prefers-reduced-motion:reduce)");
+    expect(conflictStyles).toContain(".git-conflict-file-popover{transition:opacity.1sease-out;transform:none}");
+    expect(conflictStyles).toContain("@media(prefers-reduced-transparency:reduce)");
+    expect(conflictStyles).not.toMatch(/#[0-9a-f]{3,8}/i);
+  });
+
+  it("keeps change preview viewport-safe while its file list floats over the editor", () => {
+    expect(changePreviewStyles).toContain("width:min(1480px,calc(100vw-48px))");
+    expect(changePreviewStyles).toContain("height:min(920px,calc(100vh-48px))");
+    expect(changePreviewStyles).toContain(".git-change-preview-stage{position:relative");
+    expect(changePreviewStyles).toContain(".git-change-preview-file-popover{position:absolute");
+    expect(changePreviewStyles).toContain("pointer-events:none");
+    expect(changePreviewStyles).toContain(".git-change-preview-file-popover[data-open]{opacity:1;pointer-events:auto;transform:translateX(0)scale(1)");
+    expect(changePreviewStyles).toContain("@media(prefers-reduced-motion:reduce)");
   });
 });

@@ -1,6 +1,9 @@
 use std::path::Path;
 
-use crate::domain::git::{GitCommitFile, GitError, GitSnapshot};
+use crate::domain::git::{
+    GitChangeDiff, GitCommitFile, GitCommitFileDiff, GitConflictDetail, GitConflictResolution,
+    GitError, GitSnapshot,
+};
 
 pub trait GitExecutor: Send + Sync + 'static {
     fn available(&self) -> bool;
@@ -12,6 +15,26 @@ pub trait GitExecutor: Send + Sync + 'static {
     fn unstage_all(&self, repository: &Path) -> Result<GitSnapshot, GitError>;
     fn commit(&self, repository: &Path, message: &str) -> Result<GitSnapshot, GitError>;
     fn commit_files(&self, repository: &Path, oid: &str) -> Result<Vec<GitCommitFile>, GitError>;
+    fn commit_file_diff(
+        &self,
+        repository: &Path,
+        oid: &str,
+        path: &str,
+    ) -> Result<GitCommitFileDiff, GitError>;
+    fn change_diff(
+        &self,
+        repository: &Path,
+        path: &str,
+        staged: bool,
+    ) -> Result<GitChangeDiff, GitError>;
+    fn conflict_detail(&self, repository: &Path, path: &str)
+    -> Result<GitConflictDetail, GitError>;
+    fn resolve_conflict(
+        &self,
+        repository: &Path,
+        path: &str,
+        resolution: &GitConflictResolution,
+    ) -> Result<GitSnapshot, GitError>;
     fn create_branch(&self, repository: &Path, name: &str) -> Result<GitSnapshot, GitError>;
     fn create_branch_from(
         &self,

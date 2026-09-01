@@ -444,6 +444,36 @@ enum SessionControl {
             Result<Vec<crate::domain::git::GitCommitFile>, crate::domain::git::GitError>,
         >,
     },
+    RunGitCommitFileDiff {
+        repository: String,
+        oid: String,
+        path: String,
+        reply: oneshot::Sender<
+            Result<crate::domain::git::GitCommitFileDiff, crate::domain::git::GitError>,
+        >,
+    },
+    RunGitConflictDetail {
+        repository: String,
+        path: String,
+        reply: oneshot::Sender<
+            Result<crate::domain::git::GitConflictDetail, crate::domain::git::GitError>,
+        >,
+    },
+    RunGitChangeDiff {
+        repository: String,
+        path: String,
+        staged: bool,
+        reply: oneshot::Sender<
+            Result<crate::domain::git::GitChangeDiff, crate::domain::git::GitError>,
+        >,
+    },
+    RunGitResolveConflict {
+        repository: String,
+        path: String,
+        resolution: crate::domain::git::GitConflictResolution,
+        reply:
+            oneshot::Sender<Result<crate::domain::git::GitSnapshot, crate::domain::git::GitError>>,
+    },
 }
 
 enum RemoteMutation {

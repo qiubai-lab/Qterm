@@ -6,4 +6,6 @@
 @import "./styles/gitOperationOverlay.css";
 @import "./styles/gitRepositoryPicker.css";
 @import "./styles/gitRepositoryHistory.css";
+@import "./styles/gitConflictResolver.css";
+@import "./styles/gitChangePreview.css";
 @import "./styles/gitMedia.css";

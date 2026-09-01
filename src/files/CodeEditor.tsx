@@ -5,7 +5,7 @@ import { json, jsonParseLinter } from "@codemirror/lang-json";
 import { markdown } from "@codemirror/lang-markdown";
 import { yaml } from "@codemirror/lang-yaml";
 import { linter } from "@codemirror/lint";
-import { EditorState } from "@codemirror/state";
+import { Compartment, EditorState, type Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { readText as readClipboardText, writeText as writeClipboardText } from "@tauri-apps/plugin-clipboard-manager";
 import { parseDocument } from "yaml";
@@ -18,11 +18,15 @@ type EditorOperationMessage = { text: string; tone: "success" | "error" };
 
 const SUCCESS_OPERATION_MESSAGE_MS = 1_800;
 const ERROR_OPERATION_MESSAGE_MS = 4_200;
+const EMPTY_EXTENSIONS: Extension = [];
 
-export function CodeEditor({ value, language, readOnly = false, onChange, onSave }: {
+export function CodeEditor({ value, language, readOnly = false, ariaLabel, extensions = EMPTY_EXTENSIONS, onViewReady, onChange, onSave }: {
   value: string;
   language: EditorLanguage;
   readOnly?: boolean;
+  ariaLabel?: string;
+  extensions?: Extension;
+  onViewReady?: (view: EditorView | null) => void;
   onChange: (value: string) => void;
   onSave: () => void;
 }) {
@@ -32,13 +36,18 @@ export function CodeEditor({ value, language, readOnly = false, onChange, onSave
   const initialValue = useRef(value);
   const onChangeRef = useRef(onChange);
   const onSaveRef = useRef(onSave);
+  const onViewReadyRef = useRef(onViewReady);
+  const extensionsRef = useRef(extensions);
+  const featureExtensions = useRef(new Compartment());
   const [contextMenu, setContextMenu] = useState<EditorContextMenuState | null>(null);
   const [operationMessage, setOperationMessage] = useState<EditorOperationMessage | null>(null);
 
   useEffect(() => {
     onChangeRef.current = onChange;
     onSaveRef.current = onSave;
-  }, [onChange, onSave]);
+    onViewReadyRef.current = onViewReady;
+    extensionsRef.current = extensions;
+  }, [extensions, onChange, onSave, onViewReady]);
 
   useEffect(() => {
     if (!operationMessage) return;
@@ -67,10 +76,12 @@ export function CodeEditor({ value, language, readOnly = false, onChange, onSave
           EditorView.lineWrapping,
           EditorState.readOnly.of(readOnly),
           EditorView.editable.of(!readOnly),
+          ariaLabel ? EditorView.contentAttributes.of({ "aria-label": ariaLabel }) : [],
           EditorView.editorAttributes.of((editorView) => (
             editorView.state.selection.ranges.some((range) => !range.empty) ? { class: "cm-has-selection" } : null
           )),
           languageExtension,
+          featureExtensions.current.of(extensionsRef.current),
           EditorView.updateListener.of((update) => {
             if (!readOnly && update.docChanged) onChangeRef.current(update.state.doc.toString());
           }),
@@ -104,8 +115,17 @@ export function CodeEditor({ value, language, readOnly = false, onChange, onSave
       }),
     });
     editor.current = view;
-    return () => { editor.current = null; view.destroy(); };
-  }, [language, readOnly]);
+    onViewReadyRef.current?.(view);
+    return () => {
+      onViewReadyRef.current?.(null);
+      editor.current = null;
+      view.destroy();
+    };
+  }, [ariaLabel, language, readOnly]);
+
+  useEffect(() => {
+    editor.current?.dispatch({ effects: featureExtensions.current.reconfigure(extensions) });
+  }, [extensions]);
 
   useEffect(() => {
     if (!contextMenu) return;

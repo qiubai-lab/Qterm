@@ -5,6 +5,7 @@ import { writeText as writeClipboardText } from "@tauri-apps/plugin-clipboard-ma
 import { Icon } from "../components/Icon";
 import { Button, StatusBadge } from "../components/Button";
 import { DialogActionStatus, DialogFrame } from "../components/dialogs/DialogFrame";
+import { ExactTextInput } from "../components/ExactTextInput";
 import { copyImageUrlToClipboard } from "../lib/tauri/clipboard";
 import { copyFile, createEntry, deleteEntry, listLocalDirectory, listLocalRoots, listRemoteDirectory, readBinaryFile, readTextFile, renameEntry, writeTextFile, type DirectoryListing, type FileEntry, type LocalRoot } from "../lib/tauri/files";
 import { cancelTransfer, downloadDirectory, downloadFile, selectDownloadDirectory, selectDownloadPath, selectUploadFiles, selectUploadFolder, uploadDroppedEntries, uploadSelectedEntries, type TransferEvent } from "../lib/tauri/transfers";
@@ -654,7 +655,7 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
       <button aria-label="前进到下一目录" title={forwardPath ? `前进到 ${kind === "local" ? displayLocalPath(forwardPath) : forwardPath}` : "没有可前进的目录"} disabled={!forwardPath || loading} onClick={() => void navigateForward()}><Icon name="forward" size={14}/></button>
       <div className="file-browser-path-shell" data-editing={editingPath || undefined}>
         {showLocalRoots ? <span className="file-browser-path file-browser-location-label">本机</span> : editingPath ? <form className="file-browser-path-form" onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setEditingPath(false); }} onSubmit={(event) => { event.preventDefault(); void navigateTo(pathDraft); }}>
-          <input aria-label="文件夹路径" autoFocus value={pathDraft} onChange={(event) => setPathDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); setPathDraft(visiblePath); setEditingPath(false); } }}/>
+          <ExactTextInput aria-label="文件夹路径" autoFocus value={pathDraft} onChange={(event) => setPathDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); setPathDraft(visiblePath); setEditingPath(false); } }}/>
         </form> : <button className="file-browser-path" title={`${visiblePath} · 单击编辑`} onClick={() => { setPathDraft(visiblePath); setEditingPath(true); }}>{visiblePath}</button>}
       </div>
       <button aria-label="创建文件" title="创建文件" disabled={showLocalRoots || loading || (kind === "sftp" && status !== "connected")} onClick={() => requestCreate("createFile")}><Icon name="filePlus" size={14}/></button>
@@ -710,7 +711,7 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
     </footer>
     {nameOperation && <DialogFrame title={nameOperation.kind === "copy" ? "复制文件" : nameOperation.kind === "rename" ? "改名" : nameOperation.kind === "createFile" ? "创建文件" : "创建文件夹"} subtitle={nameOperation.entry?.name ?? path} compact onClose={nameOperation.busy ? () => undefined : () => setNameOperation(null)}>
       <form className="file-name-operation" onSubmit={(event) => void submitNameOperation(event)}>
-        <label>{nameOperation.kind === "copy" ? "副本名称" : nameOperation.kind === "rename" ? "新名称" : nameOperation.kind === "createFile" ? "文件名称" : "文件夹名称"}<input data-dialog-autofocus aria-label={nameOperation.kind === "copy" ? "副本名称" : nameOperation.kind === "rename" ? "新名称" : nameOperation.kind === "createFile" ? "文件名称" : "文件夹名称"} value={nameOperation.value} onChange={(event) => setNameOperation({ ...nameOperation, value: event.target.value, error: "" })}/></label>
+        <label>{nameOperation.kind === "copy" ? "副本名称" : nameOperation.kind === "rename" ? "新名称" : nameOperation.kind === "createFile" ? "文件名称" : "文件夹名称"}<ExactTextInput data-dialog-autofocus aria-label={nameOperation.kind === "copy" ? "副本名称" : nameOperation.kind === "rename" ? "新名称" : nameOperation.kind === "createFile" ? "文件名称" : "文件夹名称"} value={nameOperation.value} onChange={(event) => setNameOperation({ ...nameOperation, value: event.target.value, error: "" })}/></label>
         {nameOperation.error && <p className="inline-message error" role="alert">{nameOperation.error}</p>}
         <footer className="dialog-actions end"><Button disabled={nameOperation.busy} onClick={() => setNameOperation(null)}>取消</Button><Button type="submit" variant="primary" loading={nameOperation.busy} disabled={!nameOperation.value.trim() || (nameOperation.kind === "rename" && nameOperation.value === nameOperation.entry?.name)}>{nameOperation.busy ? "处理中…" : nameOperation.kind === "copy" ? "创建副本" : nameOperation.kind === "rename" ? "保存名称" : nameOperation.kind === "createFile" ? "创建文件" : "创建文件夹"}</Button></footer>
       </form>

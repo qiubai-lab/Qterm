@@ -1,6 +1,6 @@
 import type { ReactNode, RefObject } from "react";
 
-import { Icon } from "../components/Icon";
+import { Icon, type IconName } from "../components/Icon";
 import type { GitChange, GitSnapshot } from "../lib/tauri/git";
 import type { GitRuntime } from "../workspace/WorkspaceProvider";
 import { GitPrimaryActionButton } from "./GitPrimaryActionButton";
@@ -89,6 +89,8 @@ interface GitChangesSectionProps {
   onUnstageAll: () => void;
   onPrimaryAction: (action: GitPrimaryAction | GitPrimaryAlternativeAction) => void;
   onStage: (change: GitChange) => void;
+  onPreviewChange: (change: GitChange) => void;
+  onResolveConflict: (change: GitChange) => void;
   onUnstage: (change: GitChange) => void;
   onContinueMerge: () => void;
   onAbortMerge: () => void;
@@ -114,12 +116,14 @@ export function GitChangesSection({
   onUnstageAll,
   onPrimaryAction,
   onStage,
+  onPreviewChange,
+  onResolveConflict,
   onUnstage,
   onContinueMerge,
   onAbortMerge,
 }: GitChangesSectionProps) {
   return <GitSection className="git-changes-section" title={`更改${snapshot ? ` ${snapshot.changes.length}` : ""}`} collapsed={collapsed} onToggle={onToggle} actions={<>
-    <button type="button" aria-label="暂存全部更改" title="暂存全部" disabled={disabled || !root || unstaged.length + conflicts.length === 0} onClick={onStageAll}><Icon name="plus" size={12}/></button>
+    <button type="button" aria-label="暂存全部更改" title={mergeInProgress && conflicts.length > 0 ? "合并冲突需要逐项解决" : "暂存全部"} disabled={disabled || !root || mergeInProgress && conflicts.length > 0 || unstaged.length + conflicts.length === 0} onClick={onStageAll}><Icon name="plus" size={12}/></button>
     <button type="button" aria-label="取消暂存全部更改" title="取消暂存全部" disabled={disabled || !root || staged.length === 0} onClick={onUnstageAll}><Icon name="clear" size={12}/></button>
   </>}>
     {mergeInProgress && <div className="git-merge-state" role="status">
@@ -133,9 +137,9 @@ export function GitChangesSection({
     </div>
     {error && <div className="git-feedback" role="alert">{error.message}</div>}
     <div className="git-change-scroll" role="list" aria-label="Git 更改">
-      {conflicts.length > 0 && <GitChangeList title="冲突" changes={conflicts} actionLabel="暂存已解决文件" onAction={onStage}/>}
-      {staged.length > 0 && <GitChangeList title="暂存的更改" changes={staged} actionLabel="取消暂存" onAction={onUnstage}/>}
-      {unstaged.length > 0 && <GitChangeList title="更改" changes={unstaged} actionLabel="暂存" onAction={onStage}/>}
+      {conflicts.length > 0 && <GitChangeList title="冲突" changes={conflicts} actionLabel="解决冲突" actionIcon="mergeConflict" showActionText onAction={onResolveConflict}/>}
+      {staged.length > 0 && <GitChangeList title="暂存的更改" changes={staged} actionLabel="取消暂存" actionIcon="clear" onAction={onUnstage} onPreview={onPreviewChange}/>}
+      {unstaged.length > 0 && <GitChangeList title="更改" changes={unstaged} actionLabel="暂存" actionIcon="plus" onAction={onStage} onPreview={onPreviewChange}/>}
       {snapshot && snapshot.changes.length === 0 && <div className="git-clean-state"><Icon name="checkCircle" size={16}/>工作区干净</div>}
       {!snapshot && !error && <div className="git-clean-state">正在读取仓库…</div>}
     </div>
@@ -157,10 +161,10 @@ export function GitSection({ title, meta, collapsed, onToggle, actions, classNam
   </section>;
 }
 
-function GitChangeList({ title, changes, actionLabel, onAction }: { title: string; changes: GitChange[]; actionLabel: string; onAction: (change: GitChange) => void }) {
+function GitChangeList({ title, changes, actionLabel, actionIcon, showActionText = false, onAction, onPreview }: { title: string; changes: GitChange[]; actionLabel: string; actionIcon: IconName; showActionText?: boolean; onAction: (change: GitChange) => void; onPreview?: (change: GitChange) => void }) {
   const visible = changes.slice(0, 500);
-  return <section className="git-change-group" aria-label={title}><div className="git-change-group-title">{title}<span>{changes.length}</span></div>{visible.map((change) => <div className="git-change-row" role="listitem" key={`${change.path}:${change.staged}:${change.status}`} title={change.originalPath ? `${change.originalPath} → ${change.path}` : change.path}>
-    <Icon name="file" size={13}/><span className="git-change-path">{change.path}</span><span className={`git-change-status${change.conflict ? " conflict" : ""}`}>{change.status}</span><button type="button" aria-label={`${actionLabel} ${change.path}`} title={actionLabel} onClick={() => onAction(change)}><Icon name={change.staged ? "clear" : "plus"} size={11}/></button>
+  return <section className="git-change-group" aria-label={title}><div className="git-change-group-title">{title}<span>{changes.length}</span></div>{visible.map((change) => <div className={`git-change-row${onPreview ? " previewable" : ""}`} role="listitem" key={`${change.path}:${change.staged}:${change.status}`} title={change.originalPath ? `${change.originalPath} → ${change.path}` : change.path}>
+    {onPreview ? <button type="button" className="git-change-preview-trigger" aria-label={`预览${change.staged ? "已暂存" : "工作区"}更改 ${change.path}`} onClick={() => onPreview(change)}><Icon name="file" size={13}/><span className="git-change-path">{change.path}</span><span className="git-change-status">{change.status}</span></button> : <><Icon name={change.conflict ? "mergeConflict" : "file"} size={13}/><span className="git-change-path">{change.path}</span><span className={`git-change-status${change.conflict ? " conflict" : ""}`}>{change.status}</span></>}<button type="button" className={showActionText ? "git-conflict-action" : undefined} aria-label={`${actionLabel} ${change.path}`} title={actionLabel} onClick={() => onAction(change)}><Icon name={actionIcon} size={11}/>{showActionText && <span>解决</span>}</button>
   </div>)}{changes.length > visible.length && <div className="git-list-limit">另有 {changes.length - visible.length} 项，请使用终端处理后刷新</div>}</section>;
 }
 

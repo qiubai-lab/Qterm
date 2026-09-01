@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEve
 
 import { Button } from "../components/Button";
 import { DialogFrame } from "../components/dialogs/DialogFrame";
+import { ExactTextInput } from "../components/ExactTextInput";
 import { Icon } from "../components/Icon";
 import { listRemoteGitDirectory, type GitDirectoryEntry, type GitDirectoryListing } from "../lib/tauri/git";
 import { parentPath } from "../files/path";
@@ -145,7 +146,7 @@ export function GitRepositoryPickerDialog({
         <button type="button" aria-label="返回上级目录" title="返回上级目录" disabled={!parent} onClick={() => parent && void navigate(parent)}><Icon name="back" size={13}/></button>
         <label className="git-repository-picker-path">
           <span className="sr-only">远程仓库路径</span>
-          <input data-dialog-autofocus aria-label="远程仓库路径" value={pathDraft} maxLength={4096} onChange={(event) => setPathDraft(event.target.value)} />
+          <ExactTextInput data-dialog-autofocus aria-label="远程仓库路径" value={pathDraft} maxLength={4096} onChange={(event) => setPathDraft(event.target.value)} />
         </label>
         <button type="submit" aria-label="转到输入路径" title="转到输入路径" disabled={!validRemotePath(pathDraft)}><Icon name="forward" size={13}/></button>
         <button type="button" aria-label="刷新目录" title="刷新目录" onClick={() => void load(path, "refresh")}><Icon name="refresh" size={13}/></button>

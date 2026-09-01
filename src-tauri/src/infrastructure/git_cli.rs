@@ -1,18 +1,26 @@
 use std::{
     ffi::{OsStr, OsString},
-    io::Read,
+    fs,
+    io::{Read, Write},
     path::{Path, PathBuf},
     process::{Command, Stdio},
     thread,
     time::{Duration, Instant},
 };
 
+use atomic_write_file::AtomicWriteFile;
+
 use crate::{
+    domain::files::content_revision,
     domain::git::{
-        GitBranch, GitBranchKind, GitChange, GitCommit, GitCommitFile, GitError, GitHead,
-        GitSnapshot, find_tracking_local_branch, validate_abort_merge, validate_branch_source_ref,
-        validate_continue_merge, validate_local_branch_ref, validate_merge_preconditions,
-        validate_remote_branch_ref, validate_remote_name,
+        GitBranch, GitBranchKind, GitChange, GitChangeDiff, GitCommit, GitCommitFile,
+        GitCommitFileDiff, GitConflictContentKind, GitConflictDetail, GitConflictKind,
+        GitConflictResolution, GitConflictResult, GitConflictVersion, GitDiffScope, GitDiffSource,
+        GitError, GitHead, GitSnapshot, MAX_CONFLICT_TEXT_BYTES, MAX_GIT_DIFF_TEXT_BYTES,
+        find_tracking_local_branch, validate_abort_merge, validate_branch_source_ref,
+        validate_commit_oid, validate_continue_merge, validate_local_branch_ref,
+        validate_merge_preconditions, validate_remote_branch_ref, validate_remote_name,
+        validate_stage_all,
     },
     ports::git_executor::GitExecutor,
 };
@@ -111,7 +119,7 @@ impl SystemGitExecutor {
         .is_ok()
     }
 
-    fn merge_in_progress(&self, repository: &Path) -> Result<bool, GitError> {
+    fn merge_head_state(&self, repository: &Path) -> Result<(bool, Option<String>), GitError> {
         match self.git(
             [
                 OsString::from("-C"),
@@ -123,10 +131,43 @@ impl SystemGitExecutor {
             ],
             READ_TIMEOUT,
         ) {
-            Ok(_) => Ok(true),
-            Err(GitError::CommandFailed(_)) => Ok(false),
+            Ok(output) => {
+                let oids = String::from_utf8_lossy(&output.stdout)
+                    .lines()
+                    .map(str::trim)
+                    .filter(|oid| !oid.is_empty())
+                    .map(str::to_owned)
+                    .collect::<Vec<_>>();
+                if oids.iter().all(|oid| validate_commit_oid(oid).is_ok()) && !oids.is_empty() {
+                    Ok((true, (oids.len() == 1).then(|| oids[0].clone())))
+                } else {
+                    Err(GitError::Io)
+                }
+            }
+            Err(GitError::CommandFailed(_)) => Ok((false, None)),
             Err(error) => Err(error),
         }
+    }
+
+    fn checkout_conflict_side(
+        &self,
+        repository: &Path,
+        path: &str,
+        side: &str,
+    ) -> Result<(), GitError> {
+        self.git(
+            [
+                OsString::from("-C"),
+                repository.as_os_str().to_owned(),
+                OsString::from("--literal-pathspecs"),
+                OsString::from("checkout"),
+                OsString::from(side),
+                OsString::from("--"),
+                OsString::from(path),
+            ],
+            MUTATION_TIMEOUT,
+        )?;
+        Ok(())
     }
 }
 
@@ -137,7 +178,7 @@ impl GitExecutor for SystemGitExecutor {
 
     fn snapshot(&self, path: &Path) -> Result<GitSnapshot, GitError> {
         let repository = self.repository_root(path)?;
-        let merge_in_progress = self.merge_in_progress(&repository)?;
+        let (merge_in_progress, merge_head_oid) = self.merge_head_state(&repository)?;
         let status = self.git(
             [
                 OsString::from("-C"),
@@ -206,6 +247,7 @@ impl GitExecutor for SystemGitExecutor {
             remotes: parse_remotes(&remotes.stdout),
             commits,
             merge_in_progress,
+            merge_head_oid,
         })
     }
 
@@ -235,6 +277,8 @@ impl GitExecutor for SystemGitExecutor {
     }
 
     fn stage_all(&self, repository: &Path) -> Result<GitSnapshot, GitError> {
+        let current = self.snapshot(repository)?;
+        validate_stage_all(&current)?;
         self.mutate(repository, ["add", "-A", "--"])
     }
 
@@ -294,6 +338,146 @@ impl GitExecutor for SystemGitExecutor {
             READ_TIMEOUT,
         )?;
         Ok(parse_commit_files(&output.stdout))
+    }
+
+    fn commit_file_diff(
+        &self,
+        repository: &Path,
+        oid: &str,
+        path: &str,
+    ) -> Result<GitCommitFileDiff, GitError> {
+        let repository = self.repository_root(repository)?;
+        let file = self
+            .commit_files(&repository, oid)?
+            .into_iter()
+            .find(|file| file.path == path)
+            .ok_or_else(|| GitError::Conflict("该文件不属于所选提交".into()))?;
+        let parent_oid = commit_parent_oid(self, &repository, oid)?;
+        let baseline_path = file.original_path.as_deref().unwrap_or(path);
+        let before = match parent_oid.as_deref() {
+            Some(parent) => tree_version(self, &repository, parent, baseline_path)?,
+            None => missing_version(),
+        };
+        let after = tree_version(self, &repository, oid, path)?;
+        Ok(GitCommitFileDiff {
+            commit_oid: oid.to_owned(),
+            parent_oid,
+            path: file.path,
+            original_path: file.original_path,
+            status: file.status,
+            before,
+            after,
+        })
+    }
+
+    fn change_diff(
+        &self,
+        repository: &Path,
+        path: &str,
+        staged: bool,
+    ) -> Result<GitChangeDiff, GitError> {
+        let repository = self.repository_root(repository)?;
+        let snapshot = self.snapshot(&repository)?;
+        let change = snapshot
+            .changes
+            .iter()
+            .find(|change| change.path == path && change.staged == staged && !change.conflict)
+            .cloned()
+            .ok_or_else(|| GitError::Conflict("该更改已变化，请刷新后重试".into()))?;
+        let baseline_path = change.original_path.as_deref().unwrap_or(path);
+        let (scope, before_source, after_source, before, after) = if staged {
+            (
+                GitDiffScope::Staged,
+                GitDiffSource::Head,
+                GitDiffSource::Index,
+                head_version(self, &repository, baseline_path)?,
+                index_version(self, &repository, path)?,
+            )
+        } else {
+            (
+                GitDiffScope::Unstaged,
+                GitDiffSource::Index,
+                GitDiffSource::Worktree,
+                index_version(self, &repository, baseline_path)?,
+                worktree_version(&repository, path)?,
+            )
+        };
+        Ok(GitChangeDiff {
+            path: change.path,
+            original_path: change.original_path,
+            status: change.status,
+            scope,
+            before_source,
+            after_source,
+            before,
+            after,
+        })
+    }
+
+    fn conflict_detail(
+        &self,
+        repository: &Path,
+        path: &str,
+    ) -> Result<GitConflictDetail, GitError> {
+        let repository = self.repository_root(repository)?;
+        conflict_detail_local(self, &repository, path)
+    }
+
+    fn resolve_conflict(
+        &self,
+        repository: &Path,
+        path: &str,
+        resolution: &GitConflictResolution,
+    ) -> Result<GitSnapshot, GitError> {
+        let repository = self.repository_root(repository)?;
+        let detail = conflict_detail_local(self, &repository, path)?;
+        match resolution {
+            GitConflictResolution::SaveText {
+                content,
+                expected_revision,
+            } => {
+                if !detail.editable || detail.result.revision != *expected_revision {
+                    return Err(GitError::Conflict(
+                        "冲突文件已在外部变化，请重新加载".into(),
+                    ));
+                }
+                write_conflict_text(&repository, path, content.as_bytes())?;
+                self.stage(&repository, &[path.to_owned()])
+            }
+            GitConflictResolution::UseCurrent => {
+                ensure_regular_side(&detail.current, "当前版本不存在或不支持直接采用")?;
+                self.checkout_conflict_side(&repository, path, "--ours")?;
+                self.stage(&repository, &[path.to_owned()])
+            }
+            GitConflictResolution::UseIncoming => {
+                ensure_regular_side(&detail.incoming, "传入版本不存在或不支持直接采用")?;
+                self.checkout_conflict_side(&repository, path, "--theirs")?;
+                self.stage(&repository, &[path.to_owned()])
+            }
+            GitConflictResolution::Delete => {
+                if detail.current.kind != GitConflictContentKind::Missing
+                    && detail.incoming.kind != GitConflictContentKind::Missing
+                {
+                    return Err(GitError::Conflict("该冲突不能直接选择删除结果".into()));
+                }
+                self.mutate(
+                    &repository,
+                    [
+                        OsStr::new("--literal-pathspecs"),
+                        OsStr::new("rm"),
+                        OsStr::new("-f"),
+                        OsStr::new("--"),
+                        OsStr::new(path),
+                    ],
+                )
+            }
+            GitConflictResolution::MarkResolved => {
+                if detail.result.kind == GitConflictContentKind::Missing {
+                    return Err(GitError::Conflict("结果文件不存在，请选择删除结果".into()));
+                }
+                self.stage(&repository, &[path.to_owned()])
+            }
+        }
     }
 
     fn create_branch(&self, repository: &Path, name: &str) -> Result<GitSnapshot, GitError> {
@@ -517,6 +701,559 @@ impl GitExecutor for SystemGitExecutor {
         validate_abort_merge(&current)?;
         self.mutate(repository, ["merge", "--abort"])
     }
+}
+
+#[derive(Clone)]
+struct GitBlobEntry {
+    oid: String,
+    mode: u32,
+}
+
+fn missing_version() -> GitConflictVersion {
+    GitConflictVersion {
+        kind: GitConflictContentKind::Missing,
+        content: None,
+        size: 0,
+        mode: None,
+    }
+}
+
+fn head_version(
+    executor: &SystemGitExecutor,
+    repository: &Path,
+    path: &str,
+) -> Result<GitConflictVersion, GitError> {
+    if !executor.has_head(repository) {
+        return Ok(missing_version());
+    }
+    tree_version(executor, repository, "HEAD", path)
+}
+
+fn tree_version(
+    executor: &SystemGitExecutor,
+    repository: &Path,
+    revision: &str,
+    path: &str,
+) -> Result<GitConflictVersion, GitError> {
+    let output = executor.git(
+        [
+            OsString::from("-C"),
+            repository.as_os_str().to_owned(),
+            OsString::from("--literal-pathspecs"),
+            OsString::from("ls-tree"),
+            OsString::from("-z"),
+            OsString::from(revision),
+            OsString::from("--"),
+            OsString::from(path),
+        ],
+        READ_TIMEOUT,
+    )?;
+    let entry = parse_tree_entry(&output.stdout, path)?;
+    entry.map_or_else(
+        || Ok(missing_version()),
+        |entry| blob_version(executor, repository, entry),
+    )
+}
+
+fn commit_parent_oid(
+    executor: &SystemGitExecutor,
+    repository: &Path,
+    oid: &str,
+) -> Result<Option<String>, GitError> {
+    let output = executor.git(
+        [
+            OsString::from("-C"),
+            repository.as_os_str().to_owned(),
+            OsString::from("rev-list"),
+            OsString::from("--parents"),
+            OsString::from("-n"),
+            OsString::from("1"),
+            OsString::from(oid),
+        ],
+        READ_TIMEOUT,
+    )?;
+    let line = String::from_utf8_lossy(&output.stdout);
+    let mut fields = line.split_whitespace();
+    let commit = fields.next().ok_or(GitError::Io)?;
+    if commit != oid {
+        return Err(GitError::Io);
+    }
+    Ok(fields.next().map(str::to_owned))
+}
+
+fn index_version(
+    executor: &SystemGitExecutor,
+    repository: &Path,
+    path: &str,
+) -> Result<GitConflictVersion, GitError> {
+    let output = executor.git(
+        [
+            OsString::from("-C"),
+            repository.as_os_str().to_owned(),
+            OsString::from("--literal-pathspecs"),
+            OsString::from("ls-files"),
+            OsString::from("--stage"),
+            OsString::from("-z"),
+            OsString::from("--"),
+            OsString::from(path),
+        ],
+        READ_TIMEOUT,
+    )?;
+    let entry = parse_index_entry(&output.stdout, path)?;
+    entry.map_or_else(
+        || Ok(missing_version()),
+        |entry| blob_version(executor, repository, entry),
+    )
+}
+
+fn parse_tree_entry(bytes: &[u8], path: &str) -> Result<Option<GitBlobEntry>, GitError> {
+    let Some(record) = bytes
+        .split(|byte| *byte == 0)
+        .find(|record| !record.is_empty())
+    else {
+        return Ok(None);
+    };
+    let mut pieces = record.splitn(2, |byte| *byte == b'\t');
+    let metadata = pieces.next().ok_or(GitError::Io)?;
+    if pieces.next().ok_or(GitError::Io)? != path.as_bytes() {
+        return Ok(None);
+    }
+    let metadata = String::from_utf8_lossy(metadata);
+    let fields = metadata.split_whitespace().collect::<Vec<_>>();
+    Ok(Some(GitBlobEntry {
+        mode: fields
+            .first()
+            .and_then(|value| u32::from_str_radix(value, 8).ok())
+            .ok_or(GitError::Io)?,
+        oid: fields.get(2).ok_or(GitError::Io)?.to_string(),
+    }))
+}
+
+fn parse_index_entry(bytes: &[u8], path: &str) -> Result<Option<GitBlobEntry>, GitError> {
+    for record in bytes
+        .split(|byte| *byte == 0)
+        .filter(|record| !record.is_empty())
+    {
+        let mut pieces = record.splitn(2, |byte| *byte == b'\t');
+        let metadata = pieces.next().ok_or(GitError::Io)?;
+        if pieces.next().ok_or(GitError::Io)? != path.as_bytes() {
+            continue;
+        }
+        let metadata = String::from_utf8_lossy(metadata);
+        let fields = metadata.split_whitespace().collect::<Vec<_>>();
+        if fields.get(2) != Some(&"0") {
+            continue;
+        }
+        return Ok(Some(GitBlobEntry {
+            mode: fields
+                .first()
+                .and_then(|value| u32::from_str_radix(value, 8).ok())
+                .ok_or(GitError::Io)?,
+            oid: fields.get(1).ok_or(GitError::Io)?.to_string(),
+        }));
+    }
+    Ok(None)
+}
+
+fn blob_version(
+    executor: &SystemGitExecutor,
+    repository: &Path,
+    entry: GitBlobEntry,
+) -> Result<GitConflictVersion, GitError> {
+    if !is_regular_mode(entry.mode) {
+        return Ok(GitConflictVersion {
+            kind: GitConflictContentKind::Unsupported,
+            content: None,
+            size: 0,
+            mode: Some(entry.mode),
+        });
+    }
+    let size_output = executor.git(
+        [
+            OsString::from("-C"),
+            repository.as_os_str().to_owned(),
+            OsString::from("cat-file"),
+            OsString::from("-s"),
+            OsString::from(&entry.oid),
+        ],
+        READ_TIMEOUT,
+    )?;
+    let size = String::from_utf8_lossy(&size_output.stdout)
+        .trim()
+        .parse::<u64>()
+        .map_err(|_| GitError::Io)?;
+    if size > MAX_GIT_DIFF_TEXT_BYTES as u64 {
+        return Ok(GitConflictVersion {
+            kind: GitConflictContentKind::Unsupported,
+            content: None,
+            size,
+            mode: Some(entry.mode),
+        });
+    }
+    let output = executor.git(
+        [
+            OsString::from("-C"),
+            repository.as_os_str().to_owned(),
+            OsString::from("cat-file"),
+            OsString::from("blob"),
+            OsString::from(&entry.oid),
+        ],
+        READ_TIMEOUT,
+    )?;
+    let content = std::str::from_utf8(&output.stdout)
+        .ok()
+        .filter(|_| !output.stdout.contains(&0))
+        .map(str::to_owned);
+    Ok(GitConflictVersion {
+        kind: if content.is_some() {
+            GitConflictContentKind::Text
+        } else {
+            GitConflictContentKind::Binary
+        },
+        content,
+        size,
+        mode: Some(entry.mode),
+    })
+}
+
+fn worktree_version(repository: &Path, path: &str) -> Result<GitConflictVersion, GitError> {
+    let target = conflict_worktree_path(repository, path)?;
+    let metadata = match fs::symlink_metadata(&target) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(missing_version()),
+        Err(_) => return Err(GitError::Io),
+    };
+    if !metadata.file_type().is_file() {
+        return Ok(GitConflictVersion {
+            kind: GitConflictContentKind::Unsupported,
+            content: None,
+            size: metadata.len(),
+            mode: None,
+        });
+    }
+    let size = metadata.len();
+    if size > MAX_GIT_DIFF_TEXT_BYTES as u64 {
+        return Ok(GitConflictVersion {
+            kind: GitConflictContentKind::Unsupported,
+            content: None,
+            size,
+            mode: Some(0o100644),
+        });
+    }
+    let bytes = fs::read(target).map_err(|_| GitError::Io)?;
+    let content = std::str::from_utf8(&bytes)
+        .ok()
+        .filter(|_| !bytes.contains(&0))
+        .map(str::to_owned);
+    Ok(GitConflictVersion {
+        kind: if content.is_some() {
+            GitConflictContentKind::Text
+        } else {
+            GitConflictContentKind::Binary
+        },
+        content,
+        size,
+        mode: Some(0o100644),
+    })
+}
+
+#[derive(Clone, Copy)]
+struct ConflictStage {
+    stage: u8,
+    mode: u32,
+}
+
+fn conflict_detail_local(
+    executor: &SystemGitExecutor,
+    repository: &Path,
+    path: &str,
+) -> Result<GitConflictDetail, GitError> {
+    let snapshot = executor.snapshot(repository)?;
+    if !snapshot.merge_in_progress {
+        return Err(GitError::Conflict("当前仓库没有未完成的合并".into()));
+    }
+    if snapshot.merge_head_oid.is_none() {
+        return Err(GitError::Conflict(
+            "多来源合并冲突需要使用终端或外部 Git 工具处理".into(),
+        ));
+    }
+    let change = snapshot
+        .changes
+        .iter()
+        .find(|change| change.conflict && change.path == path)
+        .ok_or_else(|| GitError::Conflict("该路径不再是未解决冲突".into()))?;
+    let stages = conflict_stages(executor, repository, path)?;
+    let base = conflict_stage_version(executor, repository, path, &stages, 1)?;
+    let current = conflict_stage_version(executor, repository, path, &stages, 2)?;
+    let incoming = conflict_stage_version(executor, repository, path, &stages, 3)?;
+    let result = conflict_result(repository, path)?;
+    let kind = change.conflict_kind.unwrap_or(GitConflictKind::Other);
+    Ok(build_conflict_detail(
+        path.to_owned(),
+        kind,
+        base,
+        current,
+        incoming,
+        result,
+    ))
+}
+
+pub(crate) fn build_conflict_detail(
+    path: String,
+    kind: GitConflictKind,
+    base: GitConflictVersion,
+    current: GitConflictVersion,
+    incoming: GitConflictVersion,
+    result: GitConflictResult,
+) -> GitConflictDetail {
+    let supported_kind = !matches!(kind, GitConflictKind::Other | GitConflictKind::BothDeleted);
+    let versions_textual = [&base, &current, &incoming].iter().all(|version| {
+        matches!(
+            version.kind,
+            GitConflictContentKind::Missing | GitConflictContentKind::Text
+        )
+    });
+    let editable = supported_kind
+        && versions_textual
+        && result.kind == GitConflictContentKind::Text
+        && result.mode.is_some_and(is_regular_mode);
+    let unsupported_reason = if editable
+        || [current.kind, incoming.kind].iter().any(|kind| {
+            matches!(
+                kind,
+                GitConflictContentKind::Text | GitConflictContentKind::Binary
+            )
+        }) {
+        None
+    } else if matches!(kind, GitConflictKind::Other | GitConflictKind::BothDeleted) {
+        Some("该冲突类型需要使用终端或外部 Git 工具处理".into())
+    } else {
+        Some("该文件类型不支持应用内编辑".into())
+    };
+    GitConflictDetail {
+        path,
+        kind,
+        base,
+        current,
+        incoming,
+        result,
+        editable,
+        unsupported_reason,
+    }
+}
+
+fn conflict_stages(
+    executor: &SystemGitExecutor,
+    repository: &Path,
+    path: &str,
+) -> Result<Vec<ConflictStage>, GitError> {
+    let output = executor.git(
+        [
+            OsString::from("-C"),
+            repository.as_os_str().to_owned(),
+            OsString::from("--literal-pathspecs"),
+            OsString::from("ls-files"),
+            OsString::from("--unmerged"),
+            OsString::from("-z"),
+            OsString::from("--"),
+            OsString::from(path),
+        ],
+        READ_TIMEOUT,
+    )?;
+    let mut stages = Vec::new();
+    for record in output
+        .stdout
+        .split(|byte| *byte == 0)
+        .filter(|record| !record.is_empty())
+    {
+        let mut parts = record.splitn(2, |byte| *byte == b'\t');
+        let metadata = parts.next().ok_or(GitError::Io)?;
+        let record_path = parts.next().ok_or(GitError::Io)?;
+        if record_path != path.as_bytes() {
+            continue;
+        }
+        let metadata = String::from_utf8_lossy(metadata);
+        let fields = metadata.split_whitespace().collect::<Vec<_>>();
+        let mode = fields
+            .first()
+            .and_then(|value| u32::from_str_radix(value, 8).ok())
+            .ok_or(GitError::Io)?;
+        let stage = fields
+            .get(2)
+            .and_then(|value| value.parse::<u8>().ok())
+            .ok_or(GitError::Io)?;
+        stages.push(ConflictStage { stage, mode });
+    }
+    if stages.is_empty() {
+        return Err(GitError::Conflict("该路径不再是未解决冲突".into()));
+    }
+    Ok(stages)
+}
+
+fn conflict_stage_version(
+    executor: &SystemGitExecutor,
+    repository: &Path,
+    path: &str,
+    stages: &[ConflictStage],
+    stage: u8,
+) -> Result<GitConflictVersion, GitError> {
+    let Some(entry) = stages.iter().find(|entry| entry.stage == stage) else {
+        return Ok(GitConflictVersion {
+            kind: GitConflictContentKind::Missing,
+            content: None,
+            size: 0,
+            mode: None,
+        });
+    };
+    if !is_regular_mode(entry.mode) {
+        return Ok(GitConflictVersion {
+            kind: GitConflictContentKind::Unsupported,
+            content: None,
+            size: 0,
+            mode: Some(entry.mode),
+        });
+    }
+    let object = format!(":{stage}:{path}");
+    let size_output = executor.git(
+        [
+            OsString::from("-C"),
+            repository.as_os_str().to_owned(),
+            OsString::from("cat-file"),
+            OsString::from("-s"),
+            OsString::from(&object),
+        ],
+        READ_TIMEOUT,
+    )?;
+    let size = String::from_utf8_lossy(&size_output.stdout)
+        .trim()
+        .parse::<u64>()
+        .map_err(|_| GitError::Io)?;
+    if size > MAX_CONFLICT_TEXT_BYTES as u64 {
+        return Ok(GitConflictVersion {
+            kind: GitConflictContentKind::Unsupported,
+            content: None,
+            size,
+            mode: Some(entry.mode),
+        });
+    }
+    let output = executor.git(
+        [
+            OsString::from("-C"),
+            repository.as_os_str().to_owned(),
+            OsString::from("cat-file"),
+            OsString::from("blob"),
+            OsString::from(object),
+        ],
+        READ_TIMEOUT,
+    )?;
+    let content = std::str::from_utf8(&output.stdout)
+        .ok()
+        .filter(|_| !output.stdout.contains(&0))
+        .map(str::to_owned);
+    Ok(GitConflictVersion {
+        kind: if content.is_some() {
+            GitConflictContentKind::Text
+        } else {
+            GitConflictContentKind::Binary
+        },
+        content,
+        size,
+        mode: Some(entry.mode),
+    })
+}
+
+fn conflict_result(repository: &Path, path: &str) -> Result<GitConflictResult, GitError> {
+    let target = conflict_worktree_path(repository, path)?;
+    let metadata = match fs::symlink_metadata(&target) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(GitConflictResult {
+                kind: GitConflictContentKind::Missing,
+                content: None,
+                revision: "missing".into(),
+                size: 0,
+                mode: None,
+            });
+        }
+        Err(_) => return Err(GitError::Io),
+    };
+    if !metadata.file_type().is_file() {
+        return Ok(GitConflictResult {
+            kind: GitConflictContentKind::Unsupported,
+            content: None,
+            revision: "unsupported".into(),
+            size: metadata.len(),
+            mode: None,
+        });
+    }
+    if metadata.len() > MAX_CONFLICT_TEXT_BYTES as u64 {
+        return Ok(GitConflictResult {
+            kind: GitConflictContentKind::Unsupported,
+            content: None,
+            revision: format!("oversize:{}", metadata.len()),
+            size: metadata.len(),
+            mode: Some(0o100644),
+        });
+    }
+    let bytes = fs::read(target).map_err(|_| GitError::Io)?;
+    let content = std::str::from_utf8(&bytes)
+        .ok()
+        .filter(|_| !bytes.contains(&0))
+        .map(str::to_owned);
+    Ok(GitConflictResult {
+        kind: if content.is_some() {
+            GitConflictContentKind::Text
+        } else {
+            GitConflictContentKind::Binary
+        },
+        content,
+        revision: content_revision(&bytes),
+        size: bytes.len() as u64,
+        mode: Some(0o100644),
+    })
+}
+
+fn conflict_worktree_path(repository: &Path, path: &str) -> Result<PathBuf, GitError> {
+    let root = repository
+        .canonicalize()
+        .map_err(|_| GitError::InvalidPath)?;
+    let target = root.join(path);
+    let parent = target.parent().ok_or(GitError::InvalidPath)?;
+    let parent = parent.canonicalize().map_err(|_| GitError::InvalidPath)?;
+    if !parent.starts_with(&root) {
+        return Err(GitError::InvalidPath);
+    }
+    if target.exists() {
+        let canonical = target.canonicalize().map_err(|_| GitError::InvalidPath)?;
+        if !canonical.starts_with(&root) {
+            return Err(GitError::InvalidPath);
+        }
+    }
+    Ok(target)
+}
+
+fn write_conflict_text(repository: &Path, path: &str, bytes: &[u8]) -> Result<(), GitError> {
+    let target = conflict_worktree_path(repository, path)?;
+    let mut file = AtomicWriteFile::open(&target).map_err(|_| GitError::Io)?;
+    file.write_all(bytes).map_err(|_| GitError::Io)?;
+    file.commit().map_err(|_| GitError::Io)
+}
+
+fn ensure_regular_side(version: &GitConflictVersion, message: &str) -> Result<(), GitError> {
+    if version.mode.is_some_and(is_regular_mode)
+        && matches!(
+            version.kind,
+            GitConflictContentKind::Text | GitConflictContentKind::Binary
+        )
+    {
+        Ok(())
+    } else {
+        Err(GitError::Conflict(message.into()))
+    }
+}
+
+fn is_regular_mode(mode: u32) -> bool {
+    matches!(mode, 0o100644 | 0o100755)
 }
 
 fn local_branch<'a>(snapshot: &'a GitSnapshot, ref_name: &str) -> Result<&'a GitBranch, GitError> {
@@ -768,6 +1505,7 @@ pub(crate) fn parse_status(bytes: &[u8]) -> Result<(GitHead, Vec<GitChange>), Gi
                     status: "U".into(),
                     staged: false,
                     conflict: false,
+                    conflict_kind: None,
                 });
             } else if line.starts_with("1 ") || line.starts_with("2 ") {
                 let rename = line.starts_with("2 ");
@@ -789,6 +1527,7 @@ pub(crate) fn parse_status(bytes: &[u8]) -> Result<(GitHead, Vec<GitChange>), Gi
                 }
             } else if line.starts_with("u ") {
                 let fields = line.splitn(11, ' ').collect::<Vec<_>>();
+                let xy = fields.get(1).copied().unwrap_or("..");
                 let path = fields.last().copied().unwrap_or("").to_owned();
                 changes.push(GitChange {
                     path,
@@ -796,6 +1535,7 @@ pub(crate) fn parse_status(bytes: &[u8]) -> Result<(GitHead, Vec<GitChange>), Gi
                     status: "!".into(),
                     staged: false,
                     conflict: true,
+                    conflict_kind: Some(GitConflictKind::from_xy(xy)),
                 });
             }
         }
@@ -851,6 +1591,7 @@ fn push_xy_changes(
             status: "!".into(),
             staged: false,
             conflict: true,
+            conflict_kind: Some(GitConflictKind::from_xy(xy)),
         });
         return;
     }
@@ -861,6 +1602,7 @@ fn push_xy_changes(
             status: staged.to_string(),
             staged: true,
             conflict: false,
+            conflict_kind: None,
         });
     }
     if unstaged != '.' {
@@ -870,6 +1612,7 @@ fn push_xy_changes(
             status: unstaged.to_string(),
             staged: false,
             conflict: false,
+            conflict_kind: None,
         });
     }
 }
@@ -989,7 +1732,10 @@ mod tests {
         OUTPUT_LIMIT, SystemGitExecutor, classify_failure, parse_branches, parse_commit_files,
         parse_commits, parse_status, read_bounded, run_process,
     };
-    use crate::domain::git::{GitBranchKind, GitError, find_tracking_local_branch};
+    use crate::domain::git::{
+        GitBranchKind, GitConflictContentKind, GitConflictKind, GitConflictResolution,
+        GitDiffSource, GitError, MAX_CONFLICT_TEXT_BYTES, find_tracking_local_branch,
+    };
     use crate::ports::git_executor::GitExecutor;
     use std::{fs, io::Cursor, process::Command};
     use tempfile::tempdir;
@@ -1015,18 +1761,26 @@ mod tests {
 
     #[test]
     fn parses_renames_conflicts_branches_and_merge_metadata() {
-        let fixture = b"# branch.oid abc\0# branch.head feature/test\0\x32 R. N... 100644 100644 100644 a b R100 renamed.txt\0old.txt\0u UU N... 100644 100644 100644 100644 a b c conflict.txt\0? -leading \xe4\xb8\xad\xe6\x96\x87.txt\0";
+        let fixture = b"# branch.oid abc\0# branch.head feature/test\0\x32 R. N... 100644 100644 100644 a b R100 renamed.txt\0old.txt\0u UU N... 100644 100644 100644 100644 a b c conflict.txt\0u AA N... 000000 100644 100644 100644 0 b c added.txt\0u DU N... 100644 000000 100644 100644 a 0 c current-deleted.txt\0u UD N... 100644 100644 000000 100644 a b 0 incoming-deleted.txt\0u AU N... 000000 100644 100644 100644 0 b c other.txt\0? -leading \xe4\xb8\xad\xe6\x96\x87.txt\0";
         let (_, changes) = parse_status(fixture).expect("status");
         assert!(changes.iter().any(|change| {
             change.path == "renamed.txt"
                 && change.original_path.as_deref() == Some("old.txt")
                 && change.staged
         }));
-        assert!(
-            changes
-                .iter()
-                .any(|change| change.path == "conflict.txt" && change.conflict)
-        );
+        assert!(changes.iter().any(|change| change.path == "conflict.txt"
+            && change.conflict
+            && change.conflict_kind == Some(GitConflictKind::BothModified)));
+        for (path, kind) in [
+            ("added.txt", GitConflictKind::BothAdded),
+            ("current-deleted.txt", GitConflictKind::CurrentDeleted),
+            ("incoming-deleted.txt", GitConflictKind::IncomingDeleted),
+            ("other.txt", GitConflictKind::Other),
+        ] {
+            assert!(changes.iter().any(|change| {
+                change.path == path && change.conflict && change.conflict_kind == Some(kind)
+            }));
+        }
         assert!(
             changes
                 .iter()
@@ -1665,6 +2419,75 @@ refs/remotes/origin/HEAD\0origin/HEAD\0abc\0 \0\0\0refs/remotes/origin/main\n",
     }
 
     #[test]
+    fn change_diff_respects_head_index_worktree_and_literal_paths() {
+        let git = which_git();
+        let executor = SystemGitExecutor::with_executable(git.clone());
+        let directory = tempdir().expect("diff repo");
+        let repository = directory.path();
+        executor.initialize(repository).expect("init");
+        configure_identity(&git, repository);
+        fs::write(repository.join("dual.txt"), b"head\n").expect("dual fixture");
+        fs::write(repository.join("rename-old.txt"), b"rename base\n").expect("rename fixture");
+        fs::write(repository.join("move-old.txt"), b"move base\n").expect("move fixture");
+        executor.stage_all(repository).expect("stage base");
+        executor.commit(repository, "base").expect("commit base");
+
+        fs::write(repository.join("dual.txt"), b"index\n").expect("index content");
+        executor
+            .stage(repository, &["dual.txt".into()])
+            .expect("stage dual");
+        fs::write(repository.join("dual.txt"), b"worktree\n").expect("worktree content");
+
+        let staged = executor
+            .change_diff(repository, "dual.txt", true)
+            .expect("staged diff");
+        assert_eq!(staged.before_source, GitDiffSource::Head);
+        assert_eq!(staged.after_source, GitDiffSource::Index);
+        assert_eq!(staged.before.content.as_deref(), Some("head\n"));
+        assert_eq!(staged.after.content.as_deref(), Some("index\n"));
+
+        let unstaged = executor
+            .change_diff(repository, "dual.txt", false)
+            .expect("unstaged diff");
+        assert_eq!(unstaged.before_source, GitDiffSource::Index);
+        assert_eq!(unstaged.after_source, GitDiffSource::Worktree);
+        assert_eq!(unstaged.before.content.as_deref(), Some("index\n"));
+        assert_eq!(unstaged.after.content.as_deref(), Some("worktree\n"));
+
+        fs::write(repository.join("-奇异.txt"), b"literal\n").expect("literal fixture");
+        let untracked = executor
+            .change_diff(repository, "-奇异.txt", false)
+            .expect("untracked diff");
+        assert_eq!(untracked.before.kind, GitConflictContentKind::Missing);
+        assert_eq!(untracked.after.content.as_deref(), Some("literal\n"));
+
+        fs::remove_file(repository.join("rename-old.txt")).expect("delete fixture");
+        let deleted = executor
+            .change_diff(repository, "rename-old.txt", false)
+            .expect("delete diff");
+        assert_eq!(deleted.before.content.as_deref(), Some("rename base\n"));
+        assert_eq!(deleted.after.kind, GitConflictContentKind::Missing);
+
+        run_git_test(
+            &git,
+            [
+                "-C",
+                path(repository),
+                "mv",
+                "--",
+                "move-old.txt",
+                "move-new.txt",
+            ],
+        );
+        let renamed = executor
+            .change_diff(repository, "move-new.txt", true)
+            .expect("rename diff");
+        assert_eq!(renamed.original_path.as_deref(), Some("move-old.txt"));
+        assert_eq!(renamed.before.content.as_deref(), Some("move base\n"));
+        assert_eq!(renamed.after.content.as_deref(), Some("move base\n"));
+    }
+
+    #[test]
     fn real_git_merge_supports_success_conflict_continue_abort_and_safe_preconditions() {
         let git = which_git();
         let executor = SystemGitExecutor::with_executable(git.clone());
@@ -1742,7 +2565,23 @@ refs/remotes/origin/HEAD\0origin/HEAD\0abc\0 \0\0\0refs/remotes/origin/main\n",
             .merge_branch(repository, "refs/heads/feature/conflict")
             .expect("conflict snapshot");
         assert!(conflicted.merge_in_progress);
+        assert!(conflicted.merge_head_oid.is_some());
         assert!(conflicted.changes.iter().any(|change| change.conflict));
+        let detail = executor
+            .conflict_detail(repository, "shared.txt")
+            .expect("conflict detail");
+        assert_eq!(detail.kind, GitConflictKind::BothModified);
+        assert_eq!(detail.base.content.as_deref(), Some("base\n"));
+        assert_eq!(detail.current.content.as_deref(), Some("main conflict\n"));
+        assert_eq!(
+            detail.incoming.content.as_deref(),
+            Some("feature conflict\n")
+        );
+        assert!(detail.editable);
+        assert!(matches!(
+            executor.stage_all(repository),
+            Err(GitError::Conflict(_))
+        ));
         assert!(
             executor
                 .snapshot(repository)
@@ -1776,8 +2615,43 @@ refs/remotes/origin/HEAD\0origin/HEAD\0abc\0 \0\0\0refs/remotes/origin/main\n",
             .merge_branch(repository, "refs/heads/feature/conflict")
             .expect("second conflict snapshot");
         assert!(conflicted.merge_in_progress);
-        fs::write(repository.join("shared.txt"), b"resolved\n").expect("resolve conflict");
-        executor.stage_all(repository).expect("stage resolution");
+        let detail = executor
+            .conflict_detail(repository, "shared.txt")
+            .expect("second conflict detail");
+        fs::write(repository.join("shared.txt"), b"external edit\n").expect("external edit");
+        assert!(matches!(
+            executor.resolve_conflict(
+                repository,
+                "shared.txt",
+                &GitConflictResolution::SaveText {
+                    content: "stale resolution\n".into(),
+                    expected_revision: detail.result.revision,
+                },
+            ),
+            Err(GitError::Conflict(_))
+        ));
+        assert_eq!(
+            fs::read_to_string(repository.join("shared.txt")).expect("external result"),
+            "external edit\n"
+        );
+        let detail = executor
+            .conflict_detail(repository, "shared.txt")
+            .expect("reloaded conflict detail");
+        let resolved = executor
+            .resolve_conflict(
+                repository,
+                "shared.txt",
+                &GitConflictResolution::SaveText {
+                    content: "resolved\n".into(),
+                    expected_revision: detail.result.revision,
+                },
+            )
+            .expect("save and stage resolution");
+        assert!(!resolved.changes.iter().any(|change| change.conflict));
+        assert_eq!(
+            fs::read_to_string(repository.join("shared.txt")).expect("resolved file"),
+            "resolved\n"
+        );
         let continued = executor.continue_merge(repository).expect("continue merge");
         assert!(!continued.merge_in_progress);
         assert_eq!(continued.commits[0].parents.len(), 2);
@@ -1798,6 +2672,270 @@ refs/remotes/origin/HEAD\0origin/HEAD\0abc\0 \0\0\0refs/remotes/origin/main\n",
             .expect("fast-forward");
         assert_eq!(fast_forwarded.head.oid, fast_commit.head.oid);
         assert_eq!(fast_forwarded.commits[0].parents.len(), 1);
+    }
+
+    #[test]
+    fn real_git_conflicts_support_add_delete_and_binary_file_level_resolutions() {
+        let git = which_git();
+        let executor = SystemGitExecutor::with_executable(git.clone());
+        let directory = tempdir().expect("conflict fixture");
+        let repository = directory.path();
+        executor.initialize(repository).expect("init");
+        configure_identity(&git, repository);
+        fs::write(repository.join("current-deleted.txt"), b"base current\n").expect("base");
+        fs::write(repository.join("incoming-deleted.txt"), b"base incoming\n").expect("base");
+        fs::write(repository.join("binary.bin"), b"base\0binary").expect("base binary");
+        fs::write(repository.join("oversize.txt"), b"base oversize\n").expect("base oversize");
+        executor.stage_all(repository).expect("stage base");
+        let initial = executor.commit(repository, "initial").expect("initial");
+        let main = initial.head.name.expect("main branch");
+
+        executor
+            .create_branch(repository, "feature/conflict-kinds")
+            .expect("feature branch");
+        fs::write(repository.join("both-added.txt"), b"incoming added\n").expect("incoming add");
+        fs::write(
+            repository.join("current-deleted.txt"),
+            b"incoming modified\n",
+        )
+        .expect("incoming modify");
+        fs::remove_file(repository.join("incoming-deleted.txt")).expect("incoming delete");
+        fs::write(repository.join("binary.bin"), b"incoming\0binary").expect("incoming binary");
+        fs::write(
+            repository.join("oversize.txt"),
+            vec![b'i'; MAX_CONFLICT_TEXT_BYTES + 1],
+        )
+        .expect("incoming oversize");
+        executor.stage_all(repository).expect("stage incoming");
+        executor
+            .commit(repository, "incoming changes")
+            .expect("incoming commit");
+
+        executor
+            .switch_branch(repository, &main)
+            .expect("switch main");
+        fs::write(repository.join("both-added.txt"), b"current added\n").expect("current add");
+        fs::remove_file(repository.join("current-deleted.txt")).expect("current delete");
+        fs::write(
+            repository.join("incoming-deleted.txt"),
+            b"current modified\n",
+        )
+        .expect("current modify");
+        fs::write(repository.join("binary.bin"), b"current\0binary").expect("current binary");
+        fs::write(
+            repository.join("oversize.txt"),
+            vec![b'c'; MAX_CONFLICT_TEXT_BYTES + 1],
+        )
+        .expect("current oversize");
+        executor.stage_all(repository).expect("stage current");
+        executor
+            .commit(repository, "current changes")
+            .expect("current commit");
+
+        let conflicted = executor
+            .merge_branch(repository, "refs/heads/feature/conflict-kinds")
+            .expect("merge conflicts");
+        for (path, kind) in [
+            ("both-added.txt", GitConflictKind::BothAdded),
+            ("current-deleted.txt", GitConflictKind::CurrentDeleted),
+            ("incoming-deleted.txt", GitConflictKind::IncomingDeleted),
+            ("binary.bin", GitConflictKind::BothModified),
+            ("oversize.txt", GitConflictKind::BothModified),
+        ] {
+            assert!(
+                conflicted
+                    .changes
+                    .iter()
+                    .any(|change| { change.path == path && change.conflict_kind == Some(kind) })
+            );
+        }
+
+        let add_detail = executor
+            .conflict_detail(repository, "both-added.txt")
+            .expect("AA detail");
+        assert_eq!(add_detail.base.kind, GitConflictContentKind::Missing);
+        assert!(matches!(
+            executor.conflict_detail(repository, "not-conflicted.txt"),
+            Err(GitError::Conflict(_))
+        ));
+        executor
+            .resolve_conflict(
+                repository,
+                "both-added.txt",
+                &GitConflictResolution::UseIncoming,
+            )
+            .expect("choose incoming add");
+        assert_eq!(
+            fs::read(repository.join("both-added.txt")).expect("chosen add"),
+            b"incoming added\n"
+        );
+
+        let delete_detail = executor
+            .conflict_detail(repository, "current-deleted.txt")
+            .expect("DU detail");
+        assert_eq!(delete_detail.current.kind, GitConflictContentKind::Missing);
+        assert!(matches!(
+            executor.resolve_conflict(
+                repository,
+                "current-deleted.txt",
+                &GitConflictResolution::UseCurrent,
+            ),
+            Err(GitError::Conflict(_))
+        ));
+        executor
+            .resolve_conflict(
+                repository,
+                "current-deleted.txt",
+                &GitConflictResolution::UseIncoming,
+            )
+            .expect("keep incoming side");
+        assert_eq!(
+            fs::read(repository.join("current-deleted.txt")).expect("incoming side"),
+            b"incoming modified\n"
+        );
+
+        executor
+            .resolve_conflict(
+                repository,
+                "incoming-deleted.txt",
+                &GitConflictResolution::Delete,
+            )
+            .expect("accept incoming deletion");
+        assert!(!repository.join("incoming-deleted.txt").exists());
+
+        let binary_detail = executor
+            .conflict_detail(repository, "binary.bin")
+            .expect("binary detail");
+        assert!(!binary_detail.editable);
+        assert_eq!(binary_detail.current.kind, GitConflictContentKind::Binary);
+        assert_eq!(binary_detail.incoming.kind, GitConflictContentKind::Binary);
+        executor
+            .resolve_conflict(repository, "binary.bin", &GitConflictResolution::UseCurrent)
+            .expect("choose current binary");
+        assert_eq!(
+            fs::read(repository.join("binary.bin")).expect("current binary"),
+            b"current\0binary"
+        );
+
+        let oversize_detail = executor
+            .conflict_detail(repository, "oversize.txt")
+            .expect("oversize detail");
+        assert!(!oversize_detail.editable);
+        assert_eq!(
+            oversize_detail.current.kind,
+            GitConflictContentKind::Unsupported
+        );
+        assert_eq!(
+            oversize_detail.incoming.kind,
+            GitConflictContentKind::Unsupported
+        );
+        assert!(matches!(
+            executor.resolve_conflict(
+                repository,
+                "oversize.txt",
+                &GitConflictResolution::UseIncoming,
+            ),
+            Err(GitError::Conflict(_))
+        ));
+        let resolved = executor
+            .resolve_conflict(
+                repository,
+                "oversize.txt",
+                &GitConflictResolution::MarkResolved,
+            )
+            .expect("stage external oversize result");
+        assert!(!resolved.changes.iter().any(|change| change.conflict));
+        executor.continue_merge(repository).expect("continue merge");
+    }
+
+    #[test]
+    fn real_git_commit_file_diff_uses_the_first_parent_and_empty_tree_baselines() {
+        let git = which_git();
+        let executor = SystemGitExecutor::with_executable(git.clone());
+        let directory = tempdir().expect("commit diff fixture");
+        let repository = directory.path();
+        executor.initialize(repository).expect("init");
+        configure_identity(&git, repository);
+        fs::write(
+            repository.join("rename-me.txt"),
+            b"rename baseline\nshared content\n",
+        )
+        .expect("rename fixture");
+        fs::write(repository.join("delete-me.txt"), b"deleted baseline\n").expect("delete fixture");
+        fs::write(repository.join("modify-me.txt"), b"before modification\n")
+            .expect("modify fixture");
+        fs::write(repository.join("-literal[ab].bin"), [0_u8, 1, 2])
+            .expect("literal binary fixture");
+        executor.stage_all(repository).expect("stage root");
+        let root = executor.commit(repository, "root").expect("root commit");
+        let root_oid = root.head.oid.expect("root oid");
+
+        let root_diff = executor
+            .commit_file_diff(repository, &root_oid, "rename-me.txt")
+            .expect("root diff");
+        assert_eq!(root_diff.parent_oid, None);
+        assert_eq!(root_diff.before.kind, GitConflictContentKind::Missing);
+        assert_eq!(
+            root_diff.after.content.as_deref(),
+            Some("rename baseline\nshared content\n")
+        );
+        let literal_binary = executor
+            .commit_file_diff(repository, &root_oid, "-literal[ab].bin")
+            .expect("literal binary root diff");
+        assert_eq!(literal_binary.before.kind, GitConflictContentKind::Missing);
+        assert_eq!(literal_binary.after.kind, GitConflictContentKind::Binary);
+
+        fs::rename(
+            repository.join("rename-me.txt"),
+            repository.join("renamed.txt"),
+        )
+        .expect("rename file");
+        fs::remove_file(repository.join("delete-me.txt")).expect("delete file");
+        fs::write(repository.join("modify-me.txt"), b"after modification\n").expect("modify file");
+        fs::write(repository.join("added.txt"), b"new file\n").expect("add file");
+        executor.stage_all(repository).expect("stage second");
+        let second = executor
+            .commit(repository, "change files")
+            .expect("second commit");
+        let second_oid = second.head.oid.expect("second oid");
+
+        let renamed = executor
+            .commit_file_diff(repository, &second_oid, "renamed.txt")
+            .expect("rename diff");
+        assert_eq!(renamed.parent_oid.as_deref(), Some(root_oid.as_str()));
+        assert_eq!(renamed.original_path.as_deref(), Some("rename-me.txt"));
+        assert_eq!(
+            renamed.before.content.as_deref(),
+            Some("rename baseline\nshared content\n")
+        );
+        assert_eq!(renamed.after.content, renamed.before.content);
+
+        let deleted = executor
+            .commit_file_diff(repository, &second_oid, "delete-me.txt")
+            .expect("delete diff");
+        assert_eq!(
+            deleted.before.content.as_deref(),
+            Some("deleted baseline\n")
+        );
+        assert_eq!(deleted.after.kind, GitConflictContentKind::Missing);
+
+        let added = executor
+            .commit_file_diff(repository, &second_oid, "added.txt")
+            .expect("add diff");
+        assert_eq!(added.before.kind, GitConflictContentKind::Missing);
+        assert_eq!(added.after.content.as_deref(), Some("new file\n"));
+
+        let modified = executor
+            .commit_file_diff(repository, &second_oid, "modify-me.txt")
+            .expect("modify diff");
+        assert_eq!(
+            modified.before.content.as_deref(),
+            Some("before modification\n")
+        );
+        assert_eq!(
+            modified.after.content.as_deref(),
+            Some("after modification\n")
+        );
     }
 
     fn which_git() -> std::path::PathBuf {

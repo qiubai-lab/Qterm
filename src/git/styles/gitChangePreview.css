@@ -1,0 +1,296 @@
+.dialog-frame.dialog-wide.git-change-preview-dialog {
+  width: min(1480px, calc(100vw - 48px));
+  max-width: none;
+  height: min(920px, calc(100vh - 48px));
+  max-height: none;
+  overflow: hidden;
+}
+
+.git-change-preview-dialog .dialog-content {
+  display: flex;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.git-change-preview-workbench {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.git-change-preview-toolbar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--subtle);
+  background: var(--raised);
+}
+
+.git-change-preview-files-toggle,
+.git-change-preview-navigation button {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+}
+
+.git-change-preview-files-toggle[aria-expanded="true"] {
+  color: var(--accent);
+  background: var(--selection-surface);
+}
+
+.git-change-preview-path {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.git-change-preview-path strong,
+.git-change-preview-path span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.git-change-preview-path strong {
+  font: 600 11px/1.3 SFMono-Regular, Consolas, monospace;
+}
+
+.git-change-preview-path span {
+  color: var(--dim);
+  font-size: 9px;
+}
+
+.git-change-preview-status {
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.git-change-preview-navigation {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  color: var(--dim);
+  font: 9px/1 SFMono-Regular, Consolas, monospace;
+}
+
+.git-change-preview-stage {
+  position: relative;
+  display: flex;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.git-change-preview-file-popover {
+  position: absolute;
+  z-index: 4;
+  inset: 8px auto 8px 8px;
+  display: flex;
+  width: min(300px, calc(100% - 16px));
+  min-height: 0;
+  border: 1px solid var(--subtle);
+  border-radius: 7px;
+  background: var(--floating-material);
+  box-shadow: var(--floating-shadow);
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+  transform: translateX(-8px) scale(.985);
+  transform-origin: top left;
+  transition: opacity 140ms ease-out, transform 160ms cubic-bezier(.2, .8, .2, 1);
+}
+
+.git-change-preview-file-popover[data-open] {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(0) scale(1);
+}
+
+.git-change-preview-file-title {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--subtle);
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.git-change-preview-file-list {
+  flex: 1 1 0;
+  min-height: 0;
+  padding: 5px;
+  overflow: auto;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+
+.git-change-preview-file-list button {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  padding: 6px 7px;
+  border-color: transparent;
+  background: transparent;
+  text-align: left;
+}
+
+.git-change-preview-file-list button[aria-current="true"] {
+  border-color: var(--accent);
+  background: var(--selection-surface);
+}
+
+.git-change-preview-file-list button span {
+  overflow: hidden;
+  font: 600 9.5px/1.2 SFMono-Regular, Consolas, monospace;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.git-change-preview-file-list button small {
+  color: var(--dim);
+  font-size: 8px;
+}
+
+.git-change-preview-file-list button b {
+  color: var(--accent);
+  font-size: 9px;
+}
+
+.git-change-preview-main,
+.git-change-preview-diff,
+.git-change-comparison,
+.git-change-comparison .cm-mergeView,
+.git-change-comparison .cm-mergeViewEditors,
+.git-change-comparison .cm-mergeViewEditor,
+.git-change-comparison .cm-editor {
+  min-width: 0;
+  min-height: 0;
+}
+
+.git-change-preview-main,
+.git-change-preview-diff,
+.git-change-comparison,
+.git-change-comparison .cm-mergeView,
+.git-change-comparison .cm-mergeViewEditors,
+.git-change-comparison .cm-mergeViewEditor,
+.git-change-comparison .cm-editor {
+  display: flex;
+  flex: 1 1 0;
+}
+
+.git-change-preview-diff,
+.git-change-comparison .cm-mergeViewEditor,
+.git-change-comparison .cm-editor {
+  flex-direction: column;
+}
+
+.git-change-preview-source-headings {
+  display: grid;
+  flex: none;
+  grid-template-columns: 1fr 1fr;
+  min-height: 30px;
+  border-bottom: 1px solid var(--subtle);
+  background: var(--surface);
+}
+
+.git-change-preview-source-headings span {
+  padding: 8px 10px;
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.git-change-preview-source-headings span + span {
+  border-left: 1px solid var(--subtle);
+}
+
+.git-change-comparison .cm-scroller {
+  overflow: auto;
+  font-size: 11px;
+  line-height: 1.42;
+}
+
+.git-change-preview-state {
+  display: flex;
+  flex: 1 1 0;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px;
+  color: var(--dim);
+  text-align: center;
+}
+
+.git-change-preview-state.error {
+  flex-direction: column;
+  color: var(--danger);
+}
+
+.git-change-preview-state.empty {
+  flex-direction: column;
+}
+
+.git-change-preview-state.empty strong {
+  color: var(--muted);
+}
+
+.git-change-preview-state.error span {
+  color: var(--muted);
+}
+
+.git-change-preview-fallback {
+  display: grid;
+  flex: 1 1 0;
+  grid-template-columns: 1fr 1fr;
+  min-height: 0;
+}
+
+.git-change-preview-fallback section {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 7px;
+  color: var(--muted);
+}
+
+.git-change-preview-fallback section + section {
+  border-left: 1px solid var(--subtle);
+}
+
+.git-change-preview-fallback small {
+  color: var(--dim);
+}
+
+@media (max-width: 720px) {
+  .git-change-preview-navigation span,
+  .git-change-preview-file-list button small {
+    display: none;
+  }
+
+  .git-change-preview-source-headings,
+  .git-change-preview-fallback {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .git-change-preview-file-popover {
+    transition: none;
+  }
+}

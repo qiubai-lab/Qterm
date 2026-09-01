@@ -22,6 +22,11 @@ use crate::{
     domain::{
         auth::{AuthRequest, SecretText},
         files::{DirectoryListing, FileEntry},
+        git::{
+            GitChangeDiff, GitCommitFileDiff, GitConflictContentKind, GitConflictDetail,
+            GitConflictKind, GitConflictResolution, GitConflictResult, GitConflictVersion,
+            GitDiffScope, GitDiffSource,
+        },
         network::ForwardRuleKind,
         session::{
             HostEndpoint, PresentedHostKey, RouteNodeMetadata, RouteNodeRole, SessionEvent,
@@ -466,6 +471,222 @@ async fn git_actions_require_a_connected_git_purpose_session_owned_by_the_profil
     }];
     let _ = reply.send(Ok(expected.clone()));
     assert_eq!(files_request.await.expect("request"), Ok(expected));
+
+    let commit_diff_request = {
+        let manager = Arc::clone(&manager);
+        tokio::spawn(async move {
+            manager
+                .commit_file_diff(
+                    "git-1",
+                    "profile-1",
+                    "/srv/project".into(),
+                    "0123456789abcdef0123456789abcdef01234567".into(),
+                    "src/main.rs".into(),
+                )
+                .await
+        })
+    };
+    let Some(SessionControl::RunGitCommitFileDiff {
+        repository,
+        oid,
+        path,
+        reply,
+    }) = control_receiver.recv().await
+    else {
+        panic!("Git commit file diff control")
+    };
+    assert_eq!(repository, "/srv/project");
+    assert_eq!(oid, "0123456789abcdef0123456789abcdef01234567");
+    assert_eq!(path, "src/main.rs");
+    let commit_before = GitConflictVersion {
+        kind: GitConflictContentKind::Text,
+        content: Some("parent\n".into()),
+        size: 7,
+        mode: Some(0o100644),
+    };
+    let expected_commit_diff = GitCommitFileDiff {
+        commit_oid: oid,
+        parent_oid: Some("1111111111111111111111111111111111111111".into()),
+        path,
+        original_path: None,
+        status: "M".into(),
+        before: commit_before.clone(),
+        after: GitConflictVersion {
+            content: Some("commit\n".into()),
+            ..commit_before
+        },
+    };
+    let _ = reply.send(Ok(expected_commit_diff.clone()));
+    assert_eq!(
+        commit_diff_request.await.expect("commit diff request"),
+        Ok(expected_commit_diff)
+    );
+
+    let diff_request = {
+        let manager = Arc::clone(&manager);
+        tokio::spawn(async move {
+            manager
+                .change_diff(
+                    "git-1",
+                    "profile-1",
+                    "/srv/project".into(),
+                    "src/main.rs".into(),
+                    true,
+                )
+                .await
+        })
+    };
+    let Some(SessionControl::RunGitChangeDiff {
+        repository,
+        path,
+        staged,
+        reply,
+    }) = control_receiver.recv().await
+    else {
+        panic!("Git change diff control")
+    };
+    assert_eq!(repository, "/srv/project");
+    assert_eq!(path, "src/main.rs");
+    assert!(staged);
+    let before = GitConflictVersion {
+        kind: GitConflictContentKind::Text,
+        content: Some("before\n".into()),
+        size: 7,
+        mode: Some(0o100644),
+    };
+    let expected_diff = GitChangeDiff {
+        path: "src/main.rs".into(),
+        original_path: None,
+        status: "M".into(),
+        scope: GitDiffScope::Staged,
+        before_source: GitDiffSource::Head,
+        after_source: GitDiffSource::Index,
+        before: before.clone(),
+        after: GitConflictVersion {
+            content: Some("after\n".into()),
+            ..before
+        },
+    };
+    let _ = reply.send(Ok(expected_diff.clone()));
+    assert_eq!(diff_request.await.expect("diff request"), Ok(expected_diff));
+
+    assert_eq!(
+        manager
+            .conflict_detail(
+                "git-1",
+                "other-profile",
+                "/srv/project".into(),
+                "conflict.txt".into(),
+            )
+            .await,
+        Err(crate::domain::git::GitError::SessionUnavailable)
+    );
+    assert_eq!(
+        manager
+            .resolve_conflict(
+                "git-1",
+                "profile-1",
+                "/srv/project".into(),
+                "../outside.txt".into(),
+                GitConflictResolution::UseCurrent,
+            )
+            .await,
+        Err(crate::domain::git::GitError::InvalidInput)
+    );
+
+    let detail_request = {
+        let manager = Arc::clone(&manager);
+        tokio::spawn(async move {
+            manager
+                .conflict_detail(
+                    "git-1",
+                    "profile-1",
+                    "/srv/project".into(),
+                    "conflict.txt".into(),
+                )
+                .await
+        })
+    };
+    let Some(SessionControl::RunGitConflictDetail {
+        repository,
+        path,
+        reply,
+    }) = control_receiver.recv().await
+    else {
+        panic!("Git conflict detail control")
+    };
+    assert_eq!(repository, "/srv/project");
+    assert_eq!(path, "conflict.txt");
+    let version = GitConflictVersion {
+        kind: GitConflictContentKind::Text,
+        content: Some("base\n".into()),
+        size: 5,
+        mode: Some(0o100644),
+    };
+    let expected_detail = GitConflictDetail {
+        path: "conflict.txt".into(),
+        kind: GitConflictKind::BothModified,
+        base: version.clone(),
+        current: GitConflictVersion {
+            content: Some("current\n".into()),
+            ..version.clone()
+        },
+        incoming: GitConflictVersion {
+            content: Some("incoming\n".into()),
+            ..version
+        },
+        result: GitConflictResult {
+            kind: GitConflictContentKind::Text,
+            content: Some("result\n".into()),
+            revision: "sha256:fixture".into(),
+            size: 7,
+            mode: Some(0o100644),
+        },
+        editable: true,
+        unsupported_reason: None,
+    };
+    let _ = reply.send(Ok(expected_detail.clone()));
+    assert_eq!(
+        detail_request.await.expect("detail request"),
+        Ok(expected_detail)
+    );
+
+    let resolution = GitConflictResolution::SaveText {
+        content: "resolved\n".into(),
+        expected_revision: "sha256:fixture".into(),
+    };
+    let resolve_request = {
+        let manager = Arc::clone(&manager);
+        let resolution = resolution.clone();
+        tokio::spawn(async move {
+            manager
+                .resolve_conflict(
+                    "git-1",
+                    "profile-1",
+                    "/srv/project".into(),
+                    "conflict.txt".into(),
+                    resolution,
+                )
+                .await
+        })
+    };
+    let Some(SessionControl::RunGitResolveConflict {
+        repository,
+        path,
+        resolution: dispatched_resolution,
+        reply,
+    }) = control_receiver.recv().await
+    else {
+        panic!("Git conflict resolution control")
+    };
+    assert_eq!(repository, "/srv/project");
+    assert_eq!(path, "conflict.txt");
+    assert_eq!(dispatched_resolution, resolution);
+    let _ = reply.send(Err(crate::domain::git::GitError::Timeout));
+    assert_eq!(
+        resolve_request.await.expect("resolve request"),
+        Err(crate::domain::git::GitError::Timeout)
+    );
 }
 
 #[tokio::test]

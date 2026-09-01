@@ -1,7 +1,7 @@
 import type { Dispatch, RefObject, SetStateAction } from "react";
 
 import { Icon } from "../components/Icon";
-import type { GitCommit, GitSnapshot } from "../lib/tauri/git";
+import type { GitCommit, GitCommitFile, GitSnapshot } from "../lib/tauri/git";
 import type { GitGraphRow } from "./gitGraph";
 import { formatRelativeCommitTime, type GitCommitFilesState } from "./gitPaneTypes";
 import { GitSection } from "./GitPaneSections";
@@ -26,6 +26,7 @@ interface GitCommitGraphProps {
   onToggleCommit: (commit: GitCommit) => void;
   onOpenCommitMenu: (commit: GitCommit, anchorX: number, anchorY: number) => void;
   onRetryCommit: (commit: GitCommit) => void;
+  onPreviewFile: (commit: GitCommit, file: GitCommitFile, files: GitCommitFile[]) => void;
 }
 
 export function GitCommitGraph({
@@ -45,6 +46,7 @@ export function GitCommitGraph({
   onToggleCommit,
   onOpenCommitMenu,
   onRetryCommit,
+  onPreviewFile,
 }: GitCommitGraphProps) {
   return <GitSection className="git-graph-section" title="图表" collapsed={collapsed} onToggle={onToggle}>
     <div className="git-graph-scroll" role="list" aria-label="提交图表">
@@ -89,7 +91,7 @@ export function GitCommitGraph({
           <div className={`git-commit-details-shell${expanded ? " expanded" : ""}`} aria-hidden={!expanded} inert={!expanded || undefined}>
             <div className="git-commit-details">
               <GitGraphContinuation row={graphRow}/>
-              <div className="git-commit-file-panel">{retainDetails && <GitCommitFiles commit={commit} state={fileState} onRetry={() => onRetryCommit(commit)}/>}</div>
+              <div className="git-commit-file-panel">{retainDetails && <GitCommitFiles commit={commit} state={fileState} onRetry={() => onRetryCommit(commit)} onPreview={(file, files) => onPreviewFile(commit, file, files)}/>}</div>
             </div>
           </div>
           {index < snapshot.commits.length - 1 && <GitGraphBridge row={graphRow}/>}
@@ -153,7 +155,7 @@ function GitGraphBridge({ row }: { row: GitGraphRow }) {
   </svg></span>;
 }
 
-function GitCommitFiles({ commit, state, onRetry }: { commit: GitCommit; state?: GitCommitFilesState; onRetry: () => void }) {
+function GitCommitFiles({ commit, state, onRetry, onPreview }: { commit: GitCommit; state?: GitCommitFilesState; onRetry: () => void; onPreview: (file: GitCommitFile, files: GitCommitFile[]) => void }) {
   if (!state || state.status === "loading") return <div className="git-commit-files-state" role="status"><span className="git-commit-files-spinner"/>正在读取提交文件…</div>;
   if (state.status === "error") return <div className="git-commit-files-state error" role="alert"><span>{state.message ?? "无法读取提交文件"}</span><button type="button" onClick={onRetry}>重试</button></div>;
   if (state.files.length === 0) return <div className="git-commit-files-state empty" role="status">该提交没有可显示的文件变更</div>;
@@ -162,10 +164,12 @@ function GitCommitFiles({ commit, state, onRetry }: { commit: GitCommit; state?:
     {visible.map((file) => {
       const path = splitGitFilePath(file.path);
       const status = commitFileStatus(file.status);
-      return <div className="git-commit-file-row" role="listitem" key={`${file.status}:${file.originalPath ?? ""}:${file.path}`} title={file.originalPath ? `${file.originalPath} → ${file.path}` : file.path}>
-        <Icon name="file" size={12}/>
-        <span className="git-commit-file-path"><span>{path.name}</span>{path.directory && <span className="git-commit-file-directory">{path.directory}</span>}{file.originalPath && <span className="git-commit-file-original">来自 {file.originalPath}</span>}</span>
-        <span className="git-commit-file-status" data-tone={status.tone} title={status.label}>{status.short}</span>
+      return <div className="git-commit-file-item" role="listitem" key={`${file.status}:${file.originalPath ?? ""}:${file.path}`}>
+        <button type="button" className="git-commit-file-row" aria-label={`预览提交 ${commit.oid.slice(0, 7)} 的文件更改 ${file.path}`} title={file.originalPath ? `${file.originalPath} → ${file.path}` : file.path} onClick={() => onPreview(file, state.files)}>
+          <Icon name="file" size={12}/>
+          <span className="git-commit-file-path"><span>{path.name}</span>{path.directory && <span className="git-commit-file-directory">{path.directory}</span>}{file.originalPath && <span className="git-commit-file-original">来自 {file.originalPath}</span>}</span>
+          <span className="git-commit-file-status" data-tone={status.tone} title={status.label}>{status.short}</span>
+        </button>
       </div>;
     })}
     {state.files.length > visible.length && <div className="git-list-limit">另有 {state.files.length - visible.length} 个文件未显示</div>}

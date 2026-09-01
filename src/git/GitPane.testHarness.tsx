@@ -4,7 +4,7 @@ import { afterEach, beforeEach, vi } from "vitest";
 import type { GitSnapshot } from "../lib/tauri/git";
 
 const api = vi.hoisted(() => ({
-  available: vi.fn(), select: vi.fn(), snapshot: vi.fn(), fetch: vi.fn(), pull: vi.fn(), push: vi.fn(), initialize: vi.fn(), stage: vi.fn(), stageAll: vi.fn(), unstage: vi.fn(), unstageAll: vi.fn(), commit: vi.fn(), commitFiles: vi.fn(), createBranch: vi.fn(), createBranchFrom: vi.fn(), createBranchFromCommit: vi.fn(), renameBranch: vi.fn(), deleteBranch: vi.fn(), switchBranch: vi.fn(), trackRemoteBranch: vi.fn(), mergeBranch: vi.fn(), continueMerge: vi.fn(), abortMerge: vi.fn(), remote: vi.fn(), remoteCommitFiles: vi.fn(),
+  available: vi.fn(), select: vi.fn(), snapshot: vi.fn(), fetch: vi.fn(), pull: vi.fn(), push: vi.fn(), initialize: vi.fn(), stage: vi.fn(), stageAll: vi.fn(), unstage: vi.fn(), unstageAll: vi.fn(), commit: vi.fn(), commitFiles: vi.fn(), commitFileDiff: vi.fn(), changeDiff: vi.fn(), conflictDetail: vi.fn(), resolveConflict: vi.fn(), createBranch: vi.fn(), createBranchFrom: vi.fn(), createBranchFromCommit: vi.fn(), renameBranch: vi.fn(), deleteBranch: vi.fn(), switchBranch: vi.fn(), trackRemoteBranch: vi.fn(), mergeBranch: vi.fn(), continueMerge: vi.fn(), abortMerge: vi.fn(), remote: vi.fn(), remoteCommitFiles: vi.fn(), remoteCommitFileDiff: vi.fn(), remoteChangeDiff: vi.fn(), remoteConflictDetail: vi.fn(), remoteResolveConflict: vi.fn(),
 }));
 
 vi.mock("../lib/tauri/git", () => ({
@@ -21,6 +21,10 @@ vi.mock("../lib/tauri/git", () => ({
   unstageAllGitChanges: api.unstageAll,
   commitGitChanges: api.commit,
   loadGitCommitFiles: api.commitFiles,
+  loadGitCommitFileDiff: api.commitFileDiff,
+  loadGitChangeDiff: api.changeDiff,
+  loadGitConflictDetail: api.conflictDetail,
+  resolveGitConflict: api.resolveConflict,
   createGitBranch: api.createBranch,
   createGitBranchFrom: api.createBranchFrom,
   createGitBranchFromCommit: api.createBranchFromCommit,
@@ -33,6 +37,10 @@ vi.mock("../lib/tauri/git", () => ({
   abortGitMerge: api.abortMerge,
   executeRemoteGit: api.remote,
   loadRemoteGitCommitFiles: api.remoteCommitFiles,
+  loadRemoteGitCommitFileDiff: api.remoteCommitFileDiff,
+  loadRemoteGitChangeDiff: api.remoteChangeDiff,
+  loadRemoteGitConflictDetail: api.remoteConflictDetail,
+  resolveRemoteGitConflict: api.remoteResolveConflict,
   gitError: (error: unknown) => error as { code: string; message: string },
 }));
 
@@ -75,6 +83,40 @@ function setupGitPaneTests() {
       { path: "src/renamed.ts", originalPath: "src/old.ts", status: "R100" },
     ]);
     api.remoteCommitFiles.mockResolvedValue([]);
+    api.commitFileDiff.mockImplementation((_repository: string, oid: string, path: string) => Promise.resolve({
+      commitOid: oid,
+      parentOid: "1111111111111111111111111111111111111111",
+      path,
+      originalPath: null,
+      status: "M",
+      before: { kind: "text", content: "parent\n", size: 7, mode: 0o100644 },
+      after: { kind: "text", content: "commit\n", size: 7, mode: 0o100644 },
+    }));
+    api.remoteCommitFileDiff.mockResolvedValue(null);
+    api.changeDiff.mockImplementation((_repository: string, path: string, staged: boolean) => Promise.resolve({
+      path,
+      originalPath: null,
+      status: "M",
+      scope: staged ? "staged" : "unstaged",
+      beforeSource: staged ? "head" : "index",
+      afterSource: staged ? "index" : "worktree",
+      before: { kind: "text", content: "before\n", size: 7, mode: 0o100644 },
+      after: { kind: "text", content: "after\n", size: 6, mode: 0o100644 },
+    }));
+    api.remoteChangeDiff.mockResolvedValue(null);
+    api.conflictDetail.mockResolvedValue({
+      path: "src/conflict.ts",
+      kind: "bothModified",
+      base: { kind: "text", content: "base\n", size: 5, mode: 0o100644 },
+      current: { kind: "text", content: "current\n", size: 8, mode: 0o100644 },
+      incoming: { kind: "text", content: "incoming\n", size: 9, mode: 0o100644 },
+      result: { kind: "text", content: "<<<<<<< current\n=======\n>>>>>>> incoming\n", revision: "r1", size: 40, mode: 0o100644 },
+      editable: true,
+      unsupportedReason: null,
+    });
+    api.resolveConflict.mockResolvedValue(snapshot);
+    api.remoteConflictDetail.mockResolvedValue(null);
+    api.remoteResolveConflict.mockResolvedValue(snapshot);
   });
 }
 

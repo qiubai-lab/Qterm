@@ -4,13 +4,18 @@ import { createPortal } from "react-dom";
 import {
   gitAvailable,
   gitError,
+  type GitChange,
   type GitCommit,
+  type GitCommitFile,
+  type GitConflictResolution,
   type GitSnapshot,
 } from "../lib/tauri/git";
 import { gitRepositoryHistoryEntryKey } from "../workspace/gitRepositoryHistory";
 import type { GitRepositoryHistoryEntry, GitTarget } from "../workspace/model";
 import type { GitRuntime } from "../workspace/WorkspaceProvider";
 import { GitCommitGraph, GitCommitTooltip } from "./GitCommitGraph";
+import { GitConflictResolver } from "./GitConflictResolver";
+import { GitChangePreview } from "./GitChangePreview";
 import { buildGitGraphRows } from "./gitGraph";
 import { GitChangesSection, GitEmpty, GitRepositorySection } from "./GitPaneSections";
 import { deriveGitPrimaryAction, type GitPrimaryAction, type GitPrimaryAlternativeAction } from "./gitPrimaryAction";
@@ -87,6 +92,9 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
   const [repositorySubmenu, setRepositorySubmenu] = useState<GitRepositorySubmenu | null>(null);
   const [commitContextMenu, setCommitContextMenu] = useState<GitCommitContextMenuState | null>(null);
   const [commitBranchSource, setCommitBranchSource] = useState<GitCommit | null>(null);
+  const [conflictResolverPath, setConflictResolverPath] = useState<string | null>(null);
+  const [previewChange, setPreviewChange] = useState<GitChange | null>(null);
+  const [previewCommitFile, setPreviewCommitFile] = useState<{ commit: GitCommit; files: GitCommitFile[]; initialFile: GitCommitFile } | null>(null);
   const [collapsed, setCollapsed] = useState({ repository: false, changes: false, graph: true });
   const epoch = useRef(0);
   const busyRef = useRef("");
@@ -113,7 +121,7 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
   const remoteReady = !remote || runtime?.status === "connected";
   const available = remote ? true : localAvailable;
   const {
-    loadSnapshot, fetchSnapshot, initialize, loadCommitFiles,
+    loadSnapshot, fetchSnapshot, initialize, loadCommitFiles, loadCommitFileDiff, loadChangeDiff, loadConflictDetail, resolveConflict,
     stagePaths, stageAll, unstagePaths, unstageAll, commit,
     createBranch, createBranchAt, createBranchFromCommit, renameBranch, deleteBranch, switchBranch, trackRemoteBranch,
     pullRepository, pushRepository, mergeBranch, continueMerge, abortMerge,
@@ -142,6 +150,9 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
     setCommitBranchSource(null);
     setMergeSourceRef("");
     setMergeConfirmation(null);
+    setConflictResolverPath(null);
+    setPreviewChange(null);
+    setPreviewCommitFile(null);
     setOperations([]);
     if (reportedRepositoryKeyRef.current !== nextTargetKey) reportedRepositoryKeyRef.current = null;
   }, [target, updateBusy]);
@@ -422,6 +433,43 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
     previousMergeStateRef.current = mergeInProgress;
   }, [mergeInProgress]);
 
+  function loadConflictForDialog(path: string) {
+    if (!root) return Promise.reject(new Error("Git 仓库尚未加载"));
+    return loadConflictDetail(root, path);
+  }
+
+  function loadChangeForDialog(path: string, staged: boolean) {
+    if (!root) return Promise.reject(new Error("Git 仓库尚未加载"));
+    return loadChangeDiff(root, path, staged);
+  }
+
+  function loadCommitFileForDialog(oid: string, path: string) {
+    if (!root) return Promise.reject(new Error("Git 仓库尚未加载"));
+    return loadCommitFileDiff(root, oid, path);
+  }
+
+  async function resolveConflictFromDialog(path: string, resolution: GitConflictResolution): Promise<GitSnapshot> {
+    if (!root || busyRef.current) throw new Error("Git 正在执行其他操作");
+    const request = ++epoch.current;
+    updateBusy("resolveConflict");
+    setError(null);
+    try {
+      const next = await resolveConflict(root, path, resolution);
+      if (request !== epoch.current) throw new Error("仓库状态已变化，请重新打开冲突解决器");
+      applySnapshot(next);
+      return next;
+    } catch (cause) {
+      const failure = gitError(cause);
+      if (request === epoch.current) {
+        setError(failure);
+        await recoverSnapshotAfterFailure(request, failure);
+      }
+      throw failure;
+    } finally {
+      if (request === epoch.current) updateBusy("");
+    }
+  }
+
   const repositoryAnchor = useCallback((kind = repositoryOverlay?.kind): HTMLButtonElement | null => {
     if (kind === "abortMerge") return mergeAbortButtonRef.current;
     if (kind === "createBranchFromCommit" && commitBranchSource) return commitAnchors.get(commitBranchSource.oid) ?? null;
@@ -684,6 +732,11 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
       onUnstageAll={() => root && void mutate("unstageAll", () => unstageAll(root))}
       onPrimaryAction={runPrimaryAction}
       onStage={(change) => root && void mutate("stage", () => stagePaths(root, [change.path]))}
+      onPreviewChange={(change) => {
+        setPreviewCommitFile(null);
+        setPreviewChange(change);
+      }}
+      onResolveConflict={(change) => setConflictResolverPath(change.path)}
       onUnstage={(change) => root && void mutate("unstage", () => unstagePaths(root, [change.path]))}
       onContinueMerge={() => root && void runRecordedOperation("继续合并", () => continueMerge(root), "合并提交已完成")}
       onAbortMerge={() => openRepositoryOverlay("abortMerge")}
@@ -705,6 +758,10 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
       onToggleCommit={toggleCommitFiles}
       onOpenCommitMenu={openCommitContextMenu}
       onRetryCommit={(commitToRetry) => void requestCommitFiles(commitToRetry, true)}
+      onPreviewFile={(commitToPreview, file, files) => {
+        setPreviewChange(null);
+        setPreviewCommitFile({ commit: commitToPreview, files, initialFile: file });
+      }}
     />
   </div>
     {inspectedCommit && !commitContextMenu && repositoryOverlay?.kind !== "createBranchFromCommit" && createPortal(<GitCommitTooltip
@@ -808,5 +865,29 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
         : Promise.resolve(false)}
       onConfirmMerge={() => void confirmMergeOperation()}
     />
+    {conflictResolverPath && snapshot && <GitConflictResolver
+      conflicts={conflicts}
+      initialPath={conflictResolverPath}
+      repositoryName={snapshot.repositoryName}
+      mergeHeadOid={snapshot.mergeHeadOid}
+      onLoad={loadConflictForDialog}
+      onResolve={resolveConflictFromDialog}
+      onClose={() => setConflictResolverPath(null)}
+    />}
+    {previewChange && snapshot && <GitChangePreview
+      changes={[...staged, ...unstaged]}
+      initialChange={previewChange}
+      repositoryName={snapshot.repositoryName}
+      onLoad={loadChangeForDialog}
+      onClose={() => setPreviewChange(null)}
+    />}
+    {previewCommitFile && snapshot && <GitChangePreview
+      commit={previewCommitFile.commit}
+      files={previewCommitFile.files}
+      initialFile={previewCommitFile.initialFile}
+      repositoryName={snapshot.repositoryName}
+      onLoadCommit={(path) => loadCommitFileForDialog(previewCommitFile.commit.oid, path)}
+      onClose={() => setPreviewCommitFile(null)}
+    />}
   </>;
 }

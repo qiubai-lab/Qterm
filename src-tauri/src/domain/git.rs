@@ -2,6 +2,8 @@ use std::path::{Component, Path};
 
 pub const MAX_GIT_PATH_BYTES: usize = 4096;
 pub const MAX_COMMIT_MESSAGE_CHARS: usize = 10_000;
+pub const MAX_CONFLICT_TEXT_BYTES: usize = 2 * 1024 * 1024;
+pub const MAX_GIT_DIFF_TEXT_BYTES: usize = MAX_CONFLICT_TEXT_BYTES;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum RemoteGitAction {
@@ -100,6 +102,115 @@ pub struct GitChange {
     pub status: String,
     pub staged: bool,
     pub conflict: bool,
+    pub conflict_kind: Option<GitConflictKind>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GitDiffScope {
+    Staged,
+    Unstaged,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GitDiffSource {
+    Head,
+    Index,
+    Worktree,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GitChangeDiff {
+    pub path: String,
+    pub original_path: Option<String>,
+    pub status: String,
+    pub scope: GitDiffScope,
+    pub before_source: GitDiffSource,
+    pub after_source: GitDiffSource,
+    pub before: GitConflictVersion,
+    pub after: GitConflictVersion,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GitCommitFileDiff {
+    pub commit_oid: String,
+    pub parent_oid: Option<String>,
+    pub path: String,
+    pub original_path: Option<String>,
+    pub status: String,
+    pub before: GitConflictVersion,
+    pub after: GitConflictVersion,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GitConflictKind {
+    BothModified,
+    BothAdded,
+    CurrentDeleted,
+    IncomingDeleted,
+    BothDeleted,
+    Other,
+}
+
+impl GitConflictKind {
+    pub fn from_xy(xy: &str) -> Self {
+        match xy {
+            "UU" => Self::BothModified,
+            "AA" => Self::BothAdded,
+            "DU" => Self::CurrentDeleted,
+            "UD" => Self::IncomingDeleted,
+            "DD" => Self::BothDeleted,
+            _ => Self::Other,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GitConflictContentKind {
+    Missing,
+    Text,
+    Binary,
+    Unsupported,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GitConflictVersion {
+    pub kind: GitConflictContentKind,
+    pub content: Option<String>,
+    pub size: u64,
+    pub mode: Option<u32>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GitConflictResult {
+    pub kind: GitConflictContentKind,
+    pub content: Option<String>,
+    pub revision: String,
+    pub size: u64,
+    pub mode: Option<u32>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GitConflictDetail {
+    pub path: String,
+    pub kind: GitConflictKind,
+    pub base: GitConflictVersion,
+    pub current: GitConflictVersion,
+    pub incoming: GitConflictVersion,
+    pub result: GitConflictResult,
+    pub editable: bool,
+    pub unsupported_reason: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum GitConflictResolution {
+    SaveText {
+        content: String,
+        expected_revision: String,
+    },
+    UseCurrent,
+    UseIncoming,
+    Delete,
+    MarkResolved,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -147,6 +258,7 @@ pub struct GitSnapshot {
     pub remotes: Vec<String>,
     pub commits: Vec<GitCommit>,
     pub merge_in_progress: bool,
+    pub merge_head_oid: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -366,6 +478,16 @@ pub fn validate_continue_merge(snapshot: &GitSnapshot) -> Result<(), GitError> {
     Ok(())
 }
 
+pub fn validate_stage_all(snapshot: &GitSnapshot) -> Result<(), GitError> {
+    if snapshot.merge_in_progress && snapshot.changes.iter().any(|change| change.conflict) {
+        Err(GitError::Conflict(
+            "合并冲突必须逐项确认，不能使用暂存全部批量标记".into(),
+        ))
+    } else {
+        Ok(())
+    }
+}
+
 pub fn validate_abort_merge(snapshot: &GitSnapshot) -> Result<(), GitError> {
     if snapshot.merge_in_progress {
         Ok(())
@@ -404,6 +526,22 @@ pub fn validate_commit_oid(oid: &str) -> Result<(), GitError> {
     } else {
         Err(GitError::InvalidInput)
     }
+}
+
+pub fn validate_conflict_resolution(resolution: &GitConflictResolution) -> Result<(), GitError> {
+    if let GitConflictResolution::SaveText {
+        content,
+        expected_revision,
+    } = resolution
+        && (content.len() > MAX_CONFLICT_TEXT_BYTES
+            || content.contains('\0')
+            || expected_revision.is_empty()
+            || expected_revision.len() > 128
+            || expected_revision.chars().any(char::is_control))
+    {
+        return Err(GitError::InvalidInput);
+    }
+    Ok(())
 }
 
 fn validate_path_list(paths: &[String]) -> Result<(), GitError> {
@@ -447,10 +585,11 @@ pub fn validate_posix_paths(paths: &[String]) -> Result<(), GitError> {
 #[cfg(test)]
 mod tests {
     use super::{
-        GitBranch, GitBranchKind, GitHead, GitSnapshot, RemoteGitAction, validate_branch_name,
-        validate_branch_source_ref, validate_commit_message, validate_commit_oid,
-        validate_local_branch_ref, validate_local_paths, validate_merge_preconditions,
-        validate_posix_paths, validate_remote_branch_ref, validate_remote_name,
+        GitBranch, GitBranchKind, GitConflictKind, GitConflictResolution, GitHead, GitSnapshot,
+        RemoteGitAction, validate_branch_name, validate_branch_source_ref, validate_commit_message,
+        validate_commit_oid, validate_conflict_resolution, validate_local_branch_ref,
+        validate_local_paths, validate_merge_preconditions, validate_posix_paths,
+        validate_remote_branch_ref, validate_remote_name, validate_stage_all,
     };
     use std::path::Path;
 
@@ -563,6 +702,44 @@ mod tests {
             "0123456789abcdef0123456789abcdef0123456g",
         ] {
             assert!(validate_commit_oid(value).is_err(), "{value}");
+        }
+    }
+
+    #[test]
+    fn conflict_kinds_and_text_resolutions_are_closed_and_bounded() {
+        for (xy, expected) in [
+            ("UU", GitConflictKind::BothModified),
+            ("AA", GitConflictKind::BothAdded),
+            ("DU", GitConflictKind::CurrentDeleted),
+            ("UD", GitConflictKind::IncomingDeleted),
+            ("DD", GitConflictKind::BothDeleted),
+            ("AU", GitConflictKind::Other),
+        ] {
+            assert_eq!(GitConflictKind::from_xy(xy), expected, "{xy}");
+        }
+
+        assert!(
+            validate_conflict_resolution(&GitConflictResolution::SaveText {
+                content: "resolved\n".into(),
+                expected_revision: "sha256:fixture".into(),
+            })
+            .is_ok()
+        );
+        for resolution in [
+            GitConflictResolution::SaveText {
+                content: "x".repeat(super::MAX_CONFLICT_TEXT_BYTES + 1),
+                expected_revision: "revision".into(),
+            },
+            GitConflictResolution::SaveText {
+                content: "bad\0content".into(),
+                expected_revision: "revision".into(),
+            },
+            GitConflictResolution::SaveText {
+                content: "resolved".into(),
+                expected_revision: String::new(),
+            },
+        ] {
+            assert!(validate_conflict_resolution(&resolution).is_err());
         }
     }
 
@@ -726,12 +903,26 @@ mod tests {
             status: "U".into(),
             staged: false,
             conflict: false,
+            conflict_kind: None,
         });
         assert!(validate_merge_preconditions(&dirty, "refs/heads/feature/test").is_err());
 
         let mut merging = snapshot.clone();
         merging.merge_in_progress = true;
         assert!(validate_merge_preconditions(&merging, "refs/heads/feature/test").is_err());
+
+        let mut conflicted = merging.clone();
+        conflicted.changes.push(super::GitChange {
+            path: "conflict.txt".into(),
+            original_path: None,
+            status: "U".into(),
+            staged: false,
+            conflict: true,
+            conflict_kind: Some(GitConflictKind::BothModified),
+        });
+        assert!(validate_stage_all(&conflicted).is_err());
+        conflicted.changes[0].conflict = false;
+        assert!(validate_stage_all(&conflicted).is_ok());
 
         let mut detached = snapshot;
         detached.head.detached = true;
@@ -784,6 +975,7 @@ mod tests {
             remotes: vec!["origin".into()],
             commits: Vec::new(),
             merge_in_progress: false,
+            merge_head_oid: None,
         }
     }
 }

@@ -101,12 +101,17 @@ describe("GitPane commit graph", () => {
     const form = screen.getByRole("dialog", { name: "从此提交创建分支" });
     expect(form).toHaveTextContent("fix: historical commit");
     expect(form).toHaveTextContent("12345678");
-    fireEvent.change(within(form).getByRole("textbox", { name: "新分支名称" }), { target: { value: "feature/history" } });
+    const branchName = within(form).getByRole("textbox", { name: "新分支名称" });
+    expect(branchName).toHaveAttribute("autocapitalize", "none");
+    expect(branchName).toHaveAttribute("autocorrect", "off");
+    expect(branchName).toHaveAttribute("spellcheck", "false");
+    fireEvent.change(branchName, { target: { value: "test3" } });
+    expect(branchName).toHaveValue("test3");
     fireEvent.click(within(form).getByRole("button", { name: "创建并切换" }));
 
     await waitFor(() => expect(api.createBranchFromCommit).toHaveBeenCalledWith(
       "D:/work/project",
-      "feature/history",
+      "test3",
       historicalCommit.oid,
     ));
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "从此提交创建分支" })).not.toBeInTheDocument());
@@ -219,6 +224,19 @@ describe("GitPane commit graph", () => {
     fireEvent.click(commit);
     expect(await screen.findByRole("list", { name: "feat: initial 的文件" })).toBeInTheDocument();
     expect(api.commitFiles).toHaveBeenCalledTimes(1);
+  });
+
+  it("opens a commit file diff by clicking the whole expanded file item", async () => {
+    render(<GitPane blockId="git-commit-preview" target={{ type: "local", path: "D:/work/project" }} visible onTargetChange={vi.fn()}/>);
+    await screen.findByText("project");
+    fireEvent.click(screen.getByRole("button", { name: "图表" }));
+    fireEvent.click(screen.getByRole("button", { name: /feat: initial/ }));
+    const file = await screen.findByRole("button", { name: "预览提交 abcdef0 的文件更改 src/new-file.ts" });
+    fireEvent.click(file);
+    const preview = await screen.findByRole("dialog", { name: "预览 Git 更改" });
+    await waitFor(() => expect(api.commitFileDiff).toHaveBeenCalledWith("D:/work/project", "abcdef012345", "src/new-file.ts"));
+    expect(within(preview).getByText("父提交 1111111")).toBeInTheDocument();
+    expect(within(preview).getByText("提交 abcdef0", { selector: ".git-change-preview-source-headings span" })).toBeInTheDocument();
   });
 
   it("keeps every live graph lane continuous through expanded commit files", async () => {

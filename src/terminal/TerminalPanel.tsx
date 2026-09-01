@@ -8,6 +8,7 @@ import "@xterm/xterm/css/xterm.css";
 
 import { resolveAppShortcut, shortcutLabel } from "../app/shortcuts";
 import { DialogFrame } from "../components/dialogs/DialogFrame";
+import { ExactTextInput } from "../components/ExactTextInput";
 import { Icon } from "../components/Icon";
 import { currentDesktopPlatform } from "../lib/tauri/window";
 import { prepareLocalTerminalClipboardPaste } from "../lib/tauri/localSessions";
@@ -532,7 +533,7 @@ export function TerminalPanel({ blockId, sessionKey, visible, local, osc7Enabled
     >
       <label className="terminal-search-field">
         <Icon name="search" size={13}/>
-        <input
+        <ExactTextInput
           ref={searchInputRef}
           type="search"
           aria-label="搜索内容"

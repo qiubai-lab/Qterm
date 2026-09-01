@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { Icon, type IconName } from "../components/Icon";
 import { RequiredFieldLabel } from "../components/RequiredFieldLabel";
 import { ConnectionRouteProgress } from "../components/ConnectionRouteProgress";
+import { ExactTextInput } from "../components/ExactTextInput";
 import { FileBrowserPane } from "../files/FileBrowserPane";
 import { GitPane } from "../git/GitPane";
 import { GitRepositoryHistoryList, GitRepositoryHistoryPopover } from "../git/GitRepositoryHistoryPopover";
@@ -712,7 +713,7 @@ function GitBlock(props: BlockRenderProps & { blockId: string; target: GitTarget
         </div>
       </section>}
       <label htmlFor={`git-remote-path-${props.blockId}`}><RequiredFieldLabel>远程工作目录</RequiredFieldLabel></label>
-      <input id={`git-remote-path-${props.blockId}`} required autoFocus value={pendingRemote.path} maxLength={4096} placeholder="/srv/project" onChange={(event) => setPendingRemote({ ...pendingRemote, path: event.target.value })}/>
+      <ExactTextInput id={`git-remote-path-${props.blockId}`} required autoFocus value={pendingRemote.path} maxLength={4096} placeholder="/srv/project" onChange={(event) => setPendingRemote({ ...pendingRemote, path: event.target.value })}/>
       <div><button type="button" className="secondary" onClick={() => setPendingRemote(null)}>取消</button><button type="submit" disabled={!pendingRemote.path.trim()}>连接并打开</button></div>
     </form> : <GitPane
       blockId={props.blockId}

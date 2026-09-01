@@ -8,6 +8,20 @@ import { GitPane } from "./GitPane";
 setupGitPaneTests();
 
 describe("GitPane merge, operations, and remote routing", () => {
+  it("opens staged and worktree previews without stealing the stage actions", async () => {
+    render(<GitPane blockId="git-preview" target={{ type: "local", path: "D:/work/project" }} visible onTargetChange={vi.fn()}/>);
+    await screen.findByText("project");
+
+    fireEvent.click(screen.getByRole("button", { name: "预览已暂存更改 src/staged.ts" }));
+    await screen.findByRole("dialog", { name: "预览 Git 更改" });
+    await waitFor(() => expect(api.changeDiff).toHaveBeenCalledWith("D:/work/project", "src/staged.ts", true));
+    fireEvent.click(screen.getByRole("button", { name: "关闭" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "暂存 src/new.ts" }));
+    await waitFor(() => expect(api.stage).toHaveBeenCalledWith("D:/work/project", ["src/new.ts"]));
+    expect(api.changeDiff).toHaveBeenCalledTimes(1);
+  });
+
   it("confirms merge direction for local or remote refs and records conflicts as attention", async () => {
     const cleanSnapshot = {
       ...snapshot,
@@ -21,7 +35,7 @@ describe("GitPane merge, operations, and remote routing", () => {
     const conflicted = {
       ...cleanSnapshot,
       mergeInProgress: true,
-      changes: [{ path: "src/conflict.ts", originalPath: null, status: "!", staged: false, conflict: true }],
+      changes: [{ path: "src/conflict.ts", originalPath: null, status: "!", staged: false, conflict: true, conflictKind: "bothModified" }],
     } satisfies GitSnapshot;
     api.snapshot.mockResolvedValueOnce(cleanSnapshot);
     api.mergeBranch.mockResolvedValueOnce(conflicted);
@@ -98,7 +112,7 @@ describe("GitPane merge, operations, and remote routing", () => {
     const conflicted = {
       ...snapshot,
       mergeInProgress: true,
-      changes: [{ path: "src/conflict.ts", originalPath: null, status: "!", staged: false, conflict: true }],
+      changes: [{ path: "src/conflict.ts", originalPath: null, status: "!", staged: false, conflict: true, conflictKind: "bothModified" }],
     } satisfies GitSnapshot;
     const resolved = {
       ...conflicted,
@@ -106,11 +120,25 @@ describe("GitPane merge, operations, and remote routing", () => {
     } satisfies GitSnapshot;
     const completed = { ...snapshot, changes: [], mergeInProgress: false } satisfies GitSnapshot;
     api.snapshot.mockResolvedValueOnce(conflicted);
-    api.stage.mockResolvedValueOnce(resolved);
+    api.resolveConflict.mockResolvedValueOnce(resolved);
     api.continueMerge.mockResolvedValueOnce(completed);
     const view = render(<GitPane blockId="git-1" target={{ type: "local", path: "D:/work/project" }} visible onTargetChange={vi.fn()}/>);
     await screen.findByText("合并未完成");
-    fireEvent.click(screen.getByRole("button", { name: "暂存已解决文件 src/conflict.ts" }));
+    expect(screen.getByRole("button", { name: "暂存全部更改" })).toBeDisabled();
+    const resolveTrigger = screen.getByRole("button", { name: "解决冲突 src/conflict.ts" });
+    expect(resolveTrigger).toHaveTextContent("解决");
+    expect(resolveTrigger.querySelector('[data-icon="mergeConflict"]')).toBeInTheDocument();
+    resolveTrigger.focus();
+    fireEvent.click(resolveTrigger);
+    await screen.findByRole("dialog", { name: "解决合并冲突" });
+    fireEvent.keyDown(window, { key: "Escape" });
+    await waitFor(() => expect(resolveTrigger).toHaveFocus());
+    fireEvent.click(resolveTrigger);
+    const resolver = await screen.findByRole("dialog", { name: "解决合并冲突" });
+    fireEvent.click(within(resolver).getByRole("button", { name: "采用当前" }));
+    await waitFor(() => expect(api.resolveConflict).toHaveBeenCalledWith("D:/work/project", "src/conflict.ts", { type: "useCurrent" }));
+    await waitFor(() => expect(resolver).toHaveClass("git-conflict-dialog--closing"));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "解决合并冲突" })).not.toBeInTheDocument());
     await waitFor(() => expect(screen.getByRole("button", { name: "继续合并" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "继续合并" }));
     await waitFor(() => expect(api.continueMerge).toHaveBeenCalledWith("D:/work/project"));
@@ -240,6 +268,16 @@ describe("GitPane merge, operations, and remote routing", () => {
     };
     const onRepositoryOpened = vi.fn();
     api.remote.mockResolvedValue(remoteSnapshot);
+    api.remoteCommitFiles.mockResolvedValue([{ path: "src/remote.ts", originalPath: null, status: "M" }]);
+    api.remoteCommitFileDiff.mockResolvedValue({
+      commitOid: "abcdef012345",
+      parentOid: "1111111111111111111111111111111111111111",
+      path: "src/remote.ts",
+      originalPath: null,
+      status: "M",
+      before: { kind: "text", content: "remote parent\n", size: 14, mode: 0o100644 },
+      after: { kind: "text", content: "remote commit\n", size: 14, mode: 0o100644 },
+    });
     render(<GitPane
       blockId="git-remote"
       target={{ type: "remote", profileId: "profile-1", path: "/srv/project" }}
@@ -249,6 +287,9 @@ describe("GitPane merge, operations, and remote routing", () => {
       onRepositoryOpened={onRepositoryOpened}
     />);
     await waitFor(() => expect(api.remote).toHaveBeenCalledWith("git-session", "profile-1", { type: "snapshot", path: "/srv/project" }));
+    fireEvent.click(await screen.findByRole("button", { name: "预览已暂存更改 src/staged.ts" }));
+    await waitFor(() => expect(api.remoteChangeDiff).toHaveBeenCalledWith("git-session", "profile-1", "/srv/project", "src/staged.ts", true));
+    fireEvent.click(screen.getByRole("button", { name: "关闭" }));
     fireEvent.click(await screen.findByRole("button", { name: "刷新 Git 状态" }));
     await waitFor(() => expect(api.remote).toHaveBeenCalledWith("git-session", "profile-1", { type: "fetch", repository: "/srv/project" }));
     fireEvent.click(screen.getByRole("button", { name: "切换分支，当前 main" }));
@@ -259,6 +300,9 @@ describe("GitPane merge, operations, and remote routing", () => {
     fireEvent.click(screen.getByRole("button", { name: "图表" }));
     fireEvent.click(screen.getByRole("button", { name: /feat: initial/ }));
     await waitFor(() => expect(api.remoteCommitFiles).toHaveBeenCalledWith("git-session", "profile-1", "/srv/project", "abcdef012345"));
+    fireEvent.click(await screen.findByRole("button", { name: "预览提交 abcdef0 的文件更改 src/remote.ts" }));
+    await waitFor(() => expect(api.remoteCommitFileDiff).toHaveBeenCalledWith("git-session", "profile-1", "/srv/project", "abcdef012345", "src/remote.ts"));
+    fireEvent.click(screen.getByRole("button", { name: "关闭" }));
     fireEvent.click(screen.getByRole("button", { name: "Git 仓库操作" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "拉取" }));
     await waitFor(() => expect(api.remote).toHaveBeenCalledWith("git-session", "profile-1", { type: "pull", repository: "/srv/project" }));

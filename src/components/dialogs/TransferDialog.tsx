@@ -4,6 +4,7 @@ import { cancelTransfer, downloadFile, selectDownloadPath, selectUploadFile, upl
 import { useWorkspace } from "../../workspace/WorkspaceProvider";
 import { findLeaf } from "../../workspace/layout";
 import { Button } from "../Button";
+import { ExactTextInput } from "../ExactTextInput";
 import { DialogFrame } from "./DialogFrame";
 
 export function TransferDialog({ onClose }: { onClose: () => void }) {
@@ -55,7 +56,7 @@ export function TransferDialog({ onClose }: { onClose: () => void }) {
   return <DialogFrame title="文件传输" subtitle="当前 Terminal Block · 单文件 SFTP" onClose={onClose}>
     <div className="segmented"><button className={mode === "upload" ? "selected" : ""} onClick={() => { setMode("upload"); setLocalPath(""); }}>上传</button><button className={mode === "download" ? "selected" : ""} onClick={() => { setMode("download"); setLocalPath(""); }}>下载</button></div>
     {!sessionId && <p className="callout">当前终端尚未连接 SSH。</p>}
-    <label>远程路径<input value={remotePath} onChange={(input) => setRemotePath(input.target.value)} placeholder="/home/user/file.txt"/></label>
+    <label>远程路径<ExactTextInput value={remotePath} onChange={(input) => setRemotePath(input.target.value)} placeholder="/home/user/file.txt"/></label>
     <button className="path-button" disabled={!sessionId} onClick={() => void selectPath()}>选择{mode === "upload" ? "本地文件" : "保存位置"}<small>{localPath || "使用系统文件选择器"}</small></button>
     {event && <div className="transfer-progress"><div><span>{event.type}</span><span>{progress}%</span></div><progress max="100" value={progress}/></div>}
     <footer className="dialog-actions end">{transferId && sessionId ? <Button variant="danger" onClick={() => void cancelTransfer(sessionId, transferId)}>取消传输</Button> : <Button variant="primary" disabled={!sessionId || !localPath || !remotePath} onClick={() => void start()}>开始{mode === "upload" ? "上传" : "下载"}</Button>}</footer>

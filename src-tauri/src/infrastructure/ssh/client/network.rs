@@ -80,6 +80,10 @@ pub(super) async fn run_network_session(
                 }
                 Some(SessionControl::RunGit { reply, .. }) => { let _ = reply.send(Err(crate::domain::git::GitError::SessionUnavailable)); }
                 Some(SessionControl::RunGitCommitFiles { reply, .. }) => { let _ = reply.send(Err(crate::domain::git::GitError::SessionUnavailable)); }
+                Some(SessionControl::RunGitCommitFileDiff { reply, .. }) => { let _ = reply.send(Err(crate::domain::git::GitError::SessionUnavailable)); }
+                Some(SessionControl::RunGitConflictDetail { reply, .. }) => { let _ = reply.send(Err(crate::domain::git::GitError::SessionUnavailable)); }
+                Some(SessionControl::RunGitChangeDiff { reply, .. }) => { let _ = reply.send(Err(crate::domain::git::GitError::SessionUnavailable)); }
+                Some(SessionControl::RunGitResolveConflict { reply, .. }) => { let _ = reply.send(Err(crate::domain::git::GitError::SessionUnavailable)); }
                 Some(SessionControl::Write(_) | SessionControl::Resize(_) | SessionControl::StoreTerminalStaging { .. } | SessionControl::StartTransfer { .. } | SessionControl::ListDirectory { .. } | SessionControl::ReadFile { .. } | SessionControl::WriteTextFile { .. } | SessionControl::MutateEntry { .. }) => {}
                 None => { entry.transition(SessionState::Closing); }
             },

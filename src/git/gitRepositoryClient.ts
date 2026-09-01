@@ -12,12 +12,20 @@ import {
   fetchGitRepository,
   initializeGitRepository,
   loadGitCommitFiles,
+  loadGitCommitFileDiff,
+  loadGitChangeDiff,
+  loadGitConflictDetail,
   loadGitSnapshot,
   loadRemoteGitCommitFiles,
+  loadRemoteGitCommitFileDiff,
+  loadRemoteGitChangeDiff,
+  loadRemoteGitConflictDetail,
   mergeGitBranch,
   pullGitRepository,
   pushGitRepository,
   renameGitBranch,
+  resolveGitConflict,
+  resolveRemoteGitConflict,
   stageAllGitChanges,
   stageGitPaths,
   switchGitBranch,
@@ -25,6 +33,10 @@ import {
   unstageAllGitChanges,
   unstageGitPaths,
   type GitCommitFile,
+  type GitCommitFileDiff,
+  type GitChangeDiff,
+  type GitConflictDetail,
+  type GitConflictResolution,
   type GitSnapshot,
   type RemoteGitAction,
 } from "../lib/tauri/git";
@@ -58,6 +70,10 @@ export interface GitRepositoryClient {
   continueMerge: (repository: string) => Promise<GitSnapshot>;
   abortMerge: (repository: string) => Promise<GitSnapshot>;
   loadCommitFiles: (repository: string, oid: string) => Promise<GitCommitFile[]>;
+  loadCommitFileDiff: (repository: string, oid: string, path: string) => Promise<GitCommitFileDiff>;
+  loadChangeDiff: (repository: string, path: string, staged: boolean) => Promise<GitChangeDiff>;
+  loadConflictDetail: (repository: string, path: string) => Promise<GitConflictDetail>;
+  resolveConflict: (repository: string, path: string, resolution: GitConflictResolution) => Promise<GitSnapshot>;
 }
 
 export function useGitRepositoryClient({ remote, profileId, sessionId, status }: GitRepositoryClientContext): GitRepositoryClient {
@@ -94,5 +110,25 @@ export function useGitRepositoryClient({ remote, profileId, sessionId, status }:
         ? loadRemoteGitCommitFiles(sessionId, profileId, repository, oid)
         : Promise.reject(new Error("远程 Git 连接尚未建立"))
       : loadGitCommitFiles(repository, oid),
+    loadCommitFileDiff: (repository, oid, path) => remote
+      ? profileId && sessionId && status === "connected"
+        ? loadRemoteGitCommitFileDiff(sessionId, profileId, repository, oid, path)
+        : Promise.reject(new Error("远程 Git 连接尚未建立"))
+      : loadGitCommitFileDiff(repository, oid, path),
+    loadChangeDiff: (repository, path, staged) => remote
+      ? profileId && sessionId && status === "connected"
+        ? loadRemoteGitChangeDiff(sessionId, profileId, repository, path, staged)
+        : Promise.reject(new Error("远程 Git 连接尚未建立"))
+      : loadGitChangeDiff(repository, path, staged),
+    loadConflictDetail: (repository, path) => remote
+      ? profileId && sessionId && status === "connected"
+        ? loadRemoteGitConflictDetail(sessionId, profileId, repository, path)
+        : Promise.reject(new Error("远程 Git 连接尚未建立"))
+      : loadGitConflictDetail(repository, path),
+    resolveConflict: (repository, path, resolution) => remote
+      ? profileId && sessionId && status === "connected"
+        ? resolveRemoteGitConflict(sessionId, profileId, repository, path, resolution)
+        : Promise.reject(new Error("远程 Git 连接尚未建立"))
+      : resolveGitConflict(repository, path, resolution),
   }), [profileId, remote, remoteExecute, sessionId, status]);
 }

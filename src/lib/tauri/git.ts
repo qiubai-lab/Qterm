@@ -3,13 +3,28 @@ import { Channel, invoke } from "@tauri-apps/api/core";
 import type { SessionConnectInput, SessionEvent } from "./sessions";
 
 export interface GitHead { name: string | null; oid: string | null; detached: boolean; unborn: boolean; upstream: string | null; ahead: number; behind: number }
-export interface GitChange { path: string; originalPath: string | null; status: string; staged: boolean; conflict: boolean }
+export type GitConflictKind = "bothModified" | "bothAdded" | "currentDeleted" | "incomingDeleted" | "bothDeleted" | "other";
+export type GitConflictContentKind = "missing" | "text" | "binary" | "unsupported";
+export interface GitChange { path: string; originalPath: string | null; status: string; staged: boolean; conflict: boolean; conflictKind?: GitConflictKind | null }
 export interface GitBranch { refName: string; name: string; kind: "local" | "remote"; oid: string; current: boolean; upstream: string | null; upstreamRef: string | null }
 export interface GitCommit { oid: string; parents: string[]; decorations: string[]; subject: string; body: string; author: string; timestamp: number }
 export interface GitCommitFile { path: string; originalPath: string | null; status: string }
+export interface GitCommitFileDiff { commitOid: string; parentOid: string | null; path: string; originalPath: string | null; status: string; before: GitConflictVersion; after: GitConflictVersion }
 export interface GitDirectoryEntry { name: string; path: string; isSymlink: boolean }
 export interface GitDirectoryListing { path: string; entries: GitDirectoryEntry[] }
-export interface GitSnapshot { repositoryPath: string; repositoryName: string; head: GitHead; changes: GitChange[]; branches: GitBranch[]; remotes: string[]; commits: GitCommit[]; mergeInProgress: boolean }
+export interface GitSnapshot { repositoryPath: string; repositoryName: string; head: GitHead; changes: GitChange[]; branches: GitBranch[]; remotes: string[]; commits: GitCommit[]; mergeInProgress: boolean; mergeHeadOid?: string | null }
+export interface GitConflictVersion { kind: GitConflictContentKind; content: string | null; size: number; mode: number | null }
+export type GitDiffScope = "staged" | "unstaged";
+export type GitDiffSource = "head" | "index" | "worktree";
+export interface GitChangeDiff { path: string; originalPath: string | null; status: string; scope: GitDiffScope; beforeSource: GitDiffSource; afterSource: GitDiffSource; before: GitConflictVersion; after: GitConflictVersion }
+export interface GitConflictResult extends GitConflictVersion { revision: string }
+export interface GitConflictDetail { path: string; kind: GitConflictKind; base: GitConflictVersion; current: GitConflictVersion; incoming: GitConflictVersion; result: GitConflictResult; editable: boolean; unsupportedReason: string | null }
+export type GitConflictResolution =
+  | { type: "saveText"; content: string; expectedRevision: string }
+  | { type: "useCurrent" }
+  | { type: "useIncoming" }
+  | { type: "delete" }
+  | { type: "markResolved" };
 
 export type RemoteGitAction =
   | { type: "snapshot"; path: string }
@@ -46,6 +61,10 @@ export function unstageGitPaths(repository: string, paths: string[]): Promise<Gi
 export function unstageAllGitChanges(repository: string): Promise<GitSnapshot> { return invoke("git_unstage_all", { input: { repository } }); }
 export function commitGitChanges(repository: string, message: string): Promise<GitSnapshot> { return invoke("git_commit", { input: { repository, message } }); }
 export function loadGitCommitFiles(repository: string, oid: string): Promise<GitCommitFile[]> { return invoke("git_commit_files", { input: { repository, oid } }); }
+export function loadGitCommitFileDiff(repository: string, oid: string, path: string): Promise<GitCommitFileDiff> { return invoke("git_commit_file_diff", { input: { repository, oid, path } }); }
+export function loadGitConflictDetail(repository: string, path: string): Promise<GitConflictDetail> { return invoke("git_conflict_detail", { input: { repository, path } }); }
+export function loadGitChangeDiff(repository: string, path: string, staged: boolean): Promise<GitChangeDiff> { return invoke("git_change_diff", { input: { repository, path, staged } }); }
+export function resolveGitConflict(repository: string, path: string, resolution: GitConflictResolution): Promise<GitSnapshot> { return invoke("git_resolve_conflict", { input: { repository, path, resolution } }); }
 export function createGitBranch(repository: string, name: string): Promise<GitSnapshot> { return invoke("git_create_branch", { input: { repository, name } }); }
 export function createGitBranchFrom(repository: string, name: string, sourceRef: string): Promise<GitSnapshot> { return invoke("git_create_branch_from", { input: { repository, name, sourceRef } }); }
 export function createGitBranchFromCommit(repository: string, name: string, oid: string): Promise<GitSnapshot> { return invoke("git_create_branch_from_commit", { input: { repository, name, oid } }); }
@@ -67,6 +86,22 @@ export function executeRemoteGit(sessionId: string, profileId: string, action: R
 
 export function loadRemoteGitCommitFiles(sessionId: string, profileId: string, repository: string, oid: string): Promise<GitCommitFile[]> {
   return invoke("git_remote_commit_files", { input: { sessionId, profileId, repository, oid } });
+}
+
+export function loadRemoteGitCommitFileDiff(sessionId: string, profileId: string, repository: string, oid: string, path: string): Promise<GitCommitFileDiff> {
+  return invoke("git_remote_commit_file_diff", { input: { sessionId, profileId, repository, oid, path } });
+}
+
+export function loadRemoteGitConflictDetail(sessionId: string, profileId: string, repository: string, path: string): Promise<GitConflictDetail> {
+  return invoke("git_remote_conflict_detail", { input: { sessionId, profileId, repository, path } });
+}
+
+export function loadRemoteGitChangeDiff(sessionId: string, profileId: string, repository: string, path: string, staged: boolean): Promise<GitChangeDiff> {
+  return invoke("git_remote_change_diff", { input: { sessionId, profileId, repository, path, staged } });
+}
+
+export function resolveRemoteGitConflict(sessionId: string, profileId: string, repository: string, path: string, resolution: GitConflictResolution): Promise<GitSnapshot> {
+  return invoke("git_remote_resolve_conflict", { input: { sessionId, profileId, repository, path, resolution } });
 }
 
 export function listRemoteGitDirectory(sessionId: string, profileId: string, path: string): Promise<GitDirectoryListing> {

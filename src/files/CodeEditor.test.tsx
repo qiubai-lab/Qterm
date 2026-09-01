@@ -1,5 +1,6 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { EditorView } from "@codemirror/view";
 
 const { readClipboardText, writeClipboardText } = vi.hoisted(() => ({
   readClipboardText: vi.fn(),
@@ -131,6 +132,23 @@ describe("CodeEditor context menu", () => {
     expect(screen.getByRole("status", { name: "编辑器操作状态" })).toBeInTheDocument();
     act(() => vi.advanceTimersByTime(1));
     expect(screen.queryByRole("status", { name: "编辑器操作状态" })).not.toBeInTheDocument();
+  });
+
+  it("composes feature extensions and reports the EditorView lifecycle", async () => {
+    const onViewReady = vi.fn();
+    const view = render(<CodeEditor
+      value="extended"
+      language="text"
+      extensions={EditorView.editorAttributes.of({ class: "cm-feature-extension" })}
+      onViewReady={onViewReady}
+      onChange={vi.fn()}
+      onSave={vi.fn()}
+    />);
+    await waitFor(() => expect(view.container.querySelector(".cm-editor")).toHaveClass("cm-feature-extension"));
+    expect(onViewReady).toHaveBeenCalledTimes(1);
+    expect(onViewReady.mock.calls[0][0]).toBeInstanceOf(EditorView);
+    view.unmount();
+    expect(onViewReady).toHaveBeenLastCalledWith(null);
   });
 });
 

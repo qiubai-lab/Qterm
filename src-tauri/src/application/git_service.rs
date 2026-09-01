@@ -2,10 +2,11 @@ use std::path::{Path, PathBuf};
 
 use crate::{
     domain::git::{
-        GitCommitFile, GitError, GitSnapshot, validate_branch_name, validate_branch_source_ref,
-        validate_commit_message, validate_commit_oid, validate_local_branch_ref,
-        validate_local_paths, validate_remote_branch_ref, validate_remote_name,
-        validate_remote_repository_path, validate_repository_path,
+        GitChangeDiff, GitCommitFile, GitCommitFileDiff, GitConflictDetail, GitConflictResolution,
+        GitError, GitSnapshot, validate_branch_name, validate_branch_source_ref,
+        validate_commit_message, validate_commit_oid, validate_conflict_resolution,
+        validate_local_branch_ref, validate_local_paths, validate_remote_branch_ref,
+        validate_remote_name, validate_remote_repository_path, validate_repository_path,
     },
     ports::git_executor::GitExecutor,
     ports::remote_git_executor::RemoteGitExecutor,
@@ -36,6 +37,67 @@ pub async fn execute_remote_git_commit_files<E: RemoteGitExecutor>(
     validate_commit_oid(&oid)?;
     executor
         .commit_files(session_id, profile_id, repository, oid)
+        .await
+}
+
+pub async fn execute_remote_git_commit_file_diff<E: RemoteGitExecutor>(
+    executor: &E,
+    session_id: &str,
+    profile_id: &str,
+    repository: String,
+    oid: String,
+    path: String,
+) -> Result<GitCommitFileDiff, GitError> {
+    validate_remote_repository_path(&repository)?;
+    validate_commit_oid(&oid)?;
+    crate::domain::git::validate_posix_paths(std::slice::from_ref(&path))?;
+    executor
+        .commit_file_diff(session_id, profile_id, repository, oid, path)
+        .await
+}
+
+pub async fn execute_remote_git_conflict_detail<E: RemoteGitExecutor>(
+    executor: &E,
+    session_id: &str,
+    profile_id: &str,
+    repository: String,
+    path: String,
+) -> Result<GitConflictDetail, GitError> {
+    validate_remote_repository_path(&repository)?;
+    crate::domain::git::validate_posix_paths(std::slice::from_ref(&path))?;
+    executor
+        .conflict_detail(session_id, profile_id, repository, path)
+        .await
+}
+
+pub async fn execute_remote_git_change_diff<E: RemoteGitExecutor>(
+    executor: &E,
+    session_id: &str,
+    profile_id: &str,
+    repository: String,
+    path: String,
+    staged: bool,
+) -> Result<GitChangeDiff, GitError> {
+    validate_remote_repository_path(&repository)?;
+    crate::domain::git::validate_posix_paths(std::slice::from_ref(&path))?;
+    executor
+        .change_diff(session_id, profile_id, repository, path, staged)
+        .await
+}
+
+pub async fn execute_remote_git_resolve_conflict<E: RemoteGitExecutor>(
+    executor: &E,
+    session_id: &str,
+    profile_id: &str,
+    repository: String,
+    path: String,
+    resolution: GitConflictResolution,
+) -> Result<GitSnapshot, GitError> {
+    validate_remote_repository_path(&repository)?;
+    crate::domain::git::validate_posix_paths(std::slice::from_ref(&path))?;
+    validate_conflict_resolution(&resolution)?;
+    executor
+        .resolve_conflict(session_id, profile_id, repository, path, resolution)
         .await
 }
 
@@ -88,6 +150,51 @@ impl<E: GitExecutor> GitService<E> {
     ) -> Result<Vec<GitCommitFile>, GitError> {
         validate_commit_oid(&oid)?;
         self.executor.commit_files(&input_path(repository)?, &oid)
+    }
+
+    pub fn commit_file_diff(
+        &self,
+        repository: String,
+        oid: String,
+        path: String,
+    ) -> Result<GitCommitFileDiff, GitError> {
+        validate_commit_oid(&oid)?;
+        validate_local_paths(std::slice::from_ref(&path))?;
+        self.executor
+            .commit_file_diff(&input_path(repository)?, &oid, &path)
+    }
+
+    pub fn conflict_detail(
+        &self,
+        repository: String,
+        path: String,
+    ) -> Result<GitConflictDetail, GitError> {
+        validate_local_paths(std::slice::from_ref(&path))?;
+        self.executor
+            .conflict_detail(&input_path(repository)?, &path)
+    }
+
+    pub fn change_diff(
+        &self,
+        repository: String,
+        path: String,
+        staged: bool,
+    ) -> Result<GitChangeDiff, GitError> {
+        validate_local_paths(std::slice::from_ref(&path))?;
+        self.executor
+            .change_diff(&input_path(repository)?, &path, staged)
+    }
+
+    pub fn resolve_conflict(
+        &self,
+        repository: String,
+        path: String,
+        resolution: GitConflictResolution,
+    ) -> Result<GitSnapshot, GitError> {
+        validate_local_paths(std::slice::from_ref(&path))?;
+        validate_conflict_resolution(&resolution)?;
+        self.executor
+            .resolve_conflict(&input_path(repository)?, &path, &resolution)
     }
 
     pub fn create_branch(&self, repository: String, name: String) -> Result<GitSnapshot, GitError> {

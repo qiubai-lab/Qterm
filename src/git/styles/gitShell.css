@@ -157,6 +157,16 @@
   background: var(--hover);
 }
 
+.git-change-row button.git-conflict-action {
+  display: flex;
+  width: auto;
+  gap: 3px;
+  padding: 0 5px;
+  color: var(--danger);
+  font-size: 8px;
+  font-weight: 700;
+}
+
 .git-section-body {
   display: grid;
   min-width: 0;
@@ -668,6 +678,12 @@
   color: var(--muted);
 }
 
+.git-change-row.previewable {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0;
+  padding-left: 0;
+}
+
 .git-change-row:hover {
   color: var(--text);
   background: var(--hover);
@@ -675,6 +691,38 @@
 
 .git-change-row > svg {
   flex: 0 0 auto;
+  color: var(--accent);
+}
+
+.git-change-row > .git-change-preview-trigger {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  padding: 0 4px 0 9px;
+  border: 0;
+  border-radius: 0;
+  color: inherit;
+  background: transparent;
+  text-align: left;
+}
+
+.git-change-row > .git-change-preview-trigger:hover,
+.git-change-row > .git-change-preview-trigger:active {
+  border-color: transparent;
+  background: transparent;
+}
+
+.git-change-row > .git-change-preview-trigger:focus-visible {
+  border-radius: 3px;
+  outline: 1px solid var(--focus-ring);
+  outline-offset: 0;
+}
+
+.git-change-preview-trigger > svg {
   color: var(--accent);
 }
 

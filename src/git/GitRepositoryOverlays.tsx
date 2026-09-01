@@ -2,6 +2,7 @@ import { createPortal } from "react-dom";
 import type { RefObject } from "react";
 
 import { Button } from "../components/Button";
+import { ExactTextInput } from "../components/ExactTextInput";
 import { Icon } from "../components/Icon";
 import { RequiredFieldLabel } from "../components/RequiredFieldLabel";
 import { DialogActionStatus, DialogFrame } from "../components/dialogs/DialogFrame";
@@ -143,7 +144,7 @@ function GitRepositoryOverlayContent(props: GitRepositoryOverlaysProps) {
 
   if (repositoryOverlay.kind === "branches") {
     return <div ref={overlayRef} className="git-repository-popover git-branch-popover" role="dialog" aria-label="切换分支" onKeyDown={onNavigateMenu} {...common}>
-      <div className="git-branch-search-shell"><Icon name="search" size={12}/><input className="git-branch-search" type="search" role="searchbox" aria-label="筛选分支" value={branchQuery} placeholder="筛选要签出的分支" onChange={(event) => onBranchQueryChange(event.target.value)}/></div>
+      <div className="git-branch-search-shell"><Icon name="search" size={12}/><ExactTextInput className="git-branch-search" type="search" role="searchbox" aria-label="筛选分支" value={branchQuery} placeholder="筛选要签出的分支" onChange={(event) => onBranchQueryChange(event.target.value)}/></div>
       <div className="git-branch-actions"><button type="button" onClick={() => onOpenOverlay("createBranch")}><Icon name="plus" size={12}/><span>创建新分支…</span></button></div>
       <div className="git-branch-list" role="listbox" aria-label="选择分支">
         <div className="git-branch-list-group" role="group" aria-label="本地分支"><div className="git-branch-list-header" role="presentation"><span>本地分支</span><span>{visibleLocalBranches.length}</span></div>{visibleLocalBranches.map(renderBranchOption)}</div>
@@ -162,7 +163,7 @@ function GitRepositoryOverlayContent(props: GitRepositoryOverlaysProps) {
     }} {...common}>
       <div className="git-repository-popover-title"><Icon name="git" size={13}/><strong>新建分支</strong></div>
       <label htmlFor={`git-new-branch-${blockId}`}><RequiredFieldLabel>分支名称</RequiredFieldLabel></label>
-      <input id={`git-new-branch-${blockId}`} aria-label="新分支名称" value={newBranch} autoFocus maxLength={255} placeholder="例如 feature/login" onChange={(event) => onNewBranchChange(event.target.value)}/>
+      <ExactTextInput id={`git-new-branch-${blockId}`} aria-label="新分支名称" value={newBranch} autoFocus maxLength={255} placeholder="例如 feature/login" onChange={(event) => onNewBranchChange(event.target.value)}/>
       <div className="git-branch-create-feedback" role={error ? "alert" : "status"} aria-hidden={!error}>{error?.message ?? "\u00a0"}</div>
       <div className="git-branch-create-actions"><button type="button" className="secondary" onClick={() => onCloseOverlay(true)}>取消</button><button type="submit" disabled={disabled || !newBranch.trim()}>创建并切换</button></div>
     </form>;
@@ -301,18 +302,18 @@ function GitRepositoryOverlayContent(props: GitRepositoryOverlaysProps) {
       <label htmlFor={`git-branch-source-${blockId}`}><RequiredFieldLabel>起点分支</RequiredFieldLabel></label>
       <select id={`git-branch-source-${blockId}`} aria-label="起点分支" value={branchSourceRef} onChange={(event) => onBranchSourceRefChange(event.target.value)}>{branchOptions.map((branch) => <option value={branch.refName} key={branch.refName}>{branch.name} · {branch.kind === "local" ? "本地" : "远程"}</option>)}</select>
       <label htmlFor={`git-branch-from-name-${blockId}`}><RequiredFieldLabel>新分支名称</RequiredFieldLabel></label>
-      <input id={`git-branch-from-name-${blockId}`} aria-label="新分支名称" value={newBranch} maxLength={255} autoFocus placeholder="例如 feature/login" onChange={(event) => onNewBranchChange(event.target.value)}/>
+      <ExactTextInput id={`git-branch-from-name-${blockId}`} aria-label="新分支名称" value={newBranch} maxLength={255} autoFocus placeholder="例如 feature/login" onChange={(event) => onNewBranchChange(event.target.value)}/>
     </>}
     {repositoryOverlay.kind === "createBranchFromCommit" && commitBranchSource && <>
       <div className="git-commit-branch-source" aria-label={`起点提交 ${commitBranchSource.subject}`}><Icon name="git" size={13}/><span><strong title={commitBranchSource.subject}>{commitBranchSource.subject}</strong><code title={commitBranchSource.oid}>{commitBranchSource.oid.slice(0, 8)}</code></span></div>
       <label htmlFor={`git-branch-from-commit-name-${blockId}`}><RequiredFieldLabel>新分支名称</RequiredFieldLabel></label>
-      <input id={`git-branch-from-commit-name-${blockId}`} aria-label="新分支名称" required value={newBranch} maxLength={255} autoFocus placeholder="例如 feature/history" onChange={(event) => onNewBranchChange(event.target.value)}/>
+      <ExactTextInput id={`git-branch-from-commit-name-${blockId}`} aria-label="新分支名称" required value={newBranch} maxLength={255} autoFocus placeholder="例如 feature/history" onChange={(event) => onNewBranchChange(event.target.value)}/>
     </>}
     {repositoryOverlay.kind === "renameBranch" && <>
       <label htmlFor={`git-rename-ref-${blockId}`}><RequiredFieldLabel>本地分支</RequiredFieldLabel></label>
       <select id={`git-rename-ref-${blockId}`} aria-label="本地分支" value={selectedBranchRef} onChange={(event) => onSelectedBranchRefChange(event.target.value)}>{localBranchOptions.map((branch) => <option value={branch.refName} key={branch.refName}>{branch.name}{branch.current ? " · 当前" : ""}</option>)}</select>
       <label htmlFor={`git-rename-name-${blockId}`}><RequiredFieldLabel>新分支名称</RequiredFieldLabel></label>
-      <input id={`git-rename-name-${blockId}`} aria-label="新分支名称" value={newBranch} maxLength={255} autoFocus placeholder="例如 feature/new-name" onChange={(event) => onNewBranchChange(event.target.value)}/>
+      <ExactTextInput id={`git-rename-name-${blockId}`} aria-label="新分支名称" value={newBranch} maxLength={255} autoFocus placeholder="例如 feature/new-name" onChange={(event) => onNewBranchChange(event.target.value)}/>
     </>}
     {repositoryOverlay.kind === "deleteBranch" && <>
       <label htmlFor={`git-delete-ref-${blockId}`}><RequiredFieldLabel>待删除分支</RequiredFieldLabel></label>

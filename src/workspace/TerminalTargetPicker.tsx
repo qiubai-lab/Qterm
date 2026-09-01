@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 
 import { Icon, type IconName } from "../components/Icon";
 import { HostIdentity } from "../components/HostIdentity";
+import { ExactTextInput } from "../components/ExactTextInput";
 import type { ConnectionProfile, ProfileGroup } from "../lib/tauri/profiles";
 import type { SessionState } from "../lib/tauri/sessions";
 
@@ -338,7 +339,7 @@ export function TerminalTargetPicker({ profiles, groups = [], recentProfileIds =
   >
     <div className="terminal-target-search">
       <Icon name="connections" size={12}/>
-      <input ref={searchRef} type="search" aria-label={`搜索${ariaContext}`} placeholder="搜索名称、主机或用户" value={query} onChange={(event) => {
+      <ExactTextInput ref={searchRef} type="search" aria-label={`搜索${ariaContext}`} placeholder="搜索名称、主机或用户" value={query} onChange={(event) => {
         clearGroupTimers();
         setActiveGroupId(null);
         setSubmenuPosition(null);

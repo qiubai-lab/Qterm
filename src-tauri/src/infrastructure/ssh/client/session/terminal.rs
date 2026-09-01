@@ -183,6 +183,18 @@ pub(super) async fn run_terminal_session(
                 Some(SessionControl::RunGitCommitFiles { reply, .. }) => {
                     let _ = reply.send(Err(crate::domain::git::GitError::SessionUnavailable));
                 }
+                Some(SessionControl::RunGitCommitFileDiff { reply, .. }) => {
+                    let _ = reply.send(Err(crate::domain::git::GitError::SessionUnavailable));
+                }
+                Some(SessionControl::RunGitConflictDetail { reply, .. }) => {
+                    let _ = reply.send(Err(crate::domain::git::GitError::SessionUnavailable));
+                }
+                Some(SessionControl::RunGitChangeDiff { reply, .. }) => {
+                    let _ = reply.send(Err(crate::domain::git::GitError::SessionUnavailable));
+                }
+                Some(SessionControl::RunGitResolveConflict { reply, .. }) => {
+                    let _ = reply.send(Err(crate::domain::git::GitError::SessionUnavailable));
+                }
                 None => {
                     entry.transition(SessionState::Closing);
                 }

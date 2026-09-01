@@ -36,6 +36,88 @@ impl RemoteGitExecutor for SshSessionManager {
     > {
         Box::pin(self.run_git_commit_files(session_id, profile_id, repository, oid))
     }
+
+    fn commit_file_diff<'a>(
+        &'a self,
+        session_id: &'a str,
+        profile_id: &'a str,
+        repository: String,
+        oid: String,
+        path: String,
+    ) -> std::pin::Pin<
+        Box<
+            dyn std::future::Future<
+                    Output = Result<
+                        crate::domain::git::GitCommitFileDiff,
+                        crate::domain::git::GitError,
+                    >,
+                > + Send
+                + 'a,
+        >,
+    > {
+        Box::pin(self.run_git_commit_file_diff(session_id, profile_id, repository, oid, path))
+    }
+
+    fn conflict_detail<'a>(
+        &'a self,
+        session_id: &'a str,
+        profile_id: &'a str,
+        repository: String,
+        path: String,
+    ) -> std::pin::Pin<
+        Box<
+            dyn std::future::Future<
+                    Output = Result<
+                        crate::domain::git::GitConflictDetail,
+                        crate::domain::git::GitError,
+                    >,
+                > + Send
+                + 'a,
+        >,
+    > {
+        Box::pin(self.run_git_conflict_detail(session_id, profile_id, repository, path))
+    }
+
+    fn change_diff<'a>(
+        &'a self,
+        session_id: &'a str,
+        profile_id: &'a str,
+        repository: String,
+        path: String,
+        staged: bool,
+    ) -> std::pin::Pin<
+        Box<
+            dyn std::future::Future<
+                    Output = Result<
+                        crate::domain::git::GitChangeDiff,
+                        crate::domain::git::GitError,
+                    >,
+                > + Send
+                + 'a,
+        >,
+    > {
+        Box::pin(self.run_git_change_diff(session_id, profile_id, repository, path, staged))
+    }
+
+    fn resolve_conflict<'a>(
+        &'a self,
+        session_id: &'a str,
+        profile_id: &'a str,
+        repository: String,
+        path: String,
+        resolution: crate::domain::git::GitConflictResolution,
+    ) -> std::pin::Pin<
+        Box<
+            dyn std::future::Future<
+                    Output = Result<crate::domain::git::GitSnapshot, crate::domain::git::GitError>,
+                > + Send
+                + 'a,
+        >,
+    > {
+        Box::pin(
+            self.run_git_resolve_conflict(session_id, profile_id, repository, path, resolution),
+        )
+    }
 }
 
 impl RemoteTerminalStagingStore for SshSessionManager {

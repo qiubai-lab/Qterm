@@ -187,6 +187,142 @@ impl SshSessionManager {
             .map_err(|_| crate::domain::git::GitError::SessionUnavailable)?
     }
 
+    pub(super) async fn run_git_commit_file_diff(
+        &self,
+        id: &str,
+        profile_id: &str,
+        repository: String,
+        oid: String,
+        path: String,
+    ) -> Result<crate::domain::git::GitCommitFileDiff, crate::domain::git::GitError> {
+        let entry = self
+            .entry(id)
+            .map_err(|_| crate::domain::git::GitError::SessionUnavailable)?;
+        if entry.purpose != SessionPurpose::Git
+            || entry.profile_id.as_deref() != Some(profile_id)
+            || entry.state() != SessionState::Connected
+        {
+            return Err(crate::domain::git::GitError::SessionUnavailable);
+        }
+        crate::domain::git::validate_remote_repository_path(&repository)?;
+        crate::domain::git::validate_commit_oid(&oid)?;
+        crate::domain::git::validate_posix_paths(std::slice::from_ref(&path))?;
+        let (reply, response) = oneshot::channel();
+        entry
+            .control
+            .try_send(SessionControl::RunGitCommitFileDiff {
+                repository,
+                oid,
+                path,
+                reply,
+            })
+            .map_err(|_| crate::domain::git::GitError::SessionUnavailable)?;
+        response
+            .await
+            .map_err(|_| crate::domain::git::GitError::SessionUnavailable)?
+    }
+
+    pub(super) async fn run_git_conflict_detail(
+        &self,
+        id: &str,
+        profile_id: &str,
+        repository: String,
+        path: String,
+    ) -> Result<crate::domain::git::GitConflictDetail, crate::domain::git::GitError> {
+        let entry = self
+            .entry(id)
+            .map_err(|_| crate::domain::git::GitError::SessionUnavailable)?;
+        if entry.purpose != SessionPurpose::Git
+            || entry.profile_id.as_deref() != Some(profile_id)
+            || entry.state() != SessionState::Connected
+        {
+            return Err(crate::domain::git::GitError::SessionUnavailable);
+        }
+        crate::domain::git::validate_remote_repository_path(&repository)?;
+        crate::domain::git::validate_posix_paths(std::slice::from_ref(&path))?;
+        let (reply, response) = oneshot::channel();
+        entry
+            .control
+            .try_send(SessionControl::RunGitConflictDetail {
+                repository,
+                path,
+                reply,
+            })
+            .map_err(|_| crate::domain::git::GitError::SessionUnavailable)?;
+        response
+            .await
+            .map_err(|_| crate::domain::git::GitError::SessionUnavailable)?
+    }
+
+    pub(super) async fn run_git_change_diff(
+        &self,
+        id: &str,
+        profile_id: &str,
+        repository: String,
+        path: String,
+        staged: bool,
+    ) -> Result<crate::domain::git::GitChangeDiff, crate::domain::git::GitError> {
+        let entry = self
+            .entry(id)
+            .map_err(|_| crate::domain::git::GitError::SessionUnavailable)?;
+        if entry.purpose != SessionPurpose::Git
+            || entry.profile_id.as_deref() != Some(profile_id)
+            || entry.state() != SessionState::Connected
+        {
+            return Err(crate::domain::git::GitError::SessionUnavailable);
+        }
+        crate::domain::git::validate_remote_repository_path(&repository)?;
+        crate::domain::git::validate_posix_paths(std::slice::from_ref(&path))?;
+        let (reply, response) = oneshot::channel();
+        entry
+            .control
+            .try_send(SessionControl::RunGitChangeDiff {
+                repository,
+                path,
+                staged,
+                reply,
+            })
+            .map_err(|_| crate::domain::git::GitError::SessionUnavailable)?;
+        response
+            .await
+            .map_err(|_| crate::domain::git::GitError::SessionUnavailable)?
+    }
+
+    pub(super) async fn run_git_resolve_conflict(
+        &self,
+        id: &str,
+        profile_id: &str,
+        repository: String,
+        path: String,
+        resolution: crate::domain::git::GitConflictResolution,
+    ) -> Result<crate::domain::git::GitSnapshot, crate::domain::git::GitError> {
+        let entry = self
+            .entry(id)
+            .map_err(|_| crate::domain::git::GitError::SessionUnavailable)?;
+        if entry.purpose != SessionPurpose::Git
+            || entry.profile_id.as_deref() != Some(profile_id)
+            || entry.state() != SessionState::Connected
+        {
+            return Err(crate::domain::git::GitError::SessionUnavailable);
+        }
+        crate::domain::git::validate_remote_repository_path(&repository)?;
+        crate::domain::git::validate_posix_paths(std::slice::from_ref(&path))?;
+        crate::domain::git::validate_conflict_resolution(&resolution)?;
+        let (reply, response) = oneshot::channel();
+        entry
+            .control
+            .try_send(SessionControl::RunGitResolveConflict {
+                repository,
+                path,
+                resolution,
+                reply,
+            })
+            .map_err(|_| crate::domain::git::GitError::SessionUnavailable)?;
+        response
+            .await
+            .map_err(|_| crate::domain::git::GitError::SessionUnavailable)?
+    }
+
     pub fn start_transfer(
         &self,
         session_id: &str,

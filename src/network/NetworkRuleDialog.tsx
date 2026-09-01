@@ -3,6 +3,7 @@ import { useState, type FormEvent } from "react";
 import { Icon, type IconName } from "../components/Icon";
 import { Button } from "../components/Button";
 import { DialogActionStatus, DialogFrame } from "../components/dialogs/DialogFrame";
+import { ExactTextInput } from "../components/ExactTextInput";
 import type { NetworkRule, NetworkRuleInput } from "../lib/tauri/network";
 import { networkRuleTypeLabel, type NetworkRuleType } from "./networkRuleTypes";
 
@@ -42,9 +43,9 @@ export function NetworkRuleDialog({ profileId, rule, initialType, busy, message,
       <NetworkRuleFlow type={type} bindHost={bindHost} bindPort={bindPort} targetHost={targetHost} targetPort={targetPort} locked={Boolean(rule)}/>
       <label>名称<input autoFocus value={name} disabled={busy} maxLength={80} onChange={(event) => setName(event.target.value)}/></label>
       <div className="form-grid">
-        <label><FieldLabel icon={listenerIcon(type)}>监听地址</FieldLabel><input value={bindHost} disabled={busy} onChange={(event) => setBindHost(event.target.value)}/></label>
+        <label><FieldLabel icon={listenerIcon(type)}>监听地址</FieldLabel><ExactTextInput value={bindHost} disabled={busy} onChange={(event) => setBindHost(event.target.value)}/></label>
         <label>监听端口<input type="number" min={1} max={65535} value={bindPort} disabled={busy} onChange={(event) => setBindPort(event.target.value)}/></label>
-        {type !== "socks5" && <><label><FieldLabel icon={targetIcon(type)}>目标地址</FieldLabel><input value={targetHost} disabled={busy} onChange={(event) => setTargetHost(event.target.value)}/></label><label>目标端口<input type="number" min={1} max={65535} value={targetPort} disabled={busy} onChange={(event) => setTargetPort(event.target.value)}/></label></>}
+        {type !== "socks5" && <><label><FieldLabel icon={targetIcon(type)}>目标地址</FieldLabel><ExactTextInput value={targetHost} disabled={busy} onChange={(event) => setTargetHost(event.target.value)}/></label><label>目标端口<input type="number" min={1} max={65535} value={targetPort} disabled={busy} onChange={(event) => setTargetPort(event.target.value)}/></label></>}
       </div>
       <p className={`network-exposure-note${exposed ? " warning" : ""}`}>{exposureNote}</p>
       <footer className="dialog-actions dialog-actions-with-status"><DialogActionStatus message={validation || message}/><div><Button disabled={busy} onClick={onBack ?? onClose}>{onBack ? "返回选择" : "取消"}</Button><Button type="submit" variant="primary" loading={busy}>{busy ? "正在保存…" : "保存规则"}</Button></div></footer>

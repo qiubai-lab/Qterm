@@ -5,7 +5,11 @@ use tauri::{AppHandle, State, ipc::Channel};
 use tauri_plugin_dialog::DialogExt;
 
 use crate::{
-    application::git_service::{GitService, execute_remote_git, execute_remote_git_commit_files},
+    application::git_service::{
+        GitService, execute_remote_git, execute_remote_git_change_diff,
+        execute_remote_git_commit_file_diff, execute_remote_git_commit_files,
+        execute_remote_git_conflict_detail, execute_remote_git_resolve_conflict,
+    },
     commands::{
         credential::CredentialState,
         error::IpcError,
@@ -16,8 +20,10 @@ use crate::{
     domain::{
         files::{DirectoryListing, FileEntry},
         git::{
-            GitBranch, GitBranchKind, GitChange, GitCommit, GitCommitFile, GitError, GitHead,
-            GitSnapshot, RemoteGitAction,
+            GitBranch, GitBranchKind, GitChange, GitChangeDiff, GitCommit, GitCommitFile,
+            GitCommitFileDiff, GitConflictContentKind, GitConflictDetail, GitConflictKind,
+            GitConflictResolution, GitConflictResult, GitConflictVersion, GitDiffScope,
+            GitDiffSource, GitError, GitHead, GitSnapshot, RemoteGitAction,
         },
         transfer::RemotePath,
     },
@@ -58,6 +64,7 @@ pub struct GitSnapshotDto {
     remotes: Vec<String>,
     commits: Vec<GitCommitDto>,
     merge_in_progress: bool,
+    merge_head_oid: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -79,6 +86,99 @@ struct GitChangeDto {
     status: String,
     staged: bool,
     conflict: bool,
+    conflict_kind: Option<GitConflictKindDto>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+enum GitConflictKindDto {
+    BothModified,
+    BothAdded,
+    CurrentDeleted,
+    IncomingDeleted,
+    BothDeleted,
+    Other,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+enum GitConflictContentKindDto {
+    Missing,
+    Text,
+    Binary,
+    Unsupported,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitConflictVersionDto {
+    kind: GitConflictContentKindDto,
+    content: Option<String>,
+    size: u64,
+    mode: Option<u32>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitConflictResultDto {
+    kind: GitConflictContentKindDto,
+    content: Option<String>,
+    revision: String,
+    size: u64,
+    mode: Option<u32>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitConflictDetailDto {
+    path: String,
+    kind: GitConflictKindDto,
+    base: GitConflictVersionDto,
+    current: GitConflictVersionDto,
+    incoming: GitConflictVersionDto,
+    result: GitConflictResultDto,
+    editable: bool,
+    unsupported_reason: Option<String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+enum GitDiffScopeDto {
+    Staged,
+    Unstaged,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+enum GitDiffSourceDto {
+    Head,
+    Index,
+    Worktree,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitChangeDiffDto {
+    path: String,
+    original_path: Option<String>,
+    status: String,
+    scope: GitDiffScopeDto,
+    before_source: GitDiffSourceDto,
+    after_source: GitDiffSourceDto,
+    before: GitConflictVersionDto,
+    after: GitConflictVersionDto,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitCommitFileDiffDto {
+    commit_oid: String,
+    parent_oid: Option<String>,
+    path: String,
+    original_path: Option<String>,
+    status: String,
+    before: GitConflictVersionDto,
+    after: GitConflictVersionDto,
 }
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -159,6 +259,14 @@ pub struct GitCommitFilesInput {
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
+pub struct GitCommitFileDiffInput {
+    repository: String,
+    oid: String,
+    path: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct GitBranchInput {
     repository: String,
     name: String,
@@ -217,6 +325,47 @@ pub struct GitMergeBranchInput {
 }
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct GitConflictDetailInput {
+    repository: String,
+    path: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitChangeDiffInput {
+    repository: String,
+    path: String,
+    staged: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitResolveConflictInput {
+    repository: String,
+    path: String,
+    resolution: GitConflictResolutionDto,
+}
+
+#[derive(Deserialize)]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
+pub enum GitConflictResolutionDto {
+    SaveText {
+        content: String,
+        expected_revision: String,
+    },
+    UseCurrent {},
+    UseIncoming {},
+    Delete {},
+    MarkResolved {},
+}
+
+#[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RemoteGitInput {
     session_id: String,
@@ -231,6 +380,45 @@ pub struct RemoteGitCommitFilesInput {
     profile_id: String,
     repository: String,
     oid: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RemoteGitCommitFileDiffInput {
+    session_id: String,
+    profile_id: String,
+    repository: String,
+    oid: String,
+    path: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RemoteGitConflictDetailInput {
+    session_id: String,
+    profile_id: String,
+    repository: String,
+    path: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RemoteGitChangeDiffInput {
+    session_id: String,
+    profile_id: String,
+    repository: String,
+    path: String,
+    staged: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RemoteGitResolveConflictInput {
+    session_id: String,
+    profile_id: String,
+    repository: String,
+    path: String,
+    resolution: GitConflictResolutionDto,
 }
 
 #[derive(Deserialize)]
@@ -403,6 +591,77 @@ pub async fn git_remote_commit_files(
 }
 
 #[tauri::command]
+pub async fn git_remote_commit_file_diff(
+    input: RemoteGitCommitFileDiffInput,
+    session_state: State<'_, SessionState>,
+) -> Result<GitCommitFileDiffDto, GitIpcError> {
+    execute_remote_git_commit_file_diff(
+        session_state.manager().as_ref(),
+        &input.session_id,
+        &input.profile_id,
+        input.repository,
+        input.oid,
+        input.path,
+    )
+    .await
+    .map(Into::into)
+    .map_err(GitIpcError::from)
+}
+
+#[tauri::command]
+pub async fn git_remote_conflict_detail(
+    input: RemoteGitConflictDetailInput,
+    session_state: State<'_, SessionState>,
+) -> Result<GitConflictDetailDto, GitIpcError> {
+    execute_remote_git_conflict_detail(
+        session_state.manager().as_ref(),
+        &input.session_id,
+        &input.profile_id,
+        input.repository,
+        input.path,
+    )
+    .await
+    .map(Into::into)
+    .map_err(GitIpcError::from)
+}
+
+#[tauri::command]
+pub async fn git_remote_change_diff(
+    input: RemoteGitChangeDiffInput,
+    session_state: State<'_, SessionState>,
+) -> Result<GitChangeDiffDto, GitIpcError> {
+    execute_remote_git_change_diff(
+        session_state.manager().as_ref(),
+        &input.session_id,
+        &input.profile_id,
+        input.repository,
+        input.path,
+        input.staged,
+    )
+    .await
+    .map(Into::into)
+    .map_err(GitIpcError::from)
+}
+
+#[tauri::command]
+pub async fn git_remote_resolve_conflict(
+    input: RemoteGitResolveConflictInput,
+    session_state: State<'_, SessionState>,
+) -> Result<GitSnapshotDto, GitIpcError> {
+    execute_remote_git_resolve_conflict(
+        session_state.manager().as_ref(),
+        &input.session_id,
+        &input.profile_id,
+        input.repository,
+        input.path,
+        input.resolution.into(),
+    )
+    .await
+    .map(Into::into)
+    .map_err(GitIpcError::from)
+}
+
+#[tauri::command]
 pub async fn git_remote_list_directory(
     input: RemoteGitDirectoryInput,
     session_state: State<'_, SessionState>,
@@ -510,6 +769,61 @@ pub async fn git_commit_files(
         .map_err(|_| GitIpcError::from(GitError::Io))?
         .map(|files| files.into_iter().map(Into::into).collect())
         .map_err(GitIpcError::from)
+}
+
+#[tauri::command]
+pub async fn git_commit_file_diff(
+    input: GitCommitFileDiffInput,
+    state: State<'_, GitState>,
+) -> Result<GitCommitFileDiffDto, GitIpcError> {
+    let service = Arc::clone(&state.service);
+    tauri::async_runtime::spawn_blocking(move || {
+        service.commit_file_diff(input.repository, input.oid, input.path)
+    })
+    .await
+    .map_err(|_| GitIpcError::from(GitError::Io))?
+    .map(Into::into)
+    .map_err(GitIpcError::from)
+}
+
+#[tauri::command]
+pub async fn git_conflict_detail(
+    input: GitConflictDetailInput,
+    state: State<'_, GitState>,
+) -> Result<GitConflictDetailDto, GitIpcError> {
+    let service = Arc::clone(&state.service);
+    tauri::async_runtime::spawn_blocking(move || {
+        service.conflict_detail(input.repository, input.path)
+    })
+    .await
+    .map_err(|_| GitIpcError::from(GitError::Io))?
+    .map(Into::into)
+    .map_err(GitIpcError::from)
+}
+
+#[tauri::command]
+pub async fn git_change_diff(
+    input: GitChangeDiffInput,
+    state: State<'_, GitState>,
+) -> Result<GitChangeDiffDto, GitIpcError> {
+    let service = Arc::clone(&state.service);
+    tauri::async_runtime::spawn_blocking(move || {
+        service.change_diff(input.repository, input.path, input.staged)
+    })
+    .await
+    .map_err(|_| GitIpcError::from(GitError::Io))?
+    .map(Into::into)
+    .map_err(GitIpcError::from)
+}
+
+#[tauri::command]
+pub async fn git_resolve_conflict(
+    input: GitResolveConflictInput,
+    state: State<'_, GitState>,
+) -> Result<GitSnapshotDto, GitIpcError> {
+    let service = Arc::clone(&state.service);
+    run(move || service.resolve_conflict(input.repository, input.path, input.resolution.into()))
+        .await
 }
 
 #[tauri::command]
@@ -838,6 +1152,7 @@ impl From<GitSnapshot> for GitSnapshotDto {
             remotes: value.remotes,
             commits: value.commits.into_iter().map(Into::into).collect(),
             merge_in_progress: value.merge_in_progress,
+            merge_head_oid: value.merge_head_oid,
         }
     }
 }
@@ -862,6 +1177,135 @@ impl From<GitChange> for GitChangeDto {
             status: value.status,
             staged: value.staged,
             conflict: value.conflict,
+            conflict_kind: value.conflict_kind.map(Into::into),
+        }
+    }
+}
+
+impl From<GitConflictKind> for GitConflictKindDto {
+    fn from(value: GitConflictKind) -> Self {
+        match value {
+            GitConflictKind::BothModified => Self::BothModified,
+            GitConflictKind::BothAdded => Self::BothAdded,
+            GitConflictKind::CurrentDeleted => Self::CurrentDeleted,
+            GitConflictKind::IncomingDeleted => Self::IncomingDeleted,
+            GitConflictKind::BothDeleted => Self::BothDeleted,
+            GitConflictKind::Other => Self::Other,
+        }
+    }
+}
+
+impl From<GitConflictContentKind> for GitConflictContentKindDto {
+    fn from(value: GitConflictContentKind) -> Self {
+        match value {
+            GitConflictContentKind::Missing => Self::Missing,
+            GitConflictContentKind::Text => Self::Text,
+            GitConflictContentKind::Binary => Self::Binary,
+            GitConflictContentKind::Unsupported => Self::Unsupported,
+        }
+    }
+}
+
+impl From<GitConflictVersion> for GitConflictVersionDto {
+    fn from(value: GitConflictVersion) -> Self {
+        Self {
+            kind: value.kind.into(),
+            content: value.content,
+            size: value.size,
+            mode: value.mode,
+        }
+    }
+}
+
+impl From<GitConflictResult> for GitConflictResultDto {
+    fn from(value: GitConflictResult) -> Self {
+        Self {
+            kind: value.kind.into(),
+            content: value.content,
+            revision: value.revision,
+            size: value.size,
+            mode: value.mode,
+        }
+    }
+}
+
+impl From<GitConflictDetail> for GitConflictDetailDto {
+    fn from(value: GitConflictDetail) -> Self {
+        Self {
+            path: value.path,
+            kind: value.kind.into(),
+            base: value.base.into(),
+            current: value.current.into(),
+            incoming: value.incoming.into(),
+            result: value.result.into(),
+            editable: value.editable,
+            unsupported_reason: value.unsupported_reason,
+        }
+    }
+}
+
+impl From<GitDiffScope> for GitDiffScopeDto {
+    fn from(value: GitDiffScope) -> Self {
+        match value {
+            GitDiffScope::Staged => Self::Staged,
+            GitDiffScope::Unstaged => Self::Unstaged,
+        }
+    }
+}
+
+impl From<GitDiffSource> for GitDiffSourceDto {
+    fn from(value: GitDiffSource) -> Self {
+        match value {
+            GitDiffSource::Head => Self::Head,
+            GitDiffSource::Index => Self::Index,
+            GitDiffSource::Worktree => Self::Worktree,
+        }
+    }
+}
+
+impl From<GitChangeDiff> for GitChangeDiffDto {
+    fn from(value: GitChangeDiff) -> Self {
+        Self {
+            path: value.path,
+            original_path: value.original_path,
+            status: value.status,
+            scope: value.scope.into(),
+            before_source: value.before_source.into(),
+            after_source: value.after_source.into(),
+            before: value.before.into(),
+            after: value.after.into(),
+        }
+    }
+}
+
+impl From<GitCommitFileDiff> for GitCommitFileDiffDto {
+    fn from(value: GitCommitFileDiff) -> Self {
+        Self {
+            commit_oid: value.commit_oid,
+            parent_oid: value.parent_oid,
+            path: value.path,
+            original_path: value.original_path,
+            status: value.status,
+            before: value.before.into(),
+            after: value.after.into(),
+        }
+    }
+}
+
+impl From<GitConflictResolutionDto> for GitConflictResolution {
+    fn from(value: GitConflictResolutionDto) -> Self {
+        match value {
+            GitConflictResolutionDto::SaveText {
+                content,
+                expected_revision,
+            } => Self::SaveText {
+                content,
+                expected_revision,
+            },
+            GitConflictResolutionDto::UseCurrent {} => Self::UseCurrent,
+            GitConflictResolutionDto::UseIncoming {} => Self::UseIncoming,
+            GitConflictResolutionDto::Delete {} => Self::Delete,
+            GitConflictResolutionDto::MarkResolved {} => Self::MarkResolved,
         }
     }
 }
@@ -913,9 +1357,12 @@ impl From<GitCommitFile> for GitCommitFileDto {
 #[cfg(test)]
 mod tests {
     use super::{
-        GitBranchInput, GitCommitFilesInput, GitCommitInput, GitCreateBranchFromCommitInput,
-        GitIpcError, GitMergeBranchInput, GitPathInput, GitPathsInput, GitRemoteBranchInput,
-        RemoteGitCommitFilesInput, RemoteGitDirectoryInput, RemoteGitInput,
+        GitBranchInput, GitChangeDiffInput, GitCommitFileDiffInput, GitCommitFilesInput,
+        GitCommitInput, GitConflictDetailInput, GitCreateBranchFromCommitInput, GitIpcError,
+        GitMergeBranchInput, GitPathInput, GitPathsInput, GitRemoteBranchInput,
+        GitResolveConflictInput, RemoteGitChangeDiffInput, RemoteGitCommitFileDiffInput,
+        RemoteGitCommitFilesInput, RemoteGitConflictDetailInput, RemoteGitDirectoryInput,
+        RemoteGitInput, RemoteGitResolveConflictInput,
     };
     use crate::domain::git::GitError;
 
@@ -962,6 +1409,46 @@ mod tests {
                 "repository": "D:/work/project",
                 "message": "feat: safe",
                 "cwd": "D:/other"
+            }))
+            .is_err()
+        );
+        assert!(
+            serde_json::from_value::<GitChangeDiffInput>(serde_json::json!({
+                "repository": "D:/work/project",
+                "path": "src/main.ts",
+                "staged": false,
+                "revision": "HEAD"
+            }))
+            .is_err()
+        );
+        assert!(
+            serde_json::from_value::<RemoteGitChangeDiffInput>(serde_json::json!({
+                "sessionId": "git-session",
+                "profileId": "profile-1",
+                "repository": "/srv/project",
+                "path": "src/main.ts",
+                "staged": true,
+                "command": "show"
+            }))
+            .is_err()
+        );
+        assert!(
+            serde_json::from_value::<GitCommitFileDiffInput>(serde_json::json!({
+                "repository": "D:/work/project",
+                "oid": "0123456789abcdef0123456789abcdef01234567",
+                "path": "src/main.ts",
+                "parent": "HEAD^"
+            }))
+            .is_err()
+        );
+        assert!(
+            serde_json::from_value::<RemoteGitCommitFileDiffInput>(serde_json::json!({
+                "sessionId": "git-session",
+                "profileId": "profile-1",
+                "repository": "/srv/project",
+                "oid": "0123456789abcdef0123456789abcdef01234567",
+                "path": "src/main.ts",
+                "command": "show"
             }))
             .is_err()
         );
@@ -1036,6 +1523,89 @@ mod tests {
                 "readFile": "/etc/passwd"
             }))
             .is_err()
+        );
+        assert!(
+            serde_json::from_value::<GitConflictDetailInput>(serde_json::json!({
+                "repository": "D:/work/project",
+                "path": "conflict.txt",
+                "stage": 2
+            }))
+            .is_err()
+        );
+        assert!(
+            serde_json::from_value::<RemoteGitConflictDetailInput>(serde_json::json!({
+                "sessionId": "git-session",
+                "profileId": "profile-1",
+                "repository": "/srv/project",
+                "path": "conflict.txt",
+                "revision": "HEAD"
+            }))
+            .is_err()
+        );
+        for payload in [
+            serde_json::json!({
+                "repository": "D:/work/project",
+                "path": "conflict.txt",
+                "resolution": { "type": "useCurrent", "args": ["--force"] }
+            }),
+            serde_json::json!({
+                "repository": "D:/work/project",
+                "path": "conflict.txt",
+                "resolution": { "type": "checkout", "revision": "HEAD" }
+            }),
+        ] {
+            assert!(serde_json::from_value::<GitResolveConflictInput>(payload).is_err());
+        }
+        assert!(
+            serde_json::from_value::<RemoteGitResolveConflictInput>(serde_json::json!({
+                "sessionId": "git-session",
+                "profileId": "profile-1",
+                "repository": "/srv/project",
+                "path": "conflict.txt",
+                "resolution": {
+                    "type": "saveText",
+                    "content": "resolved",
+                    "expectedRevision": "revision",
+                    "command": "git add -A"
+                }
+            }))
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn conflict_resolution_inputs_deserialize_the_closed_contract() {
+        let local = serde_json::from_value::<GitResolveConflictInput>(serde_json::json!({
+            "repository": "D:/work/project",
+            "path": "conflict.txt",
+            "resolution": {
+                "type": "saveText",
+                "content": "resolved\n",
+                "expectedRevision": "sha256:fixture"
+            }
+        }))
+        .expect("local conflict resolution");
+        assert_eq!(local.path, "conflict.txt");
+        assert_eq!(
+            crate::domain::git::GitConflictResolution::from(local.resolution),
+            crate::domain::git::GitConflictResolution::SaveText {
+                content: "resolved\n".into(),
+                expected_revision: "sha256:fixture".into(),
+            }
+        );
+
+        let remote = serde_json::from_value::<RemoteGitResolveConflictInput>(serde_json::json!({
+            "sessionId": "git-session",
+            "profileId": "profile-1",
+            "repository": "/srv/project",
+            "path": "binary.bin",
+            "resolution": { "type": "useIncoming" }
+        }))
+        .expect("remote conflict resolution");
+        assert_eq!(remote.path, "binary.bin");
+        assert_eq!(
+            crate::domain::git::GitConflictResolution::from(remote.resolution),
+            crate::domain::git::GitConflictResolution::UseIncoming
         );
     }
 

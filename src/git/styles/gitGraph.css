@@ -509,6 +509,7 @@
 
 .git-commit-file-row {
   display: grid;
+  width: 100%;
   grid-template-columns: auto minmax(0, 1fr) auto;
   min-width: 0;
   min-height: 25px;
@@ -518,10 +519,20 @@
   border: 0;
   border-radius: 4px;
   color: var(--text);
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 
 .git-commit-file-row:hover {
   background: var(--hover);
+}
+
+.git-commit-file-row:focus-visible {
+  outline: 1px solid var(--focus-ring);
+  outline-offset: -1px;
+  background: var(--selection-surface);
 }
 
 .git-commit-file-row > svg {
@@ -615,4 +626,3 @@
 @keyframes git-commit-files-spin {
   to { transform: rotate(360deg); }
 }
-
