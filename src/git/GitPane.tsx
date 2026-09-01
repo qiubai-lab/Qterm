@@ -13,6 +13,7 @@ import type { GitRuntime } from "../workspace/WorkspaceProvider";
 import { GitCommitGraph, GitCommitTooltip } from "./GitCommitGraph";
 import { buildGitGraphRows } from "./gitGraph";
 import { GitChangesSection, GitEmpty, GitRepositorySection } from "./GitPaneSections";
+import { deriveGitPrimaryAction, type GitPrimaryAction, type GitPrimaryAlternativeAction } from "./gitPrimaryAction";
 import {
   branchOverlayKinds,
   gitFailureTitle,
@@ -382,6 +383,12 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
     requestCommitFiles, setFocusedCommitOid, setHoveredCommitOid, toggleCommitFiles,
   } = useGitCommitInspection({ visible, snapshot, root, remote, remoteProfileId, loadCommitFiles });
   const disabled = Boolean(busy) || !remoteReady;
+  const primaryAction = deriveGitPrimaryAction({
+    snapshot,
+    message,
+    busy,
+    unavailable: !root || !remoteReady,
+  });
   const branchLabel = snapshot?.head.detached ? "detached HEAD" : snapshot?.head.name ?? "未命名分支";
   const branchOptions = useMemo(() => {
     if (!snapshot) return [];
@@ -612,6 +619,24 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
     else items[(current - 1 + items.length) % items.length].focus();
   }
 
+  function runPrimaryAction(action: GitPrimaryAction | GitPrimaryAlternativeAction) {
+    if (!root || busyRef.current || ("disabled" in action && action.disabled)) return;
+    if (action.kind === "stageAll") {
+      void mutate("stageAll", () => stageAll(root));
+    } else if (action.kind === "commit") {
+      const commitMessage = message.trim();
+      if (commitMessage) void mutate("commit", () => commit(root, commitMessage), true);
+    } else if (action.kind === "push") {
+      void runRecordedOperation("推送", () => pushRepository(root, null), "Push 已完成");
+    } else if (action.kind === "pull") {
+      void runRecordedOperation("拉取", () => pullRepository(root), "FF-only Pull 已完成");
+    } else if (action.kind === "publish" && action.remote) {
+      void runRecordedOperation("发布分支", () => pushRepository(root, action.remote), `已发布到 ${action.remote} 并设置 upstream`);
+    } else if (action.kind === "chooseRemote") {
+      openRepositoryOverlay("publishBranch");
+    }
+  }
+
   if (available === false) return <GitEmpty icon="git" title="未找到系统 Git" detail="安装 Git 并重新打开 Qterm 后即可使用 Git 管理。"/>;
   if (!repositoryPath) return <GitEmpty icon="git" title="选择本机仓库" detail="Git Block 一次管理一个本机或 SSH 工作区仓库。" action="选择文件夹" onAction={onRequestRepositoryChange}/>;
   if (remote && !remoteReady && !snapshot) return <GitEmpty icon="git" title={runtime?.status === "connecting" || runtime?.status === "authenticating" ? "正在连接远程 Git…" : "远程 Git 尚未连接"} detail={runtime?.notice || repositoryPath} secondary="更换远程路径" onSecondary={onRequestRepositoryChange}/>;
@@ -652,11 +677,12 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
       conflicts={conflicts}
       messageRef={messageRef}
       mergeAbortButtonRef={mergeAbortButtonRef}
+      primaryAction={primaryAction}
       onToggle={() => toggleExclusiveSection("changes")}
       onMessageChange={setMessage}
       onStageAll={() => root && void mutate("stageAll", () => stageAll(root))}
       onUnstageAll={() => root && void mutate("unstageAll", () => unstageAll(root))}
-      onCommit={() => root && void mutate("commit", () => commit(root, message.trim()), true)}
+      onPrimaryAction={runPrimaryAction}
       onStage={(change) => root && void mutate("stage", () => stagePaths(root, [change.path]))}
       onUnstage={(change) => root && void mutate("unstage", () => unstagePaths(root, [change.path]))}
       onContinueMerge={() => root && void runRecordedOperation("继续合并", () => continueMerge(root), "合并提交已完成")}

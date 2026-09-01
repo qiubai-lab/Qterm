@@ -35,6 +35,10 @@
     animation: none;
   }
 
+  .git-primary-action-menu {
+    animation: none;
+  }
+
   .git-repository-history-popover {
     animation: none;
   }

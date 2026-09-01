@@ -125,20 +125,20 @@ describe("Git pane style contracts", () => {
   it("keeps the commit composer vertical and gives the graph an unboxed topology rail", () => {
     expect(declarations(".git-commit-box")).toContain("flex-direction: column");
     expect(styles).toContain("max-height: 92px");
-    expect(declarations(".git-commit-button")).toContain("width: 100%");
-    expect(declarations(".git-commit-button")).toContain("justify-content: center");
-    expect(declarations(".git-commit-button")).toContain("border: 1px solid color-mix(in srgb, var(--primary-action) 86%, var(--border))");
-    expect(declarations(".git-commit-button")).toContain("color: var(--primary-action-contrast)");
-    expect(declarations(".git-commit-button")).toContain("background: var(--primary-action)");
-    expect(declarations(".git-commit-button")).toContain("font-size: 10.5px");
-    expect(declarations(".git-commit-button")).toContain("font-weight: 700");
-    expect(declarations(".git-commit-button")).toContain("letter-spacing: .04em");
-    expect(declarations(".git-commit-button:hover:not(:disabled)")).toContain("background: color-mix(in srgb, var(--primary-action) 88%, var(--text))");
-    expect(styles).not.toContain(".git-commit-button kbd");
+    expect(declarations(".git-primary-action")).toContain("width: 100%");
+    expect(declarations(".git-primary-action")).toContain("justify-content: center");
+    expect(declarations(".git-primary-action")).toContain("border: 1px solid color-mix(in srgb, var(--primary-action) 86%, var(--border))");
+    expect(declarations(".git-primary-action")).toContain("color: var(--primary-action-contrast)");
+    expect(declarations(".git-primary-action")).toContain("background: var(--primary-action)");
+    expect(declarations(".git-primary-action")).toContain("font-size: 10.5px");
+    expect(declarations(".git-primary-action")).toContain("font-weight: 700");
+    expect(declarations(".git-primary-action")).toContain("letter-spacing: .04em");
+    expect(declarations(".git-primary-action:hover:not(:disabled),\n.git-primary-action-toggle:hover:not(:disabled)")).toContain("background: color-mix(in srgb, var(--primary-action) 88%, var(--text))");
+    expect(styles).not.toContain(".git-primary-action kbd");
     expect(declarations(".git-commit-box textarea:focus-visible")).toContain("outline: none");
     expect(declarations(".git-commit-box textarea:focus-visible")).toContain("border-color: var(--focus)");
     expect(cyberTheme).toContain("--primary-action:#fcee0a");
-    expect(styles).toContain(".git-commit-box > button:not(.git-commit-button)");
+    expect(styles).not.toContain("git-commit-button");
     expect(cyberTheme).toContain("--accent:#00ddeb");
     expect(lastDeclarations(".git-graph-scroll")).toContain("display: flex");
     expect(lastDeclarations(".git-graph-scroll")).toContain("padding: 0");
@@ -519,5 +519,25 @@ describe("Git pane style contracts", () => {
     expect(declarations(".git-branch-create-feedback")).toContain("min-height: 12px");
     const reducedMotion = styles.slice(styles.indexOf("@media (prefers-reduced-motion: reduce)"));
     expect(reducedMotion).toContain(".git-repository-popover");
+  });
+
+  it("keeps the aggregate Git action compact, semantic, and motion-safe", () => {
+    const split = declarations(".git-primary-action-split");
+    expect(split).toContain("display: grid");
+    expect(split).toContain("min-width: 0");
+    expect(split).toContain("grid-template-columns: minmax(0, 1fr) auto");
+    const primary = declarations(".git-primary-action");
+    expect(primary).toContain("background: var(--primary-action)");
+    expect(primary).toContain("color: var(--primary-action-contrast)");
+    const menu = declarations(".git-primary-action-menu");
+    expect(menu).toContain("position: fixed");
+    expect(menu).toContain("background: var(--floating-material)");
+    expect(menu).toContain("border-color: var(--floating-border)");
+    expect(declarations(".git-primary-action-menu [role=\"menuitem\"]")).toContain("color: var(--menu-text)");
+    const disabled = declarations(".git-primary-action:disabled");
+    expect(disabled).toContain("opacity: 1");
+    expect(disabled).toContain("color: var(--menu-disabled-text)");
+    const reducedMotion = styles.slice(styles.indexOf("@media (prefers-reduced-motion: reduce)"));
+    expect(reducedMotion).toContain(".git-primary-action-menu");
   });
 });

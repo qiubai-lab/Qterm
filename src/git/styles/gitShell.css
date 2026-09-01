@@ -315,7 +315,6 @@
   border-color: var(--focus);
 }
 
-.git-commit-box > button:not(.git-commit-button),
 .git-empty button {
   border: 1px solid color-mix(in srgb, var(--accent) 52%, var(--border));
   border-radius: 5px;
@@ -433,16 +432,24 @@
   color: var(--dim);
 }
 
-.git-commit-button {
+.git-primary-action-split {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.git-primary-action {
   display: flex;
+  min-width: 0;
   align-items: center;
   justify-content: center;
+  gap: 5px;
   width: 100%;
   min-height: 28px;
-  color: var(--primary-action-contrast);
   padding: 0 10px;
   border: 1px solid color-mix(in srgb, var(--primary-action) 86%, var(--border));
   border-radius: 5px;
+  color: var(--primary-action-contrast);
   background: var(--primary-action);
   box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 18%, transparent);
   font-size: 10.5px;
@@ -453,10 +460,95 @@
   transition: border-color 120ms ease, background-color 120ms ease, box-shadow 120ms ease;
 }
 
-.git-commit-button:hover:not(:disabled) {
+.git-primary-action-split[data-has-alternative="true"] .git-primary-action {
+  border-radius: 5px 0 0 5px;
+}
+
+.git-primary-action > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.git-primary-action:hover:not(:disabled),
+.git-primary-action-toggle:hover:not(:disabled) {
   border-color: var(--primary-action);
   background: color-mix(in srgb, var(--primary-action) 88%, var(--text));
   box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 30%, transparent), 0 0 0 1px color-mix(in srgb, var(--primary-action) 20%, transparent);
+}
+
+.git-primary-action:focus-visible,
+.git-primary-action-toggle:focus-visible {
+  position: relative;
+  z-index: 1;
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+.git-primary-action:disabled {
+  border-color: var(--subtle);
+  color: var(--menu-disabled-text);
+  background: color-mix(in srgb, var(--raised) 84%, var(--surface));
+  box-shadow: none;
+  opacity: 1;
+}
+
+.git-primary-action-toggle {
+  display: grid;
+  width: 30px;
+  min-height: 28px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--primary-action) 86%, var(--border));
+  border-left: 1px solid color-mix(in srgb, var(--primary-action-contrast) 28%, transparent);
+  border-radius: 0 5px 5px 0;
+  color: var(--primary-action-contrast);
+  background: var(--primary-action);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 18%, transparent);
+}
+
+.git-primary-action-menu {
+  box-sizing: border-box;
+  position: fixed;
+  z-index: 132;
+  min-width: 216px;
+  max-width: calc(100vw - 16px);
+  padding: 3px;
+  border: 1px solid var(--floating-border);
+  border-color: var(--floating-border);
+  border-radius: 6px;
+  background: var(--floating-material);
+  box-shadow: 0 10px 28px var(--shadow-strong);
+  transform-origin: top right;
+  animation: git-repository-popover-in 120ms cubic-bezier(.2, .8, .2, 1);
+}
+
+.git-primary-action-menu[data-placement="above"] {
+  transform-origin: bottom right;
+}
+
+.git-primary-action-menu [role="menuitem"] {
+  display: flex;
+  width: 100%;
+  min-height: 28px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 4px;
+  color: var(--menu-text);
+  background: transparent;
+  font: inherit;
+  font-size: 10px;
+  text-align: left;
+}
+
+.git-primary-action-menu [role="menuitem"]:hover,
+.git-primary-action-menu [role="menuitem"]:focus-visible {
+  color: var(--menu-hover-text);
+  background: var(--menu-hover-background);
+  outline: none;
 }
 
 .git-feedback {
@@ -622,4 +714,3 @@
 .git-clean-state svg {
   color: var(--accent);
 }
-

@@ -23,8 +23,8 @@
 - `src/workspace/fileWindow.ts`：终端快捷方式和右侧工具轨共用的文件窗口打开策略；不创建 session 或读取文件系统。
 - `src/workspace/networkWindow.ts`：远程终端快捷方式和右侧工具轨共用的 Network Block 打开策略；不创建 session 或启动规则。
 - `src/workspace/gitWindow.ts`：右侧工具轨共用的 Git Block 上下文打开策略；从本机或远程 Files 路径以及同 profile 的有效 Terminal OSC 7 目录派生显式 target，不解析仓库或执行 Git。
-- `src/git/GitPane.tsx`、`gitRepositoryClient.ts`、`useGitCommitInspection.ts`、`gitPaneTypes.ts`：单仓库 Git Block 的稳定组合入口、本机/SSH action adapter、snapshot epoch/操作编排、提交检查缓存与共享局部模型；不改变 IPC DTO、不生成 Git 命令，也不把 session、仓库或操作记录写入 Workspace persistence。
-- `src/git/GitPaneSections.tsx`、`GitCommitGraph.tsx`、`GitRepositoryOverlays.tsx`、`GitRepositoryHistoryPopover.tsx`、`GitRepositoryPickerDialog.tsx`、`gitGraph.ts`：存储库/更改/提交图展示、commit 鼠标/键盘上下文菜单、从选中 commit 创建并切换分支、最近仓库与受限目录选择、分支 create-from/rename/safe-delete、Pull/Push/Publish/顺序 Sync、安全 merge source 二次确认、冲突 continue/abort 与最多 20 条仅内存脱敏操作记录；展示和浮层不直接调用 Tauri IPC、不拥有持久化/session 生命周期，也不提供 force、远程删除、任意 revision、rebase/stash、merge 策略选择或 diff。
+- `src/git/GitPane.tsx`、`gitRepositoryClient.ts`、`useGitCommitInspection.ts`、`gitPaneTypes.ts`、`gitPrimaryAction.ts`：单仓库 Git Block 的稳定组合入口、本机/SSH action adapter、snapshot epoch/操作编排、提交检查缓存、共享局部模型，以及从 staged/worktree/upstream/ahead/behind 派生单步暂存/提交/Pull/Push/Publish 推荐动作的纯前端策略；不改变 IPC DTO、不生成 Git 命令、不自动串联 mutation，也不把 session、仓库、推荐动作或操作记录写入 Workspace persistence。
+- `src/git/GitPaneSections.tsx`、`GitPrimaryActionButton.tsx`、`GitCommitGraph.tsx`、`GitRepositoryOverlays.tsx`、`GitRepositoryHistoryPopover.tsx`、`GitRepositoryPickerDialog.tsx`、`gitGraph.ts`：存储库/更改/提交图展示、状态驱动的单步聚合 Git 主按钮与选择性提交分割菜单、commit 鼠标/键盘上下文菜单、从选中 commit 创建并切换分支、最近仓库与受限目录选择、分支 create-from/rename/safe-delete、Pull/Push/Publish/顺序 Sync、安全 merge source 二次确认、冲突 continue/abort 与最多 20 条仅内存脱敏操作记录；展示和浮层不直接调用 Tauri IPC、不拥有持久化/session 生命周期，也不提供自动 stage→commit→push、force、远程删除、任意 revision、rebase/stash、merge 策略选择或 diff。
 - `src/git/git.css`、`src/git/styles/`：Git Block 样式的固定顺序 manifest，以及工作区、提交图、目标配置、分支/合并/操作浮层、仓库选择与可访问媒体规则；不定义组件状态、交互逻辑或主题 token 来源。
 - `src/network/NetworkPane.tsx`、`NetworkRuleDialog.tsx`、`NetworkAccessDialog.tsx`：按 profile 共享的 Local/Remote/SOCKS5 规则列表、编辑、暴露警告、访问地址复制和 Block 局部启停交互；实验浏览器区只请求受限 IPC，不传输隧道字节、启动任意进程或保存认证材料。
 - `src/components/dialogs/ConnectionAuthDialog.tsx`：一次性密码、已有凭证与 SSH Agent 的人工连接入口；本次选择不回写 profile。
@@ -97,7 +97,7 @@
 - `src/terminal/`：负责 xterm 实例及终端 I/O 适配；不持久化 buffer 或拥有 Workspace 生命周期。
 - `src/files/`：负责内部文件窗口展示、导航、下载反馈与瞬时预览编辑状态；不直接访问本地文件系统或 SSH infrastructure。
 - `src/network/`：负责网络规则配置 UI、共享刷新、运行状态展示、安全暴露提示和可复制访问地址派生；不实现 SSH/SOCKS5 协议、浏览器进程启动或持久化。
-- `src/git/`：负责单仓库 Git Block 的稳定组合入口、Local/Remote action adapter、快照与刷新代次、提交检查缓存、分区展示、分支/同步/安全合并浮层、仅内存 attention 操作记录、最近仓库、受限目录浏览和提交图拓扑；presentation 不直接调用 Tauri IPC，feature 不拥有 Workspace 持久化、session 生命周期、Git 校验/命令/refspec/merge strategy 规则，也不直接启动 Git、创建 SSH channel、读取文件内容、承接文件管理能力或实现 force/remote URL/高级历史改写。
+- `src/git/`：负责单仓库 Git Block 的稳定组合入口、Local/Remote action adapter、快照与刷新代次、提交检查缓存、状态驱动的单步主动作派生、分区展示、分支/同步/安全合并浮层、仅内存 attention 操作记录、最近仓库、受限目录浏览和提交图拓扑；presentation 不直接调用 Tauri IPC，feature 不拥有 Workspace 持久化、session 生命周期、Git 校验/命令/refspec/merge strategy 规则，也不直接启动 Git、自动串联 mutation、创建 SSH channel、读取文件内容、承接文件管理能力或实现 force/remote URL/高级历史改写。
 - `src/components/`：负责跨 feature 的小型展示与交互原语；不吸收 feature 状态、业务编排或领域规则。
 - `src/components/dialogs/`：负责连接、传输、设置、帮助与确认弹窗；不定义领域规则或直接操作 Rust infrastructure。
 - `src/test/`：负责前端测试运行环境；不放置生产代码。

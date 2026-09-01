@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import type { GitSnapshot } from "../lib/tauri/git";
@@ -159,11 +159,11 @@ describe("GitPane basics and lifecycle", () => {
     render(<GitPane blockId="git-1" target={{ type: "local", path: "D:/work/project" }} visible onTargetChange={vi.fn()}/>);
     await screen.findByText("src/staged.ts");
     const message = screen.getByRole<HTMLTextAreaElement>("textbox", { name: "提交消息" });
-    const submit = screen.getByRole("button", { name: "提交" });
+    const submit = screen.getByRole("button", { name: "提交 1 项已暂存更改" });
     expect(message.rows).toBe(1);
     expect(message).toHaveAttribute("data-max-rows", "5");
     expect(message.parentElement).toHaveClass("git-commit-box");
-    expect(submit).toHaveClass("git-commit-button");
+    expect(submit).toHaveClass("git-primary-action");
     expect(submit).toHaveTextContent("提交");
     expect(submit.querySelector("kbd")).toBeNull();
     expect(message.compareDocumentPosition(submit) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -189,11 +189,68 @@ describe("GitPane basics and lifecycle", () => {
     await screen.findByText("src/staged.ts");
     const message = screen.getByRole("textbox", { name: "提交消息" });
     fireEvent.change(message, { target: { value: "feat: keep me" } });
-    fireEvent.click(screen.getByRole("button", { name: "提交" }));
+    fireEvent.click(screen.getByRole("button", { name: "提交 1 项已暂存更改" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("缺少 user.email");
     expect(message).toHaveValue("feat: keep me");
-    fireEvent.click(screen.getByRole("button", { name: "提交" }));
-    await waitFor(() => expect(message).toHaveValue(""));
+    fireEvent.click(screen.getByRole("button", { name: "提交 1 项已暂存更改" }));
+    await waitFor(() => expect(screen.queryByRole("textbox", { name: "提交消息" })).not.toBeInTheDocument());
+  });
+
+  it("uses the aggregate button for stage-all without chaining into commit", async () => {
+    const onlyUnstaged = {
+      ...snapshot,
+      changes: [{ path: "src/new.ts", originalPath: null, status: "U", staged: false, conflict: false }],
+    } satisfies GitSnapshot;
+    api.snapshot.mockResolvedValueOnce(onlyUnstaged);
+    api.stageAll.mockResolvedValueOnce({ ...onlyUnstaged, changes: [{ ...onlyUnstaged.changes[0], staged: true }] });
+    render(<GitPane blockId="git-1" target={{ type: "local", path: "D:/work/project" }} visible onTargetChange={vi.fn()}/>);
+    await screen.findByText("project");
+
+    fireEvent.click(screen.getByRole("button", { name: "全部暂存 1 项更改" }));
+    await waitFor(() => expect(api.stageAll).toHaveBeenCalledWith("D:/work/project"));
+    expect(api.commit).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "提交 1 项已暂存更改" })).toBeDisabled();
+  });
+
+  it("keeps partial commit primary and exposes stage-rest through an accessible split menu", async () => {
+    render(<GitPane blockId="git-1" target={{ type: "local", path: "D:/work/project" }} visible onTargetChange={vi.fn()}/>);
+    await screen.findByText("project");
+    const toggle = screen.getByRole("button", { name: "更多提交操作" });
+    toggle.focus();
+    fireEvent.keyDown(toggle, { key: "ArrowDown" });
+    const menu = screen.getByRole("menu", { name: "其他提交操作" });
+    const stageRest = within(menu).getByRole("menuitem", { name: "暂存其余 1 项更改" });
+    expect(stageRest).toHaveFocus();
+    fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() => expect(toggle).toHaveFocus());
+
+    fireEvent.click(toggle);
+    expect(screen.getByRole("menu", { name: "其他提交操作" })).toBeInTheDocument();
+    fireEvent.pointerDown(document.body);
+    expect(screen.queryByRole("menu", { name: "其他提交操作" })).not.toBeInTheDocument();
+
+    fireEvent.click(toggle);
+    fireEvent.resize(window);
+    expect(screen.queryByRole("menu", { name: "其他提交操作" })).not.toBeInTheDocument();
+
+    fireEvent.click(toggle);
+    fireEvent.click(screen.getByRole("menuitem", { name: "暂存其余 1 项更改" }));
+    await waitFor(() => expect(api.stageAll).toHaveBeenCalledWith("D:/work/project"));
+    expect(api.commit).not.toHaveBeenCalled();
+  });
+
+  it("turns a successful commit into push without automatically pushing", async () => {
+    const committed = { ...snapshot, changes: [], head: { ...snapshot.head, ahead: 2 } } satisfies GitSnapshot;
+    api.commit.mockResolvedValueOnce(committed);
+    render(<GitPane blockId="git-1" target={{ type: "local", path: "D:/work/project" }} visible onTargetChange={vi.fn()}/>);
+    await screen.findByText("project");
+    fireEvent.change(screen.getByRole("textbox", { name: "提交消息" }), { target: { value: "feat: aggregate action" } });
+    fireEvent.click(screen.getByRole("button", { name: "提交 1 项已暂存更改" }));
+
+    await waitFor(() => expect(api.commit).toHaveBeenCalledWith("D:/work/project", "feat: aggregate action"));
+    expect(api.push).not.toHaveBeenCalled();
+    expect(screen.queryByRole("textbox", { name: "提交消息" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "推送 2 个提交" })).toBeEnabled();
   });
 
   it("offers explicit initialization for a non-repository directory", async () => {

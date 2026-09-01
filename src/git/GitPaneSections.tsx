@@ -3,6 +3,8 @@ import type { ReactNode, RefObject } from "react";
 import { Icon } from "../components/Icon";
 import type { GitChange, GitSnapshot } from "../lib/tauri/git";
 import type { GitRuntime } from "../workspace/WorkspaceProvider";
+import { GitPrimaryActionButton } from "./GitPrimaryActionButton";
+import type { GitPrimaryAction, GitPrimaryAlternativeAction } from "./gitPrimaryAction";
 import { branchOverlayKinds, type GitRepositoryOverlay, type GitRepositoryOverlayKind } from "./gitPaneTypes";
 
 interface GitRepositorySectionProps {
@@ -80,11 +82,12 @@ interface GitChangesSectionProps {
   conflicts: GitChange[];
   messageRef: RefObject<HTMLTextAreaElement | null>;
   mergeAbortButtonRef: RefObject<HTMLButtonElement | null>;
+  primaryAction: GitPrimaryAction;
   onToggle: () => void;
   onMessageChange: (message: string) => void;
   onStageAll: () => void;
   onUnstageAll: () => void;
-  onCommit: () => void;
+  onPrimaryAction: (action: GitPrimaryAction | GitPrimaryAlternativeAction) => void;
   onStage: (change: GitChange) => void;
   onUnstage: (change: GitChange) => void;
   onContinueMerge: () => void;
@@ -104,11 +107,12 @@ export function GitChangesSection({
   conflicts,
   messageRef,
   mergeAbortButtonRef,
+  primaryAction,
   onToggle,
   onMessageChange,
   onStageAll,
   onUnstageAll,
-  onCommit,
+  onPrimaryAction,
   onStage,
   onUnstage,
   onContinueMerge,
@@ -123,9 +127,9 @@ export function GitChangesSection({
       <div className="git-merge-state-copy"><strong>合并未完成</strong><span>{conflicts.length > 0 ? `${conflicts.length} 个冲突等待解决` : "冲突已解决，可以继续合并"}</span></div>
       <div className="git-merge-state-actions"><button type="button" className="secondary" disabled={disabled || conflicts.length > 0} onClick={onContinueMerge}>继续合并</button><button ref={mergeAbortButtonRef} type="button" className="danger" disabled={disabled} onClick={onAbortMerge}>中止合并</button></div>
     </div>}
-    <div className="git-commit-box">
-      <textarea ref={messageRef} aria-label="提交消息" rows={1} data-max-rows="5" value={message} maxLength={10_000} placeholder="提交消息" onChange={(event) => onMessageChange(event.target.value)}/>
-      <button type="button" className="git-commit-button" disabled={disabled || mergeInProgress || !root || !message.trim() || staged.length === 0} onClick={onCommit}>提交</button>
+    <div className="git-commit-box" data-action={primaryAction.kind}>
+      {primaryAction.showMessage && <textarea ref={messageRef} aria-label="提交消息" rows={1} data-max-rows="5" value={message} maxLength={10_000} placeholder="提交消息" onChange={(event) => onMessageChange(event.target.value)}/>}
+      <GitPrimaryActionButton key={`${primaryAction.kind}:${primaryAction.label}`} action={primaryAction} onAction={onPrimaryAction}/>
     </div>
     {error && <div className="git-feedback" role="alert">{error.message}</div>}
     <div className="git-change-scroll" role="list" aria-label="Git 更改">

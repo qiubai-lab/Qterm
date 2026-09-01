@@ -155,6 +155,54 @@ describe("GitPane merge, operations, and remote routing", () => {
     expect(log).toHaveTextContent("https://***@example.com/repo denied");
   });
 
+  it("dispatches exactly one tracked network action from a clean aggregate state", async () => {
+    const ahead = { ...snapshot, changes: [], head: { ...snapshot.head, ahead: 2, behind: 0 } } satisfies GitSnapshot;
+    api.snapshot.mockResolvedValueOnce(ahead);
+    api.push.mockResolvedValueOnce({ ...ahead, head: { ...ahead.head, ahead: 0 } });
+    const view = render(<GitPane blockId="git-1" target={{ type: "local", path: "D:/work/project" }} visible onTargetChange={vi.fn()}/>);
+    await screen.findByText("project");
+    fireEvent.click(screen.getByRole("button", { name: "推送 2 个提交" }));
+    await waitFor(() => expect(api.push).toHaveBeenCalledWith("D:/work/project", null));
+    expect(api.pull).not.toHaveBeenCalled();
+
+    view.unmount();
+    vi.clearAllMocks();
+    const behind = { ...snapshot, changes: [], head: { ...snapshot.head, ahead: 0, behind: 3 } } satisfies GitSnapshot;
+    api.available.mockResolvedValue(true);
+    api.snapshot.mockResolvedValueOnce(behind);
+    api.pull.mockResolvedValueOnce({ ...behind, head: { ...behind.head, behind: 0 } });
+    render(<GitPane blockId="git-2" target={{ type: "local", path: "D:/work/project" }} visible onTargetChange={vi.fn()}/>);
+    await screen.findByText("project");
+    fireEvent.click(screen.getByRole("button", { name: "拉取 3 个提交" }));
+    await waitFor(() => expect(api.pull).toHaveBeenCalledWith("D:/work/project"));
+    expect(api.push).not.toHaveBeenCalled();
+  });
+
+  it("publishes a clean untracked branch directly or opens the existing remote chooser", async () => {
+    const untracked = {
+      ...snapshot,
+      changes: [],
+      head: { ...snapshot.head, upstream: null, ahead: 0, behind: 0 },
+      branches: snapshot.branches.map((branch) => ({ ...branch, upstream: null, upstreamRef: null })),
+    } satisfies GitSnapshot;
+    api.snapshot.mockResolvedValueOnce(untracked);
+    api.push.mockResolvedValueOnce({ ...untracked, head: { ...untracked.head, upstream: "origin/main" } });
+    const view = render(<GitPane blockId="git-1" target={{ type: "local", path: "D:/work/project" }} visible onTargetChange={vi.fn()}/>);
+    await screen.findByText("project");
+    fireEvent.click(screen.getByRole("button", { name: "发布到 origin" }));
+    await waitFor(() => expect(api.push).toHaveBeenCalledWith("D:/work/project", "origin"));
+
+    view.unmount();
+    vi.clearAllMocks();
+    api.available.mockResolvedValue(true);
+    api.snapshot.mockResolvedValueOnce({ ...untracked, remotes: ["origin", "mirror"] });
+    render(<GitPane blockId="git-2" target={{ type: "local", path: "D:/work/project" }} visible onTargetChange={vi.fn()}/>);
+    await screen.findByText("project");
+    fireEvent.click(screen.getByRole("button", { name: "发布分支…" }));
+    expect(screen.getByRole("dialog", { name: "发布分支" })).toBeInTheDocument();
+    expect(api.push).not.toHaveBeenCalled();
+  });
+
   it("shows running and duration states and bounds the in-memory operation log to 20 records", async () => {
     const pendingPush = deferred<GitSnapshot>();
     api.push.mockReturnValueOnce(pendingPush.promise);
@@ -217,5 +265,30 @@ describe("GitPane merge, operations, and remote routing", () => {
     expect(api.snapshot).not.toHaveBeenCalled();
     expect(onRepositoryOpened).toHaveBeenCalledOnce();
     expect(onRepositoryOpened).toHaveBeenCalledWith({ type: "remote", profileId: "profile-1", path: "/srv/project" });
+  });
+
+  it("routes the aggregate push action through the owned remote Git session", async () => {
+    const remoteAhead = {
+      ...snapshot,
+      repositoryPath: "/srv/project",
+      changes: [],
+      head: { ...snapshot.head, ahead: 1, behind: 0 },
+    } satisfies GitSnapshot;
+    api.remote.mockResolvedValue(remoteAhead);
+    render(<GitPane
+      blockId="git-remote"
+      target={{ type: "remote", profileId: "profile-1", path: "/srv/project" }}
+      runtime={{ sessionId: "git-session", status: "connected", hostKeyPrompt: null, notice: "", connectionProgress: null, stale: false }}
+      visible
+      onTargetChange={vi.fn()}
+    />);
+    await screen.findByText("project");
+    fireEvent.click(screen.getByRole("button", { name: "推送 1 个提交" }));
+    await waitFor(() => expect(api.remote).toHaveBeenCalledWith("git-session", "profile-1", {
+      type: "push",
+      repository: "/srv/project",
+      remote: null,
+    }));
+    expect(api.push).not.toHaveBeenCalled();
   });
 });
