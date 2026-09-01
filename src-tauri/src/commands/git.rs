@@ -174,6 +174,14 @@ pub struct GitCreateBranchFromInput {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitCreateBranchFromCommitInput {
+    repository: String,
+    name: String,
+    oid: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct GitRenameBranchInput {
     repository: String,
     ref_name: String,
@@ -288,6 +296,11 @@ pub enum RemoteGitActionDto {
         repository: String,
         name: String,
         source_ref: String,
+    },
+    CreateBranchFromCommit {
+        repository: String,
+        name: String,
+        oid: String,
     },
     RenameBranch {
         repository: String,
@@ -515,6 +528,15 @@ pub async fn git_create_branch_from(
 ) -> Result<GitSnapshotDto, GitIpcError> {
     let service = Arc::clone(&state.service);
     run(move || service.create_branch_from(input.repository, input.name, input.source_ref)).await
+}
+
+#[tauri::command]
+pub async fn git_create_branch_from_commit(
+    input: GitCreateBranchFromCommitInput,
+    state: State<'_, GitState>,
+) -> Result<GitSnapshotDto, GitIpcError> {
+    let service = Arc::clone(&state.service);
+    run(move || service.create_branch_from_commit(input.repository, input.name, input.oid)).await
 }
 
 #[tauri::command]
@@ -754,6 +776,15 @@ impl From<RemoteGitActionDto> for RemoteGitAction {
                 name,
                 source_ref,
             },
+            RemoteGitActionDto::CreateBranchFromCommit {
+                repository,
+                name,
+                oid,
+            } => Self::CreateBranchFromCommit {
+                repository,
+                name,
+                oid,
+            },
             RemoteGitActionDto::RenameBranch {
                 repository,
                 ref_name,
@@ -882,9 +913,9 @@ impl From<GitCommitFile> for GitCommitFileDto {
 #[cfg(test)]
 mod tests {
     use super::{
-        GitBranchInput, GitCommitFilesInput, GitCommitInput, GitIpcError, GitMergeBranchInput,
-        GitPathInput, GitPathsInput, GitRemoteBranchInput, RemoteGitCommitFilesInput,
-        RemoteGitDirectoryInput, RemoteGitInput,
+        GitBranchInput, GitCommitFilesInput, GitCommitInput, GitCreateBranchFromCommitInput,
+        GitIpcError, GitMergeBranchInput, GitPathInput, GitPathsInput, GitRemoteBranchInput,
+        RemoteGitCommitFilesInput, RemoteGitDirectoryInput, RemoteGitInput,
     };
     use crate::domain::git::GitError;
 
@@ -939,6 +970,15 @@ mod tests {
                 "repository": "D:/work/project",
                 "name": "feature/test",
                 "subcommand": "delete"
+            }))
+            .is_err()
+        );
+        assert!(
+            serde_json::from_value::<GitCreateBranchFromCommitInput>(serde_json::json!({
+                "repository": "D:/work/project",
+                "name": "feature/history",
+                "oid": "0123456789abcdef0123456789abcdef01234567",
+                "revision": "HEAD"
             }))
             .is_err()
         );
@@ -1073,6 +1113,26 @@ mod tests {
             crate::domain::git::RemoteGitAction::TrackRemoteBranch {
                 repository: "/srv/project".into(),
                 ref_name: "refs/remotes/origin/feature/test".into()
+            }
+        );
+
+        let create_from_commit = serde_json::from_value::<RemoteGitInput>(serde_json::json!({
+            "sessionId": "git-session",
+            "profileId": "profile-1",
+            "action": {
+                "type": "createBranchFromCommit",
+                "repository": "/srv/project",
+                "name": "feature/history",
+                "oid": "0123456789abcdef0123456789abcdef01234567"
+            }
+        }))
+        .expect("create branch from commit input");
+        assert_eq!(
+            crate::domain::git::RemoteGitAction::from(create_from_commit.action),
+            crate::domain::git::RemoteGitAction::CreateBranchFromCommit {
+                repository: "/srv/project".into(),
+                name: "feature/history".into(),
+                oid: "0123456789abcdef0123456789abcdef01234567".into(),
             }
         );
     }

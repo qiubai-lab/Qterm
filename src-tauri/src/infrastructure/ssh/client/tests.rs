@@ -377,6 +377,11 @@ async fn git_actions_require_a_connected_git_purpose_session_owned_by_the_profil
             name: "feature/from-main".into(),
             source_ref: "refs/remotes/origin/main".into(),
         },
+        crate::domain::git::RemoteGitAction::CreateBranchFromCommit {
+            repository: "/srv/project".into(),
+            name: "feature/history".into(),
+            oid: "0123456789abcdef0123456789abcdef01234567".into(),
+        },
         crate::domain::git::RemoteGitAction::RenameBranch {
             repository: "/srv/project".into(),
             ref_name: "refs/heads/feature/from-main".into(),

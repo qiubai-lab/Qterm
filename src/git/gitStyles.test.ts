@@ -501,4 +501,23 @@ describe("Git pane style contracts", () => {
     expect(path).toContain("color: var(--text)");
     expect(path).toContain("font-weight: 600");
   });
+
+  it("uses semantic menu roles and a stable source card for commit branch creation", () => {
+    const menu = declarations(".git-commit-context-menu");
+    expect(menu).toContain("position: fixed");
+    expect(menu).toContain("background: var(--floating-material)");
+    expect(menu).toContain("border-color: var(--floating-border)");
+    expect(declarations(".git-commit-context-heading")).toContain("min-width: 0");
+    expect(declarations(".git-commit-context-menu .git-repository-action-item")).toContain("color: var(--menu-text)");
+    const disabled = declarations(".git-commit-context-menu .git-repository-action-item:disabled");
+    expect(disabled).toContain("color: var(--menu-disabled-text)");
+    expect(disabled).toContain("opacity: 1");
+    const source = declarations(".git-commit-branch-source");
+    expect(source).toContain("display: grid");
+    expect(source).toContain("background: color-mix(in srgb, var(--raised) 62%, transparent)");
+    expect(source).not.toMatch(/#[0-9a-f]{3,8}/i);
+    expect(declarations(".git-branch-create-feedback")).toContain("min-height: 12px");
+    const reducedMotion = styles.slice(styles.indexOf("@media (prefers-reduced-motion: reduce)"));
+    expect(reducedMotion).toContain(".git-repository-popover");
+  });
 });

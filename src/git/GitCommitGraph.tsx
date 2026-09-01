@@ -24,6 +24,7 @@ interface GitCommitGraphProps {
   getCommitFilesKey: (oid: string) => string | null;
   onToggle: () => void;
   onToggleCommit: (commit: GitCommit) => void;
+  onOpenCommitMenu: (commit: GitCommit, anchorX: number, anchorY: number) => void;
   onRetryCommit: (commit: GitCommit) => void;
 }
 
@@ -42,6 +43,7 @@ export function GitCommitGraph({
   getCommitFilesKey,
   onToggle,
   onToggleCommit,
+  onOpenCommitMenu,
   onRetryCommit,
 }: GitCommitGraphProps) {
   return <GitSection className="git-graph-section" title="图表" collapsed={collapsed} onToggle={onToggle}>
@@ -67,6 +69,16 @@ export function GitCommitGraph({
             onPointerLeave={() => setHoveredCommitOid((value) => value === commit.oid ? null : value)}
             onFocus={() => setFocusedCommitOid(commit.oid)}
             onBlur={() => setFocusedCommitOid((value) => value === commit.oid ? null : value)}
+            onContextMenu={(event) => {
+              event.preventDefault();
+              onOpenCommitMenu(commit, event.clientX, event.clientY);
+            }}
+            onKeyDown={(event) => {
+              if (event.key !== "ContextMenu" && !(event.shiftKey && event.key === "F10")) return;
+              event.preventDefault();
+              const rect = event.currentTarget.getBoundingClientRect();
+              onOpenCommitMenu(commit, rect.left + 18, rect.top + Math.min(18, rect.height / 2));
+            }}
             onClick={() => onToggleCommit(commit)}
           >
             <GitGraph row={graphRow}/>

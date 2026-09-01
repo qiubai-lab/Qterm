@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import {
   gitAvailable,
   gitError,
+  type GitCommit,
   type GitSnapshot,
 } from "../lib/tauri/git";
 import { gitRepositoryHistoryEntryKey } from "../workspace/gitRepositoryHistory";
@@ -16,6 +17,7 @@ import {
   branchOverlayKinds,
   gitFailureTitle,
   visibleOperationDetail,
+  type GitCommitContextMenu as GitCommitContextMenuState,
   type GitMergeConfirmation,
   type GitOperationRecord,
   type GitRepositoryOverlay,
@@ -23,7 +25,7 @@ import {
   type GitRepositorySubmenu,
 } from "./gitPaneTypes";
 import { useGitRepositoryClient } from "./gitRepositoryClient";
-import { GitRepositoryOverlays } from "./GitRepositoryOverlays";
+import { GitCommitContextMenu, GitRepositoryOverlays } from "./GitRepositoryOverlays";
 import { useGitCommitInspection } from "./useGitCommitInspection";
 
 interface GitPaneProps {
@@ -59,6 +61,13 @@ function fitRepositorySubmenu(anchor: DOMRect, width: number, height: number): G
   return { left, top, side: opensRight ? "right" : "left" };
 }
 
+function fitCommitContextMenu(anchorX: number, anchorY: number, width: number, height: number): Pick<GitCommitContextMenuState, "left" | "top" | "placement"> {
+  const gutter = 8;
+  const left = Math.max(gutter, Math.min(anchorX, window.innerWidth - width - gutter));
+  if (anchorY + height <= window.innerHeight - gutter) return { left, top: Math.max(gutter, anchorY), placement: "below" };
+  return { left, top: Math.max(gutter, anchorY - height), placement: "above" };
+}
+
 export function GitPane({ blockId, target, runtime, visible, onTargetChange, onRequestRepositoryChange, onRepositoryOpened }: GitPaneProps) {
   const [snapshot, setSnapshot] = useState<GitSnapshot | null>(null);
   const [localAvailable, setLocalAvailable] = useState<boolean | null>(null);
@@ -75,6 +84,8 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
   const [operations, setOperations] = useState<GitOperationRecord[]>([]);
   const [repositoryOverlay, setRepositoryOverlay] = useState<GitRepositoryOverlay | null>(null);
   const [repositorySubmenu, setRepositorySubmenu] = useState<GitRepositorySubmenu | null>(null);
+  const [commitContextMenu, setCommitContextMenu] = useState<GitCommitContextMenuState | null>(null);
+  const [commitBranchSource, setCommitBranchSource] = useState<GitCommit | null>(null);
   const [collapsed, setCollapsed] = useState({ repository: false, changes: false, graph: true });
   const epoch = useRef(0);
   const busyRef = useRef("");
@@ -87,6 +98,7 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
   const repositoryActionsButtonRef = useRef<HTMLButtonElement>(null);
   const repositoryOverlayRef = useRef<HTMLElement | null>(null);
   const repositorySubmenuRef = useRef<HTMLElement | null>(null);
+  const commitContextMenuRef = useRef<HTMLDivElement | null>(null);
   const branchManagementItemRef = useRef<HTMLButtonElement>(null);
   const mergeAbortButtonRef = useRef<HTMLButtonElement>(null);
   const previousMergeStateRef = useRef(false);
@@ -102,7 +114,7 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
   const {
     loadSnapshot, fetchSnapshot, initialize, loadCommitFiles,
     stagePaths, stageAll, unstagePaths, unstageAll, commit,
-    createBranch, createBranchAt, renameBranch, deleteBranch, switchBranch, trackRemoteBranch,
+    createBranch, createBranchAt, createBranchFromCommit, renameBranch, deleteBranch, switchBranch, trackRemoteBranch,
     pullRepository, pushRepository, mergeBranch, continueMerge, abortMerge,
   } = useGitRepositoryClient({ remote, profileId: remoteProfileId, sessionId: remoteSessionId, status: remoteStatus });
 
@@ -125,6 +137,8 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
     updateBusy("");
     setRepositoryOverlay(null);
     setRepositorySubmenu(null);
+    setCommitContextMenu(null);
+    setCommitBranchSource(null);
     setMergeSourceRef("");
     setMergeConfirmation(null);
     setOperations([]);
@@ -392,6 +406,7 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
   const selectedMergeSource = mergeSourceOptions.find((branch) => branch.refName === mergeSourceRef) ?? null;
   const mergeInProgress = Boolean(snapshot?.mergeInProgress);
   const mergeWorktreeClean = snapshot?.changes.length === 0;
+  const commitAnchors = commitAnchorRefs.current;
 
   useEffect(() => {
     if (mergeInProgress && !previousMergeStateRef.current) {
@@ -402,8 +417,36 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
 
   const repositoryAnchor = useCallback((kind = repositoryOverlay?.kind): HTMLButtonElement | null => {
     if (kind === "abortMerge") return mergeAbortButtonRef.current;
+    if (kind === "createBranchFromCommit" && commitBranchSource) return commitAnchors.get(commitBranchSource.oid) ?? null;
     return kind && branchOverlayKinds.has(kind) ? branchButtonRef.current : repositoryActionsButtonRef.current;
-  }, [repositoryOverlay?.kind]);
+  }, [commitAnchors, commitBranchSource, repositoryOverlay?.kind]);
+
+  function openCommitContextMenu(commit: GitCommit, anchorX: number, anchorY: number) {
+    setRepositoryOverlay(null);
+    setRepositorySubmenu(null);
+    setMergeConfirmation(null);
+    setHoveredCommitOid(null);
+    setFocusedCommitOid(null);
+    setCommitContextMenu({
+      commit,
+      anchorX,
+      anchorY,
+      ...fitCommitContextMenu(anchorX, anchorY, 232, 72),
+    });
+  }
+
+  function openCommitBranchOverlay(commit: GitCommit) {
+    const anchor = commitAnchorRefs.current.get(commit.oid);
+    if (!anchor) return;
+    setCommitContextMenu(null);
+    setCommitBranchSource(commit);
+    setNewBranch("");
+    setError(null);
+    setRepositoryOverlay({
+      kind: "createBranchFromCommit",
+      ...fitRepositoryOverlay(anchor.getBoundingClientRect(), 292, 202),
+    });
+  }
 
   function closeRepositoryOverlay(restoreFocus = false) {
     const anchor = repositoryOverlay ? repositoryAnchor(repositoryOverlay.kind) : null;
@@ -453,6 +496,48 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
     setRepositorySubmenu(null);
     if (restoreFocus) window.requestAnimationFrame(() => branchManagementItemRef.current?.focus());
   }
+
+  useLayoutEffect(() => {
+    if (!commitContextMenu || !commitContextMenuRef.current) return;
+    const menu = commitContextMenuRef.current;
+    const next = fitCommitContextMenu(commitContextMenu.anchorX, commitContextMenu.anchorY, menu.offsetWidth, menu.offsetHeight);
+    setCommitContextMenu((current) => {
+      if (!current || current.commit.oid !== commitContextMenu.commit.oid) return current;
+      if (current.left === next.left && current.top === next.top && current.placement === next.placement) return current;
+      return { ...current, ...next };
+    });
+  }, [commitContextMenu]);
+
+  useEffect(() => {
+    if (!commitContextMenu) return;
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      const node = event.target as Node;
+      if (!commitContextMenuRef.current?.contains(node)) setCommitContextMenu(null);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      const anchor = commitAnchors.get(commitContextMenu.commit.oid);
+      setCommitContextMenu(null);
+      window.requestAnimationFrame(() => anchor?.focus());
+    };
+    const closeOnViewportChange = () => setCommitContextMenu(null);
+    document.addEventListener("pointerdown", closeOnOutsidePointer);
+    document.addEventListener("keydown", closeOnEscape);
+    window.addEventListener("resize", closeOnViewportChange);
+    window.addEventListener("scroll", closeOnViewportChange, true);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsidePointer);
+      document.removeEventListener("keydown", closeOnEscape);
+      window.removeEventListener("resize", closeOnViewportChange);
+      window.removeEventListener("scroll", closeOnViewportChange, true);
+    };
+  }, [commitAnchors, commitContextMenu]);
+
+  useEffect(() => {
+    if (!commitContextMenu) return;
+    window.requestAnimationFrame(() => commitContextMenuRef.current?.querySelector<HTMLElement>('[role="menuitem"]:not([disabled])')?.focus());
+  }, [commitContextMenu]);
 
   useLayoutEffect(() => {
     if (!repositoryOverlay || !repositoryOverlayRef.current) return;
@@ -592,15 +677,23 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
       getCommitFilesKey={commitFilesKey}
       onToggle={() => toggleExclusiveSection("graph")}
       onToggleCommit={toggleCommitFiles}
+      onOpenCommitMenu={openCommitContextMenu}
       onRetryCommit={(commitToRetry) => void requestCommitFiles(commitToRetry, true)}
     />
   </div>
-    {inspectedCommit && createPortal(<GitCommitTooltip
+    {inspectedCommit && !commitContextMenu && repositoryOverlay?.kind !== "createBranchFromCommit" && createPortal(<GitCommitTooltip
       commit={inspectedCommit}
       fileCount={inspectedCommitFileCount}
       tooltipId={commitTooltipId}
       tooltipRef={commitTooltipRef}
     />, document.body)}
+    {visible && <GitCommitContextMenu
+      menu={commitContextMenu}
+      menuRef={commitContextMenuRef}
+      disabled={disabled || mergeInProgress}
+      onNavigateMenu={navigateRepositoryMenu}
+      onCreateBranch={openCommitBranchOverlay}
+    />}
     <GitRepositoryOverlays
       visible={visible}
       blockId={blockId}
@@ -609,6 +702,7 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
       repositoryOverlay={repositoryOverlay}
       repositorySubmenu={repositorySubmenu}
       mergeConfirmation={mergeConfirmation}
+      commitBranchSource={commitBranchSource}
       repositoryOverlayRef={repositoryOverlayRef}
       repositorySubmenuRef={repositorySubmenuRef}
       branchManagementItemRef={branchManagementItemRef}
@@ -670,6 +764,9 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
       }}
       onCreateBranchAt={(name, sourceRef) => root
         ? runRecordedOperation("从分支创建", () => createBranchAt(root, name, sourceRef), `已从 ${sourceRef} 创建`)
+        : Promise.resolve(false)}
+      onCreateBranchFromCommit={(name, oid) => root
+        ? runRecordedOperation("从提交创建分支", () => createBranchFromCommit(root, name, oid), `已从 ${oid.slice(0, 8)} 创建并切换`)
         : Promise.resolve(false)}
       onRenameBranch={(refName, name) => root
         ? runRecordedOperation("重命名分支", () => renameBranch(root, refName, name), "本地分支已重命名")

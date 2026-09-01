@@ -38,6 +38,11 @@ pub enum RemoteGitAction {
         name: String,
         source_ref: String,
     },
+    CreateBranchFromCommit {
+        repository: String,
+        name: String,
+        oid: String,
+    },
     RenameBranch {
         repository: String,
         ref_name: String,
@@ -203,6 +208,15 @@ impl RemoteGitAction {
                 validate_remote_repository_path(repository)?;
                 validate_branch_name(name)?;
                 validate_branch_source_ref(source_ref)
+            }
+            Self::CreateBranchFromCommit {
+                repository,
+                name,
+                oid,
+            } => {
+                validate_remote_repository_path(repository)?;
+                validate_branch_name(name)?;
+                validate_commit_oid(oid)
             }
             Self::RenameBranch {
                 repository,
@@ -546,6 +560,27 @@ mod tests {
             .validate()
             .is_ok()
         );
+        assert!(
+            RemoteGitAction::CreateBranchFromCommit {
+                repository: "/srv/repo".into(),
+                name: "feature/history".into(),
+                oid: "0123456789abcdef0123456789abcdef01234567".into(),
+            }
+            .validate()
+            .is_ok()
+        );
+        for oid in ["abcdef0", "HEAD", "--orphan", "0123456789abcdef^{commit}"] {
+            assert!(
+                RemoteGitAction::CreateBranchFromCommit {
+                    repository: "/srv/repo".into(),
+                    name: "feature/history".into(),
+                    oid: oid.into(),
+                }
+                .validate()
+                .is_err(),
+                "{oid}"
+            );
+        }
         assert!(
             RemoteGitAction::Push {
                 repository: "/srv/repo".into(),

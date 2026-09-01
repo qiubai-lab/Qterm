@@ -6,6 +6,7 @@ import {
   continueGitMerge,
   createGitBranch,
   createGitBranchFrom,
+  createGitBranchFromCommit,
   deleteGitBranch,
   executeRemoteGit,
   fetchGitRepository,
@@ -46,6 +47,7 @@ export interface GitRepositoryClient {
   commit: (repository: string, message: string) => Promise<GitSnapshot>;
   createBranch: (repository: string, name: string) => Promise<GitSnapshot>;
   createBranchAt: (repository: string, name: string, sourceRef: string) => Promise<GitSnapshot>;
+  createBranchFromCommit: (repository: string, name: string, oid: string) => Promise<GitSnapshot>;
   renameBranch: (repository: string, refName: string, newName: string) => Promise<GitSnapshot>;
   deleteBranch: (repository: string, refName: string) => Promise<GitSnapshot>;
   switchBranch: (repository: string, name: string) => Promise<GitSnapshot>;
@@ -77,6 +79,7 @@ export function useGitRepositoryClient({ remote, profileId, sessionId, status }:
     commit: (repository, message) => remote ? remoteExecute({ type: "commit", repository, message }) : commitGitChanges(repository, message),
     createBranch: (repository, name) => remote ? remoteExecute({ type: "createBranch", repository, name }) : createGitBranch(repository, name),
     createBranchAt: (repository, name, sourceRef) => remote ? remoteExecute({ type: "createBranchFrom", repository, name, sourceRef }) : createGitBranchFrom(repository, name, sourceRef),
+    createBranchFromCommit: (repository, name, oid) => remote ? remoteExecute({ type: "createBranchFromCommit", repository, name, oid }) : createGitBranchFromCommit(repository, name, oid),
     renameBranch: (repository, refName, newName) => remote ? remoteExecute({ type: "renameBranch", repository, refName, newName }) : renameGitBranch(repository, refName, newName),
     deleteBranch: (repository, refName) => remote ? remoteExecute({ type: "deleteBranch", repository, refName }) : deleteGitBranch(repository, refName),
     switchBranch: (repository, name) => remote ? remoteExecute({ type: "switchBranch", repository, name }) : switchGitBranch(repository, name),

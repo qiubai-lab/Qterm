@@ -4,7 +4,7 @@ import { afterEach, beforeEach, vi } from "vitest";
 import type { GitSnapshot } from "../lib/tauri/git";
 
 const api = vi.hoisted(() => ({
-  available: vi.fn(), select: vi.fn(), snapshot: vi.fn(), fetch: vi.fn(), pull: vi.fn(), push: vi.fn(), initialize: vi.fn(), stage: vi.fn(), stageAll: vi.fn(), unstage: vi.fn(), unstageAll: vi.fn(), commit: vi.fn(), commitFiles: vi.fn(), createBranch: vi.fn(), createBranchFrom: vi.fn(), renameBranch: vi.fn(), deleteBranch: vi.fn(), switchBranch: vi.fn(), trackRemoteBranch: vi.fn(), mergeBranch: vi.fn(), continueMerge: vi.fn(), abortMerge: vi.fn(), remote: vi.fn(), remoteCommitFiles: vi.fn(),
+  available: vi.fn(), select: vi.fn(), snapshot: vi.fn(), fetch: vi.fn(), pull: vi.fn(), push: vi.fn(), initialize: vi.fn(), stage: vi.fn(), stageAll: vi.fn(), unstage: vi.fn(), unstageAll: vi.fn(), commit: vi.fn(), commitFiles: vi.fn(), createBranch: vi.fn(), createBranchFrom: vi.fn(), createBranchFromCommit: vi.fn(), renameBranch: vi.fn(), deleteBranch: vi.fn(), switchBranch: vi.fn(), trackRemoteBranch: vi.fn(), mergeBranch: vi.fn(), continueMerge: vi.fn(), abortMerge: vi.fn(), remote: vi.fn(), remoteCommitFiles: vi.fn(),
 }));
 
 vi.mock("../lib/tauri/git", () => ({
@@ -23,6 +23,7 @@ vi.mock("../lib/tauri/git", () => ({
   loadGitCommitFiles: api.commitFiles,
   createGitBranch: api.createBranch,
   createGitBranchFrom: api.createBranchFrom,
+  createGitBranchFromCommit: api.createBranchFromCommit,
   renameGitBranch: api.renameBranch,
   deleteGitBranch: api.deleteBranch,
   switchGitBranch: api.switchBranch,
@@ -61,6 +62,7 @@ function setupGitPaneTests() {
     api.stage.mockResolvedValue(snapshot);
     api.createBranch.mockResolvedValue(snapshot);
     api.createBranchFrom.mockResolvedValue(snapshot);
+    api.createBranchFromCommit.mockResolvedValue(snapshot);
     api.renameBranch.mockResolvedValue(snapshot);
     api.deleteBranch.mockResolvedValue(snapshot);
     api.switchBranch.mockResolvedValue(snapshot);

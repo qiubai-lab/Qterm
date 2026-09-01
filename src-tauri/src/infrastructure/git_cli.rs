@@ -324,6 +324,25 @@ impl GitExecutor for SystemGitExecutor {
         )
     }
 
+    fn create_branch_from_commit(
+        &self,
+        repository: &Path,
+        name: &str,
+        oid: &str,
+    ) -> Result<GitSnapshot, GitError> {
+        crate::domain::git::validate_commit_oid(oid)?;
+        self.mutate(
+            repository,
+            [
+                OsStr::new("switch"),
+                OsStr::new("--no-track"),
+                OsStr::new("-c"),
+                OsStr::new(name),
+                OsStr::new(oid),
+            ],
+        )
+    }
+
     fn rename_branch(
         &self,
         repository: &Path,
@@ -1176,6 +1195,49 @@ refs/remotes/origin/HEAD\0origin/HEAD\0abc\0 \0\0\0refs/remotes/origin/main\n",
             Err(GitError::CommandFailed(_))
         ));
         fs::remove_file(directory.path().join(".git/index.lock")).expect("remove lock");
+    }
+
+    #[test]
+    fn real_git_creates_and_switches_branch_from_historical_commit() {
+        let git = which_git();
+        let executor = SystemGitExecutor::with_executable(git.clone());
+        let directory = tempdir().expect("historical commit fixture");
+        run_git_test(&git, ["init", path(directory.path())]);
+        configure_identity(&git, directory.path());
+
+        fs::write(directory.path().join("history.txt"), b"first\n").expect("first file");
+        run_git_test(&git, ["-C", path(directory.path()), "add", "history.txt"]);
+        run_git_test(
+            &git,
+            ["-C", path(directory.path()), "commit", "-m", "first"],
+        );
+        let first_oid = executor
+            .snapshot(directory.path())
+            .expect("first snapshot")
+            .head
+            .oid
+            .expect("first oid");
+
+        fs::write(directory.path().join("history.txt"), b"second\n").expect("second file");
+        run_git_test(&git, ["-C", path(directory.path()), "add", "history.txt"]);
+        run_git_test(
+            &git,
+            ["-C", path(directory.path()), "commit", "-m", "second"],
+        );
+
+        let created = executor
+            .create_branch_from_commit(directory.path(), "feature/history", &first_oid)
+            .expect("create branch from historical commit");
+        assert_eq!(created.head.name.as_deref(), Some("feature/history"));
+        assert_eq!(created.head.oid.as_deref(), Some(first_oid.as_str()));
+        assert_eq!(
+            fs::read_to_string(directory.path().join("history.txt")).expect("historical worktree"),
+            "first\n"
+        );
+        assert!(matches!(
+            executor.create_branch_from_commit(directory.path(), "feature/invalid", "abcdef0"),
+            Err(GitError::InvalidInput)
+        ));
     }
 
     #[test]

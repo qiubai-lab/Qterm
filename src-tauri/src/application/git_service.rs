@@ -107,6 +107,18 @@ impl<E: GitExecutor> GitService<E> {
             .create_branch_from(&input_path(repository)?, &name, &source_ref)
     }
 
+    pub fn create_branch_from_commit(
+        &self,
+        repository: String,
+        name: String,
+        oid: String,
+    ) -> Result<GitSnapshot, GitError> {
+        validate_branch_name(&name)?;
+        validate_commit_oid(&oid)?;
+        self.executor
+            .create_branch_from_commit(&input_path(repository)?, &name, &oid)
+    }
+
     pub fn rename_branch(
         &self,
         repository: String,

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { api, setupGitPaneTests, snapshot } from "./GitPane.testHarness";
@@ -7,6 +7,16 @@ import { GitPane } from "./GitPane";
 setupGitPaneTests();
 
 describe("GitPane commit graph", () => {
+  const historicalCommit = {
+    oid: "1234567890abcdef1234567890abcdef12345678",
+    parents: [],
+    decorations: [],
+    subject: "fix: historical commit",
+    body: "",
+    author: "Koppa",
+    timestamp: 1_690_000_000,
+  };
+
   it("renders a VS Code-style selectable commit graph with branch decorations", async () => {
     api.snapshot.mockResolvedValueOnce({
       ...snapshot,
@@ -64,6 +74,79 @@ describe("GitPane commit graph", () => {
     expect(screen.getByRole("tooltip")).toBeInTheDocument();
     fireEvent.blur(commit);
     expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+  });
+
+  it("creates and switches a branch from the commit targeted by the context menu", async () => {
+    api.snapshot.mockResolvedValueOnce({ ...snapshot, commits: [snapshot.commits[0], historicalCommit] });
+    render(<GitPane blockId="git-1" target={{ type: "local", path: "D:/work/project" }} visible onTargetChange={vi.fn()}/>);
+    await screen.findByText("project");
+    fireEvent.click(screen.getByRole("button", { name: "图表" }));
+    const commit = screen.getByRole("button", { name: /fix: historical commit/ });
+
+    fireEvent.pointerEnter(commit);
+    expect(screen.getByRole("tooltip")).toBeInTheDocument();
+    fireEvent.contextMenu(commit, { clientX: 240, clientY: 180 });
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+    const menu = screen.getByRole("menu", { name: "fix: historical commit 提交菜单" });
+    expect(menu.parentElement).toBe(document.body);
+    expect(menu).toHaveTextContent("fix: historical commit");
+    expect(menu).toHaveTextContent("12345678");
+    const createItem = within(menu).getByRole("menuitem", { name: "从此提交创建分支…" });
+    fireEvent.keyDown(menu, { key: "End" });
+    expect(createItem).toHaveFocus();
+    fireEvent.keyDown(menu, { key: "Home" });
+    expect(createItem).toHaveFocus();
+    fireEvent.click(createItem);
+
+    const form = screen.getByRole("dialog", { name: "从此提交创建分支" });
+    expect(form).toHaveTextContent("fix: historical commit");
+    expect(form).toHaveTextContent("12345678");
+    fireEvent.change(within(form).getByRole("textbox", { name: "新分支名称" }), { target: { value: "feature/history" } });
+    fireEvent.click(within(form).getByRole("button", { name: "创建并切换" }));
+
+    await waitFor(() => expect(api.createBranchFromCommit).toHaveBeenCalledWith(
+      "D:/work/project",
+      "feature/history",
+      historicalCommit.oid,
+    ));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "从此提交创建分支" })).not.toBeInTheDocument());
+  });
+
+  it("supports keyboard commit menus, focus restoration, and merge gating", async () => {
+    api.snapshot.mockResolvedValueOnce({ ...snapshot, mergeInProgress: true, commits: [historicalCommit] });
+    render(<GitPane blockId="git-1" target={{ type: "local", path: "D:/work/project" }} visible onTargetChange={vi.fn()}/>);
+    await screen.findByText("project");
+    fireEvent.click(screen.getByRole("button", { name: "图表" }));
+    const commit = screen.getByRole("button", { name: /fix: historical commit/ });
+    commit.focus();
+    fireEvent.keyDown(commit, { key: "ContextMenu" });
+    let menu = screen.getByRole("menu", { name: "fix: historical commit 提交菜单" });
+    expect(within(menu).getByRole("menuitem", { name: "从此提交创建分支…" })).toBeDisabled();
+    fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() => expect(commit).toHaveFocus());
+
+    fireEvent.keyDown(commit, { key: "F10", shiftKey: true });
+    menu = screen.getByRole("menu", { name: "fix: historical commit 提交菜单" });
+    expect(menu).toBeInTheDocument();
+    fireEvent.pointerDown(document.body);
+    expect(screen.queryByRole("menu", { name: "fix: historical commit 提交菜单" })).not.toBeInTheDocument();
+    expect(api.createBranchFromCommit).not.toHaveBeenCalled();
+  });
+
+  it("keeps the commit branch form open when Git rejects the mutation", async () => {
+    api.snapshot.mockResolvedValueOnce({ ...snapshot, commits: [historicalCommit] });
+    api.createBranchFromCommit.mockRejectedValueOnce({ code: "gitConflict", message: "当前更改会被切换覆盖" });
+    render(<GitPane blockId="git-1" target={{ type: "local", path: "D:/work/project" }} visible onTargetChange={vi.fn()}/>);
+    await screen.findByText("project");
+    fireEvent.click(screen.getByRole("button", { name: "图表" }));
+    const commit = screen.getByRole("button", { name: /fix: historical commit/ });
+    fireEvent.contextMenu(commit, { clientX: 140, clientY: 120 });
+    fireEvent.click(screen.getByRole("menuitem", { name: "从此提交创建分支…" }));
+    const form = screen.getByRole("dialog", { name: "从此提交创建分支" });
+    fireEvent.change(within(form).getByRole("textbox", { name: "新分支名称" }), { target: { value: "feature/conflict" } });
+    fireEvent.click(within(form).getByRole("button", { name: "创建并切换" }));
+    expect(await within(form).findByRole("alert")).toHaveTextContent("当前更改会被切换覆盖");
+    expect(form).toBeInTheDocument();
   });
 
   it("repositions commit details after viewport and ancestor-scroll changes", async () => {

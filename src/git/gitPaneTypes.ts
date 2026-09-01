@@ -1,9 +1,10 @@
-import type { GitCommitFile } from "../lib/tauri/git";
+import type { GitCommit, GitCommitFile } from "../lib/tauri/git";
 
 export type GitRepositoryOverlayKind =
   | "branches"
   | "createBranch"
   | "createBranchFrom"
+  | "createBranchFromCommit"
   | "renameBranch"
   | "deleteBranch"
   | "repositoryActions"
@@ -23,6 +24,15 @@ export interface GitRepositorySubmenu {
   left: number;
   top: number;
   side: "left" | "right";
+}
+
+export interface GitCommitContextMenu {
+  commit: GitCommit;
+  anchorX: number;
+  anchorY: number;
+  left: number;
+  top: number;
+  placement: "above" | "below";
 }
 
 export interface GitCommitFilesState {

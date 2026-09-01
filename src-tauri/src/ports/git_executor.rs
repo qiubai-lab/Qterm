@@ -19,6 +19,12 @@ pub trait GitExecutor: Send + Sync + 'static {
         name: &str,
         source_ref: &str,
     ) -> Result<GitSnapshot, GitError>;
+    fn create_branch_from_commit(
+        &self,
+        repository: &Path,
+        name: &str,
+        oid: &str,
+    ) -> Result<GitSnapshot, GitError>;
     fn rename_branch(
         &self,
         repository: &Path,

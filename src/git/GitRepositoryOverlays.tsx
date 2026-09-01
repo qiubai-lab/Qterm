@@ -5,10 +5,11 @@ import { Button } from "../components/Button";
 import { Icon } from "../components/Icon";
 import { RequiredFieldLabel } from "../components/RequiredFieldLabel";
 import { DialogActionStatus, DialogFrame } from "../components/dialogs/DialogFrame";
-import type { GitBranch, GitSnapshot } from "../lib/tauri/git";
+import type { GitBranch, GitCommit, GitSnapshot } from "../lib/tauri/git";
 import {
   formatRelativeCommitTime,
   operationStatusLabel,
+  type GitCommitContextMenu as GitCommitContextMenuState,
   type GitMergeConfirmation,
   type GitOperationRecord,
   type GitRepositoryOverlay,
@@ -24,6 +25,7 @@ interface GitRepositoryOverlaysProps {
   repositoryOverlay: GitRepositoryOverlay | null;
   repositorySubmenu: GitRepositorySubmenu | null;
   mergeConfirmation: GitMergeConfirmation | null;
+  commitBranchSource: GitCommit | null;
   repositoryOverlayRef: RefObject<HTMLElement | null>;
   repositorySubmenuRef: RefObject<HTMLElement | null>;
   branchManagementItemRef: RefObject<HTMLButtonElement | null>;
@@ -68,11 +70,35 @@ interface GitRepositoryOverlaysProps {
   onPush: () => void;
   onSynchronize: () => void;
   onCreateBranchAt: (name: string, sourceRef: string) => Promise<boolean>;
+  onCreateBranchFromCommit: (name: string, oid: string) => Promise<boolean>;
   onRenameBranch: (refName: string, name: string) => Promise<boolean>;
   onDeleteBranch: (refName: string) => Promise<boolean>;
   onPublishBranch: (remote: string) => Promise<boolean>;
   onAbortMerge: () => Promise<boolean>;
   onConfirmMerge: () => void;
+}
+
+export function GitCommitContextMenu({ menu, menuRef, disabled, onNavigateMenu, onCreateBranch }: {
+  menu: GitCommitContextMenuState | null;
+  menuRef: RefObject<HTMLDivElement | null>;
+  disabled: boolean;
+  onNavigateMenu: (event: React.KeyboardEvent<HTMLElement>) => void;
+  onCreateBranch: (commit: GitCommit) => void;
+}) {
+  if (!menu) return null;
+  return createPortal(<div
+    ref={menuRef}
+    className="git-repository-popover git-repository-action-popover git-commit-context-menu"
+    data-placement={menu.placement}
+    role="menu"
+    aria-label={`${menu.commit.subject} 提交菜单`}
+    style={{ left: menu.left, top: menu.top }}
+    onContextMenu={(event) => event.preventDefault()}
+    onKeyDown={onNavigateMenu}
+  >
+    <div className="git-commit-context-heading" role="presentation"><strong title={menu.commit.subject}>{menu.commit.subject}</strong><code>{menu.commit.oid.slice(0, 8)}</code></div>
+    <button type="button" className="git-repository-action-item" role="menuitem" disabled={disabled} onClick={() => onCreateBranch(menu.commit)}><Icon name="plus" size={12}/><span>从此提交创建分支…</span></button>
+  </div>, document.body);
 }
 
 export function GitRepositoryOverlays(props: GitRepositoryOverlaysProps) {
@@ -85,7 +111,7 @@ export function GitRepositoryOverlays(props: GitRepositoryOverlaysProps) {
 
 function GitRepositoryOverlayContent(props: GitRepositoryOverlaysProps) {
   const {
-    blockId, snapshot, root, repositoryOverlay, repositorySubmenu, mergeConfirmation, repositoryOverlayRef,
+    blockId, snapshot, root, repositoryOverlay, repositorySubmenu, mergeConfirmation, commitBranchSource, repositoryOverlayRef,
     repositorySubmenuRef, branchManagementItemRef, repositorySubmenuId, branchQuery, newBranch,
     branchSourceRef, selectedBranchRef, selectedRemote, mergeSourceRef, branchLabel, disabled, error,
     mergeInProgress, mergeWorktreeClean, branchOptions, visibleBranches, visibleLocalBranches,
@@ -93,7 +119,7 @@ function GitRepositoryOverlayContent(props: GitRepositoryOverlaysProps) {
     selectedMergeSource, operations, onBranchQueryChange, onNewBranchChange, onBranchSourceRefChange,
     onSelectedBranchRefChange, onSelectedRemoteChange, onMergeSourceRefChange, onMergeConfirmationChange,
     onOpenOverlay, onCloseOverlay, onOpenBranchSubmenu, onCloseBranchSubmenu, onDismissBranchSubmenu,
-    onNavigateMenu, onSelectBranch, onCreateBranch, onPull, onPush, onSynchronize, onCreateBranchAt,
+    onNavigateMenu, onSelectBranch, onCreateBranch, onPull, onPush, onSynchronize, onCreateBranchAt, onCreateBranchFromCommit,
     onRenameBranch, onDeleteBranch, onPublishBranch, onAbortMerge,
   } = props;
   if (!repositoryOverlay) return null;
@@ -237,6 +263,8 @@ function GitRepositoryOverlayContent(props: GitRepositoryOverlaysProps) {
 
   const formTitle = repositoryOverlay.kind === "createBranchFrom"
     ? "从指定分支创建"
+    : repositoryOverlay.kind === "createBranchFromCommit"
+      ? "从此提交创建分支"
     : repositoryOverlay.kind === "renameBranch"
       ? "重命名本地分支"
       : repositoryOverlay.kind === "deleteBranch"
@@ -251,6 +279,10 @@ function GitRepositoryOverlayContent(props: GitRepositoryOverlaysProps) {
       const name = newBranch.trim();
       if (!name || !branchSourceRef) return;
       succeeded = await onCreateBranchAt(name, branchSourceRef);
+    } else if (repositoryOverlay.kind === "createBranchFromCommit") {
+      const name = newBranch.trim();
+      if (!name || !commitBranchSource || mergeInProgress) return;
+      succeeded = await onCreateBranchFromCommit(name, commitBranchSource.oid);
     } else if (repositoryOverlay.kind === "renameBranch") {
       const name = newBranch.trim();
       if (!name || !selectedBranchRef) return;
@@ -271,6 +303,11 @@ function GitRepositoryOverlayContent(props: GitRepositoryOverlaysProps) {
       <label htmlFor={`git-branch-from-name-${blockId}`}><RequiredFieldLabel>新分支名称</RequiredFieldLabel></label>
       <input id={`git-branch-from-name-${blockId}`} aria-label="新分支名称" value={newBranch} maxLength={255} autoFocus placeholder="例如 feature/login" onChange={(event) => onNewBranchChange(event.target.value)}/>
     </>}
+    {repositoryOverlay.kind === "createBranchFromCommit" && commitBranchSource && <>
+      <div className="git-commit-branch-source" aria-label={`起点提交 ${commitBranchSource.subject}`}><Icon name="git" size={13}/><span><strong title={commitBranchSource.subject}>{commitBranchSource.subject}</strong><code title={commitBranchSource.oid}>{commitBranchSource.oid.slice(0, 8)}</code></span></div>
+      <label htmlFor={`git-branch-from-commit-name-${blockId}`}><RequiredFieldLabel>新分支名称</RequiredFieldLabel></label>
+      <input id={`git-branch-from-commit-name-${blockId}`} aria-label="新分支名称" required value={newBranch} maxLength={255} autoFocus placeholder="例如 feature/history" onChange={(event) => onNewBranchChange(event.target.value)}/>
+    </>}
     {repositoryOverlay.kind === "renameBranch" && <>
       <label htmlFor={`git-rename-ref-${blockId}`}><RequiredFieldLabel>本地分支</RequiredFieldLabel></label>
       <select id={`git-rename-ref-${blockId}`} aria-label="本地分支" value={selectedBranchRef} onChange={(event) => onSelectedBranchRefChange(event.target.value)}>{localBranchOptions.map((branch) => <option value={branch.refName} key={branch.refName}>{branch.name}{branch.current ? " · 当前" : ""}</option>)}</select>
@@ -288,7 +325,7 @@ function GitRepositoryOverlayContent(props: GitRepositoryOverlaysProps) {
       <p>将当前分支发布到同名远程分支并设置 upstream。</p>
     </>}
     <div className="git-branch-create-feedback" role={error ? "alert" : "status"} aria-hidden={!error}>{error?.message ?? "\u00a0"}</div>
-    <div className="git-branch-create-actions"><button type="button" className="secondary" onClick={() => onCloseOverlay(true)}>取消</button><button type="submit" className={isDelete ? "danger" : undefined} disabled={disabled || (repositoryOverlay.kind === "createBranchFrom" ? !newBranch.trim() || !branchSourceRef : repositoryOverlay.kind === "renameBranch" ? !newBranch.trim() || !selectedBranchRef : repositoryOverlay.kind === "deleteBranch" ? !selectedBranchRef : !selectedRemote)}>{repositoryOverlay.kind === "createBranchFrom" ? "创建并切换" : repositoryOverlay.kind === "renameBranch" ? "重命名" : repositoryOverlay.kind === "deleteBranch" ? "确认安全删除" : "发布并设置 upstream"}</button></div>
+    <div className="git-branch-create-actions"><button type="button" className="secondary" onClick={() => onCloseOverlay(true)}>取消</button><button type="submit" className={isDelete ? "danger" : undefined} disabled={disabled || (repositoryOverlay.kind === "createBranchFrom" ? !newBranch.trim() || !branchSourceRef : repositoryOverlay.kind === "createBranchFromCommit" ? !newBranch.trim() || !commitBranchSource || mergeInProgress : repositoryOverlay.kind === "renameBranch" ? !newBranch.trim() || !selectedBranchRef : repositoryOverlay.kind === "deleteBranch" ? !selectedBranchRef : !selectedRemote)}>{repositoryOverlay.kind === "createBranchFrom" || repositoryOverlay.kind === "createBranchFromCommit" ? "创建并切换" : repositoryOverlay.kind === "renameBranch" ? "重命名" : repositoryOverlay.kind === "deleteBranch" ? "确认安全删除" : "发布并设置 upstream"}</button></div>
   </form>;
 }
 

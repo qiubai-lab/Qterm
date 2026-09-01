@@ -26,11 +26,11 @@ use commands::files::{
 };
 use commands::git::{
     GitState, git_abort_merge, git_available, git_commit, git_commit_files, git_continue_merge,
-    git_create_branch, git_create_branch_from, git_delete_branch, git_fetch, git_initialize,
-    git_merge_branch, git_pull, git_push, git_remote_commit_files, git_remote_execute,
-    git_remote_list_directory, git_rename_branch, git_select_repository_directory,
-    git_session_connect, git_snapshot, git_stage, git_stage_all, git_switch_branch,
-    git_track_remote_branch, git_unstage, git_unstage_all,
+    git_create_branch, git_create_branch_from, git_create_branch_from_commit, git_delete_branch,
+    git_fetch, git_initialize, git_merge_branch, git_pull, git_push, git_remote_commit_files,
+    git_remote_execute, git_remote_list_directory, git_rename_branch,
+    git_select_repository_directory, git_session_connect, git_snapshot, git_stage, git_stage_all,
+    git_switch_branch, git_track_remote_branch, git_unstage, git_unstage_all,
 };
 use commands::local_session::{
     LocalSessionState, local_session_close, local_session_connect, local_session_resize,
@@ -351,6 +351,7 @@ pub fn run() {
             git_commit_files,
             git_create_branch,
             git_create_branch_from,
+            git_create_branch_from_commit,
             git_rename_branch,
             git_delete_branch,
             git_switch_branch,

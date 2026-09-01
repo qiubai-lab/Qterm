@@ -24,7 +24,7 @@
 - `src/workspace/networkWindow.ts`：远程终端快捷方式和右侧工具轨共用的 Network Block 打开策略；不创建 session 或启动规则。
 - `src/workspace/gitWindow.ts`：右侧工具轨共用的 Git Block 上下文打开策略；从本机或远程 Files 路径以及同 profile 的有效 Terminal OSC 7 目录派生显式 target，不解析仓库或执行 Git。
 - `src/git/GitPane.tsx`、`gitRepositoryClient.ts`、`useGitCommitInspection.ts`、`gitPaneTypes.ts`：单仓库 Git Block 的稳定组合入口、本机/SSH action adapter、snapshot epoch/操作编排、提交检查缓存与共享局部模型；不改变 IPC DTO、不生成 Git 命令，也不把 session、仓库或操作记录写入 Workspace persistence。
-- `src/git/GitPaneSections.tsx`、`GitCommitGraph.tsx`、`GitRepositoryOverlays.tsx`、`GitRepositoryHistoryPopover.tsx`、`GitRepositoryPickerDialog.tsx`、`gitGraph.ts`：存储库/更改/提交图展示、最近仓库与受限目录选择、分支 create-from/rename/safe-delete、Pull/Push/Publish/顺序 Sync、安全 merge source 二次确认、冲突 continue/abort 与最多 20 条仅内存脱敏操作记录；展示和浮层不直接调用 Tauri IPC、不拥有持久化/session 生命周期，也不提供 force、远程删除、rebase/stash、merge 策略选择或 diff。
+- `src/git/GitPaneSections.tsx`、`GitCommitGraph.tsx`、`GitRepositoryOverlays.tsx`、`GitRepositoryHistoryPopover.tsx`、`GitRepositoryPickerDialog.tsx`、`gitGraph.ts`：存储库/更改/提交图展示、commit 鼠标/键盘上下文菜单、从选中 commit 创建并切换分支、最近仓库与受限目录选择、分支 create-from/rename/safe-delete、Pull/Push/Publish/顺序 Sync、安全 merge source 二次确认、冲突 continue/abort 与最多 20 条仅内存脱敏操作记录；展示和浮层不直接调用 Tauri IPC、不拥有持久化/session 生命周期，也不提供 force、远程删除、任意 revision、rebase/stash、merge 策略选择或 diff。
 - `src/git/git.css`、`src/git/styles/`：Git Block 样式的固定顺序 manifest，以及工作区、提交图、目标配置、分支/合并/操作浮层、仓库选择与可访问媒体规则；不定义组件状态、交互逻辑或主题 token 来源。
 - `src/network/NetworkPane.tsx`、`NetworkRuleDialog.tsx`、`NetworkAccessDialog.tsx`：按 profile 共享的 Local/Remote/SOCKS5 规则列表、编辑、暴露警告、访问地址复制和 Block 局部启停交互；实验浏览器区只请求受限 IPC，不传输隧道字节、启动任意进程或保存认证材料。
 - `src/components/dialogs/ConnectionAuthDialog.tsx`：一次性密码、已有凭证与 SSH Agent 的人工连接入口；本次选择不回写 profile。
@@ -44,7 +44,7 @@
 - `src/lib/tauri/transfers.ts`：单文件 SFTP 选择、启动、进度和取消 IPC 契约；不直接访问本地或远程文件系统。
 - `src/lib/tauri/files.ts`：本地/远程目录、受限文件读取、带修订保存与 Files-only SSH connect IPC 契约；不执行文件系统或 SFTP 操作。
 - `src/lib/tauri/network.ts`：Network 规则 CRUD、独立 SSH session 与规则启停的窄 IPC 契约；TCP 字节不经过 WebView。
-- `src/lib/tauri/git.ts`：本机及 profile-bound SSH 工作区的快照/remote 名称/真实 merge 状态、初始化、stage/unstage、commit、分支 create-from/rename/safe-delete、主动 fetch、跟踪签出、FF-only Pull、显式 Push/Publish、安全 merge/continue/abort 与 Git-purpose 只读目录浏览窄 IPC 契约；只发送封闭 action union 或 session/profile/path/ref/已有 remote name，不接受 executable、任意 cwd、shell、子命令、参数数组、merge strategy、remote URL、force 标志或凭据。
+- `src/lib/tauri/git.ts`：本机及 profile-bound SSH 工作区的快照/remote 名称/真实 merge 状态、初始化、stage/unstage、commit、分支 create-from/从完整 commit OID 创建并切换/rename/safe-delete、主动 fetch、跟踪签出、FF-only Pull、显式 Push/Publish、安全 merge/continue/abort 与 Git-purpose 只读目录浏览窄 IPC 契约；只发送封闭 action union 或 session/profile/path/ref/完整 commit OID/已有 remote name，不接受 executable、任意 cwd、shell、子命令、参数数组、任意 revision、merge strategy、remote URL、force 标志或凭据。
 - `src/lib/tauri/browserProxy.ts`：桌面端 Chrome/Edge 代理浏览器检测与启动的固定枚举 IPC 契约；不接收可执行路径、任意参数或用户 Profile。
 - `src/lib/tauri/workspaces.ts`：版本化 Workspace 文档的 load/save IPC 契约；不包含运行时会话字段。
 - `src/lib/tauri/window.ts`：桌面平台判定与当前窗口控制适配；不拥有 Workspace 状态或窗口视觉样式。
@@ -64,11 +64,11 @@
 - `src-tauri/src/domain/files.rs`：稳定目录列表、文件条目与排序/数量边界；不依赖文件系统、SFTP 或 Tauri。
 - `src-tauri/src/application/file_service.rs`：本地文件预览限制、UTF-8 校验、内容修订与原子保存用例；不依赖 Tauri UI 或 SFTP 类型。
 - `src-tauri/src/domain/workspace.rs`：Workspace/split tree、Git target、按 profile 隔离的最近仓库 identity 与 per-scope/global 资源上限；不依赖前端状态、Tauri 或 JSON 格式。
-- `src-tauri/src/domain/git.rs`、`ports/{git_executor,remote_git_executor}.rs`、`application/git_service.rs`：Git 元数据、remote 名称、真实 merge-in-progress 状态、完整 local/remote/source ref、跟踪分支匹配、安全 merge 前置规则、本机/远程封闭 action 输入边界、分支生命周期与同步/merge 能力端口及用例编排；不依赖 Tauri、process API、shell 或具体 Git 输出格式，也不表达命令、参数、strategy、URL、force 或凭据。
+- `src-tauri/src/domain/git.rs`、`ports/{git_executor,remote_git_executor}.rs`、`application/git_service.rs`：Git 元数据、完整 SHA-1/SHA-256 commit OID、remote 名称、真实 merge-in-progress 状态、完整 local/remote/source ref、跟踪分支匹配、安全 merge 前置规则、本机/远程封闭 action 输入边界、从 commit 创建并切换分支、分支生命周期与同步/merge 能力端口及用例编排；commit OID 与 branch/merge ref 保持独立校验，不依赖 Tauri、process API、shell 或具体 Git 输出格式，也不表达命令、参数、任意 revision、strategy、URL、force 或凭据。
 - `src-tauri/src/commands/git.rs`：Git 稳定 snapshot/merge DTO、Git-purpose SSH 建连、profile/session ownership 调用、只返回目录项的远程浏览、错误映射、非阻塞本机目录选择和阻塞用例调度 IPC；不拥有 Git 规则、输出解析、文件读写、merge 策略或任意命令执行入口。
 - `src-tauri/src/commands/profile.rs`、`commands/profile/{dto,import}.rs`：Profile CRUD façade、严格 IPC DTO 与 SSH Config parser/dialog/application coordinator 适配；不拥有导入选择、唯一命名、跨 repository commit 或 rollback 规则。
 - `src-tauri/src/commands/credential.rs`、`commands/credential/{commands,dto,files,recovery}.rs`：Credential state façade、严格 secret DTO、Tauri command、授权私钥读取与恢复文件/对话框 adapter；不把私钥正文或恢复材料序列化到 WebView，也不拥有 SSH Config 跨 repository 事务规则。
-- `src-tauri/src/infrastructure/git_cli.rs`：系统 Git 发现、固定结构化 snapshot/fetch/branch/create-from/rename/safe-delete/FF-only Pull/显式 refspec Push/Publish/default merge/continue/abort 参数、MERGE_HEAD 冲突状态恢复、网络与普通操作超时/输出上限、URL userinfo 脱敏及 machine-readable status/ref/log 解析；不经 shell、不接收 WebView 命令片段、参数数组、merge strategy、remote URL/凭据、force 选项或持久化仓库状态。
+- `src-tauri/src/infrastructure/git_cli.rs`：系统 Git 发现、固定结构化 snapshot/fetch/branch/create-from/从完整 commit OID 创建并切换/rename/safe-delete/FF-only Pull/显式 refspec Push/Publish/default merge/continue/abort 参数、MERGE_HEAD 冲突状态恢复、网络与普通操作超时/输出上限、URL userinfo 脱敏及 machine-readable status/ref/log 解析；不经 shell、不接收 WebView 命令片段、参数数组、任意 revision、merge strategy、remote URL/凭据、force 选项或持久化仓库状态。
 - `src-tauri/src/domain/network.rs`、`ports/network_repository.rs`、`application/network_service.rs`：转发规则、不变量、profile 引用与配置用例边界；不包含 socket、SSH channel、运行状态或持久化格式。
 - `src-tauri/src/commands/network.rs`：Network 严格 DTO、profile-bound session 建连和规则启停 IPC；不实现 SOCKS5 或 TCP 数据泵。
 - `src-tauri/src/commands/clipboard.rs`：接收当前 SSH session ID/opaque task ID 或无参数本地准备请求，调用本地路径准备或远端暂存/取消用例，并桥接一次性最终本地粘贴文本及无敏感远端事件；不接收本机路径、文件字节、远端路径策略或权限参数。
@@ -109,7 +109,7 @@
 - `src-tauri/src/infrastructure/`：负责 persistence、系统 Git、russh、known-hosts、PTY、SFTP 和受限本机浏览器启动适配；不把第三方库、process 细节或 Win32 类型泄漏到 IPC 或 domain。
 - `src-tauri/src/infrastructure/persistence/`：负责严格 JSON 读取、受支持 schema 的显式迁移、敏感字段拒绝、原子写入、可丢弃缓存，以及 credential vault 的 Argon2id + envelope AES-GCM 适配；不执行远程命令或拥有 UI 流程。
 - `src-tauri/src/infrastructure/windows/`：负责 Windows WTS session-lock 注册、消息映射与窗口 hook 生命周期；Win32 类型不得越过该 adapter。
-- `src-tauri/src/infrastructure/ssh/`：负责 `russh` 私钥凭证解析、SSH Config 有界解析、平台 SSH Agent 签名适配、纯 Rust 多跳连接生命周期、PTY、受限远程 Shell/Git exec、当前会话 Hook、SFTP 及有界 TCP forwarding；只执行固定集成命令或受限 Git action、读取系统选择器明确授权的配置入口及受限 Include，并仅在用户明确授权后读取候选私钥，不泄漏私钥正文、Git stdin 或第三方 channel 类型。
+- `src-tauri/src/infrastructure/ssh/`：负责 `russh` 私钥凭证解析、SSH Config 有界解析、平台 SSH Agent 签名适配、纯 Rust 多跳连接生命周期、PTY、受限远程 Shell/Git exec、当前会话 Hook、SFTP 及有界 TCP forwarding；只执行固定集成命令或受限 Git action（含经 POSIX literal 编码的完整 commit OID 创建并切换分支）、读取系统选择器明确授权的配置入口及受限 Include，并仅在用户明确授权后读取候选私钥，不接受任意 revision，也不泄漏私钥正文、Git stdin 或第三方 channel 类型。
 - `src-tauri/src/infrastructure/ssh/config_import.rs`：负责 SSH Config 的受限读取、Include 展开、Match 隔离、候选解析与私钥元数据检查；不执行 Match 或代理命令。
 
 ## Forbidden Contents By Directory

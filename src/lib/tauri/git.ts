@@ -21,6 +21,7 @@ export type RemoteGitAction =
   | { type: "commit"; repository: string; message: string }
   | { type: "createBranch"; repository: string; name: string }
   | { type: "createBranchFrom"; repository: string; name: string; sourceRef: string }
+  | { type: "createBranchFromCommit"; repository: string; name: string; oid: string }
   | { type: "renameBranch"; repository: string; refName: string; newName: string }
   | { type: "deleteBranch"; repository: string; refName: string }
   | { type: "switchBranch"; repository: string; name: string }
@@ -47,6 +48,7 @@ export function commitGitChanges(repository: string, message: string): Promise<G
 export function loadGitCommitFiles(repository: string, oid: string): Promise<GitCommitFile[]> { return invoke("git_commit_files", { input: { repository, oid } }); }
 export function createGitBranch(repository: string, name: string): Promise<GitSnapshot> { return invoke("git_create_branch", { input: { repository, name } }); }
 export function createGitBranchFrom(repository: string, name: string, sourceRef: string): Promise<GitSnapshot> { return invoke("git_create_branch_from", { input: { repository, name, sourceRef } }); }
+export function createGitBranchFromCommit(repository: string, name: string, oid: string): Promise<GitSnapshot> { return invoke("git_create_branch_from_commit", { input: { repository, name, oid } }); }
 export function renameGitBranch(repository: string, refName: string, newName: string): Promise<GitSnapshot> { return invoke("git_rename_branch", { input: { repository, refName, newName } }); }
 export function deleteGitBranch(repository: string, refName: string): Promise<GitSnapshot> { return invoke("git_delete_branch", { input: { repository, refName } }); }
 export function switchGitBranch(repository: string, name: string): Promise<GitSnapshot> { return invoke("git_switch_branch", { input: { repository, name } }); }

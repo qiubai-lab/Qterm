@@ -495,6 +495,60 @@
   opacity: .4;
 }
 
+.git-commit-context-menu {
+  position: fixed;
+  width: 232px;
+  border-color: var(--floating-border);
+  background: var(--floating-material);
+}
+
+.git-commit-context-heading {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 7px;
+  align-items: center;
+  margin: -3px -3px 3px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--subtle);
+  color: var(--menu-secondary-text);
+}
+
+.git-commit-context-heading strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--menu-text);
+  font-size: 9px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.git-commit-context-heading code {
+  color: var(--menu-secondary-text);
+  font: 8px/1 SFMono-Regular, Consolas, monospace;
+}
+
+.git-commit-context-menu .git-repository-action-item {
+  color: var(--menu-text);
+}
+
+.git-commit-context-menu .git-repository-action-item:hover:not(:disabled),
+.git-commit-context-menu .git-repository-action-item:focus-visible:not(:disabled) {
+  color: var(--menu-hover-text);
+  background: var(--menu-hover-background);
+}
+
+.git-commit-context-menu .git-repository-action-item:disabled {
+  color: var(--menu-disabled-text);
+  background: transparent;
+  opacity: 1;
+}
+
+.git-commit-context-menu .git-repository-action-item:disabled > svg {
+  color: currentColor;
+}
+
 .git-repository-refresh[data-updating="true"] svg {
   transform-origin: center;
   animation: git-repository-picker-spin 700ms linear infinite;
@@ -548,9 +602,48 @@
   line-height: 1.45;
 }
 
+.git-commit-branch-source {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: 6px;
+  align-items: center;
+  padding: 6px;
+  border: 1px solid var(--subtle);
+  border-radius: 5px;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--raised) 62%, transparent);
+}
+
+.git-commit-branch-source > svg {
+  color: var(--accent);
+}
+
+.git-commit-branch-source > span {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 7px;
+  align-items: center;
+}
+
+.git-commit-branch-source strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 9px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.git-commit-branch-source code {
+  color: var(--dim);
+  font: 8px/1 SFMono-Regular, Consolas, monospace;
+}
+
 .git-branch-management-danger {
   border-color: color-mix(in srgb, var(--danger) 38%, var(--subtle)) !important;
   color: var(--danger) !important;
   background: color-mix(in srgb, var(--danger) 8%, transparent) !important;
 }
-

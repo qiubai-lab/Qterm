@@ -110,6 +110,11 @@ pub(super) async fn run_remote_git_action(
             name,
             source_ref,
         } => create_branch_from(handle, &repository, &name, &source_ref).await,
+        RemoteGitAction::CreateBranchFromCommit {
+            repository,
+            name,
+            oid,
+        } => create_branch_from_commit(handle, &repository, &name, &oid).await,
         RemoteGitAction::RenameBranch {
             repository,
             ref_name,
@@ -290,6 +295,23 @@ async fn create_branch_from(
         "switch --no-track -c {} {}",
         posix_literal(name),
         posix_literal(source_ref)
+    );
+    run_git(handle, repository, &args, Vec::new(), MUTATION_TIMEOUT).await?;
+    snapshot(handle, repository).await
+}
+
+async fn create_branch_from_commit(
+    handle: &client::Handle<ClientHandler>,
+    repository: &str,
+    name: &str,
+    oid: &str,
+) -> Result<GitSnapshot, GitError> {
+    validate_branch_name(name)?;
+    validate_commit_oid(oid)?;
+    let args = format!(
+        "switch --no-track -c {} {}",
+        posix_literal(name),
+        posix_literal(oid)
     );
     run_git(handle, repository, &args, Vec::new(), MUTATION_TIMEOUT).await?;
     snapshot(handle, repository).await
