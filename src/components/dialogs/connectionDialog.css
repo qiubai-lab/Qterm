@@ -74,7 +74,7 @@
 .connection-group-toggle:hover { color: var(--text); background: var(--hover); }
 .connection-group-items > p { color: var(--text-disabled); }
 .connection-context-menu { border:1px solid var(--floating-border); background: var(--floating-material); box-shadow: 0 14px 38px var(--shadow-strong); }
-.connection-item.selected .connection-item-status{background:var(--selection-marker);box-shadow:0 0 6px color-mix(in srgb,var(--selection-marker) 50%,transparent)}
+.connection-item.selected .connection-item-icon{color:var(--selection-marker)}
 .connection-item.selected .connection-item-name{color:var(--selection-marker)}
 .connection-editor-tab-indicator{border-color:color-mix(in srgb,var(--selection-marker) 58%,var(--border));background:var(--selection-surface)}
 .connection-editor-tabs button[aria-selected="true"]>span::before{background:var(--selection-marker);box-shadow:0 0 7px color-mix(in srgb,var(--selection-marker) 50%,transparent)}

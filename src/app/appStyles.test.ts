@@ -754,9 +754,10 @@ describe("application layout styles", () => {
     expect(declarations(".connection-sidebar-toolbar")).toContain("flex:none");
     expect(declarations(".connection-list")).toContain("overflow:auto");
     expect(declarations(".connection-item")).toContain("min-height:30px");
-    expect(declarations(".connection-item")).toContain("grid-template-columns:5px minmax(0,1fr)");
+    expect(declarations(".connection-item")).toContain("grid-template-columns:15px minmax(0,1fr)");
     expect(declarations(".connection-item")).toContain("touch-action:none");
-    expect(declarations(".connection-item-status")).toContain("border-radius:50%");
+    expect(declarations(".connection-item-icon")).toContain("place-items:center");
+    expect(lastDeclarations(".connection-item.selected .connection-item-icon")).toContain("color:var(--selection-marker)");
     expect(declarations(".connection-item-endpoint")).toContain("font-family:");
     expect(declarations(".connection-item-address")).toContain("text-overflow:ellipsis");
     expect(declarations(".connection-item-auth")).toContain("flex:none");
