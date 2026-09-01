@@ -65,9 +65,10 @@ vi.mock("../lib/tauri/git", () => ({
 }));
 
 vi.mock("../git/GitRepositoryPickerDialog", () => ({
-  GitRepositoryPickerDialog: ({ initialPath, onClose, onSelect }: { initialPath: string; onClose: () => void; onSelect: (path: string) => void }) => <div role="dialog" aria-label="测试远程仓库选择器" data-initial-path={initialPath}>
-    <button onClick={() => onSelect("/srv/next")}>测试确认远程目录</button>
-    <button onClick={onClose}>测试取消远程目录</button>
+  GitRepositoryPickerDialog: ({ mode = "remote", initialPath, onClose, onSelect, onSelectSystemDirectory }: { mode?: "local" | "remote"; initialPath: string; onClose: () => void; onSelect: (path: string) => void; onSelectSystemDirectory?: () => Promise<string | null> }) => <div role="dialog" aria-label={`测试${mode === "local" ? "本机" : "远程"}仓库选择器`} data-initial-path={initialPath}>
+    <button onClick={() => onSelect(mode === "local" ? "D:/work/local-next" : "/srv/next")}>测试确认{mode === "local" ? "本机" : "远程"}目录</button>
+    {onSelectSystemDirectory && <button onClick={() => void onSelectSystemDirectory().then((path) => path && onSelect(path))}>测试使用系统选择器</button>}
+    <button onClick={onClose}>测试取消{mode === "local" ? "本机" : "远程"}目录</button>
   </div>,
 }));
 
@@ -479,9 +480,25 @@ describe("WorkspaceCanvas terminal actions", () => {
     await user.click(choose);
     await user.click(screen.getByRole("button", { name: "浏览其他目录…" }));
 
+    expect(screen.getByRole("dialog", { name: "测试本机仓库选择器" })).toHaveAttribute("data-initial-path", "D:/work/project");
+    expect(gitApi.selectDirectory).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "测试使用系统选择器" }));
     expect(gitApi.selectDirectory).toHaveBeenCalledWith("D:/work/project");
-    expect(selectGitTarget).toHaveBeenCalledWith("workspace-1", "git-1", { type: "local", path: "D:/work/next" });
+    await waitFor(() => expect(selectGitTarget).toHaveBeenCalledWith("workspace-1", "git-1", { type: "local", path: "D:/work/next" }));
     expect(view.container.querySelector('[data-layout-block="git-1"] .block-actions')).toContainElement(choose);
+  });
+
+  it("keeps the local picker and target unchanged when native fallback is cancelled", async () => {
+    const user = userEvent.setup();
+    gitApi.selectDirectory.mockResolvedValue(null);
+    render(<WorkspaceCanvas workspace={{ ...workspace, activeBlockId: "git-1", layout: { type: "git", blockId: "git-1", target: { type: "local", path: "D:/work/project" } } }} visible onRequestClose={vi.fn()} onRequestAuthConnection={vi.fn()}/>);
+
+    await user.click(screen.getByRole("button", { name: "打开本机仓库" }));
+    await user.click(screen.getByRole("button", { name: "浏览其他目录…" }));
+    await user.click(screen.getByRole("button", { name: "测试使用系统选择器" }));
+
+    expect(screen.getByRole("dialog", { name: "测试本机仓库选择器" })).toBeInTheDocument();
+    expect(selectGitTarget).not.toHaveBeenCalled();
   });
 
   it("opens the connected remote repository picker and commits its path once", async () => {

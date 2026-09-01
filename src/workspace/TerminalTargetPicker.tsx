@@ -338,7 +338,7 @@ export function TerminalTargetPicker({ profiles, groups = [], recentProfileIds =
     onKeyDown={navigateEntries}
   >
     <div className="terminal-target-search">
-      <Icon name="connections" size={12}/>
+      <Icon name="computer" size={12}/>
       <ExactTextInput ref={searchRef} type="search" aria-label={`搜索${ariaContext}`} placeholder="搜索名称、主机或用户" value={query} onChange={(event) => {
         clearGroupTimers();
         setActiveGroupId(null);
@@ -351,11 +351,11 @@ export function TerminalTargetPicker({ profiles, groups = [], recentProfileIds =
     </div>}
     <div className="terminal-target-list" aria-label={`${ariaContext}列表`}>
       {query ? <>
-        {searchResults.map((profile) => <TargetOption key={profile.id} icon="connections" name={profile.name} detail={`${profile.username}@${profile.host}:${profile.port}`} selected={profile.id === selectedProfileId} onClick={() => select(profile.id)} mainEntry/>)}
+        {searchResults.map((profile) => <TargetOption key={profile.id} icon="computer" name={profile.name} detail={`${profile.username}@${profile.host}:${profile.port}`} selected={profile.id === selectedProfileId} onClick={() => select(profile.id)} mainEntry/>)}
         {searchResults.length === 0 && <div className="terminal-target-empty">没有匹配的连接</div>}
       </> : <>
         <div className="terminal-target-section-label">最近使用</div>
-        {recentProfiles.map((profile) => <TargetOption key={profile.id} icon="connections" name={profile.name} detail={`${profile.username}@${profile.host}:${profile.port}`} selected={profile.id === selectedProfileId} onClick={() => select(profile.id)} mainEntry/>)}
+        {recentProfiles.map((profile) => <TargetOption key={profile.id} icon="computer" name={profile.name} detail={`${profile.username}@${profile.host}:${profile.port}`} selected={profile.id === selectedProfileId} onClick={() => select(profile.id)} mainEntry/>)}
         {recentProfiles.length === 0 && <div className="terminal-target-recent-empty">暂无最近连接</div>}
         <div className="terminal-target-section-label terminal-target-groups-label">连接分组</div>
         {groupSections.map((section) => <button
@@ -378,7 +378,7 @@ export function TerminalTargetPicker({ profiles, groups = [], recentProfileIds =
           onClick={() => openGroup(section.id)}
           onKeyDown={(event) => { if (event.key === "ArrowRight") { event.preventDefault(); openGroup(section.id, true); } }}
         >
-          <Icon name="connections" size={12}/><strong>{section.name}</strong><span className="terminal-target-group-meta"><small>{section.profiles.length}</small><span className="terminal-target-group-arrow" aria-hidden="true"/></span>
+          <Icon name="computer" size={12}/><strong>{section.name}</strong><span className="terminal-target-group-meta"><small>{section.profiles.length}</small><span className="terminal-target-group-arrow" aria-hidden="true"/></span>
         </button>)}
         {groupSections.length === 0 && <div className="terminal-target-recent-empty">连接管理中暂无配置</div>}
       </>}
@@ -399,7 +399,7 @@ export function TerminalTargetPicker({ profiles, groups = [], recentProfileIds =
     onKeyDown={navigateSubmenu}
   >
     <div ref={submenuScrollRef} className="terminal-target-submenu-list" onScroll={updateSubmenuScrollbar}>
-      {activeGroup.profiles.map((profile) => <TargetOption key={profile.id} icon="connections" name={profile.name} detail={`${profile.username}@${profile.host}:${profile.port}`} selected={profile.id === selectedProfileId} onClick={() => select(profile.id)} submenuEntry/>)}
+      {activeGroup.profiles.map((profile) => <TargetOption key={profile.id} icon="computer" name={profile.name} detail={`${profile.username}@${profile.host}:${profile.port}`} selected={profile.id === selectedProfileId} onClick={() => select(profile.id)} submenuEntry/>)}
     </div>
     <div className="terminal-target-scrollbar" aria-hidden="true"><span/></div>
   </div> : null;

@@ -37,9 +37,13 @@ describe("TerminalTargetPicker", () => {
     await user.click(screen.getByRole("button", { name: "选择终端连接，当前：本地终端" }));
     const menu = screen.getByRole("dialog", { name: "选择终端连接" });
     expect(document.querySelector(".terminal-target")).not.toContainElement(menu);
+    expect(menu.querySelector(".terminal-target-search [data-icon=\"computer\"]")).toBeInTheDocument();
     expect(within(menu).getByRole("button", { name: /本地终端/ })).toHaveAttribute("aria-pressed", "true");
     expect(within(menu).getByText("最近使用")).toBeInTheDocument();
+    const recentConnection = within(menu).getByRole("button", { name: /Production/ });
+    expect(recentConnection.querySelector('[data-icon="computer"]')).toBeInTheDocument();
     expect(within(menu).getByText("deploy@prod.example:22")).toBeInTheDocument();
+    expect(within(menu).getByRole("button", { name: /生产环境/ }).querySelector('[data-icon="computer"]')).toBeInTheDocument();
     expect(within(menu).queryByRole("button", { name: /Personal/ })).not.toBeInTheDocument();
 
     await user.click(within(menu).getByRole("button", { name: /Production/ }));
@@ -86,7 +90,7 @@ describe("TerminalTargetPicker", () => {
     const submenu = await screen.findByRole("dialog", { name: "生产环境连接" });
     expect(triggerRect).toHaveBeenCalledTimes(1);
     expect(picker).toHaveAttribute("style", initialPickerStyle ?? "");
-    expect(within(submenu).getByRole("button", { name: /Production/ })).toBeInTheDocument();
+    expect(within(submenu).getByRole("button", { name: /Production/ }).querySelector('[data-icon="computer"]')).toBeInTheDocument();
     expect(within(submenu).getByRole("button", { name: /Bastion/ })).toBeInTheDocument();
     const submenuList = submenu.querySelector(".terminal-target-submenu-list");
     expect(submenuList).not.toBeNull();

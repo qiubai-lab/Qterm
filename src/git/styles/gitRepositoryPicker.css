@@ -1,5 +1,5 @@
-.git-repository-picker-dialog {
-  width: min(740px, calc(100vw - 48px));
+.dialog-frame.git-repository-picker-dialog {
+  width: min(925px, calc(100vw - 48px));
   height: min(470px, calc(100vh - 48px));
 }
 
@@ -75,11 +75,13 @@
 }
 
 .git-repository-picker-path {
+  box-sizing: border-box;
   display: flex;
   width: 100%;
   min-width: 0;
-  height: 100%;
+  height: 27px;
   align-items: center;
+  margin: 0;
   padding: 0 5px;
 }
 
@@ -157,7 +159,7 @@
 
 .git-repository-picker-columns,
 .git-repository-picker-row-shell button {
-  grid-template-columns: minmax(180px, 1fr) 94px 150px;
+  grid-template-columns: minmax(0, 1fr) 112px 168px;
 }
 
 .git-repository-picker-columns {
@@ -172,6 +174,10 @@
   background: var(--panel-bg);
   font-size: 8px;
   font-weight: 600;
+}
+
+.git-repository-picker-columns > span:not(:first-child) {
+  text-align: center;
 }
 
 .git-repository-picker-list-scroll {
@@ -285,12 +291,14 @@
 }
 
 .git-repository-picker-permission,
+.git-repository-picker-type,
 .git-repository-picker-time {
   min-width: 0;
   overflow: hidden;
   color: var(--dim);
   font-size: 8.5px;
   font-weight: 500;
+  text-align: center;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -298,6 +306,10 @@
 .git-repository-picker-permission {
   font-family: var(--terminal-font-family);
   letter-spacing: .015em;
+}
+
+.git-repository-picker-type {
+  letter-spacing: .02em;
 }
 
 .git-repository-picker-row-shell button:hover .git-repository-picker-name > svg {
@@ -319,6 +331,7 @@
 
 .git-repository-picker-row-shell button[data-selected] .git-repository-picker-name > small,
 .git-repository-picker-row-shell button[data-selected] .git-repository-picker-permission,
+.git-repository-picker-row-shell button[data-selected] .git-repository-picker-type,
 .git-repository-picker-row-shell button[data-selected] .git-repository-picker-time {
   color: var(--file-selection-secondary-foreground);
 }
@@ -456,7 +469,7 @@
 }
 
 @media (max-width: 520px) {
-  .git-repository-picker-dialog {
+  .dialog-frame.git-repository-picker-dialog {
     width: calc(100vw - 32px);
   }
 
@@ -468,16 +481,27 @@
     max-width: 42%;
   }
 
-  .git-repository-picker-columns,
-  .git-repository-picker-row-shell button {
-    grid-template-columns: minmax(100px, 1fr) 76px 116px;
-  }
-
   .git-repository-picker-columns {
     padding: 0 12px;
   }
 
   .git-repository-picker-time {
     font-size: 8px;
+  }
+}
+
+@media (max-width: 620px) {
+  .git-repository-picker-footer[data-local] {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 7px;
+  }
+
+  .git-repository-picker-footer[data-local] > div:first-child {
+    max-width: none;
+  }
+
+  .git-repository-picker-footer[data-local] > div:last-child {
+    justify-content: flex-end;
   }
 }

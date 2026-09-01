@@ -611,7 +611,7 @@ function GitBlock(props: BlockRenderProps & { blockId: string; target: GitTarget
   const name = path?.replace(/[\\/]+$/, "").split(/[\\/]/).pop() || "Git 管理";
   const requestedProfileRef = useRef<string | null>(null);
   const [pendingRemote, setPendingRemote] = useState<{ profileId: string; path: string } | null>(null);
-  const [repositoryPickerProfileId, setRepositoryPickerProfileId] = useState<string | null>(null);
+  const [repositoryPickerRequest, setRepositoryPickerRequest] = useState<"local" | { profileId: string } | null>(null);
   const repositoryHistory = document?.recentGitRepositories ?? [];
   const visibleRepositoryHistory = recentGitRepositoriesForScope(repositoryHistory, target.type === "remote"
     ? { type: "remote", profileId: target.profileId }
@@ -662,15 +662,13 @@ function GitBlock(props: BlockRenderProps & { blockId: string; target: GitTarget
   const requestRepositoryChange = useCallback(async () => {
     if (pendingRemote) return;
     if (target.type !== "remote") {
-      const initialPath = target.type === "local" ? target.path : null;
-      const nextPath = await selectGitRepositoryDirectory(initialPath);
-      if (nextPath) await retargetGit({ type: "local", path: nextPath });
+      setRepositoryPickerRequest("local");
       return;
     }
     if (!profile) return;
-    setRepositoryPickerProfileId(profile.id);
+    setRepositoryPickerRequest({ profileId: profile.id });
     if (status !== "connected" || !runtime?.sessionId) onRequestAuthConnection("git", blockId, profile);
-  }, [blockId, onRequestAuthConnection, pendingRemote, profile, retargetGit, runtime?.sessionId, status, target]);
+  }, [blockId, onRequestAuthConnection, pendingRemote, profile, runtime?.sessionId, status, target.type]);
 
   useEffect(() => {
     if (target.type !== "remote" || !profile || status !== "closed" || requestedProfileRef.current === profile.id) return;
@@ -679,7 +677,8 @@ function GitBlock(props: BlockRenderProps & { blockId: string; target: GitTarget
   }, [blockId, onRequestAuthConnection, profile, status, target.type]);
 
   const repositoryPickerOpen = target.type === "remote"
-    && repositoryPickerProfileId === target.profileId
+    && typeof repositoryPickerRequest === "object"
+    && repositoryPickerRequest?.profileId === target.profileId
     && runtime?.status === "connected"
     && Boolean(runtime.sessionId);
 
@@ -734,13 +733,24 @@ function GitBlock(props: BlockRenderProps & { blockId: string; target: GitTarget
       onRequestRepositoryChange={() => void requestRepositoryChange()}
       onRepositoryOpened={(repository) => dispatch({ type: "recordRecentGitRepository", repository })}
     />}
+    {repositoryPickerRequest === "local" && target.type !== "remote" && <GitRepositoryPickerDialog
+      mode="local"
+      initialPath={target.type === "local" ? target.path : "~"}
+      onSelectSystemDirectory={() => selectGitRepositoryDirectory(target.type === "local" ? target.path : null)}
+      onClose={() => setRepositoryPickerRequest(null)}
+      onSelect={(nextPath) => {
+        setRepositoryPickerRequest(null);
+        void retargetGit({ type: "local", path: nextPath });
+      }}
+    />}
     {repositoryPickerOpen && target.type === "remote" && runtime?.sessionId && <GitRepositoryPickerDialog
+      mode="remote"
       sessionId={runtime.sessionId}
       profileId={target.profileId}
       initialPath={target.path}
-      onClose={() => setRepositoryPickerProfileId(null)}
+      onClose={() => setRepositoryPickerRequest(null)}
       onSelect={(nextPath) => {
-        setRepositoryPickerProfileId(null);
+        setRepositoryPickerRequest(null);
         if (nextPath !== target.path) void retargetGit({ ...target, path: nextPath });
       }}
     />}

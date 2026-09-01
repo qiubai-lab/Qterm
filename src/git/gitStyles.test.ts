@@ -82,9 +82,9 @@ describe("Git pane style contracts", () => {
     expect(reducedMotion).toContain(".git-repository-history-popover");
   });
 
-  it("gives the remote repository picker one bounded directory scroller", () => {
-    const dialog = declarations(".git-repository-picker-dialog");
-    expect(dialog).toContain("width: min(740px, calc(100vw - 48px))");
+  it("gives the repository picker one bounded directory scroller", () => {
+    const dialog = declarations(".dialog-frame.git-repository-picker-dialog");
+    expect(dialog).toContain("width: min(925px, calc(100vw - 48px))");
     expect(dialog).toContain("height: min(470px, calc(100vh - 48px))");
     expect(declarations(".git-repository-picker-dialog .dialog-content")).toContain("display: flex");
     expect(declarations(".git-repository-picker-dialog .dialog-content")).toContain("min-height: 0");
@@ -97,10 +97,15 @@ describe("Git pane style contracts", () => {
     expect(declarations(".git-repository-picker-toolbar > button")).toContain("width: 27px");
     const pathShell = declarations(".git-repository-picker-path-shell");
     expect(pathShell).toContain("min-width: 0");
+    expect(pathShell).toContain("height: 27px");
     expect(pathShell).not.toContain("border:");
     expect(pathShell).not.toContain("background:");
     expect(pathShell).not.toContain("box-shadow:");
     expect(declarations(".git-repository-picker-path > .sr-only")).toContain("clip: rect(0, 0, 0, 0)");
+    const pathForm = declarations(".git-repository-picker-path");
+    expect(pathForm).toContain("height: 27px");
+    expect(pathForm).toContain("margin: 0");
+    expect(pathForm).toContain("align-items: center");
     const pathInput = declarations(".git-repository-picker-path input");
     expect(pathInput).toContain("width: 0");
     expect(pathInput).toContain("height: 20px");
@@ -113,7 +118,11 @@ describe("Git pane style contracts", () => {
     expect(declarations(".git-repository-picker-directory-stage")).toContain("min-height: 0");
     expect(declarations(".git-repository-picker-directory-stage")).toContain("flex: 1");
     const columns = declarations(".git-repository-picker-columns,\n.git-repository-picker-row-shell button");
-    expect(columns).toContain("grid-template-columns: minmax(180px, 1fr) 94px 150px");
+    expect(columns).toContain("grid-template-columns: minmax(0, 1fr) 112px 168px");
+    expect(declarations(".git-repository-picker-columns > span:not(:first-child)")).toContain("text-align: center");
+    expect(declarations(".git-repository-picker-permission,\n.git-repository-picker-type,\n.git-repository-picker-time")).toContain("text-align: center");
+    const narrowPicker = styles.slice(styles.indexOf("@media (max-width: 520px)"), styles.indexOf("@media (max-width: 620px)"));
+    expect(narrowPicker).not.toContain("grid-template-columns:");
     expect(declarations(".git-repository-picker-list-scroll")).toContain("min-height: 0");
     expect(declarations(".git-repository-picker-list-scroll")).toContain("flex: 1");
     expect(declarations(".git-repository-picker-list-scroll")).toContain("overflow: auto");

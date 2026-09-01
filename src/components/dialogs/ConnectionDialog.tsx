@@ -503,7 +503,7 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
       onPointerUp={endPointerDrag}
       onPointerCancel={cancelPointerDrag}
       onLostPointerCapture={() => { if (pointerDragRef.current?.anchorProfile.id === profile.id) clearPointerDrag(); }}
-    ><span className="connection-item-status" aria-hidden="true"/><span className="connection-item-copy"><strong className="connection-item-name">{profile.name}</strong><small className="connection-item-endpoint"><span className="connection-item-address" title={`${profile.username}@${profile.host}:${profile.port}`}>{profile.username}@{profile.host}:{profile.port}</span><span className="connection-item-auth">{authPreferenceLabel(profile.authPreference)}</span></small></span></div>;
+    ><span className="connection-item-icon" aria-hidden="true"><Icon name="computer" size={13}/></span><span className="connection-item-copy"><strong className="connection-item-name">{profile.name}</strong><small className="connection-item-endpoint"><span className="connection-item-address" title={`${profile.username}@${profile.host}:${profile.port}`}>{profile.username}@{profile.host}:{profile.port}</span><span className="connection-item-auth">{authPreferenceLabel(profile.authPreference)}</span></small></span></div>;
   }
 
   return <>

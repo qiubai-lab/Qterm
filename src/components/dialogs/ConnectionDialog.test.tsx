@@ -157,7 +157,9 @@ describe("ConnectionDialog", () => {
     expect(within(section).queryByRole("button", { name: /K8S服务器/ })).not.toBeInTheDocument();
     await user.click(ungroupedToggle);
     expect(ungroupedToggle).toHaveAttribute("aria-expanded", "true");
-    expect(within(section).getByRole("button", { name: /K8S服务器/ })).toBeInTheDocument();
+    const connection = within(section).getByRole("button", { name: /K8S服务器/ });
+    expect(connection).toBeInTheDocument();
+    expect(connection.querySelector('[data-icon="computer"]')).toHaveAttribute("width", "13");
   });
 
   it("splits connection and authentication fields into tabs and removes immediate session actions", async () => {

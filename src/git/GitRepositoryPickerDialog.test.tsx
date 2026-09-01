@@ -4,11 +4,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { GitRepositoryPickerDialog } from "./GitRepositoryPickerDialog";
 
-const api = vi.hoisted(() => ({ list: vi.fn() }));
+const api = vi.hoisted(() => ({ list: vi.fn(), listLocal: vi.fn(), listRoots: vi.fn() }));
 
 vi.mock("../lib/tauri/git", () => ({
   listRemoteGitDirectory: api.list,
   gitError: (error: unknown) => error as { code: string; message: string },
+}));
+
+vi.mock("../lib/tauri/files", () => ({
+  listLocalDirectory: api.listLocal,
+  listLocalRoots: api.listRoots,
 }));
 
 function listing(path: string, names: string[]) {
@@ -42,6 +47,47 @@ describe("GitRepositoryPickerDialog", () => {
       if (path === "/srv") return listing(path, ["project"]);
       return listing(path, []);
     });
+    api.listLocal.mockImplementation(async (path: string) => ({
+      path,
+      entries: [
+        { name: "directory", path: `${path}/directory`, isDirectory: true, isSymlink: false, size: 0, modifiedAt: null, permissionMode: null },
+        { name: "file.txt", path: `${path}/file.txt`, isDirectory: false, isSymlink: false, size: 10, modifiedAt: null, permissionMode: null },
+      ],
+    }));
+    api.listRoots.mockResolvedValue([{ name: "C:", path: "C:\\" }, { name: "D:", path: "D:\\" }]);
+  });
+
+  it("reuses the picker shell for local directories, filters files, and opens local roots", async () => {
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+    render(<GitRepositoryPickerDialog mode="local" initialPath={"C:\\work"} onClose={vi.fn()} onSelect={onSelect} onSelectSystemDirectory={vi.fn().mockResolvedValue(null)}/>);
+
+    expect(await screen.findByRole("dialog", { name: "选择本机仓库目录" })).toBeInTheDocument();
+    expect(await screen.findByRole("listitem", { name: /^目录 directory/ })).toBeInTheDocument();
+    expect(api.listLocal).toHaveBeenCalledWith("C:\\work");
+    expect(screen.queryByText("file.txt")).not.toBeInTheDocument();
+    expect(screen.getByText("类型")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "返回上级目录" }));
+    expect(api.listLocal).toHaveBeenLastCalledWith("C:\\");
+    await user.click(screen.getByRole("button", { name: "返回上级目录" }));
+    expect(await screen.findByRole("list", { name: "本机根目录" })).toBeInTheDocument();
+    expect(screen.getByRole("listitem", { name: /^目录 D:/ })).toBeInTheDocument();
+  });
+
+  it("keeps the local picker open when system selection is cancelled and submits a selected system path", async () => {
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+    const onSelectSystemDirectory = vi.fn().mockResolvedValueOnce(null).mockResolvedValueOnce("D:\\project");
+    render(<GitRepositoryPickerDialog mode="local" initialPath={"C:\\work"} onClose={vi.fn()} onSelect={onSelect} onSelectSystemDirectory={onSelectSystemDirectory}/>);
+    await screen.findByRole("list", { name: "本机目录 C:\\work" });
+
+    await user.click(screen.getByRole("button", { name: "使用系统选择器" }));
+    expect(screen.getByRole("dialog", { name: "选择本机仓库目录" })).toBeInTheDocument();
+    expect(onSelect).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "使用系统选择器" }));
+    expect(onSelect).toHaveBeenCalledWith("D:\\project");
   });
 
   it("selects on click, opens on double click, and navigates with the file-browser forward stack", async () => {

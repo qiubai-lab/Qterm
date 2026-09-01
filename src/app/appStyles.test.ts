@@ -321,6 +321,14 @@ describe("application layout styles", () => {
     expect(styles).toMatch(/prefers-contrast:more[\s\S]*\.terminal-block,\.terminal-surface,\.file-browser,\.network-pane\{background:var\(--surface\)\}/);
   });
 
+  it("keeps the repository picker wider than the later shared dialog default", () => {
+    const repositoryPicker = declarations(".dialog-frame.git-repository-picker-dialog");
+
+    expect(repositoryPicker).toContain("width: min(925px, calc(100vw - 48px))");
+    expect(repositoryPicker).toContain("height: min(470px, calc(100vh - 48px))");
+    expect(declarations(".dialog-frame")).toContain("width:min(540px,calc(100vw - 48px))");
+  });
+
   it("places the macOS traffic lights and brand on one tab-height glass plaque", () => {
     const brand = declarations('.app-shell[data-platform="macos"] .app-brand');
     const brandPlate = declarations('.app-shell[data-platform="macos"] .app-brand::before');

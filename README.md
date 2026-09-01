@@ -1,7 +1,7 @@
 <div align="center">
   <img src="src-tauri/icons/icon.png" width="128" height="128" alt="Qterm 软件图标">
   <h1>Qterm</h1>
-  <p>轻量、安全、跨平台的 SSH 终端与远程文件工作台</p>
+  <p>面向远程 AI 开发的轻量、安全、跨平台 SSH 工作台</p>
   <p>
     <a href="https://github.com/qiubai-lab/Qterm/releases/latest"><img src="https://img.shields.io/github/v/release/qiubai-lab/Qterm?logo=github" alt="最新版本"></a>
     <a href="LICENSE"><img src="https://img.shields.io/github/license/qiubai-lab/Qterm" alt="许可证"></a>
@@ -9,11 +9,23 @@
   </p>
 </div>
 
-Qterm 基于 Tauri 2、React、TypeScript 与 Rust 构建，将本地终端、SSH 会话、SFTP 文件管理和网络转发组织在可持久化、可自由拆分的 Workspace 中。
+Qterm 基于 Tauri 2、React、TypeScript 与 Rust 构建，将本地终端、SSH 会话、SFTP 文件管理、Git 操作和网络转发组织在可持久化、可自由拆分的 Workspace 中。
 
 ## 🌠 界面预览
 
 ![Qterm 工作台：远程终端、本地终端、文件编辑、网络转发与文件浏览](images/screenshoot.png)
+
+## 🤖 为远程 AI 开发优化
+
+Qterm 不内置 AI 模型或专属 Agent，而是面向在 SSH 服务器中运行 Codex、Claude Code 等 CLI Agent 的开发方式优化宿主体验。终端、文件和 Git 都直接作用于同一台远程主机，项目无需先下载到本机。
+
+- **本机文件与图片一键交给远程 Agent**：在远程终端粘贴从 Explorer、Finder 或 Linux 文件管理器复制的文件、文件夹或截图时，Qterm 会通过当前 SSH 会话安全暂存到服务器，并把远端绝对路径插入 CLI 输入区；上传过程可查看进度和取消，不会自动执行命令。
+- **自动跟随 Agent 所在目录**：OSC 7 Shell 集成跟踪终端当前目录。可从正在工作的远程终端直接打开同一目录的 Files 或 Git Block，减少重复输入路径和切换连接。
+- **远程文件直接查看与编辑**：SFTP Files Block 支持目录浏览、上传下载、文本编辑和预览，可与 Agent 会话并排放置，检查生成结果或补充上下文时无需离开工作台。
+- **本机与远程仓库使用同一套 Git 工作流**：Git Block 可直接连接 SSH 仓库，查看工作区与暂存区、逐文件预览差异、选择性暂存和提交，并处理分支、同步、合并与冲突。
+- **长任务上下文保持稳定**：Workspace 切换、Block 分割和连接上下文继承让终端输出、文件视图与仓库状态保持在各自工作环境中，适合同时推进多个远程项目。
+
+一个典型流程是：通过 SSH Agent 或加密凭证连接服务器，在 Terminal Block 中启动 CLI Agent；将需求截图或本机资料直接粘贴为远端路径；从当前目录打开 Files 与 Git Block；最后在 Qterm 内审阅 Agent 产生的差异、解决冲突并完成提交与同步。
 
 ## 📥 安装
 
@@ -59,9 +71,16 @@ xattr -cr /Applications/Qterm.app
 ### Workspace 与终端
 
 - **多 Workspace 工作台**：顶部标签直接代表独立工作环境，会话、布局与终端输出在切换后继续保留。
-- **自由分割布局**：Terminal、Files 与 Network Block 可以横向或纵向分割，并支持调整比例与重排。
+- **自由分割布局**：Terminal、Files、Git 与 Network Block 可以横向或纵向分割，并支持调整比例与重排。
 - **本地与远程终端**：在同一界面中同时运行本机 shell 和 SSH 会话，终端尺寸变化会同步到底层 PTY。
+- **剪贴板暂存粘贴**：本地终端可直接粘贴文件路径或将截图保存为临时 PNG；远程终端会通过 SFTP 暂存文件、目录或图片并粘贴服务器路径，同时保持文本优先、输入顺序和长文本确认语义。
 - **会话保护**：支持手动锁定终端界面，也可配置应用内空闲自动锁定。
+
+### OSC 7 终端目录跟踪说明
+
+启用 OSC 7 终端目录跟踪后，Qterm 会在远程登录时识别 Shell，并向当前 SSH 会话注入临时 Hook，以便跟踪终端的当前目录。该 Hook 不会修改远程 `.bashrc`、`.zshrc`、Fish 配置、PowerShell Profile 或其他文件，关闭会话后即失效。
+
+由于 Hook 通过远程交互式命令行注入，其初始化命令可能会被 Bash、Zsh、Fish 或 PowerShell 的历史机制记录；每次重新连接都可能新增一条记录。这是当前实现的已知限制，并不表示用户主动执行了该命令，也不表示 Qterm 在远程主机上安装了持久脚本。若不希望产生此类历史记录，可在“系统设置 → 高级”中关闭“OSC 7 终端目录跟踪”；关闭后 Qterm 将不再注入 Hook，也不会继续解析或显示 OSC 7 目录状态。已经写入的历史记录不会被 Qterm 自动删除。
 
 ### SSH 连接与凭证
 
@@ -69,6 +88,14 @@ xattr -cr /Applications/Qterm.app
 - **多种认证方式**：支持一次性密码、加密保存的密码、OpenSSH 私钥凭证和系统 SSH Agent。
 - **严格主机密钥校验**：首次连接显示 SHA-256 指纹并要求确认；已信任主机的密钥发生变化时默认阻断。
 - **加密凭证库**：通过 Argon2id 派生密钥，使用 AES-256-GCM 分项加密密码、私钥和口令；支持离线恢复密钥。
+
+### 本机与远程 Git 工作台
+
+- **上下文仓库打开**：从活动 Terminal 的 OSC 7 当前目录或 Files Block 的浏览路径打开 Git Block；也可使用统一目录选择器浏览本机或已连接的 SSH 主机。
+- **变更审阅与安全操作**：区分工作区、暂存区和冲突状态，支持多选、逐文件暂存/取消暂存、差异预览和确认后丢弃未暂存更改；路径按字面值传递，避免特殊 pathspec 被误解释。
+- **提交与同步建议**：根据当前快照提供单步的暂存、提交、Pull、Push 或发布分支主操作，保留选择性提交，不自动串联高影响 Git 操作。
+- **分支与历史**：支持本地/远程分支切换与筛选、新建、重命名、安全删除、从分支或历史提交创建分支，以及提交图和提交文件差异查看。
+- **合并与冲突处理**：合并前提供确认与安全检查；发生冲突时可在专用工作台中比较 Current/Incoming、编辑结果、逐文件保存并继续或中止合并。
 
 ### 文件与网络工具
 
@@ -120,8 +147,9 @@ pnpm tauri dev
 | [架构规范](docs/qb-spec/context/ARCHITECTURE_SPEC.md) | 技术基线、模块边界、数据流与安全规则 |
 | [架构决策](docs/qb-spec/context/DECISIONS.md) | 重要设计选择及其背景 |
 | [目录地图](docs/qb-spec/DIRECTORY_MAP.md) | 仓库结构与模块职责速查 |
-| [功能规格](docs/qb-spec/specs/) | 各项功能的需求、范围与验收标准 |
-| [实施计划](docs/qb-spec/plans/) | 对应功能的实现步骤与验证计划 |
+| [进行中的功能规格](docs/qb-spec/specs/) | 当前变更的需求、范围与验收标准 |
+| [进行中的实施计划](docs/qb-spec/plans/) | 当前变更的实现步骤与验证计划 |
+| [历史变更归档](docs/qb-spec/archive/) | 已完成或显式关闭的规格、计划与验证记录 |
 
 ## 🛠 技术栈
 
