@@ -225,7 +225,11 @@ impl GitExecutor for SystemGitExecutor {
     }
 
     fn stage(&self, repository: &Path, paths: &[String]) -> Result<GitSnapshot, GitError> {
-        let mut args = vec![OsString::from("add"), OsString::from("--")];
+        let mut args = vec![
+            OsString::from("--literal-pathspecs"),
+            OsString::from("add"),
+            OsString::from("--"),
+        ];
         args.extend(paths.iter().map(OsString::from));
         self.mutate(repository, args)
     }
@@ -237,6 +241,7 @@ impl GitExecutor for SystemGitExecutor {
     fn unstage(&self, repository: &Path, paths: &[String]) -> Result<GitSnapshot, GitError> {
         let mut args = if self.has_head(repository) {
             vec![
+                OsString::from("--literal-pathspecs"),
                 OsString::from("reset"),
                 OsString::from("-q"),
                 OsString::from("HEAD"),
@@ -244,6 +249,7 @@ impl GitExecutor for SystemGitExecutor {
             ]
         } else {
             vec![
+                OsString::from("--literal-pathspecs"),
                 OsString::from("rm"),
                 OsString::from("--cached"),
                 OsString::from("-q"),
@@ -1195,6 +1201,82 @@ refs/remotes/origin/HEAD\0origin/HEAD\0abc\0 \0\0\0refs/remotes/origin/main\n",
             Err(GitError::CommandFailed(_))
         ));
         fs::remove_file(directory.path().join(".git/index.lock")).expect("remove lock");
+    }
+
+    #[test]
+    fn real_git_literal_pathspec_stage_and_unstage_preserve_the_selected_filename() {
+        let git = which_git();
+        let executor = SystemGitExecutor::with_executable(git.clone());
+        let directory = tempdir().expect("literal pathspec repository");
+        executor.initialize(directory.path()).expect("init");
+        fs::write(directory.path().join("[ab].txt"), b"literal\n").expect("literal fixture");
+        fs::write(directory.path().join("a.txt"), b"pattern match\n").expect("pattern fixture");
+
+        let staged = executor
+            .stage(directory.path(), &["[ab].txt".into()])
+            .expect("stage literal path");
+        assert!(
+            staged
+                .changes
+                .iter()
+                .any(|change| change.path == "[ab].txt" && change.staged)
+        );
+        assert!(
+            staged
+                .changes
+                .iter()
+                .any(|change| change.path == "a.txt" && !change.staged)
+        );
+
+        executor
+            .stage_all(directory.path())
+            .expect("stage all paths");
+        let unstaged = executor
+            .unstage(directory.path(), &["[ab].txt".into()])
+            .expect("unstage literal path");
+        assert!(
+            unstaged
+                .changes
+                .iter()
+                .any(|change| change.path == "[ab].txt" && !change.staged)
+        );
+        assert!(
+            unstaged
+                .changes
+                .iter()
+                .any(|change| change.path == "a.txt" && change.staged)
+        );
+
+        configure_identity(&git, directory.path());
+        executor
+            .stage_all(directory.path())
+            .expect("restage all paths");
+        executor
+            .commit(directory.path(), "test: literal pathspec")
+            .expect("commit fixture");
+        fs::write(directory.path().join("[ab].txt"), b"literal changed\n")
+            .expect("modify literal fixture");
+        fs::write(directory.path().join("a.txt"), b"pattern changed\n")
+            .expect("modify pattern fixture");
+        executor
+            .stage_all(directory.path())
+            .expect("stage changed paths");
+
+        let reset = executor
+            .unstage(directory.path(), &["[ab].txt".into()])
+            .expect("reset literal path with HEAD");
+        assert!(
+            reset
+                .changes
+                .iter()
+                .any(|change| change.path == "[ab].txt" && !change.staged)
+        );
+        assert!(
+            reset
+                .changes
+                .iter()
+                .any(|change| change.path == "a.txt" && change.staged)
+        );
     }
 
     #[test]

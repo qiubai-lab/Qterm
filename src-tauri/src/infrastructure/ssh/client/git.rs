@@ -22,6 +22,11 @@ const MUTATION_TIMEOUT: Duration = Duration::from_secs(60);
 const FETCH_TIMEOUT: Duration = Duration::from_secs(120);
 const OUTPUT_LIMIT: usize = 8 * 1024 * 1024;
 const ENVIRONMENT: &str = "GIT_TERMINAL_PROMPT=0 GIT_EDITOR=true GIT_PAGER=cat LC_ALL=C";
+const STAGE_PATHS_ARGS: &str = "--literal-pathspecs add --pathspec-from-file=- --pathspec-file-nul";
+const UNSTAGE_PATHS_WITH_HEAD_ARGS: &str =
+    "--literal-pathspecs reset -q HEAD --pathspec-from-file=- --pathspec-file-nul";
+const UNSTAGE_PATHS_WITHOUT_HEAD_ARGS: &str =
+    "--literal-pathspecs update-index --force-remove -z --stdin";
 
 struct RemoteOutput {
     stdout: Vec<u8>,
@@ -43,7 +48,7 @@ pub(super) async fn run_remote_git_action(
             run_git(
                 handle,
                 &repository,
-                "add --pathspec-from-file=- --pathspec-file-nul",
+                STAGE_PATHS_ARGS,
                 nul_payload(&paths),
                 MUTATION_TIMEOUT,
             )
@@ -63,9 +68,9 @@ pub(super) async fn run_remote_git_action(
         }
         RemoteGitAction::Unstage { repository, paths } => {
             let args = if has_head(handle, &repository).await {
-                "reset -q HEAD --pathspec-from-file=- --pathspec-file-nul"
+                UNSTAGE_PATHS_WITH_HEAD_ARGS
             } else {
-                "update-index --force-remove -z --stdin"
+                UNSTAGE_PATHS_WITHOUT_HEAD_ARGS
             };
             run_git(
                 handle,
@@ -658,7 +663,10 @@ pub(crate) fn posix_literal(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{nul_payload, posix_literal};
+    use super::{
+        STAGE_PATHS_ARGS, UNSTAGE_PATHS_WITH_HEAD_ARGS, UNSTAGE_PATHS_WITHOUT_HEAD_ARGS,
+        nul_payload, posix_literal,
+    };
 
     #[test]
     fn quotes_spaces_quotes_newlines_unicode_and_leading_dashes_as_one_posix_literal() {
@@ -674,5 +682,19 @@ mod tests {
             nul_payload(&["-leading.txt".into(), "目录/a b.txt".into()]),
             b"-leading.txt\0\xE7\x9B\xAE\xE5\xBD\x95/a b.txt\0"
         );
+    }
+
+    #[test]
+    fn literal_pathspec_commands_preserve_nul_delimited_paths() {
+        for args in [
+            STAGE_PATHS_ARGS,
+            UNSTAGE_PATHS_WITH_HEAD_ARGS,
+            UNSTAGE_PATHS_WITHOUT_HEAD_ARGS,
+        ] {
+            assert!(args.starts_with("--literal-pathspecs "), "{args}");
+        }
+        assert!(STAGE_PATHS_ARGS.contains("--pathspec-file-nul"));
+        assert!(UNSTAGE_PATHS_WITH_HEAD_ARGS.contains("--pathspec-file-nul"));
+        assert!(UNSTAGE_PATHS_WITHOUT_HEAD_ARGS.ends_with("-z --stdin"));
     }
 }

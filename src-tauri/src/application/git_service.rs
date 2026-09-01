@@ -3,9 +3,9 @@ use std::path::{Path, PathBuf};
 use crate::{
     domain::git::{
         GitCommitFile, GitError, GitSnapshot, validate_branch_name, validate_branch_source_ref,
-        validate_commit_message, validate_commit_oid, validate_local_branch_ref, validate_paths,
-        validate_remote_branch_ref, validate_remote_name, validate_remote_repository_path,
-        validate_repository_path,
+        validate_commit_message, validate_commit_oid, validate_local_branch_ref,
+        validate_local_paths, validate_remote_branch_ref, validate_remote_name,
+        validate_remote_repository_path, validate_repository_path,
     },
     ports::git_executor::GitExecutor,
     ports::remote_git_executor::RemoteGitExecutor,
@@ -59,7 +59,7 @@ impl<E: GitExecutor> GitService<E> {
     }
 
     pub fn stage(&self, repository: String, paths: Vec<String>) -> Result<GitSnapshot, GitError> {
-        validate_paths(&paths)?;
+        validate_local_paths(&paths)?;
         self.executor.stage(&input_path(repository)?, &paths)
     }
 
@@ -68,7 +68,7 @@ impl<E: GitExecutor> GitService<E> {
     }
 
     pub fn unstage(&self, repository: String, paths: Vec<String>) -> Result<GitSnapshot, GitError> {
-        validate_paths(&paths)?;
+        validate_local_paths(&paths)?;
         self.executor.unstage(&input_path(repository)?, &paths)
     }
 

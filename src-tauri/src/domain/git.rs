@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Component, Path};
 
 pub const MAX_GIT_PATH_BYTES: usize = 4096;
 pub const MAX_COMMIT_MESSAGE_CHARS: usize = 10_000;
@@ -173,7 +173,7 @@ impl RemoteGitAction {
             }
             Self::Stage { repository, paths } | Self::Unstage { repository, paths } => {
                 validate_remote_repository_path(repository)?;
-                validate_paths(paths)
+                validate_posix_paths(paths)
             }
             Self::StageAll { repository }
             | Self::UnstageAll { repository }
@@ -406,15 +406,38 @@ pub fn validate_commit_oid(oid: &str) -> Result<(), GitError> {
     }
 }
 
-pub fn validate_paths(paths: &[String]) -> Result<(), GitError> {
+fn validate_path_list(paths: &[String]) -> Result<(), GitError> {
     if paths.is_empty()
         || paths.len() > 10_000
-        || paths.iter().any(|path| {
-            path.is_empty()
-                || path.len() > MAX_GIT_PATH_BYTES
-                || path.contains('\0')
-                || Path::new(path).is_absolute()
+        || paths
+            .iter()
+            .any(|path| path.is_empty() || path.len() > MAX_GIT_PATH_BYTES || path.contains('\0'))
+    {
+        return Err(GitError::InvalidInput);
+    }
+    Ok(())
+}
+
+pub fn validate_local_paths(paths: &[String]) -> Result<(), GitError> {
+    validate_path_list(paths)?;
+    if paths.iter().any(|path| {
+        Path::new(path).components().any(|component| {
+            matches!(
+                component,
+                Component::Prefix(_) | Component::RootDir | Component::ParentDir
+            )
         })
+    }) {
+        return Err(GitError::InvalidInput);
+    }
+    Ok(())
+}
+
+pub fn validate_posix_paths(paths: &[String]) -> Result<(), GitError> {
+    validate_path_list(paths)?;
+    if paths
+        .iter()
+        .any(|path| path.starts_with('/') || path.split('/').any(|segment| segment == ".."))
     {
         return Err(GitError::InvalidInput);
     }
@@ -426,12 +449,13 @@ mod tests {
     use super::{
         GitBranch, GitBranchKind, GitHead, GitSnapshot, RemoteGitAction, validate_branch_name,
         validate_branch_source_ref, validate_commit_message, validate_commit_oid,
-        validate_local_branch_ref, validate_merge_preconditions, validate_paths,
-        validate_remote_branch_ref, validate_remote_name,
+        validate_local_branch_ref, validate_local_paths, validate_merge_preconditions,
+        validate_posix_paths, validate_remote_branch_ref, validate_remote_name,
     };
+    use std::path::Path;
 
     #[test]
-    fn rejects_branch_and_path_values_that_can_change_git_argument_meaning() {
+    fn rejects_branch_values_that_can_change_git_argument_meaning() {
         for value in [
             "",
             "-force",
@@ -443,8 +467,82 @@ mod tests {
             assert!(validate_branch_name(value).is_err(), "{value}");
         }
         assert!(validate_branch_name("feature/中文-path").is_ok());
-        assert!(validate_paths(&["-leading.txt".into(), "dir/空 格.txt".into()]).is_ok());
-        assert!(validate_paths(&["C:/absolute.txt".into()]).is_err());
+    }
+
+    #[test]
+    fn local_git_paths_follow_host_repository_relative_semantics() {
+        let absolute = env!("CARGO_MANIFEST_DIR").to_owned();
+        assert!(Path::new(&absolute).is_absolute(), "{absolute}");
+        assert!(validate_local_paths(&[absolute]).is_err());
+        assert!(validate_local_paths(&["../outside.txt".into()]).is_err());
+        assert!(validate_local_paths(&["dir/../outside.txt".into()]).is_err());
+        assert!(
+            validate_local_paths(&[
+                "-leading.txt".into(),
+                "dir/空 格.txt".into(),
+                "[ab].txt".into(),
+            ])
+            .is_ok()
+        );
+
+        #[cfg(not(windows))]
+        assert!(validate_local_paths(&["C:/absolute.txt".into()]).is_ok());
+
+        #[cfg(windows)]
+        for path in [
+            "C:/absolute.txt",
+            r"C:\absolute.txt",
+            r"C:drive-relative.txt",
+            r"\rooted.txt",
+            r"\\server\share\file.txt",
+        ] {
+            assert!(validate_local_paths(&[path.into()]).is_err(), "{path}");
+        }
+    }
+
+    #[test]
+    fn remote_git_paths_use_stable_posix_repository_relative_semantics() {
+        assert!(
+            validate_posix_paths(&[
+                "C:/absolute.txt".into(),
+                "-leading.txt".into(),
+                "dir/空 格.txt".into(),
+            ])
+            .is_ok()
+        );
+        for path in ["/absolute.txt", "../outside.txt", "dir/../outside.txt"] {
+            assert!(validate_posix_paths(&[path.into()]).is_err(), "{path}");
+            assert!(
+                RemoteGitAction::Stage {
+                    repository: "/srv/repo".into(),
+                    paths: vec![path.into()],
+                }
+                .validate()
+                .is_err(),
+                "{path}"
+            );
+        }
+        assert!(
+            RemoteGitAction::Stage {
+                repository: "/srv/repo".into(),
+                paths: vec!["C:/absolute.txt".into()],
+            }
+            .validate()
+            .is_ok()
+        );
+    }
+
+    #[test]
+    fn git_path_lists_preserve_bounded_payload_rules() {
+        for validate in [
+            validate_local_paths as fn(&[String]) -> Result<(), super::GitError>,
+            validate_posix_paths,
+        ] {
+            assert!(validate(&[]).is_err());
+            assert!(validate(&["bad\0path".into()]).is_err());
+            assert!(validate(&["x".repeat(super::MAX_GIT_PATH_BYTES + 1)]).is_err());
+            assert!(validate(&vec!["path".into(); 10_001]).is_err());
+        }
     }
 
     #[test]
