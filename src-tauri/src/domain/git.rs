@@ -4,6 +4,7 @@ pub const MAX_GIT_PATH_BYTES: usize = 4096;
 pub const MAX_COMMIT_MESSAGE_CHARS: usize = 10_000;
 pub const MAX_CONFLICT_TEXT_BYTES: usize = 2 * 1024 * 1024;
 pub const MAX_GIT_DIFF_TEXT_BYTES: usize = MAX_CONFLICT_TEXT_BYTES;
+pub const MAX_GIT_DISCARD_PATHS: usize = 500;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum RemoteGitAction {
@@ -26,6 +27,10 @@ pub enum RemoteGitAction {
     },
     UnstageAll {
         repository: String,
+    },
+    Discard {
+        repository: String,
+        paths: Vec<String>,
     },
     Commit {
         repository: String,
@@ -103,6 +108,12 @@ pub struct GitChange {
     pub staged: bool,
     pub conflict: bool,
     pub conflict_kind: Option<GitConflictKind>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GitDiscardPlan {
+    pub tracked_paths: Vec<String>,
+    pub untracked_paths: Vec<String>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -283,9 +294,15 @@ impl RemoteGitAction {
             Self::Snapshot { path } | Self::Initialize { path } => {
                 validate_remote_repository_path(path)
             }
-            Self::Stage { repository, paths } | Self::Unstage { repository, paths } => {
+            Self::Stage { repository, paths }
+            | Self::Unstage { repository, paths }
+            | Self::Discard { repository, paths } => {
                 validate_remote_repository_path(repository)?;
-                validate_posix_paths(paths)
+                if matches!(self, Self::Discard { .. }) {
+                    validate_discard_paths(paths, validate_posix_paths)
+                } else {
+                    validate_posix_paths(paths)
+                }
             }
             Self::StageAll { repository }
             | Self::UnstageAll { repository }
@@ -582,16 +599,120 @@ pub fn validate_posix_paths(paths: &[String]) -> Result<(), GitError> {
     Ok(())
 }
 
+pub fn validate_discard_paths(
+    paths: &[String],
+    validate: fn(&[String]) -> Result<(), GitError>,
+) -> Result<(), GitError> {
+    validate(paths)?;
+    if paths.len() > MAX_GIT_DISCARD_PATHS {
+        return Err(GitError::InvalidInput);
+    }
+    let mut unique = std::collections::HashSet::with_capacity(paths.len());
+    if paths.iter().any(|path| !unique.insert(path.as_str())) {
+        return Err(GitError::InvalidInput);
+    }
+    Ok(())
+}
+
+pub fn plan_discard(snapshot: &GitSnapshot, paths: &[String]) -> Result<GitDiscardPlan, GitError> {
+    let mut tracked_paths = Vec::new();
+    let mut untracked_paths = Vec::new();
+    for path in paths {
+        let change = snapshot
+            .changes
+            .iter()
+            .find(|change| change.path == *path && !change.staged && !change.conflict)
+            .ok_or(GitError::InvalidInput)?;
+        if change.status == "U" {
+            untracked_paths.push(path.clone());
+        } else if matches!(change.status.as_str(), "R" | "C") {
+            tracked_paths.push(change.original_path.clone().ok_or(GitError::InvalidInput)?);
+            untracked_paths.push(path.clone());
+        } else {
+            tracked_paths.push(path.clone());
+        }
+    }
+    Ok(GitDiscardPlan {
+        tracked_paths,
+        untracked_paths,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        GitBranch, GitBranchKind, GitConflictKind, GitConflictResolution, GitHead, GitSnapshot,
-        RemoteGitAction, validate_branch_name, validate_branch_source_ref, validate_commit_message,
-        validate_commit_oid, validate_conflict_resolution, validate_local_branch_ref,
-        validate_local_paths, validate_merge_preconditions, validate_posix_paths,
-        validate_remote_branch_ref, validate_remote_name, validate_stage_all,
+        GitBranch, GitBranchKind, GitChange, GitConflictKind, GitConflictResolution, GitHead,
+        GitSnapshot, RemoteGitAction, plan_discard, validate_branch_name,
+        validate_branch_source_ref, validate_commit_message, validate_commit_oid,
+        validate_conflict_resolution, validate_local_branch_ref, validate_local_paths,
+        validate_merge_preconditions, validate_posix_paths, validate_remote_branch_ref,
+        validate_remote_name, validate_stage_all,
     };
     use std::path::Path;
+
+    #[test]
+    fn discard_plan_accepts_only_current_unstaged_non_conflict_changes() {
+        let mut current = merge_snapshot();
+        current.changes = vec![
+            GitChange {
+                path: "tracked.txt".into(),
+                original_path: None,
+                status: "M".into(),
+                staged: false,
+                conflict: false,
+                conflict_kind: None,
+            },
+            GitChange {
+                path: "new.txt".into(),
+                original_path: None,
+                status: "U".into(),
+                staged: false,
+                conflict: false,
+                conflict_kind: None,
+            },
+            GitChange {
+                path: "renamed.txt".into(),
+                original_path: Some("old.txt".into()),
+                status: "R".into(),
+                staged: false,
+                conflict: false,
+                conflict_kind: None,
+            },
+            GitChange {
+                path: "staged.txt".into(),
+                original_path: None,
+                status: "M".into(),
+                staged: true,
+                conflict: false,
+                conflict_kind: None,
+            },
+        ];
+        let plan = plan_discard(
+            &current,
+            &["tracked.txt".into(), "new.txt".into(), "renamed.txt".into()],
+        )
+        .expect("plan");
+        assert_eq!(plan.tracked_paths, vec!["tracked.txt", "old.txt"]);
+        assert_eq!(plan.untracked_paths, vec!["new.txt", "renamed.txt"]);
+        assert!(plan_discard(&current, &["staged.txt".into()]).is_err());
+        assert!(plan_discard(&current, &["missing.txt".into()]).is_err());
+        assert!(
+            RemoteGitAction::Discard {
+                repository: "/srv/project".into(),
+                paths: vec!["same.txt".into(), "same.txt".into()],
+            }
+            .validate()
+            .is_err()
+        );
+        assert!(
+            RemoteGitAction::Discard {
+                repository: "/srv/project".into(),
+                paths: vec!["file.txt".into(); super::MAX_GIT_DISCARD_PATHS + 1],
+            }
+            .validate()
+            .is_err()
+        );
+    }
 
     #[test]
     fn rejects_branch_values_that_can_change_git_argument_meaning() {

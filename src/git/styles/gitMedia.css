@@ -47,6 +47,10 @@
     animation: none;
   }
 
+  .git-change-selection-hint {
+    animation: none;
+  }
+
   .git-commit-files,
   .git-commit-files-state,
   .git-commit-files-spinner {
@@ -77,7 +81,8 @@
   }
 
   .git-repository-picker-spinner,
-  .git-repository-refresh[data-updating="true"] svg {
+  .git-repository-refresh[data-updating="true"] svg,
+  .git-primary-action[data-updating="true"] > svg {
     animation: none;
   }
 
@@ -104,6 +109,7 @@
   }
 
   .git-commit-tooltip,
+  .git-change-selection-hint,
   .git-repository-history-popover,
   .git-repository-picker-loading {
     background: var(--raised);

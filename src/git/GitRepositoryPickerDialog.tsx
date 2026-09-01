@@ -5,6 +5,7 @@ import { DialogFrame } from "../components/dialogs/DialogFrame";
 import { ExactTextInput } from "../components/ExactTextInput";
 import { Icon } from "../components/Icon";
 import { listRemoteGitDirectory, type GitDirectoryEntry, type GitDirectoryListing } from "../lib/tauri/git";
+import { formatPermissions } from "../files/fileBrowserModel";
 import { parentPath } from "../files/path";
 
 const pickerRowHeight = 30;
@@ -35,8 +36,9 @@ export function GitRepositoryPickerDialog({
   const [path, setPath] = useState(initialPath);
   const [pathDraft, setPathDraft] = useState(initialPath);
   const [listing, setListing] = useState<GitDirectoryListing | null>(null);
-  const [backPaths, setBackPaths] = useState<string[]>([]);
   const [forwardPaths, setForwardPaths] = useState<string[]>([]);
+  const [editingPath, setEditingPath] = useState(false);
+  const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [range, setRange] = useState<PickerRange>({ start: 0, end: pickerFallbackRows + pickerOverscan });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -49,7 +51,8 @@ export function GitRepositoryPickerDialog({
   const visibleEnd = virtualized ? Math.min(Math.max(range.end, visibleStart), entries.length) : entries.length;
   const visibleEntries = entries.slice(visibleStart, visibleEnd);
   const parent = parentPath(path, false);
-  const selectablePath = validRemotePath(pathDraft) ? pathDraft.trim() : "";
+  const forwardPath = forwardPaths[forwardPaths.length - 1] ?? null;
+  const selectablePath = selectedPath ?? (validRemotePath(pathDraft) ? pathDraft.trim() : "");
 
   const updateRange = useCallback((container: HTMLElement, count: number) => {
     const next = pickerRange(container.scrollTop, container.clientHeight, count);
@@ -71,12 +74,13 @@ export function GitRepositoryPickerDialog({
       setListing(next);
       setPath(next.path);
       setPathDraft(next.path);
+      setEditingPath(false);
+      if (mode !== "refresh") setSelectedPath(null);
       setRange({ start: 0, end: pickerFallbackRows + pickerOverscan });
       requestAnimationFrame(() => {
         if (listScroll.current) listScroll.current.scrollTop = 0;
       });
       if (mode === "initial") {
-        setBackPaths([]);
         setForwardPaths([]);
       }
       return true;
@@ -108,24 +112,20 @@ export function GitRepositoryPickerDialog({
   }, [entries.length, updateRange]);
 
   async function navigate(nextPath: string) {
-    const previous = path;
     if (!await load(nextPath, "navigate")) return;
-    if (previous !== nextPath) setBackPaths((current) => [...current, previous]);
     setForwardPaths([]);
   }
 
-  async function navigateBack() {
-    const next = backPaths[backPaths.length - 1];
-    if (!next || !await load(next, "history")) return;
-    setBackPaths((current) => current.slice(0, -1));
-    setForwardPaths((current) => [...current, path]);
+  async function navigateUp() {
+    if (!parent) return;
+    const previous = path;
+    if (!await load(parent, "history")) return;
+    setForwardPaths((current) => [...current, previous]);
   }
 
   async function navigateForward() {
-    const next = forwardPaths[forwardPaths.length - 1];
-    if (!next || !await load(next, "history")) return;
-    setForwardPaths((current) => current.slice(0, -1));
-    setBackPaths((current) => [...current, path]);
+    if (!forwardPath || !await load(forwardPath, "history")) return;
+    setForwardPaths((current) => current[current.length - 1] === forwardPath ? current.slice(0, -1) : current);
   }
 
   function submitPath(event: FormEvent) {
@@ -140,39 +140,82 @@ export function GitRepositoryPickerDialog({
     onClose={onClose}
   >
     <div className="git-repository-picker">
-      <form className="git-repository-picker-toolbar" onSubmit={submitPath}>
-        <button type="button" aria-label="后退" title="后退" disabled={backPaths.length === 0} onClick={() => void navigateBack()}><Icon name="back" size={13}/></button>
-        <button type="button" aria-label="前进" title="前进" disabled={forwardPaths.length === 0} onClick={() => void navigateForward()}><Icon name="forward" size={13}/></button>
-        <button type="button" aria-label="返回上级目录" title="返回上级目录" disabled={!parent} onClick={() => parent && void navigate(parent)}><Icon name="back" size={13}/></button>
-        <label className="git-repository-picker-path">
-          <span className="sr-only">远程仓库路径</span>
-          <ExactTextInput data-dialog-autofocus aria-label="远程仓库路径" value={pathDraft} maxLength={4096} onChange={(event) => setPathDraft(event.target.value)} />
-        </label>
-        <button type="submit" aria-label="转到输入路径" title="转到输入路径" disabled={!validRemotePath(pathDraft)}><Icon name="forward" size={13}/></button>
-        <button type="button" aria-label="刷新目录" title="刷新目录" onClick={() => void load(path, "refresh")}><Icon name="refresh" size={13}/></button>
+      <form className="git-repository-picker-toolbar" aria-label="远程目录导航" onSubmit={submitPath}>
+        <button type="button" aria-label="返回上级目录" title="返回上级目录" disabled={!parent || loading} onClick={() => void navigateUp()}><Icon name="back" size={14}/></button>
+        <button type="button" aria-label="前进到下一目录" title={forwardPath ? `前进到 ${forwardPath}` : "没有可前进的目录"} disabled={!forwardPath || loading} onClick={() => void navigateForward()}><Icon name="forward" size={14}/></button>
+        <div className="git-repository-picker-path-shell" data-editing={editingPath || undefined}>
+          {editingPath ? <label className="git-repository-picker-path">
+            <span className="sr-only">远程仓库路径</span>
+            <ExactTextInput
+              data-dialog-autofocus
+              autoFocus
+              aria-label="远程仓库路径"
+              value={pathDraft}
+              maxLength={4096}
+              onChange={(event) => setPathDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key !== "Escape") return;
+                event.preventDefault();
+                setPathDraft(path);
+                setEditingPath(false);
+              }}
+            />
+          </label> : <button
+            data-dialog-autofocus
+            className="git-repository-picker-path-display"
+            type="button"
+            title={`${path} · 单击编辑`}
+            onClick={() => {
+              setSelectedPath(null);
+              setPathDraft(path);
+              setEditingPath(true);
+            }}
+          >{path}</button>}
+        </div>
+        <button type="button" aria-label="刷新目录" aria-busy={loading || undefined} title="刷新目录" disabled={loading} onClick={() => void load(path, "refresh")}><Icon name="refresh" size={14}/></button>
       </form>
 
-      <div
-        ref={listScroll}
-        className="git-repository-picker-list-scroll"
-        data-loading={loading || undefined}
-        onScroll={(event) => updateRange(event.currentTarget, entries.length)}
-      >
-        {listing && <div
-          className={`git-repository-picker-list${virtualized ? " virtualized" : ""}`}
-          role="list"
-          aria-label={`远程目录 ${listing.path}`}
-          aria-setsize={entries.length}
-          style={virtualized ? { height: entries.length * pickerRowHeight } : undefined}
+      <div className="git-repository-picker-directory-stage">
+        <div className="git-repository-picker-columns" aria-label="目录信息列">
+          <span>名称</span><span>权限</span><span>修改时间</span>
+        </div>
+        <div
+          ref={listScroll}
+          className="git-repository-picker-list-scroll"
+          data-loading={loading || undefined}
+          aria-busy={loading || undefined}
+          onPointerEnter={() => setEditingPath(false)}
+          onScroll={(event) => updateRange(event.currentTarget, entries.length)}
         >
-          {visibleEntries.map((entry, visibleIndex) => {
-            const index = visibleStart + visibleIndex;
-            return <DirectoryRow key={entry.path} entry={entry} index={index} count={entries.length} virtualized={virtualized} onOpen={() => void navigate(entry.path)}/>;
-          })}
-        </div>}
-        {!listing && !loading && <div className="git-repository-picker-empty"><Icon name="files" size={22}/><strong>无法显示目录</strong><span>仍可在上方直接输入远程路径</span></div>}
-        {listing && !loading && entries.length === 0 && <div className="git-repository-picker-empty"><Icon name="files" size={22}/><strong>此目录没有子目录</strong><span>可以选择当前目录，或直接输入其他路径</span></div>}
-        {loading && <div className="git-repository-picker-loading" role="status" aria-live="polite"><span className="git-repository-picker-spinner"/><span>正在读取远程目录…</span></div>}
+          {listing && <div
+            className={`git-repository-picker-list${virtualized ? " virtualized" : ""}`}
+            role="list"
+            aria-label={`远程目录 ${listing.path}`}
+            aria-setsize={entries.length}
+            style={virtualized ? { height: entries.length * pickerRowHeight } : undefined}
+          >
+            {visibleEntries.map((entry, visibleIndex) => {
+              const index = visibleStart + visibleIndex;
+              return <DirectoryRow
+                key={entry.path}
+                entry={entry}
+                index={index}
+                count={entries.length}
+                virtualized={virtualized}
+                selected={selectedPath === entry.path}
+                disabled={loading}
+                onSelect={() => {
+                  setEditingPath(false);
+                  setSelectedPath(entry.path);
+                }}
+                onOpen={() => void navigate(entry.path)}
+              />;
+            })}
+          </div>}
+          {!listing && !loading && <div className="git-repository-picker-empty"><Icon name="files" size={22}/><strong>无法显示目录</strong><span>仍可在上方直接输入远程路径</span></div>}
+          {listing && !loading && entries.length === 0 && <div className="git-repository-picker-empty"><Icon name="files" size={22}/><strong>此目录没有子目录</strong><span>可以选择当前目录，或直接输入其他路径</span></div>}
+          {loading && <div className="git-repository-picker-loading" role="status" aria-live="polite"><span className="git-repository-picker-spinner"/><span>正在读取远程目录…</span></div>}
+        </div>
       </div>
 
       <div className={`git-repository-picker-feedback${error ? " error" : ""}`} role={error ? "alert" : "status"} aria-live="polite">
@@ -181,30 +224,58 @@ export function GitRepositoryPickerDialog({
 
       <footer className="git-repository-picker-footer">
         <div><span>选择路径</span><code title={selectablePath || pathDraft}>{selectablePath || "请输入有效路径"}</code></div>
-        <div><Button onClick={onClose}>取消</Button><Button variant="primary" disabled={!selectablePath} onClick={() => selectablePath && onSelect(selectablePath)}>选择此路径</Button></div>
+        <div><Button variant="danger" onClick={onClose}>取消</Button><Button variant="primary" disabled={!selectablePath} onClick={() => selectablePath && onSelect(selectablePath)}>选择此路径</Button></div>
       </footer>
     </div>
   </DialogFrame>;
 }
 
-function DirectoryRow({ entry, index, count, virtualized, onOpen }: {
+function DirectoryRow({ entry, index, count, virtualized, selected, disabled, onSelect, onOpen }: {
   entry: GitDirectoryEntry;
   index: number;
   count: number;
   virtualized: boolean;
+  selected: boolean;
+  disabled: boolean;
+  onSelect: () => void;
   onOpen: () => void;
 }) {
   return <div
-    role="listitem"
-    aria-posinset={index + 1}
-    aria-setsize={count}
     className="git-repository-picker-row-shell"
     style={virtualized ? { transform: `translateY(${index * pickerRowHeight}px)` } : undefined}
   >
-    <button type="button" aria-label={`打开目录 ${entry.name}`} title={entry.path} onClick={onOpen}>
-      <Icon name="files" size={14}/><span>{entry.name}</span>{entry.isSymlink && <small>链接</small>}<Icon name="forward" size={11}/>
+    <button
+      type="button"
+      role="listitem"
+      aria-label={`目录 ${entry.name}，权限 ${formatPermissions(entry.permissionMode)}，修改时间 ${formatModifiedAt(entry.modifiedAt)}`}
+      aria-selected={selected}
+      aria-posinset={index + 1}
+      aria-setsize={count}
+      data-selected={selected || undefined}
+      title={`${entry.path} · 双击打开`}
+      disabled={disabled}
+      onClick={onSelect}
+      onDoubleClick={onOpen}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          onOpen();
+        }
+        if (event.key === " ") {
+          event.preventDefault();
+          onSelect();
+        }
+      }}
+    >
+      <span className="git-repository-picker-name"><Icon name="files" size={14}/><span>{entry.name}</span>{entry.isSymlink && <small>链接</small>}</span>
+      <span className="git-repository-picker-permission">{formatPermissions(entry.permissionMode)}</span>
+      <span className="git-repository-picker-time">{formatModifiedAt(entry.modifiedAt)}</span>
     </button>
   </div>;
+}
+
+function formatModifiedAt(value: number | null): string {
+  return value === null ? "—" : new Date(value * 1000).toLocaleString();
 }
 
 function pickerRange(scrollTop: number, clientHeight: number, count: number): PickerRange {

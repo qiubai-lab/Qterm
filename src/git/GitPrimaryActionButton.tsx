@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 
 import { Icon, type IconName } from "../components/Icon";
 import type { GitPrimaryAction, GitPrimaryAlternativeAction, GitPrimaryActionKind } from "./gitPrimaryAction";
+import { GitRemoteConfigurationHint, gitRemoteConfigurationHint } from "./GitRemoteConfigurationHint";
 
 interface MenuPosition {
   left: number;
@@ -10,7 +11,8 @@ interface MenuPosition {
   placement: "above" | "below";
 }
 
-function actionIcon(kind: GitPrimaryActionKind): IconName {
+function actionIcon(kind: GitPrimaryActionKind, updating = false): IconName {
+  if (updating) return "sync";
   if (kind === "stageAll") return "plus";
   if (kind === "commit") return "check";
   if (kind === "push" || kind === "publish" || kind === "chooseRemote") return "upload";
@@ -38,6 +40,7 @@ export function GitPrimaryActionButton({ action, onAction }: {
   const toggleRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const alternative = action.alternative;
+  const remoteConfigurationRequired = Boolean(action.remoteConfigurationRequired);
 
   function closeMenu(restoreFocus: boolean) {
     setMenuPosition(null);
@@ -82,9 +85,9 @@ export function GitPrimaryActionButton({ action, onAction }: {
 
   return <>
     <div ref={splitRef} className="git-primary-action-split" data-has-alternative={Boolean(alternative) || undefined}>
-      <button type="button" className="git-primary-action" disabled={action.disabled} title={action.title} onClick={() => onAction(action)}>
-        <Icon name={actionIcon(action.kind)} size={12}/><span>{action.label}</span>
-      </button>
+      <GitRemoteConfigurationHint active={remoteConfigurationRequired}><button type="button" className="git-primary-action" data-updating={action.updating || undefined} data-remote-configuration-required={remoteConfigurationRequired || undefined} aria-busy={action.updating || undefined} aria-disabled={action.disabled || undefined} disabled={action.disabled && !remoteConfigurationRequired} title={remoteConfigurationRequired ? gitRemoteConfigurationHint : action.title} onClick={() => onAction(action)}>
+        <Icon name={actionIcon(action.kind, action.updating)} size={12}/><span>{action.label}</span>
+      </button></GitRemoteConfigurationHint>
       {alternative && <button
         ref={toggleRef}
         type="button"

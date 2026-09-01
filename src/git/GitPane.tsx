@@ -1,6 +1,9 @@
-import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from "react";
 import { createPortal } from "react-dom";
 
+import { Button } from "../components/Button";
+import { Icon } from "../components/Icon";
+import { DialogActionStatus, DialogFrame } from "../components/dialogs/DialogFrame";
 import {
   gitAvailable,
   gitError,
@@ -42,6 +45,28 @@ interface GitPaneProps {
   onTargetChange: (target: GitTarget) => void;
   onRequestRepositoryChange?: () => void;
   onRepositoryOpened?: (repository: GitRepositoryHistoryEntry) => void;
+}
+
+type GitChangeScope = "staged" | "unstaged";
+
+interface GitChangeMenuState {
+  left: number;
+  top: number;
+  placement: "above" | "below";
+  scope: GitChangeScope;
+  paths: string[];
+}
+
+interface GitDiscardConfirmation {
+  changes: GitChange[];
+}
+
+function discardImpact(changes: GitChange[]): string {
+  const untracked = changes.filter((change) => change.status === "U").length;
+  const tracked = changes.length - untracked;
+  if (tracked > 0 && untracked > 0) return `将把 ${tracked} 个已跟踪文件恢复到暂存区版本，并永久删除 ${untracked} 个未跟踪文件`;
+  if (tracked > 0) return `将把 ${tracked} 个已跟踪文件恢复到暂存区版本`;
+  return `将永久删除 ${untracked} 个未跟踪文件`;
 }
 
 function gitTargetKey(target: GitTarget): string {
@@ -95,6 +120,10 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
   const [conflictResolverPath, setConflictResolverPath] = useState<string | null>(null);
   const [previewChange, setPreviewChange] = useState<GitChange | null>(null);
   const [previewCommitFile, setPreviewCommitFile] = useState<{ commit: GitCommit; files: GitCommitFile[]; initialFile: GitCommitFile } | null>(null);
+  const [selectedStagedPaths, setSelectedStagedPaths] = useState<Set<string>>(() => new Set());
+  const [selectedUnstagedPaths, setSelectedUnstagedPaths] = useState<Set<string>>(() => new Set());
+  const [changeMenu, setChangeMenu] = useState<GitChangeMenuState | null>(null);
+  const [discardConfirmation, setDiscardConfirmation] = useState<GitDiscardConfirmation | null>(null);
   const [collapsed, setCollapsed] = useState({ repository: false, changes: false, graph: true });
   const epoch = useRef(0);
   const busyRef = useRef("");
@@ -110,6 +139,10 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
   const commitContextMenuRef = useRef<HTMLDivElement | null>(null);
   const branchManagementItemRef = useRef<HTMLButtonElement>(null);
   const mergeAbortButtonRef = useRef<HTMLButtonElement>(null);
+  const changeMenuRef = useRef<HTMLDivElement>(null);
+  const discardReturnFocusRef = useRef<HTMLElement | null>(null);
+  const stagedSelectionAnchorRef = useRef<number | null>(null);
+  const unstagedSelectionAnchorRef = useRef<number | null>(null);
   const previousMergeStateRef = useRef(false);
   const operationSequence = useRef(0);
   const repositorySubmenuId = useId();
@@ -122,7 +155,7 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
   const available = remote ? true : localAvailable;
   const {
     loadSnapshot, fetchSnapshot, initialize, loadCommitFiles, loadCommitFileDiff, loadChangeDiff, loadConflictDetail, resolveConflict,
-    stagePaths, stageAll, unstagePaths, unstageAll, commit,
+    stagePaths, stageAll, unstagePaths, unstageAll, discardPaths, commit,
     createBranch, createBranchAt, createBranchFromCommit, renameBranch, deleteBranch, switchBranch, trackRemoteBranch,
     pullRepository, pushRepository, mergeBranch, continueMerge, abortMerge,
   } = useGitRepositoryClient({ remote, profileId: remoteProfileId, sessionId: remoteSessionId, status: remoteStatus });
@@ -153,6 +186,12 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
     setConflictResolverPath(null);
     setPreviewChange(null);
     setPreviewCommitFile(null);
+    setSelectedStagedPaths(new Set());
+    setSelectedUnstagedPaths(new Set());
+    setChangeMenu(null);
+    setDiscardConfirmation(null);
+    stagedSelectionAnchorRef.current = null;
+    unstagedSelectionAnchorRef.current = null;
     setOperations([]);
     if (reportedRepositoryKeyRef.current !== nextTargetKey) reportedRepositoryKeyRef.current = null;
   }, [target, updateBusy]);
@@ -160,6 +199,21 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
   const applySnapshot = useCallback((next: GitSnapshot) => {
     setSnapshot(next);
     setError(null);
+    const eligibleStaged = new Set(next.changes.filter((change) => change.staged && !change.conflict).map((change) => change.path));
+    const eligibleUnstaged = new Set(next.changes.filter((change) => !change.staged && !change.conflict).map((change) => change.path));
+    setSelectedStagedPaths((current) => {
+      const selected = new Set([...current].filter((path) => eligibleStaged.has(path)));
+      return selected.size === current.size ? current : selected;
+    });
+    setSelectedUnstagedPaths((current) => {
+      const selected = new Set([...current].filter((path) => eligibleUnstaged.has(path)));
+      return selected.size === current.size ? current : selected;
+    });
+    setChangeMenu((current) => {
+      if (!current) return null;
+      const eligible = current.scope === "staged" ? eligibleStaged : eligibleUnstaged;
+      return current.paths.some((path) => !eligible.has(path)) ? null : current;
+    });
     const repository: GitRepositoryHistoryEntry = remote && remoteProfileId
       ? { type: "remote", profileId: remoteProfileId, path: next.repositoryPath }
       : { type: "local", path: next.repositoryPath };
@@ -216,6 +270,11 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
   }, [refreshSnapshot, visible]);
+  useEffect(() => {
+    if (!visible || !available) return;
+    const timer = window.setInterval(() => void refreshSnapshot(), 15_000);
+    return () => window.clearInterval(timer);
+  }, [available, refreshSnapshot, visible]);
   useLayoutEffect(() => {
     const textarea = messageRef.current;
     if (!textarea) return;
@@ -386,6 +445,125 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
   const staged = useMemo(() => snapshot?.changes.filter((change) => change.staged) ?? [], [snapshot]);
   const unstaged = useMemo(() => snapshot?.changes.filter((change) => !change.staged && !change.conflict) ?? [], [snapshot]);
   const conflicts = useMemo(() => snapshot?.changes.filter((change) => change.conflict) ?? [], [snapshot]);
+
+  useEffect(() => {
+    if (!changeMenu) return;
+    const close = (event: PointerEvent) => {
+      if (!(event.target instanceof Element) || !event.target.closest(".git-change-context-menu")) setChangeMenu(null);
+    };
+    const escape = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setChangeMenu(null);
+      window.requestAnimationFrame(() => discardReturnFocusRef.current?.focus());
+    };
+    document.addEventListener("pointerdown", close);
+    window.addEventListener("keydown", escape);
+    window.setTimeout(() => changeMenuRef.current?.querySelector<HTMLButtonElement>('[role="menuitem"]')?.focus(), 0);
+    return () => {
+      document.removeEventListener("pointerdown", close);
+      window.removeEventListener("keydown", escape);
+    };
+  }, [changeMenu]);
+
+  function selectChange(scope: GitChangeScope, change: GitChange, index: number, event: ReactMouseEvent<HTMLButtonElement>) {
+    setChangeMenu(null);
+    const changes = scope === "staged" ? staged : unstaged;
+    const anchorRef = scope === "staged" ? stagedSelectionAnchorRef : unstagedSelectionAnchorRef;
+    const setSelectedPaths = scope === "staged" ? setSelectedStagedPaths : setSelectedUnstagedPaths;
+    setSelectedPaths((current) => {
+      if (event.shiftKey && anchorRef.current !== null) {
+        const start = Math.min(anchorRef.current, index);
+        const end = Math.max(anchorRef.current, index);
+        const next = event.ctrlKey || event.metaKey ? new Set(current) : new Set<string>();
+        changes.slice(start, end + 1).forEach((item) => next.add(item.path));
+        return next;
+      }
+      anchorRef.current = index;
+      if (event.ctrlKey || event.metaKey) {
+        const next = new Set(current);
+        if (next.has(change.path)) next.delete(change.path); else next.add(change.path);
+        return next;
+      }
+      return new Set([change.path]);
+    });
+  }
+
+  function openChangeMenu(scope: GitChangeScope, change: GitChange, index: number, event: ReactMouseEvent<HTMLElement> | ReactKeyboardEvent<HTMLButtonElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    discardReturnFocusRef.current = event.currentTarget instanceof HTMLButtonElement
+      ? event.currentTarget
+      : event.currentTarget.querySelector<HTMLButtonElement>(".git-change-preview-trigger");
+    const changes = scope === "staged" ? staged : unstaged;
+    const selectedPaths = scope === "staged" ? selectedStagedPaths : selectedUnstagedPaths;
+    const setSelectedPaths = scope === "staged" ? setSelectedStagedPaths : setSelectedUnstagedPaths;
+    const anchorRef = scope === "staged" ? stagedSelectionAnchorRef : unstagedSelectionAnchorRef;
+    let paths = selectedPaths.has(change.path)
+      ? changes.filter((item) => selectedPaths.has(item.path)).map((item) => item.path)
+      : [change.path];
+    if (!selectedPaths.has(change.path)) {
+      setSelectedPaths(new Set(paths));
+      anchorRef.current = index;
+    }
+    if (paths.length === 0) paths = [change.path];
+    const keyboard = "key" in event;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const anchorX = keyboard ? rect.left + 18 : event.clientX;
+    const anchorY = keyboard ? rect.top + rect.height / 2 : event.clientY;
+    const menuHeight = scope === "unstaged" ? 68 : 38;
+    setChangeMenu({ ...fitCommitContextMenu(anchorX, anchorY, 210, menuHeight), scope, paths });
+  }
+
+  function runChangeMenuAction(action: "stage" | "unstage") {
+    if (!root || !changeMenu || busyRef.current) return;
+    if (action === "stage" && changeMenu.scope !== "unstaged") return;
+    if (action === "unstage" && changeMenu.scope !== "staged") return;
+    const paths = changeMenu.paths;
+    setChangeMenu(null);
+    if (action === "stage") void mutate("stage", () => stagePaths(root, paths));
+    else void mutate("unstage", () => unstagePaths(root, paths));
+  }
+
+  function requestDiscardConfirmation() {
+    if (!changeMenu || changeMenu.scope !== "unstaged") return;
+    const selected = changeMenu.paths
+      .map((path) => unstaged.find((change) => change.path === path))
+      .filter((change): change is GitChange => Boolean(change));
+    setChangeMenu(null);
+    setError(null);
+    if (selected.length > 0) setDiscardConfirmation({ changes: selected });
+  }
+
+  async function confirmDiscard() {
+    if (!root || !discardConfirmation || busyRef.current) return;
+    const paths = discardConfirmation.changes.map((change) => change.path);
+    const request = ++epoch.current;
+    updateBusy("discard");
+    setError(null);
+    try {
+      const next = await discardPaths(root, paths);
+      if (request !== epoch.current) return;
+      applySnapshot(next);
+      setDiscardConfirmation(null);
+      setSelectedUnstagedPaths(new Set());
+      unstagedSelectionAnchorRef.current = null;
+    } catch (cause) {
+      const failure = gitError(cause);
+      if (request === epoch.current) {
+        await recoverSnapshotAfterFailure(request, failure);
+        setDiscardConfirmation(null);
+        window.requestAnimationFrame(() => discardReturnFocusRef.current?.focus());
+      }
+    } finally {
+      if (request === epoch.current) updateBusy("");
+    }
+  }
+
+  function closeDiscardConfirmation() {
+    if (busyRef.current === "discard") return;
+    setDiscardConfirmation(null);
+    window.requestAnimationFrame(() => discardReturnFocusRef.current?.focus());
+  }
   const graphRows = useMemo(() => buildGitGraphRows(snapshot?.commits ?? []), [snapshot]);
   const root = snapshot?.repositoryPath ?? repositoryPath;
   const {
@@ -738,6 +916,12 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
       }}
       onResolveConflict={(change) => setConflictResolverPath(change.path)}
       onUnstage={(change) => root && void mutate("unstage", () => unstagePaths(root, [change.path]))}
+      selectedStagedPaths={selectedStagedPaths}
+      selectedUnstagedPaths={selectedUnstagedPaths}
+      onSelectStaged={(change, index, event) => selectChange("staged", change, index, event)}
+      onSelectUnstaged={(change, index, event) => selectChange("unstaged", change, index, event)}
+      onOpenStagedMenu={(change, index, event) => openChangeMenu("staged", change, index, event)}
+      onOpenUnstagedMenu={(change, index, event) => openChangeMenu("unstaged", change, index, event)}
       onContinueMerge={() => root && void runRecordedOperation("继续合并", () => continueMerge(root), "合并提交已完成")}
       onAbortMerge={() => openRepositoryOverlay("abortMerge")}
     />
@@ -865,6 +1049,20 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
         : Promise.resolve(false)}
       onConfirmMerge={() => void confirmMergeOperation()}
     />
+    {visible && changeMenu && createPortal(<div ref={changeMenuRef} className="git-repository-popover git-repository-action-popover git-commit-context-menu git-change-context-menu" role="menu" aria-label="Git 更改操作" data-placement={changeMenu.placement} style={{ left: changeMenu.left, top: changeMenu.top }} onKeyDown={navigateRepositoryMenu} onContextMenu={(event) => event.preventDefault()}>
+      {changeMenu.scope === "unstaged"
+        ? <button type="button" className="git-repository-action-item" role="menuitem" disabled={disabled} onClick={() => runChangeMenuAction("stage")}><Icon name="plus" size={12}/><span>{changeMenu.paths.length === 1 ? "添加到暂存区" : `将 ${changeMenu.paths.length} 个文件添加到暂存区`}</span></button>
+        : <button type="button" className="git-repository-action-item" role="menuitem" disabled={disabled} onClick={() => runChangeMenuAction("unstage")}><Icon name="clear" size={12}/><span>{changeMenu.paths.length === 1 ? "取消暂存" : `取消暂存 ${changeMenu.paths.length} 个文件`}</span></button>}
+      {changeMenu.scope === "unstaged" && <button type="button" className="git-repository-action-item danger" role="menuitem" disabled={disabled} onClick={requestDiscardConfirmation}><Icon name="trash" size={12}/><span>{changeMenu.paths.length === 1 ? "抛弃更改" : `抛弃 ${changeMenu.paths.length} 个文件的更改`}</span></button>}
+    </div>, document.body)}
+    {visible && discardConfirmation && createPortal(<DialogFrame title={`抛弃 ${discardConfirmation.changes.length} 个文件的更改？`} subtitle="工作区更改" compact className="git-discard-confirmation" dismissible={busy !== "discard"} onClose={closeDiscardConfirmation}>
+      <div className="git-discard-confirmation-body">
+        <p className="confirm-copy">{discardImpact(discardConfirmation.changes)}。已暂存的更改和现有提交不会受到影响。此操作无法由 Qterm 撤销。</p>
+        <ul className="git-discard-file-list">{discardConfirmation.changes.slice(0, 5).map((change) => <li key={change.path}><Icon name="file" size={12}/><code title={change.path}>{change.path}</code><span>{change.status === "U" ? "删除" : "恢复"}</span></li>)}</ul>
+        {discardConfirmation.changes.length > 5 && <p className="git-discard-remainder">另有 {discardConfirmation.changes.length - 5} 项</p>}
+      </div>
+      <footer className="dialog-actions dialog-actions-with-status"><DialogActionStatus message={error?.message ?? ""}/><div><Button data-dialog-autofocus disabled={busy === "discard"} onClick={closeDiscardConfirmation}>取消</Button><Button variant="dangerSolid" loading={busy === "discard"} onClick={() => void confirmDiscard()}>确认抛弃 {discardConfirmation.changes.length} 个更改</Button></div></footer>
+    </DialogFrame>, document.body)}
     {conflictResolverPath && snapshot && <GitConflictResolver
       conflicts={conflicts}
       initialPath={conflictResolverPath}

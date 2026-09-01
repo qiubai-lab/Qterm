@@ -442,6 +442,8 @@ pub struct GitDirectoryEntryDto {
     name: String,
     path: String,
     is_symlink: bool,
+    modified_at: Option<u64>,
+    permission_mode: Option<u32>,
 }
 
 #[derive(Deserialize)]
@@ -471,6 +473,10 @@ pub enum RemoteGitActionDto {
     },
     UnstageAll {
         repository: String,
+    },
+    Discard {
+        repository: String,
+        paths: Vec<String>,
     },
     Commit {
         repository: String,
@@ -750,6 +756,15 @@ pub async fn git_unstage_all(
 }
 
 #[tauri::command]
+pub async fn git_discard(
+    input: GitPathsInput,
+    state: State<'_, GitState>,
+) -> Result<GitSnapshotDto, GitIpcError> {
+    let service = Arc::clone(&state.service);
+    run(move || service.discard(input.repository, input.paths)).await
+}
+
+#[tauri::command]
 pub async fn git_commit(
     input: GitCommitInput,
     state: State<'_, GitState>,
@@ -992,6 +1007,8 @@ impl From<FileEntry> for GitDirectoryEntryDto {
             name: value.name,
             path: value.path,
             is_symlink: value.is_symlink,
+            modified_at: value.modified_at,
+            permission_mode: value.permission_mode,
         }
     }
 }
@@ -1071,6 +1088,9 @@ impl From<RemoteGitActionDto> for RemoteGitAction {
                 Self::Unstage { repository, paths }
             }
             RemoteGitActionDto::UnstageAll { repository } => Self::UnstageAll { repository },
+            RemoteGitActionDto::Discard { repository, paths } => {
+                Self::Discard { repository, paths }
+            }
             RemoteGitActionDto::Commit {
                 repository,
                 message,
@@ -1358,13 +1378,35 @@ impl From<GitCommitFile> for GitCommitFileDto {
 mod tests {
     use super::{
         GitBranchInput, GitChangeDiffInput, GitCommitFileDiffInput, GitCommitFilesInput,
-        GitCommitInput, GitConflictDetailInput, GitCreateBranchFromCommitInput, GitIpcError,
-        GitMergeBranchInput, GitPathInput, GitPathsInput, GitRemoteBranchInput,
-        GitResolveConflictInput, RemoteGitChangeDiffInput, RemoteGitCommitFileDiffInput,
-        RemoteGitCommitFilesInput, RemoteGitConflictDetailInput, RemoteGitDirectoryInput,
-        RemoteGitInput, RemoteGitResolveConflictInput,
+        GitCommitInput, GitConflictDetailInput, GitCreateBranchFromCommitInput,
+        GitDirectoryListingDto, GitIpcError, GitMergeBranchInput, GitPathInput, GitPathsInput,
+        GitRemoteBranchInput, GitResolveConflictInput, RemoteGitChangeDiffInput,
+        RemoteGitCommitFileDiffInput, RemoteGitCommitFilesInput, RemoteGitConflictDetailInput,
+        RemoteGitDirectoryInput, RemoteGitInput, RemoteGitResolveConflictInput,
     };
-    use crate::domain::git::GitError;
+    use crate::domain::{
+        files::{DirectoryListing, FileEntry},
+        git::GitError,
+    };
+
+    #[test]
+    fn git_directory_dto_preserves_read_only_file_metadata() {
+        let dto = GitDirectoryListingDto::from(DirectoryListing::new(
+            "/srv".into(),
+            vec![FileEntry {
+                name: "project".into(),
+                path: "/srv/project".into(),
+                is_directory: true,
+                is_symlink: false,
+                size: 0,
+                modified_at: Some(1_725_187_200),
+                permission_mode: Some(0o754),
+            }],
+        ));
+        let value = serde_json::to_value(dto).expect("serialize directory DTO");
+        assert_eq!(value["entries"][0]["modifiedAt"], 1_725_187_200u64);
+        assert_eq!(value["entries"][0]["permissionMode"], 0o754u32);
+    }
 
     #[test]
     fn git_inputs_reject_arbitrary_process_fields() {

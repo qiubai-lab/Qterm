@@ -100,12 +100,13 @@
 .git-repository-history-item:hover,
 .git-repository-history-item:focus-visible {
   color: var(--text-strong);
-  background: var(--control-hover);
-  outline: none;
+  background: var(--file-active-surface);
+  box-shadow: inset 2px 0 color-mix(in srgb, var(--file-active-marker) 72%, transparent);
 }
 
 .git-repository-history-item:focus-visible {
-  box-shadow: inset 0 0 0 1px var(--focus);
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
 }
 
 .git-repository-history-item:active {
@@ -147,8 +148,19 @@
 }
 
 .git-repository-history-item[aria-current="true"] {
-  color: var(--selection-marker);
-  background: var(--selection-surface);
+  border-radius: 4px;
+  color: var(--file-selection-foreground);
+  background: var(--file-selection-surface);
+  box-shadow: inset 0 0 0 1px var(--file-selection-marker);
+}
+
+.git-repository-history-item[aria-current="true"] > svg,
+.git-repository-history-item[aria-current="true"] em {
+  color: var(--file-selection-marker);
+}
+
+.git-repository-history-item[aria-current="true"] small {
+  color: var(--file-selection-secondary-foreground);
 }
 
 .git-repository-history-empty {
@@ -181,11 +193,16 @@
 .git-repository-history-browse:hover,
 .git-repository-history-browse:focus-visible {
   color: var(--text-strong);
-  background: var(--control-hover);
-  outline: none;
+  background: var(--file-active-surface);
+  box-shadow: inset 2px 0 color-mix(in srgb, var(--file-active-marker) 72%, transparent);
 }
 
 .git-repository-history-browse:focus-visible {
-  box-shadow: inset 0 0 0 1px var(--focus);
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
 }
 
+.git-repository-history-browse:hover > svg,
+.git-repository-history-browse:focus-visible > svg {
+  color: var(--file-active-marker);
+}

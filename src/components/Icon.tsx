@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-export type IconName = "workspace" | "plus" | "terminal" | "git" | "mergeConflict" | "browser" | "computer" | "server" | "network" | "connections" | "files" | "file" | "filePlus" | "folderPlus" | "edit" | "save" | "check" | "checkCircle" | "copy" | "upload" | "download" | "key" | "lock" | "trash" | "clear" | "back" | "forward" | "chevronDown" | "refresh" | "search" | "disconnect" | "settings" | "help" | "splitHorizontal" | "splitVertical" | "menu" | "pin" | "windowMinimize" | "windowMaximize" | "close" | "more" | "eye" | "eyeOff";
+export type IconName = "workspace" | "plus" | "terminal" | "git" | "mergeConflict" | "browser" | "computer" | "server" | "network" | "connections" | "files" | "file" | "filePlus" | "folderPlus" | "edit" | "save" | "check" | "checkCircle" | "copy" | "upload" | "download" | "key" | "lock" | "trash" | "clear" | "back" | "forward" | "chevronDown" | "refresh" | "sync" | "search" | "disconnect" | "settings" | "help" | "splitHorizontal" | "splitVertical" | "menu" | "pin" | "windowMinimize" | "windowMaximize" | "close" | "more" | "eye" | "eyeOff";
 
 export function Icon({ name, size = 16 }: { name: IconName; size?: number }) {
   const paths: Record<IconName, ReactNode> = {
@@ -12,8 +12,8 @@ export function Icon({ name, size = 16 }: { name: IconName; size?: number }) {
     browser: <><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M3 9h18M7 6.5h.01M10 6.5h.01"/></>,
     computer: <><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></>,
     server: <><rect x="4" y="3" width="16" height="7" rx="2"/><rect x="4" y="14" width="16" height="7" rx="2"/><path d="M8 6.5h.01M8 17.5h.01M12 6.5h5M12 17.5h5"/></>,
-    network: <><circle cx="5" cy="12" r="2.5"/><circle cx="19" cy="6" r="2.5"/><circle cx="19" cy="18" r="2.5"/><path d="m7.5 11 9-4M7.5 13l9 4"/></>,
-    connections: <><circle cx="6" cy="12" r="3"/><circle cx="18" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><path d="m9 11 6-4M9 13l6 4"/></>,
+    network: <><rect x="9" y="2" width="6" height="6" rx="1.2"/><rect x="3" y="16" width="6" height="6" rx="1.2"/><rect x="15" y="16" width="6" height="6" rx="1.2"/><path d="M12 8v4M6 16v-4h12v4"/></>,
+    connections: <><rect x="1.5" y="5" width="7" height="8" rx="1.3"/><rect x="15.5" y="5" width="7" height="8" rx="1.3"/><path d="M5 13v3M3 16h4M19 13v3M17 16h4M10 8h4m-2-2 2 2-2 2M14 12h-4m2-2-2 2 2 2"/></>,
     files: <><path d="M4 5a2 2 0 0 1 2-2h4l2 3h6a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z"/></>,
     file: <><path d="M6 3h8l4 4v14H6Z"/><path d="M14 3v5h5"/></>,
     filePlus: <><path d="M4 4h9l4 4v12H4Z"/><path d="M13 4v4h4"/><path d="M17.5 12.5v7M14 16h7"/></>,
@@ -33,6 +33,7 @@ export function Icon({ name, size = 16 }: { name: IconName; size?: number }) {
     forward: <path d="m9 6 6 6-6 6"/>,
     chevronDown: <path d="m6 9 6 6 6-6"/>,
     refresh: <><path d="M19 7v5h-5"/><path d="M18 12a6 6 0 1 0-1.8 4.3"/></>,
+    sync: <><path d="M4 10a8 8 0 0 1 14-4" strokeWidth="3"/><path d="m21 7-6-5v10Z" fill="currentColor" stroke="none"/><path d="M20 14a8 8 0 0 1-14 4" strokeWidth="3"/><path d="m3 17 6-5v10Z" fill="currentColor" stroke="none"/></>,
     search: <><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></>,
     disconnect: <><path d="M8.5 8.5 6 6a3.5 3.5 0 0 0-5 5l3 3a3.5 3.5 0 0 0 5 0l1-1"/><path d="m15.5 15.5 2.5 2.5a3.5 3.5 0 0 0 5-5l-3-3a3.5 3.5 0 0 0-5 0l-1 1M4 20 20 4"/></>,
     settings: <><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6 1.7 1.7 0 0 0 10 3v-.2h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/></>,

@@ -1,0 +1,94 @@
+.git-remote-configuration-hint {
+  display: contents;
+}
+
+.git-primary-action[data-remote-configuration-required="true"] {
+  border-color: color-mix(in srgb, var(--danger) 72%, var(--border));
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 9%, var(--raised));
+  box-shadow: inset 0 1px color-mix(in srgb, var(--danger) 12%, transparent);
+}
+
+.git-primary-action[data-remote-configuration-required="true"]:hover,
+.git-primary-action[data-remote-configuration-required="true"]:focus-visible {
+  border-color: var(--danger);
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 14%, var(--raised));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--danger) 28%, transparent);
+}
+
+.git-repository-action-item[data-remote-configuration-required="true"] {
+  color: var(--danger);
+  opacity: 1;
+}
+
+.git-repository-action-item[data-remote-configuration-required="true"] > svg {
+  color: var(--danger);
+}
+
+.git-repository-action-item[data-remote-configuration-required="true"]:hover,
+.git-repository-action-item[data-remote-configuration-required="true"]:focus-visible {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 12%, var(--raised));
+  box-shadow: inset 2px 0 var(--danger);
+}
+
+.git-remote-configuration-tooltip {
+  box-sizing: border-box;
+  position: fixed;
+  z-index: 170;
+  width: max-content;
+  max-width: min(250px, calc(100vw - 16px));
+  padding: 6px 8px;
+  border: 1px solid color-mix(in srgb, var(--danger) 44%, var(--floating-border));
+  border-radius: 6px;
+  color: var(--text);
+  background: var(--floating-material);
+  box-shadow: 0 8px 22px var(--shadow-strong);
+  font-size: 9px;
+  line-height: 1.45;
+  pointer-events: none;
+  animation: git-remote-configuration-tooltip-in 120ms cubic-bezier(.2, .8, .2, 1);
+}
+
+.git-remote-configuration-tooltip::after {
+  position: absolute;
+  left: 50%;
+  width: 7px;
+  height: 7px;
+  border-right: 1px solid color-mix(in srgb, var(--danger) 44%, var(--floating-border));
+  border-bottom: 1px solid color-mix(in srgb, var(--danger) 44%, var(--floating-border));
+  background: var(--floating-material);
+  content: "";
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.git-remote-configuration-tooltip[data-placement="above"]::after {
+  bottom: -5px;
+}
+
+.git-remote-configuration-tooltip[data-placement="below"]::after {
+  top: -5px;
+  transform: translateX(-50%) rotate(225deg);
+}
+
+@keyframes git-remote-configuration-tooltip-in {
+  from { opacity: 0; transform: translateY(2px) scale(.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .git-remote-configuration-tooltip {
+    animation: none;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .git-remote-configuration-tooltip {
+    background: var(--raised);
+  }
+
+  .git-remote-configuration-tooltip::after {
+    background: var(--raised);
+  }
+}

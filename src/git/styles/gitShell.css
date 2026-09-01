@@ -122,7 +122,7 @@
   padding-left: 7px;
   overflow: hidden;
   border-left: 1px solid var(--border);
-  color: var(--dim);
+  color: var(--muted);
   font: 8.5px/1.25 SFMono-Regular, Consolas, monospace;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -504,6 +504,11 @@
   opacity: 1;
 }
 
+.git-primary-action[data-updating="true"]:disabled {
+  color: var(--primary-action);
+  background: color-mix(in srgb, var(--primary-action) 9%, var(--raised));
+}
+
 .git-primary-action-toggle {
   display: grid;
   width: 30px;
@@ -635,7 +640,10 @@
   padding: 0;
   overflow: auto;
   background: transparent;
-  scrollbar-gutter: stable;
+}
+
+.git-change-scroll > .git-clean-state:only-child {
+  flex: 1;
 }
 
 .git-change-group {
@@ -676,6 +684,7 @@
   padding: 0 5px 0 9px;
   border-bottom: 1px solid color-mix(in srgb, var(--subtle) 42%, transparent);
   color: var(--muted);
+  transition: color 120ms ease, background-color 140ms ease, box-shadow 140ms ease;
 }
 
 .git-change-row.previewable {
@@ -686,7 +695,19 @@
 
 .git-change-row:hover {
   color: var(--text);
-  background: var(--hover);
+  background: var(--file-active-surface);
+  box-shadow: inset 2px 0 color-mix(in srgb, var(--file-active-marker) 72%, transparent);
+}
+
+.git-change-row.previewable[data-selected="true"] {
+  color: var(--text);
+  border-radius: 4px;
+  background: var(--file-selection-surface);
+  box-shadow: inset 0 0 0 1px var(--file-selection-marker);
+}
+
+.git-change-row:hover .git-change-preview-trigger > svg {
+  color: var(--file-active-marker);
 }
 
 .git-change-row > svg {
@@ -716,6 +737,12 @@
   background: transparent;
 }
 
+.git-change-row.previewable[data-selected="true"] > .git-change-preview-trigger:hover:not(:disabled),
+.git-change-row.previewable[data-selected="true"] > .git-change-preview-trigger:active:not(:disabled) {
+  border-color: transparent;
+  background: transparent;
+}
+
 .git-change-row > .git-change-preview-trigger:focus-visible {
   border-radius: 3px;
   outline: 1px solid var(--focus-ring);
@@ -727,6 +754,7 @@
 }
 
 .git-change-path {
+  justify-self: start;
   min-width: 0;
   overflow: hidden;
   color: var(--text);
@@ -736,10 +764,118 @@
   white-space: nowrap;
 }
 
+.git-change-context-menu {
+  width: 210px;
+}
+
+.dialog-frame.git-discard-confirmation {
+  width: min(410px, calc(100vw - 40px));
+}
+
+.git-discard-confirmation .dialog-content {
+  display: flex;
+  width: 100%;
+  min-height: 0;
+  flex-direction: column;
+  align-items: stretch;
+  padding: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.git-discard-confirmation-body {
+  display: grid;
+  width: 100%;
+  min-height: 0;
+  gap: 10px;
+  padding: 14px 16px 4px;
+  box-sizing: border-box;
+}
+
+.git-discard-confirmation-body .confirm-copy {
+  margin: 0;
+  color: var(--muted);
+  font-size: 9.5px;
+  line-height: 1.6;
+}
+
+.git-discard-file-list {
+  display: grid;
+  width: 100%;
+  max-height: 150px;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  border: 1px solid var(--subtle);
+  border-radius: 6px;
+  background: var(--surface);
+  list-style: none;
+}
+
+.git-discard-confirmation .dialog-actions {
+  width: 100%;
+  margin-top: 8px;
+  padding: 12px 16px 16px;
+  border-top: 1px solid var(--subtle);
+  box-sizing: border-box;
+}
+
+.git-discard-file-list li {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 7px;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--subtle);
+  color: var(--muted);
+}
+
+.git-discard-file-list li:last-child {
+  border-bottom: 0;
+}
+
+.git-discard-file-list svg {
+  color: var(--accent);
+}
+
+.git-discard-file-list code {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font: 9px/1.2 SFMono-Regular, Consolas, monospace;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.git-discard-file-list span,
+.git-discard-remainder {
+  color: var(--danger);
+  font-size: 8px;
+}
+
+.git-discard-remainder {
+  margin: 0;
+}
+
 .git-change-status {
   color: var(--accent);
   font-size: 9px;
   font-weight: 750;
+  white-space: nowrap;
+}
+
+.git-change-row.previewable[data-selected="true"] .git-change-path {
+  color: var(--file-selection-foreground);
+}
+
+.git-change-row.previewable[data-selected="true"] .git-change-preview-trigger > svg {
+  color: var(--file-selection-marker);
+}
+
+.git-change-row.previewable[data-selected="true"] .git-change-status {
+  color: var(--file-selection-secondary-foreground);
 }
 
 .git-change-status.conflict {

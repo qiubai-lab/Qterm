@@ -10,7 +10,7 @@ export interface GitBranch { refName: string; name: string; kind: "local" | "rem
 export interface GitCommit { oid: string; parents: string[]; decorations: string[]; subject: string; body: string; author: string; timestamp: number }
 export interface GitCommitFile { path: string; originalPath: string | null; status: string }
 export interface GitCommitFileDiff { commitOid: string; parentOid: string | null; path: string; originalPath: string | null; status: string; before: GitConflictVersion; after: GitConflictVersion }
-export interface GitDirectoryEntry { name: string; path: string; isSymlink: boolean }
+export interface GitDirectoryEntry { name: string; path: string; isSymlink: boolean; modifiedAt: number | null; permissionMode: number | null }
 export interface GitDirectoryListing { path: string; entries: GitDirectoryEntry[] }
 export interface GitSnapshot { repositoryPath: string; repositoryName: string; head: GitHead; changes: GitChange[]; branches: GitBranch[]; remotes: string[]; commits: GitCommit[]; mergeInProgress: boolean; mergeHeadOid?: string | null }
 export interface GitConflictVersion { kind: GitConflictContentKind; content: string | null; size: number; mode: number | null }
@@ -33,6 +33,7 @@ export type RemoteGitAction =
   | { type: "stageAll"; repository: string }
   | { type: "unstage"; repository: string; paths: string[] }
   | { type: "unstageAll"; repository: string }
+  | { type: "discard"; repository: string; paths: string[] }
   | { type: "commit"; repository: string; message: string }
   | { type: "createBranch"; repository: string; name: string }
   | { type: "createBranchFrom"; repository: string; name: string; sourceRef: string }
@@ -59,6 +60,7 @@ export function stageGitPaths(repository: string, paths: string[]): Promise<GitS
 export function stageAllGitChanges(repository: string): Promise<GitSnapshot> { return invoke("git_stage_all", { input: { repository } }); }
 export function unstageGitPaths(repository: string, paths: string[]): Promise<GitSnapshot> { return invoke("git_unstage", { input: { repository, paths } }); }
 export function unstageAllGitChanges(repository: string): Promise<GitSnapshot> { return invoke("git_unstage_all", { input: { repository } }); }
+export function discardGitPaths(repository: string, paths: string[]): Promise<GitSnapshot> { return invoke("git_discard", { input: { repository, paths } }); }
 export function commitGitChanges(repository: string, message: string): Promise<GitSnapshot> { return invoke("git_commit", { input: { repository, message } }); }
 export function loadGitCommitFiles(repository: string, oid: string): Promise<GitCommitFile[]> { return invoke("git_commit_files", { input: { repository, oid } }); }
 export function loadGitCommitFileDiff(repository: string, oid: string, path: string): Promise<GitCommitFileDiff> { return invoke("git_commit_file_diff", { input: { repository, oid, path } }); }

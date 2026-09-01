@@ -5,6 +5,7 @@ import type { GitCommit, GitCommitFile, GitSnapshot } from "../lib/tauri/git";
 import type { GitGraphRow } from "./gitGraph";
 import { formatRelativeCommitTime, type GitCommitFilesState } from "./gitPaneTypes";
 import { GitSection } from "./GitPaneSections";
+import { presentGitFileStatus } from "./gitStatus";
 
 const gitGraphLaneGap = 11;
 const gitGraphLaneOffset = 7;
@@ -163,12 +164,12 @@ function GitCommitFiles({ commit, state, onRetry, onPreview }: { commit: GitComm
   return <div className="git-commit-files" role="list" aria-label={`${commit.subject} 的文件`}>
     {visible.map((file) => {
       const path = splitGitFilePath(file.path);
-      const status = commitFileStatus(file.status);
+      const status = presentGitFileStatus(file.status, { context: "commit" });
       return <div className="git-commit-file-item" role="listitem" key={`${file.status}:${file.originalPath ?? ""}:${file.path}`}>
         <button type="button" className="git-commit-file-row" aria-label={`预览提交 ${commit.oid.slice(0, 7)} 的文件更改 ${file.path}`} title={file.originalPath ? `${file.originalPath} → ${file.path}` : file.path} onClick={() => onPreview(file, state.files)}>
           <Icon name="file" size={12}/>
           <span className="git-commit-file-path"><span>{path.name}</span>{path.directory && <span className="git-commit-file-directory">{path.directory}</span>}{file.originalPath && <span className="git-commit-file-original">来自 {file.originalPath}</span>}</span>
-          <span className="git-commit-file-status" data-tone={status.tone} title={status.label}>{status.short}</span>
+          <span className="git-commit-file-status" data-tone={status.tone} title={`Git 状态：${status.label}`}>{status.label}</span>
         </button>
       </div>;
     })}
@@ -187,18 +188,6 @@ function gitGraphLaneX(lane: number): number {
 function splitGitFilePath(path: string): { name: string; directory: string } {
   const separator = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
   return separator < 0 ? { name: path, directory: "" } : { name: path.slice(separator + 1), directory: path.slice(0, separator) };
-}
-
-function commitFileStatus(status: string): { short: string; label: string; tone: string } {
-  const short = status.charAt(0).toUpperCase() || "?";
-  if (short === "A") return { short, label: "新增", tone: "added" };
-  if (short === "M") return { short, label: "修改", tone: "modified" };
-  if (short === "D") return { short, label: "删除", tone: "deleted" };
-  if (short === "R") return { short, label: "重命名", tone: "renamed" };
-  if (short === "C") return { short, label: "复制", tone: "copied" };
-  if (short === "T") return { short, label: "类型变更", tone: "modified" };
-  if (short === "U") return { short, label: "冲突", tone: "conflict" };
-  return { short, label: status || "未知状态", tone: "default" };
 }
 
 function formatCommitDateTime(timestamp: number): string {

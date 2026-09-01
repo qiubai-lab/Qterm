@@ -18,6 +18,7 @@ import { openTerminalSearch } from "../terminal/terminalViewRegistry";
 import { terminalBlockIds, type DropPosition } from "./layout";
 import { calculateLayoutGeometry, layoutScalarCss, resolveLayoutBounds, type LayoutBounds, type LayoutDividerGeometry } from "./layoutGeometry";
 import { isSameGitRepository, recentGitRepositoriesForScope } from "./gitRepositoryHistory";
+import { isAbsoluteLocalPath, isValidRemotePath } from "./gitWindow";
 import type { GitRepositoryHistoryEntry, GitTarget, LayoutLeaf, Workspace } from "./model";
 import { TerminalTargetPicker } from "./TerminalTargetPicker";
 import { useWorkspace, type FileRuntime } from "./WorkspaceProvider";
@@ -387,6 +388,14 @@ function TerminalBlock(props: BlockRenderProps & { blockId: string; profileId: s
     dispatch({ type: "openFiles", workspaceId: props.workspace.id, anchorBlockId: props.blockId, profileId: props.profileId, path: fileBrowserPath });
   }
 
+  function openTerminalRepository() {
+    if (props.remoteShellIntegrationEnabled && !reportedCwd) showOsc7Attention();
+    let target: GitTarget = { type: "unbound" };
+    if (props.profileId === null && isAbsoluteLocalPath(fileBrowserPath)) target = { type: "local", path: fileBrowserPath };
+    if (props.profileId !== null && isValidRemotePath(fileBrowserPath)) target = { type: "remote", profileId: props.profileId, path: fileBrowserPath };
+    dispatch({ type: "openGit", workspaceId: props.workspace.id, anchorBlockId: props.blockId, target });
+  }
+
   useEffect(() => {
     if (!props.remoteShellIntegrationEnabled || status !== "connected" || reportedCwd || autoOsc7AttentionSessionRef.current === sessionIdentity) return;
     autoOsc7AttentionSessionRef.current = sessionIdentity;
@@ -445,6 +454,7 @@ function TerminalBlock(props: BlockRenderProps & { blockId: string; profileId: s
         actions={[
           { label: "搜索终端输出", icon: "search", onSelect: () => openTerminalSearch(props.blockId) },
           { label: "清除终端缓冲区", icon: "clear", onSelect: () => clearBlockBuffer(props.blockId) },
+          { label: "打开仓库管理", title: status === "connected" ? `管理终端目录仓库 ${fileBrowserPath}` : "连接终端后打开仓库管理", icon: "git", disabled: status !== "connected", onSelect: openTerminalRepository },
           { label: "打开终端文件夹", title: cwdButtonTitle, icon: "files", disabled: status !== "connected", onSelect: openTerminalDirectory },
           { label: "打开网络窗口", title: props.profileId ? "使用当前远程连接打开网络窗口" : "本地终端无法创建网络窗口", icon: "network", disabled: !props.profileId, onSelect: () => dispatch({ type: "openNetwork", workspaceId: props.workspace.id, anchorBlockId: props.blockId, profileId: props.profileId }) },
           { label: "左右分割", icon: "splitHorizontal", onSelect: () => splitTerminalBlock(props.workspace.id, props.blockId, "horizontal", props.remoteShellIntegrationEnabled) },

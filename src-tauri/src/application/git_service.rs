@@ -5,8 +5,9 @@ use crate::{
         GitChangeDiff, GitCommitFile, GitCommitFileDiff, GitConflictDetail, GitConflictResolution,
         GitError, GitSnapshot, validate_branch_name, validate_branch_source_ref,
         validate_commit_message, validate_commit_oid, validate_conflict_resolution,
-        validate_local_branch_ref, validate_local_paths, validate_remote_branch_ref,
-        validate_remote_name, validate_remote_repository_path, validate_repository_path,
+        validate_discard_paths, validate_local_branch_ref, validate_local_paths,
+        validate_remote_branch_ref, validate_remote_name, validate_remote_repository_path,
+        validate_repository_path,
     },
     ports::git_executor::GitExecutor,
     ports::remote_git_executor::RemoteGitExecutor,
@@ -136,6 +137,11 @@ impl<E: GitExecutor> GitService<E> {
 
     pub fn unstage_all(&self, repository: String) -> Result<GitSnapshot, GitError> {
         self.executor.unstage_all(&input_path(repository)?)
+    }
+
+    pub fn discard(&self, repository: String, paths: Vec<String>) -> Result<GitSnapshot, GitError> {
+        validate_discard_paths(&paths, validate_local_paths)?;
+        self.executor.discard(&input_path(repository)?, &paths)
     }
 
     pub fn commit(&self, repository: String, message: String) -> Result<GitSnapshot, GitError> {

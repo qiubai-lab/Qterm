@@ -14,6 +14,7 @@ import {
   type GitConflictVersion,
   type GitDiffSource,
 } from "../lib/tauri/git";
+import { presentGitFileStatus } from "./gitStatus";
 
 const GitChangeComparison = lazy(() => import("./editor/GitChangeComparison").then((module) => ({ default: module.GitChangeComparison })));
 
@@ -79,6 +80,7 @@ export function GitChangePreview(props: GitChangePreviewProps) {
   const [selectedKey, setSelectedKey] = useState(initialEntry?.key ?? entries[0]?.key ?? "");
   const selectedIndex = Math.max(0, entries.findIndex((entry) => entry.key === selectedKey));
   const selected = entries[selectedIndex] ?? initialEntry ?? entries[0];
+  const selectedStatus = selected ? presentGitFileStatus(selected.status, { context: commitMode ? "commit" : "change" }) : null;
   const [detail, setDetail] = useState<PreviewDetail | null>(null);
   const [loading, setLoading] = useState(Boolean(selected));
   const [message, setMessage] = useState("");
@@ -143,13 +145,16 @@ export function GitChangePreview(props: GitChangePreviewProps) {
       <header className="git-change-preview-toolbar">
         <button type="button" className="git-change-preview-files-toggle" aria-label={filesExpanded ? "收起更改文件" : "展开更改文件"} aria-expanded={filesExpanded} onClick={() => setFilesExpanded((value) => !value)}><Icon name="files" size={14}/></button>
         <div className="git-change-preview-path"><strong>{selected?.path ?? "没有可预览的文件"}</strong>{selected?.originalPath && <span>{selected.originalPath} → {selected.path}</span>}</div>
-        {selected && <span className="git-change-preview-status" aria-label={`Git 状态 ${selected.status}`}>{selected.status}</span>}
-        <div className="git-change-preview-navigation"><button type="button" aria-label="上一个更改" disabled={entries.length < 2} onClick={() => move(-1)}><Icon name="back" size={12}/></button><span>{entries.length ? selectedIndex + 1 : 0} / {entries.length}</span><button type="button" aria-label="下一个更改" disabled={entries.length < 2} onClick={() => move(1)}><Icon name="forward" size={12}/></button></div>
+        {selectedStatus && <span className="git-change-preview-status" aria-label={`Git 状态：${selectedStatus.label}`}>{selectedStatus.label}</span>}
+        <div className="git-change-preview-navigation"><button type="button" aria-label="上一个更改" disabled={entries.length < 2} onClick={() => move(-1)}><Icon name="back" size={12}/></button><span className="git-change-preview-counter" aria-label={`第 ${entries.length ? selectedIndex + 1 : 0} 个更改，共 ${entries.length} 个`}><strong className="git-change-preview-counter-current">{entries.length ? selectedIndex + 1 : 0}</strong><span className="git-change-preview-counter-separator" aria-hidden="true">/</span><span className="git-change-preview-counter-total">{entries.length}</span></span><button type="button" aria-label="下一个更改" disabled={entries.length < 2} onClick={() => move(1)}><Icon name="forward" size={12}/></button></div>
       </header>
       <div className="git-change-preview-stage">
         <aside className="git-change-preview-file-popover" data-open={filesExpanded || undefined} aria-hidden={!filesExpanded} inert={!filesExpanded || undefined}>
           <div className="git-change-preview-file-title">更改文件 <span>{entries.length}</span></div>
-          <div className="git-change-preview-file-list">{entries.map((entry) => <button type="button" key={entry.key} aria-current={entry.key === selected?.key} aria-label={`${entry.path} ${entry.context} ${entry.status}`} onClick={() => select(entry)}><Icon name="file" size={13}/><span>{entry.path}</span><small>{entry.context}</small><b>{entry.status}</b></button>)}</div>
+          <div className="git-change-preview-file-list">{entries.map((entry) => {
+            const status = presentGitFileStatus(entry.status, { context: commitMode ? "commit" : "change" });
+            return <button type="button" key={entry.key} aria-current={entry.key === selected?.key} aria-label={`${entry.path} ${entry.context} ${status.label}`} onClick={() => select(entry)}><Icon name="file" size={13}/><span>{entry.path}</span><small>{entry.context}</small><b>{status.label}</b></button>;
+          })}</div>
         </aside>
         <main className="git-change-preview-main">
           {loading && <div className="git-change-preview-state" role="status">正在读取差异…</div>}

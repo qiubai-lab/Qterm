@@ -574,9 +574,11 @@
 }
 
 .git-commit-file-status {
+  flex: none;
   color: var(--accent);
   font-size: 9px;
   font-weight: 750;
+  white-space: nowrap;
 }
 
 .git-commit-file-status[data-tone="deleted"],

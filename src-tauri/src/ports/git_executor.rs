@@ -13,6 +13,7 @@ pub trait GitExecutor: Send + Sync + 'static {
     fn stage_all(&self, repository: &Path) -> Result<GitSnapshot, GitError>;
     fn unstage(&self, repository: &Path, paths: &[String]) -> Result<GitSnapshot, GitError>;
     fn unstage_all(&self, repository: &Path) -> Result<GitSnapshot, GitError>;
+    fn discard(&self, repository: &Path, paths: &[String]) -> Result<GitSnapshot, GitError>;
     fn commit(&self, repository: &Path, message: &str) -> Result<GitSnapshot, GitError>;
     fn commit_files(&self, repository: &Path, oid: &str) -> Result<Vec<GitCommitFile>, GitError>;
     fn commit_file_diff(

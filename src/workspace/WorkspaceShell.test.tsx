@@ -365,9 +365,15 @@ describe("WorkspaceShell utility rail", () => {
   it("shows the terminal lock action directly above system settings", async () => {
     render(<WorkspaceShell/>);
 
-    expect(screen.getByRole("button", { name: "链接管理" })).toBeInTheDocument();
+    const connectionManager = screen.getByRole("button", { name: "连接管理" });
+    expect(connectionManager).toBeInTheDocument();
+    expect(connectionManager.querySelector('[data-icon="computer"]')).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "凭证管理" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "文件管理" })).toBeInTheDocument();
+    const networkManager = screen.getByRole("button", { name: "网络管理" });
+    expect(networkManager.querySelector('[data-icon="network"]')).toBeInTheDocument();
+    const gitManager = screen.getByRole("button", { name: "Git 管理" });
+    expect(gitManager.querySelector('[data-icon="git"]')).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "打开终端" })).toBeInTheDocument();
     const lockButton = await screen.findByRole("button", { name: "锁定终端" });
     const settingsButton = screen.getByRole("button", { name: "系统设置" });

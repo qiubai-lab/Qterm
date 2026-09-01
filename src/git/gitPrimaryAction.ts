@@ -23,6 +23,8 @@ export interface GitPrimaryAction {
   title?: string;
   remote?: string;
   alternative?: GitPrimaryAlternativeAction;
+  updating?: boolean;
+  remoteConfigurationRequired?: boolean;
 }
 
 interface GitPrimaryActionInput {
@@ -43,14 +45,14 @@ function busyLabel(busy: string): string {
 }
 
 function withRuntimeState(action: GitPrimaryAction, busy: string, unavailable: boolean): GitPrimaryAction {
-  if (busy) return { ...action, label: busyLabel(busy), disabled: true, alternative: undefined };
+  if (busy) return { ...action, label: busyLabel(busy), disabled: true, alternative: undefined, updating: true };
   if (unavailable && !action.disabled) return { ...action, disabled: true, alternative: undefined };
   return action;
 }
 
 export function deriveGitPrimaryAction({ snapshot, message, busy, unavailable }: GitPrimaryActionInput): GitPrimaryAction {
   if (!snapshot) {
-    return { kind: "idle", label: busy ? busyLabel(busy) : "正在读取仓库…", disabled: true, showMessage: false };
+    return { kind: "idle", label: busy ? busyLabel(busy) : "正在读取仓库…", disabled: true, showMessage: false, updating: Boolean(busy) };
   }
 
   const stagedCount = snapshot.changes.filter((change) => change.staged && !change.conflict).length;
@@ -99,7 +101,7 @@ export function deriveGitPrimaryAction({ snapshot, message, busy, unavailable }:
 
   if (!snapshot.head.upstream) {
     if (snapshot.remotes.length === 0) {
-      return { kind: "idle", label: "未配置远端", disabled: true, showMessage: false };
+      return { kind: "idle", label: "未配置远端", disabled: true, showMessage: false, remoteConfigurationRequired: true };
     }
     if (snapshot.remotes.length === 1) {
       const remote = snapshot.remotes[0];

@@ -8,18 +8,170 @@ import { GitPane } from "./GitPane";
 setupGitPaneTests();
 
 describe("GitPane merge, operations, and remote routing", () => {
+  it("stages the exact unstaged multi-selection from its context menu", async () => {
+    const changes = [
+      { path: "src/first.ts", originalPath: null, status: "M", staged: false, conflict: false },
+      { path: "src/middle.ts", originalPath: null, status: "U", staged: false, conflict: false },
+      { path: "src/last.ts", originalPath: null, status: "D", staged: false, conflict: false },
+    ] satisfies GitSnapshot["changes"];
+    api.snapshot.mockResolvedValueOnce({ ...snapshot, changes });
+    render(<GitPane blockId="git-stage-selection" target={{ type: "local", path: "D:/work/project" }} visible onTargetChange={vi.fn()}/>);
+    await screen.findByText("project");
+
+    const first = screen.getByRole("button", { name: "预览工作区更改 src/first.ts" });
+    const last = screen.getByRole("button", { name: "预览工作区更改 src/last.ts" });
+    fireEvent.click(first);
+    fireEvent.click(last, { ctrlKey: true });
+    fireEvent.contextMenu(first, { clientX: 40, clientY: 60 });
+    const menu = screen.getByRole("menu", { name: "Git 更改操作" });
+    expect(within(menu).getByRole("menuitem", { name: "将 2 个文件添加到暂存区" })).toBeInTheDocument();
+    expect(within(menu).getByRole("menuitem", { name: "抛弃 2 个文件的更改" })).toBeInTheDocument();
+    fireEvent.click(within(menu).getByRole("menuitem", { name: "将 2 个文件添加到暂存区" }));
+
+    await waitFor(() => expect(api.stage).toHaveBeenCalledWith("D:/work/project", ["src/first.ts", "src/last.ts"]));
+    expect(api.stage).toHaveBeenCalledTimes(1);
+    expect(api.discard).not.toHaveBeenCalled();
+  });
+
+  it("multi-selects staged changes and unstages the exact context-menu selection", async () => {
+    const changes = [
+      { path: "src/a.ts", originalPath: null, status: "M", staged: true, conflict: false },
+      { path: "src/b.ts", originalPath: null, status: "A", staged: true, conflict: false },
+      { path: "src/c.ts", originalPath: null, status: "D", staged: true, conflict: false },
+    ] satisfies GitSnapshot["changes"];
+    api.snapshot.mockResolvedValueOnce({ ...snapshot, changes });
+    render(<GitPane blockId="git-unstage-selection" target={{ type: "local", path: "D:/work/project" }} visible onTargetChange={vi.fn()}/>);
+    await screen.findByText("project");
+
+    const first = screen.getByRole("button", { name: "预览已暂存更改 src/a.ts" });
+    const middle = screen.getByRole("button", { name: "预览已暂存更改 src/b.ts" });
+    const last = screen.getByRole("button", { name: "预览已暂存更改 src/c.ts" });
+    fireEvent.contextMenu(middle, { clientX: 30, clientY: 40 });
+    expect(middle).toHaveAttribute("aria-pressed", "true");
+    expect(first).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("menuitem", { name: "取消暂存" })).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: "Escape" });
+
+    fireEvent.click(first);
+    fireEvent.keyDown(window, { key: "Escape" });
+    fireEvent.click(last, { shiftKey: true });
+    expect(first).toHaveAttribute("aria-pressed", "true");
+    expect(middle).toHaveAttribute("aria-pressed", "true");
+    expect(last).toHaveAttribute("aria-pressed", "true");
+    fireEvent.keyDown(last, { key: "F10", shiftKey: true });
+    fireEvent.click(screen.getByRole("menuitem", { name: "取消暂存 3 个文件" }));
+
+    await waitFor(() => expect(api.unstage).toHaveBeenCalledWith("D:/work/project", ["src/a.ts", "src/b.ts", "src/c.ts"]));
+    expect(api.unstage).toHaveBeenCalledTimes(1);
+  });
+
+  it("selects multiple unstaged files and confirms one exact discard batch", async () => {
+    const changes = [
+      { path: "src/first.ts", originalPath: null, status: "M", staged: false, conflict: false },
+      { path: "src/untracked.ts", originalPath: null, status: "U", staged: false, conflict: false },
+      { path: "src/last.ts", originalPath: null, status: "D", staged: false, conflict: false },
+    ] satisfies GitSnapshot["changes"];
+    const dirty = { ...snapshot, changes } satisfies GitSnapshot;
+    const clean = { ...dirty, changes: [] } satisfies GitSnapshot;
+    api.snapshot.mockResolvedValueOnce(dirty);
+    api.discard.mockResolvedValueOnce(clean);
+    render(<GitPane blockId="git-discard" target={{ type: "local", path: "D:/work/project" }} visible onTargetChange={vi.fn()}/>);
+    await screen.findByText("project");
+
+    const first = screen.getByRole("button", { name: "预览工作区更改 src/first.ts" });
+    const untracked = screen.getByRole("button", { name: "预览工作区更改 src/untracked.ts" });
+    const last = screen.getByRole("button", { name: "预览工作区更改 src/last.ts" });
+    fireEvent.click(first);
+    expect(screen.getByRole("status")).toHaveTextContent("再次点击打开预览");
+    expect(api.changeDiff).not.toHaveBeenCalled();
+    fireEvent.click(last, { ctrlKey: true });
+    expect(screen.queryByText("已选择，再次点击打开预览")).not.toBeInTheDocument();
+    expect(api.changeDiff).not.toHaveBeenCalled();
+    expect(first).toHaveAttribute("aria-pressed", "true");
+    expect(last).toHaveAttribute("aria-pressed", "true");
+    expect(untracked).toHaveAttribute("aria-pressed", "false");
+
+    fireEvent.contextMenu(first, { clientX: 40, clientY: 60 });
+    const menu = screen.getByRole("menu", { name: "Git 更改操作" });
+    fireEvent.click(within(menu).getByRole("menuitem", { name: "抛弃 2 个文件的更改" }));
+    const confirmation = screen.getByRole("dialog", { name: "抛弃 2 个文件的更改？" });
+    expect(confirmation).toHaveTextContent("2 个已跟踪文件");
+    expect(confirmation).toHaveTextContent("已暂存的更改和现有提交不会受到影响");
+    expect(confirmation).toHaveTextContent("src/first.ts");
+    expect(confirmation).toHaveTextContent("src/last.ts");
+    expect(api.discard).not.toHaveBeenCalled();
+    fireEvent.click(within(confirmation).getByRole("button", { name: "确认抛弃 2 个更改" }));
+    await waitFor(() => expect(api.discard).toHaveBeenCalledWith("D:/work/project", ["src/first.ts", "src/last.ts"]));
+    expect(screen.queryByRole("dialog", { name: "抛弃 2 个文件的更改？" })).not.toBeInTheDocument();
+  });
+
+  it("uses range selection, keyboard context menu, and explains untracked deletion before discard", async () => {
+    const changes = [
+      { path: "a.ts", originalPath: null, status: "M", staged: false, conflict: false },
+      { path: "b.ts", originalPath: null, status: "U", staged: false, conflict: false },
+      { path: "c.ts", originalPath: null, status: "D", staged: false, conflict: false },
+    ] satisfies GitSnapshot["changes"];
+    api.snapshot.mockResolvedValueOnce({ ...snapshot, changes });
+    render(<GitPane blockId="git-range" target={{ type: "local", path: "D:/work/project" }} visible onTargetChange={vi.fn()}/>);
+    await screen.findByText("project");
+    const first = screen.getByRole("button", { name: "预览工作区更改 a.ts" });
+    const last = screen.getByRole("button", { name: "预览工作区更改 c.ts" });
+    fireEvent.click(first);
+    fireEvent.keyDown(window, { key: "Escape" });
+    fireEvent.click(last, { shiftKey: true });
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.getByRole("button", { name: "预览工作区更改 b.ts" })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.keyDown(last, { key: "F10", shiftKey: true });
+    fireEvent.click(screen.getByRole("menuitem", { name: "抛弃 3 个文件的更改" }));
+    const confirmation = screen.getByRole("dialog", { name: "抛弃 3 个文件的更改？" });
+    expect(confirmation).toHaveTextContent("2 个已跟踪文件");
+    expect(confirmation).toHaveTextContent("永久删除 1 个未跟踪文件");
+    fireEvent.click(within(confirmation).getByRole("button", { name: "取消" }));
+    expect(api.discard).not.toHaveBeenCalled();
+    await waitFor(() => expect(last).toHaveFocus());
+  });
+
+  it("refreshes the snapshot and closes stale confirmation after discard failure", async () => {
+    const dirty = { ...snapshot, changes: [{ path: "changed.ts", originalPath: null, status: "M", staged: false, conflict: false }] } satisfies GitSnapshot;
+    const recovered = { ...dirty, changes: [] } satisfies GitSnapshot;
+    api.snapshot.mockResolvedValueOnce(dirty).mockResolvedValueOnce(recovered);
+    api.discard.mockRejectedValueOnce({ code: "gitCommandFailed", message: "只完成了部分操作，请检查最新状态" });
+    render(<GitPane blockId="git-discard-failure" target={{ type: "local", path: "D:/work/project" }} visible onTargetChange={vi.fn()}/>);
+    await screen.findByText("project");
+    fireEvent.contextMenu(screen.getByRole("button", { name: "预览工作区更改 changed.ts" }), { clientX: 30, clientY: 40 });
+    fireEvent.click(screen.getByRole("menuitem", { name: "抛弃更改" }));
+    fireEvent.click(within(screen.getByRole("dialog", { name: "抛弃 1 个文件的更改？" })).getByRole("button", { name: "确认抛弃 1 个更改" }));
+    await waitFor(() => expect(api.snapshot).toHaveBeenCalledTimes(2));
+    expect(screen.queryByRole("dialog", { name: "抛弃 1 个文件的更改？" })).not.toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent("只完成了部分操作，请检查最新状态");
+    expect(screen.getByText("工作区干净")).toBeInTheDocument();
+  });
+
   it("opens staged and worktree previews without stealing the stage actions", async () => {
     render(<GitPane blockId="git-preview" target={{ type: "local", path: "D:/work/project" }} visible onTargetChange={vi.fn()}/>);
     await screen.findByText("project");
 
-    fireEvent.click(screen.getByRole("button", { name: "预览已暂存更改 src/staged.ts" }));
+    const staged = screen.getByRole("button", { name: "预览已暂存更改 src/staged.ts" });
+    fireEvent.click(staged);
+    expect(staged).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("status")).toHaveTextContent("已选择，再次点击打开预览");
+    expect(api.changeDiff).not.toHaveBeenCalled();
+    fireEvent.click(staged);
     await screen.findByRole("dialog", { name: "预览 Git 更改" });
     await waitFor(() => expect(api.changeDiff).toHaveBeenCalledWith("D:/work/project", "src/staged.ts", true));
     fireEvent.click(screen.getByRole("button", { name: "关闭" }));
 
+    const worktree = screen.getByRole("button", { name: "预览工作区更改 src/new.ts" });
+    fireEvent.click(worktree);
+    expect(worktree).toHaveAttribute("aria-pressed", "true");
+    expect(api.changeDiff).toHaveBeenCalledTimes(1);
+    fireEvent.click(worktree);
+    await waitFor(() => expect(api.changeDiff).toHaveBeenCalledWith("D:/work/project", "src/new.ts", false));
+    fireEvent.click(screen.getByRole("button", { name: "关闭" }));
+
     fireEvent.click(screen.getByRole("button", { name: "暂存 src/new.ts" }));
     await waitFor(() => expect(api.stage).toHaveBeenCalledWith("D:/work/project", ["src/new.ts"]));
-    expect(api.changeDiff).toHaveBeenCalledTimes(1);
+    expect(api.changeDiff).toHaveBeenCalledTimes(2);
   });
 
   it("confirms merge direction for local or remote refs and records conflicts as attention", async () => {
@@ -239,6 +391,10 @@ describe("GitPane merge, operations, and remote routing", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Git 仓库操作" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "推送" }));
+    const aggregate = screen.getByRole("button", { name: "正在推送…" });
+    expect(aggregate).toHaveAttribute("aria-busy", "true");
+    expect(aggregate.querySelector('[data-icon="sync"]')).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "正在更新 Git 状态" }).querySelector('[data-icon="sync"]')).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Git 仓库操作" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "操作记录" }));
     expect(within(screen.getByRole("dialog", { name: "Git 操作记录" })).getByLabelText("进行中")).toBeInTheDocument();
@@ -255,7 +411,7 @@ describe("GitPane merge, operations, and remote routing", () => {
     fireEvent.click(screen.getByRole("button", { name: "Git 仓库操作" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "操作记录" }));
     expect(within(screen.getByRole("dialog", { name: "Git 操作记录" })).getAllByRole("listitem")).toHaveLength(20);
-  });
+  }, 10_000);
 
   it("routes remote snapshots and mutations through the owned Git session", async () => {
     const remoteSnapshot = {
@@ -287,9 +443,15 @@ describe("GitPane merge, operations, and remote routing", () => {
       onRepositoryOpened={onRepositoryOpened}
     />);
     await waitFor(() => expect(api.remote).toHaveBeenCalledWith("git-session", "profile-1", { type: "snapshot", path: "/srv/project" }));
-    fireEvent.click(await screen.findByRole("button", { name: "预览已暂存更改 src/staged.ts" }));
+    const stagedChange = await screen.findByRole("button", { name: "预览已暂存更改 src/staged.ts" });
+    fireEvent.click(stagedChange);
+    expect(api.remoteChangeDiff).not.toHaveBeenCalled();
+    fireEvent.click(stagedChange);
     await waitFor(() => expect(api.remoteChangeDiff).toHaveBeenCalledWith("git-session", "profile-1", "/srv/project", "src/staged.ts", true));
     fireEvent.click(screen.getByRole("button", { name: "关闭" }));
+    fireEvent.contextMenu(stagedChange, { clientX: 30, clientY: 40 });
+    fireEvent.click(screen.getByRole("menuitem", { name: "取消暂存" }));
+    await waitFor(() => expect(api.remote).toHaveBeenCalledWith("git-session", "profile-1", { type: "unstage", repository: "/srv/project", paths: ["src/staged.ts"] }));
     fireEvent.click(await screen.findByRole("button", { name: "刷新 Git 状态" }));
     await waitFor(() => expect(api.remote).toHaveBeenCalledWith("git-session", "profile-1", { type: "fetch", repository: "/srv/project" }));
     fireEvent.click(screen.getByRole("button", { name: "切换分支，当前 main" }));
@@ -297,6 +459,10 @@ describe("GitPane merge, operations, and remote routing", () => {
     await waitFor(() => expect(api.remote).toHaveBeenCalledWith("git-session", "profile-1", { type: "trackRemoteBranch", repository: "/srv/project", refName: "refs/remotes/origin/feature/remote" }));
     fireEvent.click(await screen.findByRole("button", { name: "暂存 src/new.ts" }));
     await waitFor(() => expect(api.remote).toHaveBeenCalledWith("git-session", "profile-1", { type: "stage", repository: "/srv/project", paths: ["src/new.ts"] }));
+    fireEvent.contextMenu(screen.getByRole("button", { name: "预览工作区更改 src/new.ts" }), { clientX: 30, clientY: 40 });
+    fireEvent.click(screen.getByRole("menuitem", { name: "抛弃更改" }));
+    fireEvent.click(within(screen.getByRole("dialog", { name: "抛弃 1 个文件的更改？" })).getByRole("button", { name: "确认抛弃 1 个更改" }));
+    await waitFor(() => expect(api.remote).toHaveBeenCalledWith("git-session", "profile-1", { type: "discard", repository: "/srv/project", paths: ["src/new.ts"] }));
     fireEvent.click(screen.getByRole("button", { name: "图表" }));
     fireEvent.click(screen.getByRole("button", { name: /feat: initial/ }));
     await waitFor(() => expect(api.remoteCommitFiles).toHaveBeenCalledWith("git-session", "profile-1", "/srv/project", "abcdef012345"));

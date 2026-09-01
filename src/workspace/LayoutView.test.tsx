@@ -185,6 +185,7 @@ describe("WorkspaceCanvas terminal actions", () => {
     act(() => more.click());
     const menu = await screen.findByRole("menu", { name: "终端更多操作" });
     expect(within(menu).getByRole("menuitem", { name: "搜索终端输出" })).toBeInTheDocument();
+    expect(within(menu).getByRole("menuitem", { name: "打开仓库管理" })).toBeInTheDocument();
     expect(within(menu).getByRole("menuitem", { name: "打开终端文件夹" })).toBeInTheDocument();
     await user.click(within(menu).getByRole("menuitem", { name: "左右分割" }));
     expect(splitTerminalBlock).toHaveBeenCalledWith("workspace-1", "block-1", "horizontal", false);
@@ -291,6 +292,26 @@ describe("WorkspaceCanvas terminal actions", () => {
     const view = render(<WorkspaceCanvas workspace={workspace} visible remoteShellIntegrationEnabled onRequestClose={vi.fn()} onRequestAuthConnection={vi.fn()}/>);
     within(view.container).getByRole("button", { name: "打开终端文件夹" }).click();
     expect(dispatch).toHaveBeenCalledWith({ type: "openFiles", workspaceId: "workspace-1", anchorBlockId: "block-1", profileId: null, path: "C:/work" });
+  });
+
+  it("opens repository management for the terminal directory before the folder action", () => {
+    const view = render(<WorkspaceCanvas workspace={workspace} visible remoteShellIntegrationEnabled onRequestClose={vi.fn()} onRequestAuthConnection={vi.fn()}/>);
+    const repository = within(view.container).getByRole("button", { name: "打开仓库管理" });
+    const folder = within(view.container).getByRole("button", { name: "打开终端文件夹" });
+
+    expect(repository.querySelector('[data-icon="git"]')).toBeInTheDocument();
+    expect(repository.compareDocumentPosition(folder) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    repository.click();
+    expect(dispatch).toHaveBeenCalledWith({ type: "openGit", workspaceId: "workspace-1", anchorBlockId: "block-1", target: { type: "local", path: "C:/work" } });
+  });
+
+  it("opens repository management with the connected remote terminal path", () => {
+    const remoteWorkspace: Workspace = { ...workspace, layout: { type: "terminal", blockId: "block-1", profileId: "password-profile", restoreDirectory: null } };
+    terminalRuntimes = { "block-1": { ...connectedLocalRuntime, kind: "ssh", cwd: "/srv/project", cwdSource: "osc7" } };
+    const view = render(<WorkspaceCanvas workspace={remoteWorkspace} visible remoteShellIntegrationEnabled onRequestClose={vi.fn()} onRequestAuthConnection={vi.fn()}/>);
+
+    within(view.container).getByRole("button", { name: "打开仓库管理" }).click();
+    expect(dispatch).toHaveBeenCalledWith({ type: "openGit", workspaceId: "workspace-1", anchorBlockId: "block-1", target: { type: "remote", profileId: "password-profile", path: "/srv/project" } });
   });
 
   it("automatically highlights a new connected terminal when OSC 7 remains unavailable", () => {

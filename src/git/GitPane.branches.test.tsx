@@ -27,6 +27,9 @@ describe("GitPane branches and repository actions", () => {
     expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "创建分支" })).not.toBeInTheDocument();
     const refreshButton = screen.getByRole("button", { name: "刷新 Git 状态" });
+    expect(refreshButton.querySelector('[data-icon="sync"]')).toBeInTheDocument();
+    expect(refreshButton.querySelector('[data-icon="sync"]')).toHaveAttribute("width", "14");
+    expect(refreshButton.querySelector('[data-icon="sync"] path[fill="currentColor"]')).toBeInTheDocument();
     const syncStatus = repositoryRow?.querySelector(".git-repository-sync");
     expect(repositoryRow).toContainElement(refreshButton);
     expect(repositoryRow).not.toHaveTextContent("origin/main");
@@ -60,6 +63,57 @@ describe("GitPane branches and repository actions", () => {
     fireEvent.click(within(screen.getByRole("group", { name: "本地分支" })).getByRole("option", { name: /feature\/portal/ }));
     await waitFor(() => expect(api.switchBranch).toHaveBeenCalledWith("D:/work/project", "feature/portal"));
     expect(screen.queryByRole("dialog", { name: "切换分支" })).not.toBeInTheDocument();
+  });
+
+  it("refreshes visible repositories in the background and immediately on window focus", async () => {
+    const intervalSpy = vi.spyOn(window, "setInterval");
+    render(<GitPane blockId="git-1" target={{ type: "local", path: "D:/work/project" }} visible onTargetChange={vi.fn()}/>);
+    await screen.findByText("project");
+    expect(api.snapshot).toHaveBeenCalledTimes(1);
+
+    const intervalCall = intervalSpy.mock.calls.find(([, delay]) => delay === 15_000);
+    expect(intervalCall).toBeDefined();
+    const intervalHandler = intervalCall?.[0];
+    expect(typeof intervalHandler).toBe("function");
+    if (typeof intervalHandler === "function") intervalHandler();
+    await waitFor(() => expect(api.snapshot).toHaveBeenCalledTimes(2));
+
+    fireEvent.focus(window);
+    await waitFor(() => expect(api.snapshot).toHaveBeenCalledTimes(3));
+    intervalSpy.mockRestore();
+  });
+
+  it("explains missing remote configuration from the aggregate action and repository menu", async () => {
+    api.snapshot.mockResolvedValueOnce({
+      ...snapshot,
+      head: { ...snapshot.head, upstream: null, ahead: 0, behind: 0 },
+      changes: [],
+      remotes: [],
+    });
+    render(<GitPane blockId="git-no-remote" target={{ type: "local", path: "D:/work/project" }} visible onTargetChange={vi.fn()}/>);
+    await screen.findByText("project");
+
+    const aggregate = screen.getByRole("button", { name: "未配置远端" });
+    expect(aggregate).toHaveAttribute("data-remote-configuration-required", "true");
+    expect(aggregate).toHaveAttribute("aria-disabled", "true");
+    expect(aggregate).not.toBeDisabled();
+    fireEvent.pointerEnter(aggregate);
+    expect(screen.getByRole("tooltip")).toHaveTextContent("请先配置远端仓库地址");
+    fireEvent.pointerLeave(aggregate);
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Git 仓库操作" }));
+    const menu = screen.getByRole("menu", { name: "存储库操作" });
+    const unavailableItems = ["拉取", "发布分支…", "同步"].map((name) => within(menu).getByRole("menuitem", { name }));
+    for (const item of unavailableItems) {
+      expect(item).toHaveAttribute("data-remote-configuration-required", "true");
+      expect(item).toHaveAttribute("aria-disabled", "true");
+      expect(item).not.toBeDisabled();
+    }
+    fireEvent.focus(unavailableItems[1]);
+    expect(screen.getByRole("tooltip")).toHaveTextContent("请先配置远端仓库地址，再进行拉取、推送或同步。");
+    fireEvent.click(unavailableItems[1]);
+    expect(screen.queryByRole("dialog", { name: "发布分支" })).not.toBeInTheDocument();
   });
 
   it("keeps the branch chooser open while its list scrolls and closes it for outside viewport scrolling", async () => {

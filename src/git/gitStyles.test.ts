@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 
 const gitStyleFiles = [
   "gitShell.css",
+  "gitChangeSelection.css",
   "gitGraph.css",
   "gitTargetConfig.css",
   "gitBranchOverlays.css",
@@ -12,6 +13,7 @@ const gitStyleFiles = [
   "gitOperationOverlay.css",
   "gitRepositoryPicker.css",
   "gitRepositoryHistory.css",
+  "gitRemoteConfigurationHint.css",
   "gitConflictResolver.css",
   "gitChangePreview.css",
   "gitMedia.css",
@@ -63,25 +65,70 @@ describe("Git pane style contracts", () => {
     expect(declarations(".git-repository-history-scroll")).toContain("overflow-y: auto");
     expect(declarations(".git-repository-history-scroll")).toContain("scrollbar-color: var(--scrollbar-thumb) transparent");
     expect(declarations(".git-repository-history-browse")).toContain("flex: none");
-    expect(declarations('.git-repository-history-item[aria-current="true"]')).toContain("var(--selection-surface)");
+    const itemHover = declarations(".git-repository-history-item:hover,\n.git-repository-history-item:focus-visible");
+    expect(itemHover).toContain("background: var(--file-active-surface)");
+    expect(itemHover).toContain("var(--file-active-marker)");
+    const selectedItem = declarations('.git-repository-history-item[aria-current="true"]');
+    expect(selectedItem).toContain("color: var(--file-selection-foreground)");
+    expect(selectedItem).toContain("background: var(--file-selection-surface)");
+    expect(selectedItem).toContain("inset 0 0 0 1px var(--file-selection-marker)");
+    expect(selectedItem).toContain("border-radius: 4px");
+    expect(declarations('.git-repository-history-item[aria-current="true"] small')).toContain("var(--file-selection-secondary-foreground)");
+    const browseHover = declarations(".git-repository-history-browse:hover,\n.git-repository-history-browse:focus-visible");
+    expect(browseHover).toContain("background: var(--file-active-surface)");
+    expect(browseHover).toContain("var(--file-active-marker)");
+    expect(declarations(".git-repository-history-browse:hover > svg,\n.git-repository-history-browse:focus-visible > svg")).toContain("color: var(--file-active-marker)");
     const reducedMotion = styles.slice(styles.indexOf("@media (prefers-reduced-motion: reduce)"));
     expect(reducedMotion).toContain(".git-repository-history-popover");
   });
 
   it("gives the remote repository picker one bounded directory scroller", () => {
-    expect(declarations(".git-repository-picker-dialog")).toContain("height: min(470px, calc(100vh - 48px))");
+    const dialog = declarations(".git-repository-picker-dialog");
+    expect(dialog).toContain("width: min(740px, calc(100vw - 48px))");
+    expect(dialog).toContain("height: min(470px, calc(100vh - 48px))");
     expect(declarations(".git-repository-picker-dialog .dialog-content")).toContain("display: flex");
     expect(declarations(".git-repository-picker-dialog .dialog-content")).toContain("min-height: 0");
     expect(declarations(".git-repository-picker-dialog .dialog-content")).toContain("overflow: hidden");
     expect(declarations(".git-repository-picker")).toContain("min-height: 0");
     expect(declarations(".git-repository-picker")).toContain("flex: 1");
-    expect(declarations(".git-repository-picker-toolbar")).toContain("flex: none");
+    const toolbar = declarations(".git-repository-picker-toolbar");
+    expect(toolbar).toContain("flex: none");
+    expect(toolbar).toContain("grid-template-columns: 27px 27px minmax(0, 1fr) 27px");
+    expect(declarations(".git-repository-picker-toolbar > button")).toContain("width: 27px");
+    const pathShell = declarations(".git-repository-picker-path-shell");
+    expect(pathShell).toContain("min-width: 0");
+    expect(pathShell).not.toContain("border:");
+    expect(pathShell).not.toContain("background:");
+    expect(pathShell).not.toContain("box-shadow:");
+    expect(declarations(".git-repository-picker-path > .sr-only")).toContain("clip: rect(0, 0, 0, 0)");
+    const pathInput = declarations(".git-repository-picker-path input");
+    expect(pathInput).toContain("width: 0");
+    expect(pathInput).toContain("height: 20px");
+    expect(pathInput).toContain("border: 0");
+    expect(pathInput).toContain("border-radius: 0");
+    expect(pathInput).toContain("background: transparent");
+    expect(pathInput).toContain("box-shadow: inset 0 -1px 0 var(--focus)");
+    expect(declarations(".git-repository-picker-path input:focus,\n.git-repository-picker-path input:focus-visible")).toContain("box-shadow: inset 0 -1px 0 var(--focus)");
+    expect(declarations(".git-repository-picker-path-display")).toContain("text-overflow: ellipsis");
+    expect(declarations(".git-repository-picker-directory-stage")).toContain("min-height: 0");
+    expect(declarations(".git-repository-picker-directory-stage")).toContain("flex: 1");
+    const columns = declarations(".git-repository-picker-columns,\n.git-repository-picker-row-shell button");
+    expect(columns).toContain("grid-template-columns: minmax(180px, 1fr) 94px 150px");
     expect(declarations(".git-repository-picker-list-scroll")).toContain("min-height: 0");
     expect(declarations(".git-repository-picker-list-scroll")).toContain("flex: 1");
     expect(declarations(".git-repository-picker-list-scroll")).toContain("overflow: auto");
     expect(declarations(".git-repository-picker-list-scroll")).toContain("scrollbar-color: var(--scrollbar-thumb) transparent");
     expect(declarations(".git-repository-picker-feedback")).toContain("min-height: 34px");
-    expect(declarations(".git-repository-picker-footer")).toContain("flex: none");
+    expect(declarations(".git-repository-picker-footer")).toContain("min-height: 58px");
+    expect(declarations(".git-repository-picker-footer .ui-button")).toContain("height: 30px");
+    expect(declarations(".git-repository-picker-footer .ui-button--primary")).toContain("min-width: 100px");
+    expect(cyberTheme).toContain("--danger:#ff6b75");
+    const selectedRow = declarations(".git-repository-picker-row-shell button[data-selected],\n.git-repository-picker-row-shell button[data-selected]:hover");
+    expect(selectedRow).toContain("background: var(--file-selection-surface)");
+    expect(selectedRow).toContain("inset 0 0 0 1px var(--file-selection-marker)");
+    expect(declarations(".git-repository-picker-name > svg")).toContain("color: var(--accent)");
+    expect(declarations(".git-repository-picker-row-shell button:hover .git-repository-picker-name > svg")).toContain("color: var(--file-active-marker)");
+    expect(declarations(".git-repository-picker-row-shell button[data-selected] .git-repository-picker-name > svg,\n.git-repository-picker-row-shell button[data-selected]:hover .git-repository-picker-name > svg")).toContain("color: var(--file-selection-marker)");
     const reducedMotion = styles.slice(styles.indexOf("@media (prefers-reduced-motion: reduce)"));
     expect(reducedMotion).toContain(".git-repository-picker-row-shell button");
   });
@@ -99,6 +146,7 @@ describe("Git pane style contracts", () => {
     expect(declarations(".git-changes-section")).not.toContain("order:");
     expect(declarations(".git-graph-section")).not.toContain("order:");
     expect(declarations(".git-changes-section")).toContain("flex: 1 1 160px");
+    expect(declarations(".git-section-meta")).toContain("color: var(--muted)");
     expect(declarations(".git-graph-section")).toContain("flex: 1 1 140px");
     expect(declarations(".git-graph-section")).not.toContain("flex: .75 1 140px");
     expect(declarations(".git-graph-section")).toContain("margin-top: 0");
@@ -209,14 +257,16 @@ describe("Git pane style contracts", () => {
     expect(cyberTheme).toContain("--accent:#00ddeb");
   });
 
-  it("uses independent cards for each change list without an outer card", () => {
+  it("aligns independent change cards with the commit card without a reserved scrollbar gutter", () => {
     const changes = declarations(".git-change-scroll");
+    expect(declarations(".git-commit-box")).toContain("margin: 7px 8px 5px");
     expect(changes).toContain("margin: 0 8px 7px");
     expect(changes).toContain("padding: 0");
     expect(changes).toContain("background: transparent");
-    expect(changes).toContain("scrollbar-gutter: stable");
+    expect(changes).not.toContain("scrollbar-gutter: stable");
     expect(changes).not.toContain("border:");
     expect(changes).not.toContain("box-shadow:");
+    expect(declarations(".git-change-scroll > .git-clean-state:only-child")).toContain("flex: 1");
     const group = declarations(".git-change-group");
     expect(group).toContain("border: 1px solid");
     expect(group).toContain("border-radius: 5px");
@@ -372,9 +422,24 @@ describe("Git pane style contracts", () => {
     expect(declarations('.git-operation-row[data-status="error"]')).toContain("var(--danger)");
     expect(declarations(".git-branch-management-danger")).toContain("var(--danger)");
     expect(declarations('.git-repository-refresh[data-updating="true"] svg')).toContain("animation: git-repository-picker-spin 700ms linear infinite");
+    expect(declarations('.git-primary-action[data-updating="true"] > svg')).toContain("animation: git-repository-picker-spin 700ms linear infinite");
+    expect(declarations('.git-primary-action[data-updating="true"]:disabled')).toContain("color: var(--primary-action)");
     const reducedMotion = styles.slice(styles.indexOf("@media (prefers-reduced-motion: reduce)"));
     expect(reducedMotion).toContain('.git-repository-refresh[data-updating="true"] svg');
+    expect(reducedMotion).toContain('.git-primary-action[data-updating="true"] > svg');
     expect(reducedMotion).toContain(".git-merge-flow-packet");
+  });
+
+  it("uses themed danger feedback and a floating explanation when remote configuration is missing", () => {
+    const primary = declarations('.git-primary-action[data-remote-configuration-required="true"]');
+    expect(primary).toContain("border-color: color-mix(in srgb, var(--danger)");
+    expect(primary).toContain("color: var(--danger)");
+    expect(declarations('.git-repository-action-item[data-remote-configuration-required="true"]')).toContain("color: var(--danger)");
+    const tooltip = declarations(".git-remote-configuration-tooltip");
+    expect(tooltip).toContain("position: fixed");
+    expect(tooltip).toContain("z-index: 170");
+    expect(tooltip).toContain("background: var(--floating-material)");
+    expect(tooltip).toContain("pointer-events: none");
   });
 
   it("presents graph commits as selectable two-line rows with a legible glass selection", () => {
@@ -505,10 +570,54 @@ describe("Git pane style contracts", () => {
     const path = declarations(".git-change-path");
     expect(path).toContain("color: var(--text)");
     expect(path).toContain("font-weight: 600");
+    expect(path).toContain("justify-self: start");
     expect(declarations(".git-change-row.previewable")).toContain("grid-template-columns: minmax(0, 1fr) auto");
     const previewTrigger = declarations(".git-change-row > .git-change-preview-trigger");
     expect(previewTrigger).toContain("width: 100%");
     expect(previewTrigger).toContain("grid-template-columns: auto minmax(0, 1fr) auto");
+    const hover = declarations(".git-change-row:hover");
+    expect(hover).toContain("background: var(--file-active-surface)");
+    expect(hover).toContain("var(--file-active-marker)");
+    const selected = declarations('.git-change-row.previewable[data-selected="true"]');
+    expect(selected).toContain("border-radius: 4px");
+    expect(selected).toContain("background: var(--file-selection-surface)");
+    expect(selected).toContain("box-shadow: inset 0 0 0 1px var(--file-selection-marker)");
+    const selectedTriggerHover = declarations('.git-change-row.previewable[data-selected="true"] > .git-change-preview-trigger:hover:not(:disabled),\n.git-change-row.previewable[data-selected="true"] > .git-change-preview-trigger:active:not(:disabled)');
+    expect(selectedTriggerHover).toContain("border-color: transparent");
+    expect(selectedTriggerHover).toContain("background: transparent");
+    const selectionHint = declarations(".git-change-selection-hint");
+    expect(selectionHint).toContain("position: fixed");
+    expect(selectionHint).toContain("border: 1px solid var(--floating-border)");
+    expect(selectionHint).toContain("background: var(--floating-material)");
+    expect(selectionHint).toContain("pointer-events: none");
+    expect(declarations('.git-change-row.previewable[data-selected="true"] .git-change-path')).toContain("color: var(--file-selection-foreground)");
+    expect(declarations('.git-change-row.previewable[data-selected="true"] .git-change-preview-trigger > svg')).toContain("color: var(--file-selection-marker)");
+    expect(declarations('.git-change-row.previewable[data-selected="true"] .git-change-status')).toContain("color: var(--file-selection-secondary-foreground)");
+  });
+
+  it("uses the shared themed popover surface for change context actions", () => {
+    expect(declarations(".git-change-context-menu")).toContain("width: 210px");
+    expect(styles).not.toContain(".git-discard-context-menu");
+    expect(declarations(".git-commit-context-menu")).toContain("background: var(--floating-material)");
+  });
+
+  it("keeps translated Git status labels on one compact line", () => {
+    expect(declarations(".git-change-status")).toContain("white-space: nowrap");
+    expect(declarations(".git-change-preview-status")).toContain("flex: none");
+    expect(declarations(".git-change-preview-status")).toContain("white-space: nowrap");
+    expect(declarations(".git-change-preview-file-list button b")).toContain("white-space: nowrap");
+    expect(declarations(".git-commit-file-status")).toContain("flex: none");
+    expect(declarations(".git-commit-file-status")).toContain("white-space: nowrap");
+  });
+
+  it("lets discard confirmation content use the dialog width", () => {
+    expect(declarations(".dialog-frame.git-discard-confirmation")).toContain("width: min(410px, calc(100vw - 40px))");
+    const content = declarations(".git-discard-confirmation .dialog-content");
+    expect(content).toContain("width: 100%");
+    expect(content).toContain("padding: 0");
+    expect(content).toContain("align-items: stretch");
+    expect(declarations(".git-discard-confirmation-body")).toContain("width: 100%");
+    expect(declarations(".git-discard-confirmation .dialog-actions")).toContain("width: 100%");
   });
 
   it("uses semantic menu roles and a stable source card for commit branch creation", () => {
@@ -584,10 +693,56 @@ describe("Git pane style contracts", () => {
   it("keeps change preview viewport-safe while its file list floats over the editor", () => {
     expect(changePreviewStyles).toContain("width:min(1480px,calc(100vw-48px))");
     expect(changePreviewStyles).toContain("height:min(920px,calc(100vh-48px))");
+    expect(changePreviewStyles).toContain(".git-change-preview-dialog.dialog-content{display:flex;flex:110;min-width:0;min-height:0");
     expect(changePreviewStyles).toContain(".git-change-preview-stage{position:relative");
+    expect(changePreviewStyles).toContain("flex:110;min-width:0;min-height:0;overflow:hidden");
     expect(changePreviewStyles).toContain(".git-change-preview-file-popover{position:absolute");
+    expect(changePreviewStyles).toContain("flex-direction:column");
+    expect(changePreviewStyles).toContain(".git-change-comparison.cm-mergeView{height:100%");
+    expect(changePreviewStyles).toContain("overflow-y:auto");
+    expect(changePreviewStyles).toContain(".git-change-comparison.cm-mergeViewEditors{flex:none;min-height:100%;width:100%");
+    expect(changePreviewStyles).toContain(".git-change-comparison.cm-mergeView,.git-change-comparison.cm-mergeViewEditors{background:var(--editor-background)");
+    expect(changePreviewStyles).toContain(".git-change-comparison.cm-mergeViewEditor{--git-diff-gutter-width:0px;min-height:100%");
+    expect(changePreviewStyles).toContain("background:linear-gradient(toright,var(--editor-gutter-background)0calc(var(--git-diff-gutter-width)-1px),var(--editor-border)calc(var(--git-diff-gutter-width)-1px)var(--git-diff-gutter-width),var(--editor-background)var(--git-diff-gutter-width))");
+    expect(changePreviewStyles).toContain("min-height:100%;height:max-content;overflow-x:hidden;overflow-y:clip");
+    expect(changePreviewStyles).toContain(".git-change-comparison.cm-lineWrapping.cm-content{min-width:0;width:100%;white-space:pre-wrap;overflow-wrap:anywhere");
+    expect(changePreviewStyles).toContain(".git-change-comparison.cm-mergeViewEditor.cm-editor{flex:none;width:100%;min-height:100%;height:auto!important");
+    expect(changePreviewStyles).toContain(".git-change-comparison.cm-mergeView.cm-editor.cm-scroller{min-height:100%;height:auto!important;overflow:visible!important");
+    expect(changePreviewStyles).toContain(".git-change-comparison.cm-mergeSpacer{background:repeating-linear-gradient");
+    expect(changePreviewStyles).toContain(".git-change-comparison.cm-cursorLayer,.git-change-comparison.cm-dropCursor{display:none");
+    expect(changePreviewStyles).toContain(".git-diff-overview{position:absolute");
+    expect(changePreviewStyles).toContain("background:color-mix(insrgb,var(--scrollbar-track)72%,transparent)");
+    expect(changePreviewStyles).toContain(".git-diff-overview-viewport{z-index:1");
+    expect(changePreviewStyles).toContain("background:color-mix(insrgb,var(--scrollbar-thumb)38%,transparent)");
+    expect(changePreviewStyles).toContain("color-mix(insrgb,var(--scrollbar-thumb)82%,var(--accent))");
+    expect(changePreviewStyles).toContain('.git-diff-overview-marker[data-kind="deletion"]');
+    expect(changePreviewStyles).toContain('.git-diff-overview-marker[data-kind="addition"]');
     expect(changePreviewStyles).toContain("pointer-events:none");
     expect(changePreviewStyles).toContain(".git-change-preview-file-popover[data-open]{opacity:1;pointer-events:auto;transform:translateX(0)scale(1)");
     expect(changePreviewStyles).toContain("@media(prefers-reduced-motion:reduce)");
+    expect(changePreviewStyles).toContain("@media(prefers-reduced-transparency:reduce)");
+    expect(changePreviewStyles).toContain("@media(prefers-contrast:more)");
+  });
+
+  it("uses themed, frameless file and navigation affordances in change preview", () => {
+    expect(changePreviewStyles).toContain(".git-change-preview-files-toggle{color:var(--primary-action);background:transparent");
+    expect(changePreviewStyles).toContain(".git-change-preview-files-toggle>svg{animation:git-change-preview-files-attention");
+    expect(changePreviewStyles).toContain(".git-change-preview-navigationbutton{border:0;color:var(--muted);background:transparent");
+    expect(changePreviewStyles).toContain(".git-change-preview-navigationbutton:hover:not(:disabled),.git-change-preview-navigationbutton:focus-visible{color:var(--primary-action)");
+    expect(changePreviewStyles).toContain(".git-change-preview-counter-current{color:var(--text-strong)");
+    expect(changePreviewStyles).toContain(".git-change-preview-counter-total{color:var(--text)");
+    const reducedMotion = changePreviewStyles.slice(changePreviewStyles.indexOf("@media(prefers-reduced-motion:reduce)"));
+    expect(reducedMotion).toContain(".git-change-preview-files-toggle>svg");
+    expect(reducedMotion).toContain("animation:none");
+  });
+
+  it("uses the diff overview as the sole scrollbar while wrapped editors avoid horizontal scrolling", () => {
+    expect(changePreviewStyles).toContain(".git-change-comparison.cm-mergeView{height:100%;box-sizing:border-box;padding-right:12px");
+    expect(changePreviewStyles).toContain("scrollbar-width:none");
+    expect(changePreviewStyles).toContain(".git-change-comparison.cm-mergeView::-webkit-scrollbar{width:0;height:0");
+    expect(changePreviewStyles).not.toContain(".git-change-comparison.cm-mergeViewEditor::-webkit-scrollbar");
+    expect(changePreviewStyles).toContain(".git-diff-overview{position:absolute;z-index:3;top:0;right:1px;bottom:0");
+    expect(changePreviewStyles).toContain("box-shadow:inset0001px");
+    expect(changePreviewStyles).toContain(".git-diff-overview-viewport{z-index:1;right:0;left:0;box-sizing:border-box");
   });
 });

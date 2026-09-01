@@ -135,8 +135,9 @@ Nested dialogs must remain stacked. Only the topmost dialog handles Escape and T
 - Primary name occupies the first line; endpoint, type, or algorithm is secondary.
 - Use monospace for `user@host:port` and paths.
 - Keep status/authorization information at the trailing edge when it aids scanning.
-- Selected state uses a neutral raised background, brighter primary text, and at most one small accent indicator such as a dot.
-- Avoid a wide or decorative left selection block. Do not make selection rely only on color.
+- Entity lists such as connections and credentials use a neutral raised selected background, brighter primary text, and at most one small accent indicator such as a dot.
+- Dense file/path lists, including Git change lists, use the file browser as the canonical interaction treatment: hover uses `--file-active-surface` with `--file-active-marker`; selection uses `--file-selection-surface`, a one-pixel full inset outline in `--file-selection-marker`, the matching foreground tokens, and the established 4px row radius. Selected styling must remain dominant while hovered rather than being replaced by the hover surface.
+- Avoid a wide or decorative left selection block. Do not make selection rely only on color; file/path selection combines surface, full outline, foreground changes, and semantic selected state.
 - Dragging uses reduced opacity and a slight scale; drop targets get a restrained accent border/surface.
 
 ### Tabs and segmented controls
@@ -160,6 +161,7 @@ Nested dialogs must remain stacked. Only the topmost dialog handles Escape and T
 
 - Primary: filled accent, dark text; one dominant action per footer.
 - Secondary: neutral raised surface and border.
+- Cancel paired with a positive primary footer action: outlined theme danger via the shared `Button` `danger` variant. The active theme owns the color (for example cyberpunk red); never hard-code a feature-local red.
 - Danger: red outline by default; filled red only for final confirmation.
 - Icon-only: about 25–28px square, persistent when core to the task, with `aria-label` and hover enhancement.
 - Disable unavailable actions explicitly; do not hide them when their stable position helps comprehension.
@@ -246,6 +248,7 @@ Canonical implementation references inside Terminal-Demo:
 - `src/components/dialogs/CredentialDialog.tsx`: fixed-toolbar list/detail manager layout.
 - `src/components/dialogs/ConnectionAuthDialog.tsx`: segmented method switch and directional content motion.
 - `src/components/Icon.tsx`: icon vocabulary.
+- `src/files/fileBrowser.css`: canonical hover and multi-selection treatment for dense file/path rows.
 
 ## 9. Verification checklist
 

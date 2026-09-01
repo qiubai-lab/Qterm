@@ -20,6 +20,7 @@ describe("GitPane basics and lifecycle", () => {
     expect(await screen.findByText("project")).toBeInTheDocument();
     expect(screen.getByText("src/staged.ts")).toBeInTheDocument();
     expect(screen.getByText("src/new.ts")).toBeInTheDocument();
+    expect(Array.from(document.querySelectorAll(".git-change-status")).map((node) => node.textContent)).toEqual(["修改", "未跟踪"]);
     expect(screen.getByText("feat: initial")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /diff|比较|查看改动/i })).not.toBeInTheDocument();
   });
@@ -93,11 +94,11 @@ describe("GitPane basics and lifecycle", () => {
     try {
       const view = render(<GitPane blockId="git-1" target={{ type: "local", path: "D:/work/project" }} visible onTargetChange={vi.fn()}/>);
       await act(async () => { await Promise.resolve(); });
-      await act(async () => { await vi.runOnlyPendingTimersAsync(); });
+      await act(async () => { await vi.advanceTimersByTimeAsync(0); });
       expect(api.snapshot).toHaveBeenCalledTimes(1);
 
       view.rerender(<GitPane blockId="git-1" target={{ type: "local", path: "D:/work/project" }} visible onTargetChange={vi.fn()}/>);
-      await act(async () => { await vi.runOnlyPendingTimersAsync(); });
+      await act(async () => { await vi.advanceTimersByTimeAsync(0); });
       expect(api.snapshot).toHaveBeenCalledTimes(1);
     } finally {
       vi.useRealTimers();

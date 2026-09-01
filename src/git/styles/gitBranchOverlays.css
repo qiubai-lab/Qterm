@@ -554,6 +554,11 @@
   animation: git-repository-picker-spin 700ms linear infinite;
 }
 
+.git-primary-action[data-updating="true"] > svg {
+  transform-origin: center;
+  animation: git-repository-picker-spin 700ms linear infinite;
+}
+
 .git-branch-management-popover {
   width: 292px;
   gap: 5px;

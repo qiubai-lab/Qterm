@@ -1,4 +1,5 @@
 @import "./styles/gitShell.css";
+@import "./styles/gitChangeSelection.css";
 @import "./styles/gitGraph.css";
 @import "./styles/gitTargetConfig.css";
 @import "./styles/gitBranchOverlays.css";
@@ -6,6 +7,7 @@
 @import "./styles/gitOperationOverlay.css";
 @import "./styles/gitRepositoryPicker.css";
 @import "./styles/gitRepositoryHistory.css";
+@import "./styles/gitRemoteConfigurationHint.css";
 @import "./styles/gitConflictResolver.css";
 @import "./styles/gitChangePreview.css";
 @import "./styles/gitMedia.css";

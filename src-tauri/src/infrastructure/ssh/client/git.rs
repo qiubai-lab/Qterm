@@ -8,7 +8,7 @@ use crate::{
         GitConflictContentKind, GitConflictDetail, GitConflictKind, GitConflictResolution,
         GitConflictResult, GitConflictVersion, GitDiffScope, GitDiffSource, GitError, GitSnapshot,
         MAX_CONFLICT_TEXT_BYTES, MAX_GIT_DIFF_TEXT_BYTES, RemoteGitAction,
-        find_tracking_local_branch, validate_abort_merge, validate_branch_name,
+        find_tracking_local_branch, plan_discard, validate_abort_merge, validate_branch_name,
         validate_branch_source_ref, validate_commit_oid, validate_continue_merge,
         validate_local_branch_ref, validate_merge_preconditions, validate_posix_paths,
         validate_remote_name, validate_remote_repository_path, validate_stage_all,
@@ -31,6 +31,8 @@ const UNSTAGE_PATHS_WITH_HEAD_ARGS: &str =
     "--literal-pathspecs reset -q HEAD --pathspec-from-file=- --pathspec-file-nul";
 const UNSTAGE_PATHS_WITHOUT_HEAD_ARGS: &str =
     "--literal-pathspecs update-index --force-remove -z --stdin";
+const DISCARD_TRACKED_PATHS_ARGS: &str =
+    "--literal-pathspecs checkout --pathspec-from-file=- --pathspec-file-nul";
 
 struct RemoteOutput {
     stdout: Vec<u8>,
@@ -95,6 +97,31 @@ pub(super) async fn run_remote_git_action(
                 "rm --cached -r -q --ignore-unmatch -- ."
             };
             run_git(handle, &repository, args, Vec::new(), MUTATION_TIMEOUT).await?;
+            snapshot(handle, &repository).await
+        }
+        RemoteGitAction::Discard { repository, paths } => {
+            let current = snapshot(handle, &repository).await?;
+            let plan = plan_discard(&current, &paths)?;
+            if !plan.tracked_paths.is_empty() {
+                run_git(
+                    handle,
+                    &repository,
+                    DISCARD_TRACKED_PATHS_ARGS,
+                    nul_payload(&plan.tracked_paths),
+                    MUTATION_TIMEOUT,
+                )
+                .await?;
+            }
+            if !plan.untracked_paths.is_empty() {
+                let quoted = plan
+                    .untracked_paths
+                    .iter()
+                    .map(|path| posix_literal(path))
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                let args = format!("--literal-pathspecs clean -f -- {quoted}");
+                run_git(handle, &repository, &args, Vec::new(), MUTATION_TIMEOUT).await?;
+            }
             snapshot(handle, &repository).await
         }
         RemoteGitAction::Commit {

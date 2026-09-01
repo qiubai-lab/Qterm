@@ -64,7 +64,7 @@ describe("deriveGitPrimaryAction", () => {
     const untracked = { ...cleanSnapshot, head: { ...cleanSnapshot.head, upstream: null } } satisfies GitSnapshot;
     expect(derive(untracked)).toMatchObject({ kind: "publish", label: "发布到 origin", remote: "origin", disabled: false });
     expect(derive({ ...untracked, remotes: ["origin", "mirror"] })).toMatchObject({ kind: "chooseRemote", label: "发布分支…", disabled: false });
-    expect(derive({ ...untracked, remotes: [] })).toMatchObject({ kind: "idle", label: "未配置远端", disabled: true });
+    expect(derive({ ...untracked, remotes: [] })).toMatchObject({ kind: "idle", label: "未配置远端", disabled: true, remoteConfigurationRequired: true });
     expect(derive({ ...untracked, head: { ...untracked.head, detached: true } })).toMatchObject({ kind: "blocked", label: "分离 HEAD 无法同步", disabled: true });
     expect(derive({ ...untracked, head: { ...untracked.head, unborn: true, oid: null } })).toMatchObject({ kind: "idle", label: "等待首次提交", disabled: true });
   });
@@ -72,6 +72,6 @@ describe("deriveGitPrimaryAction", () => {
   it("disables actionable states while unavailable and reports the active busy step", () => {
     const ahead = { ...cleanSnapshot, head: { ...cleanSnapshot.head, ahead: 1 } } satisfies GitSnapshot;
     expect(derive(ahead, "", "", true)).toMatchObject({ kind: "push", disabled: true, label: "推送 1 个提交" });
-    expect(derive(ahead, "", "推送")).toMatchObject({ kind: "push", disabled: true, label: "正在推送…" });
+    expect(derive(ahead, "", "推送")).toMatchObject({ kind: "push", disabled: true, label: "正在推送…", updating: true });
   });
 });

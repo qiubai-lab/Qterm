@@ -208,8 +208,8 @@ describe("GitPane commit graph", () => {
     expect(files).toHaveTextContent("new-file.ts");
     expect(files).toHaveTextContent("src");
     expect(files).toHaveTextContent("来自 src/old.ts");
-    expect(files.querySelector('[data-tone="added"]')).toHaveTextContent("A");
-    expect(files.querySelector('[data-tone="renamed"]')).toHaveTextContent("R");
+    expect(files.querySelector('[data-tone="added"]')).toHaveTextContent("新增");
+    expect(files.querySelector('[data-tone="renamed"]')).toHaveTextContent("重命名");
     expect(screen.queryByRole("button", { name: /diff|比较|查看改动/i })).not.toBeInTheDocument();
     fireEvent.pointerEnter(commit);
     expect(screen.getByRole("tooltip")).toHaveTextContent("2 个文件");

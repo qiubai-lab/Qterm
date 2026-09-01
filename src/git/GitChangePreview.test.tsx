@@ -35,12 +35,15 @@ describe("GitChangePreview", () => {
     expect(within(dialog).getByText("暂存区")).toBeInTheDocument();
     const toggle = within(dialog).getByRole("button", { name: "展开更改文件" });
     expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(within(dialog).getByLabelText("第 1 个更改，共 3 个")).toHaveTextContent("1/3");
     fireEvent.click(toggle);
-    const worktreeEntry = within(dialog).getByRole("button", { name: "src/dual.ts 工作区 M" });
+    expect(within(dialog).getByLabelText("Git 状态：修改")).toHaveTextContent("修改");
+    const worktreeEntry = within(dialog).getByRole("button", { name: "src/dual.ts 工作区 修改" });
     fireEvent.click(worktreeEntry);
     await waitFor(() => expect(onLoad).toHaveBeenLastCalledWith("src/dual.ts", false));
     expect(within(dialog).getAllByText("暂存区").length).toBeGreaterThan(0);
     expect(within(dialog).getAllByText("工作区").length).toBeGreaterThan(0);
+    expect(within(dialog).queryByText("M")).not.toBeInTheDocument();
   });
 
   it("renders binary metadata fallback", async () => {
@@ -98,6 +101,7 @@ describe("GitChangePreview", () => {
     render(<GitChangePreview commit={commit} files={files} initialFile={files[0]} repositoryName="project" onLoadCommit={onLoadCommit} onClose={vi.fn()}/>);
     expect(await screen.findByText("父提交 1111111")).toBeInTheDocument();
     expect(screen.getByText("提交 abcdef0", { selector: ".git-change-preview-source-headings span" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Git 状态：修改")).toHaveTextContent("修改");
     fireEvent.click(screen.getByRole("button", { name: "下一个更改" }));
     await waitFor(() => expect(onLoadCommit).toHaveBeenLastCalledWith("src/b.ts"));
   });

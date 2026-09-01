@@ -8,6 +8,7 @@ import {
   createGitBranchFrom,
   createGitBranchFromCommit,
   deleteGitBranch,
+  discardGitPaths,
   executeRemoteGit,
   fetchGitRepository,
   initializeGitRepository,
@@ -56,6 +57,7 @@ export interface GitRepositoryClient {
   stageAll: (repository: string) => Promise<GitSnapshot>;
   unstagePaths: (repository: string, paths: string[]) => Promise<GitSnapshot>;
   unstageAll: (repository: string) => Promise<GitSnapshot>;
+  discardPaths: (repository: string, paths: string[]) => Promise<GitSnapshot>;
   commit: (repository: string, message: string) => Promise<GitSnapshot>;
   createBranch: (repository: string, name: string) => Promise<GitSnapshot>;
   createBranchAt: (repository: string, name: string, sourceRef: string) => Promise<GitSnapshot>;
@@ -92,6 +94,7 @@ export function useGitRepositoryClient({ remote, profileId, sessionId, status }:
     stageAll: (repository) => remote ? remoteExecute({ type: "stageAll", repository }) : stageAllGitChanges(repository),
     unstagePaths: (repository, paths) => remote ? remoteExecute({ type: "unstage", repository, paths }) : unstageGitPaths(repository, paths),
     unstageAll: (repository) => remote ? remoteExecute({ type: "unstageAll", repository }) : unstageAllGitChanges(repository),
+    discardPaths: (repository, paths) => remote ? remoteExecute({ type: "discard", repository, paths }) : discardGitPaths(repository, paths),
     commit: (repository, message) => remote ? remoteExecute({ type: "commit", repository, message }) : commitGitChanges(repository, message),
     createBranch: (repository, name) => remote ? remoteExecute({ type: "createBranch", repository, name }) : createGitBranch(repository, name),
     createBranchAt: (repository, name, sourceRef) => remote ? remoteExecute({ type: "createBranchFrom", repository, name, sourceRef }) : createGitBranchFrom(repository, name, sourceRef),

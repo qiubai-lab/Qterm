@@ -8,6 +8,8 @@
 
 .git-change-preview-dialog .dialog-content {
   display: flex;
+  flex: 1 1 0;
+  min-width: 0;
   min-height: 0;
   padding: 0;
   overflow: hidden;
@@ -39,11 +41,46 @@
   width: 26px;
   height: 26px;
   padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  transition: color 120ms ease-out, background-color 120ms ease-out, transform 90ms ease-out;
+}
+
+.git-change-preview-files-toggle {
+  color: var(--primary-action);
+  background: transparent;
+}
+
+.git-change-preview-files-toggle > svg {
+  animation: git-change-preview-files-attention 720ms cubic-bezier(.2, .8, .2, 1) 2;
+}
+
+.git-change-preview-files-toggle:hover,
+.git-change-preview-files-toggle:focus-visible {
+  color: var(--primary-action);
+  background: color-mix(in srgb, var(--primary-action) 11%, transparent);
 }
 
 .git-change-preview-files-toggle[aria-expanded="true"] {
-  color: var(--accent);
-  background: var(--selection-surface);
+  color: var(--primary-action);
+  background: transparent;
+}
+
+.git-change-preview-files-toggle:focus-visible,
+.git-change-preview-navigation button:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+.git-change-preview-files-toggle:active,
+.git-change-preview-navigation button:active:not(:disabled) {
+  transform: scale(.94);
+}
+
+@keyframes git-change-preview-files-attention {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  48% { opacity: .58; transform: scale(1.12); }
 }
 
 .git-change-preview-path {
@@ -70,18 +107,64 @@
 }
 
 .git-change-preview-status {
+  flex: none;
   color: var(--accent);
   font-size: 10px;
   font-weight: 750;
+  white-space: nowrap;
 }
 
 .git-change-preview-navigation {
   display: flex;
   flex: none;
   align-items: center;
+  gap: 2px;
+  font: 600 9px/1 SFMono-Regular, Consolas, monospace;
+}
+
+.git-change-preview-navigation button {
+  border: 0;
+  color: var(--muted);
+  background: transparent;
+}
+
+.git-change-preview-navigation button > svg {
+  display: block;
+}
+
+.git-change-preview-navigation button:hover:not(:disabled),
+.git-change-preview-navigation button:focus-visible {
+  color: var(--primary-action);
+  background: color-mix(in srgb, var(--primary-action) 11%, transparent);
+}
+
+.git-change-preview-navigation button:disabled {
+  color: var(--text-disabled);
+  background: transparent;
+  opacity: .62;
+}
+
+.git-change-preview-counter {
+  display: flex;
+  min-width: 46px;
+  height: 26px;
+  align-items: center;
+  justify-content: center;
   gap: 4px;
-  color: var(--dim);
-  font: 9px/1 SFMono-Regular, Consolas, monospace;
+  white-space: nowrap;
+}
+
+.git-change-preview-counter-current {
+  color: var(--text-strong);
+  font-weight: 750;
+}
+
+.git-change-preview-counter-separator {
+  color: var(--muted);
+}
+
+.git-change-preview-counter-total {
+  color: var(--text);
 }
 
 .git-change-preview-stage {
@@ -98,6 +181,7 @@
   z-index: 4;
   inset: 8px auto 8px 8px;
   display: flex;
+  flex-direction: column;
   width: min(300px, calc(100% - 16px));
   min-height: 0;
   border: 1px solid var(--subtle);
@@ -169,10 +253,12 @@
 .git-change-preview-file-list button b {
   color: var(--accent);
   font-size: 9px;
+  white-space: nowrap;
 }
 
 .git-change-preview-main,
 .git-change-preview-diff,
+.git-change-comparison-shell,
 .git-change-comparison,
 .git-change-comparison .cm-mergeView,
 .git-change-comparison .cm-mergeViewEditors,
@@ -184,6 +270,7 @@
 
 .git-change-preview-main,
 .git-change-preview-diff,
+.git-change-comparison-shell,
 .git-change-comparison,
 .git-change-comparison .cm-mergeView,
 .git-change-comparison .cm-mergeViewEditors,
@@ -193,10 +280,169 @@
   flex: 1 1 0;
 }
 
+.git-change-comparison-shell {
+  position: relative;
+  overflow: hidden;
+}
+
 .git-change-preview-diff,
 .git-change-comparison .cm-mergeViewEditor,
 .git-change-comparison .cm-editor {
   flex-direction: column;
+}
+
+.git-change-comparison .cm-mergeView {
+  height: 100%;
+  box-sizing: border-box;
+  padding-right: 12px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+
+.git-change-comparison .cm-mergeView::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.git-change-comparison .cm-mergeViewEditors {
+  flex: none;
+  min-height: 100%;
+  width: 100%;
+}
+
+.git-change-comparison .cm-mergeView,
+.git-change-comparison .cm-mergeViewEditors {
+  background: var(--editor-background);
+}
+
+.git-change-comparison .cm-mergeViewEditor {
+  --git-diff-gutter-width: 0px;
+  min-height: 100%;
+  height: max-content;
+  overflow-x: hidden;
+  overflow-y: clip;
+  background: linear-gradient(
+    to right,
+    var(--editor-gutter-background) 0 calc(var(--git-diff-gutter-width) - 1px),
+    var(--editor-border) calc(var(--git-diff-gutter-width) - 1px) var(--git-diff-gutter-width),
+    var(--editor-background) var(--git-diff-gutter-width)
+  );
+}
+
+.git-change-comparison .cm-lineWrapping .cm-content {
+  min-width: 0;
+  width: 100%;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.git-change-comparison .cm-mergeViewEditor .cm-editor {
+  flex: none;
+  width: 100%;
+  min-height: 100%;
+  height: auto !important;
+}
+
+.git-change-comparison .cm-mergeView .cm-editor .cm-scroller {
+  min-height: 100%;
+  height: auto !important;
+  overflow: visible !important;
+}
+
+.git-change-comparison .cm-gutters {
+  min-height: 100%;
+}
+
+.git-change-comparison .cm-cursorLayer,
+.git-change-comparison .cm-dropCursor {
+  display: none;
+}
+
+.git-change-comparison .cm-mergeSpacer {
+  background: repeating-linear-gradient(
+    -45deg,
+    color-mix(in srgb, var(--muted) 8%, transparent) 0 4px,
+    transparent 4px 8px
+  );
+  box-shadow: inset 0 1px var(--subtle), inset 0 -1px var(--subtle);
+}
+
+.git-diff-overview {
+  position: absolute;
+  z-index: 3;
+  top: 0;
+  right: 1px;
+  bottom: 0;
+  width: 10px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 5px;
+  outline: none;
+  background: color-mix(in srgb, var(--scrollbar-track) 72%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--scrollbar-thumb) 24%, transparent), 0 1px 5px color-mix(in srgb, var(--canvas) 42%, transparent);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  touch-action: none;
+  transition: opacity 120ms ease-out, box-shadow 120ms ease-out;
+}
+
+.git-diff-overview[data-visible] {
+  opacity: .82;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+.git-diff-overview:hover,
+.git-diff-overview:focus-visible {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--scrollbar-thumb) 82%, var(--accent)), 0 1px 5px color-mix(in srgb, var(--canvas) 42%, transparent);
+  opacity: 1;
+}
+
+.git-diff-overview:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.git-diff-overview-marker,
+.git-diff-overview-viewport {
+  position: absolute;
+  border-radius: 999px;
+  pointer-events: none;
+}
+
+.git-diff-overview-marker {
+  width: 3px;
+  min-height: 3px;
+}
+
+.git-diff-overview-marker[data-kind="deletion"] {
+  left: 1px;
+  background: color-mix(in srgb, var(--danger) 74%, transparent);
+}
+
+.git-diff-overview-marker[data-kind="addition"] {
+  right: 1px;
+  background: color-mix(in srgb, var(--accent) 74%, transparent);
+}
+
+.git-diff-overview-viewport {
+  z-index: 1;
+  right: 0;
+  left: 0;
+  box-sizing: border-box;
+  min-height: 24px;
+  border: 1px solid color-mix(in srgb, var(--scrollbar-thumb) 68%, transparent);
+  background: color-mix(in srgb, var(--scrollbar-thumb) 38%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--scrollbar-track) 42%, transparent);
+}
+
+.git-diff-overview:hover .git-diff-overview-viewport,
+.git-diff-overview:focus-visible .git-diff-overview-viewport {
+  background: color-mix(in srgb, var(--scrollbar-thumb) 82%, var(--accent));
+  opacity: .68;
 }
 
 .git-change-preview-source-headings {
@@ -220,7 +466,6 @@
 }
 
 .git-change-comparison .cm-scroller {
-  overflow: auto;
   font-size: 11px;
   line-height: 1.42;
 }
@@ -278,7 +523,7 @@
 }
 
 @media (max-width: 720px) {
-  .git-change-preview-navigation span,
+  .git-change-preview-counter,
   .git-change-preview-file-list button small {
     display: none;
   }
@@ -290,7 +535,35 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .git-change-preview-file-popover {
+  .git-change-preview-file-popover,
+  .git-diff-overview {
     transition: none;
+  }
+
+  .git-change-preview-files-toggle > svg {
+    animation: none;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .git-diff-overview {
+    background: var(--scrollbar-track);
+    box-shadow: inset 0 0 0 1px var(--scrollbar-thumb);
+  }
+
+  .git-diff-overview-viewport {
+    border-color: var(--scrollbar-track);
+    background: var(--scrollbar-thumb);
+  }
+}
+
+@media (prefers-contrast: more) {
+  .git-diff-overview {
+    box-shadow: inset 0 0 0 1px var(--focus);
+  }
+
+  .git-diff-overview-marker,
+  .git-diff-overview-viewport {
+    box-shadow: 0 0 0 1px var(--canvas);
   }
 }

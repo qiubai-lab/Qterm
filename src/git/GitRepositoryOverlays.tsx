@@ -7,6 +7,7 @@ import { Icon } from "../components/Icon";
 import { RequiredFieldLabel } from "../components/RequiredFieldLabel";
 import { DialogActionStatus, DialogFrame } from "../components/dialogs/DialogFrame";
 import type { GitBranch, GitCommit, GitSnapshot } from "../lib/tauri/git";
+import { GitRemoteConfigurationHint, gitRemoteConfigurationHint } from "./GitRemoteConfigurationHint";
 import {
   formatRelativeCommitTime,
   operationStatusLabel,
@@ -171,13 +172,14 @@ function GitRepositoryOverlayContent(props: GitRepositoryOverlaysProps) {
 
   if (repositoryOverlay.kind === "repositoryActions") {
     const tracked = Boolean(snapshot?.head.upstream);
+    const remoteConfigurationRequired = Boolean(snapshot && snapshot.remotes.length === 0);
     return <><div ref={overlayRef} className="git-repository-popover git-repository-action-popover" role="menu" aria-label="存储库操作" onKeyDown={onNavigateMenu} {...common}>
       <div className="git-repository-popover-title"><Icon name="git" size={13}/><strong>存储库操作</strong></div>
-      <button type="button" className="git-repository-action-item" role="menuitem" disabled={disabled || mergeInProgress || !tracked} onPointerEnter={onDismissBranchSubmenu} onClick={onPull}><Icon name="download" size={12}/><span>拉取</span></button>
+      <GitRemoteConfigurationHint active={remoteConfigurationRequired}><button type="button" className="git-repository-action-item" role="menuitem" data-remote-configuration-required={remoteConfigurationRequired || undefined} aria-disabled={disabled || mergeInProgress || !tracked || undefined} disabled={disabled || mergeInProgress || !tracked && !remoteConfigurationRequired} title={remoteConfigurationRequired ? gitRemoteConfigurationHint : undefined} onPointerEnter={onDismissBranchSubmenu} onClick={() => tracked && onPull()}><Icon name="download" size={12}/><span>拉取</span></button></GitRemoteConfigurationHint>
       {tracked
-        ? <button type="button" className="git-repository-action-item" role="menuitem" disabled={disabled || mergeInProgress} onPointerEnter={onDismissBranchSubmenu} onClick={onPush}><Icon name="upload" size={12}/><span>推送</span></button>
-        : <button type="button" className="git-repository-action-item" role="menuitem" disabled={disabled || mergeInProgress || !snapshot?.remotes.length} onPointerEnter={onDismissBranchSubmenu} onClick={() => onOpenOverlay("publishBranch")}><Icon name="upload" size={12}/><span>发布分支…</span></button>}
-      <button type="button" className="git-repository-action-item" role="menuitem" disabled={disabled || mergeInProgress || !tracked} onPointerEnter={onDismissBranchSubmenu} onClick={onSynchronize}><Icon name="refresh" size={12}/><span>同步</span></button>
+        ? <GitRemoteConfigurationHint active={remoteConfigurationRequired}><button type="button" className="git-repository-action-item" role="menuitem" data-remote-configuration-required={remoteConfigurationRequired || undefined} aria-disabled={disabled || mergeInProgress || remoteConfigurationRequired || undefined} disabled={disabled || mergeInProgress} title={remoteConfigurationRequired ? gitRemoteConfigurationHint : undefined} onPointerEnter={onDismissBranchSubmenu} onClick={() => !remoteConfigurationRequired && onPush()}><Icon name="upload" size={12}/><span>推送</span></button></GitRemoteConfigurationHint>
+        : <GitRemoteConfigurationHint active={remoteConfigurationRequired}><button type="button" className="git-repository-action-item" role="menuitem" data-remote-configuration-required={remoteConfigurationRequired || undefined} aria-disabled={disabled || mergeInProgress || !snapshot?.remotes.length || undefined} disabled={disabled || mergeInProgress || !snapshot?.remotes.length && !remoteConfigurationRequired} title={remoteConfigurationRequired ? gitRemoteConfigurationHint : undefined} onPointerEnter={onDismissBranchSubmenu} onClick={() => !remoteConfigurationRequired && onOpenOverlay("publishBranch")}><Icon name="upload" size={12}/><span>发布分支…</span></button></GitRemoteConfigurationHint>}
+      <GitRemoteConfigurationHint active={remoteConfigurationRequired}><button type="button" className="git-repository-action-item" role="menuitem" data-remote-configuration-required={remoteConfigurationRequired || undefined} aria-disabled={disabled || mergeInProgress || !tracked || undefined} disabled={disabled || mergeInProgress || !tracked && !remoteConfigurationRequired} title={remoteConfigurationRequired ? gitRemoteConfigurationHint : undefined} onPointerEnter={onDismissBranchSubmenu} onClick={() => tracked && onSynchronize()}><Icon name="sync" size={12}/><span>同步</span></button></GitRemoteConfigurationHint>
       <button type="button" className="git-repository-action-item" role="menuitem" disabled={disabled || mergeInProgress || mergeSourceOptions.length === 0} onPointerEnter={onDismissBranchSubmenu} onClick={() => onOpenOverlay("mergeBranch")}><Icon name="git" size={12}/><span>合并分支…</span></button>
       <div className="git-repository-action-separator" role="separator"/>
       <button ref={branchManagementItemRef} type="button" className="git-repository-action-item" role="menuitem" disabled={mergeInProgress} aria-haspopup="menu" aria-expanded={Boolean(repositorySubmenu)} aria-controls={repositorySubmenuId} onPointerEnter={() => onOpenBranchSubmenu(false)} onKeyDown={(event) => {

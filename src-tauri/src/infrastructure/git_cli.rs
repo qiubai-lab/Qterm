@@ -17,7 +17,7 @@ use crate::{
         GitCommitFileDiff, GitConflictContentKind, GitConflictDetail, GitConflictKind,
         GitConflictResolution, GitConflictResult, GitConflictVersion, GitDiffScope, GitDiffSource,
         GitError, GitHead, GitSnapshot, MAX_CONFLICT_TEXT_BYTES, MAX_GIT_DIFF_TEXT_BYTES,
-        find_tracking_local_branch, validate_abort_merge, validate_branch_source_ref,
+        find_tracking_local_branch, plan_discard, validate_abort_merge, validate_branch_source_ref,
         validate_commit_oid, validate_continue_merge, validate_local_branch_ref,
         validate_merge_preconditions, validate_remote_branch_ref, validate_remote_name,
         validate_stage_all,
@@ -310,6 +310,31 @@ impl GitExecutor for SystemGitExecutor {
         } else {
             self.mutate(repository, ["rm", "--cached", "-r", "-q", "--", "."])
         }
+    }
+
+    fn discard(&self, repository: &Path, paths: &[String]) -> Result<GitSnapshot, GitError> {
+        let current = self.snapshot(repository)?;
+        let plan = plan_discard(&current, paths)?;
+        if !plan.tracked_paths.is_empty() {
+            let mut args = vec![
+                OsString::from("--literal-pathspecs"),
+                OsString::from("checkout"),
+                OsString::from("--"),
+            ];
+            args.extend(plan.tracked_paths.iter().map(OsString::from));
+            self.mutate(repository, args)?;
+        }
+        if !plan.untracked_paths.is_empty() {
+            let mut args = vec![
+                OsString::from("--literal-pathspecs"),
+                OsString::from("clean"),
+                OsString::from("-f"),
+                OsString::from("--"),
+            ];
+            args.extend(plan.untracked_paths.iter().map(OsString::from));
+            self.mutate(repository, args)?;
+        }
+        self.snapshot(repository)
     }
 
     fn commit(&self, repository: &Path, message: &str) -> Result<GitSnapshot, GitError> {
@@ -2030,6 +2055,77 @@ refs/remotes/origin/HEAD\0origin/HEAD\0abc\0 \0\0\0refs/remotes/origin/main\n",
                 .changes
                 .iter()
                 .any(|change| change.path == "a.txt" && change.staged)
+        );
+    }
+
+    #[test]
+    fn real_git_discard_restores_the_index_and_removes_only_selected_untracked_files() {
+        let git = which_git();
+        let executor = SystemGitExecutor::with_executable(git.clone());
+        let directory = tempdir().expect("discard repository");
+        executor.initialize(directory.path()).expect("init");
+        for (key, value) in [
+            ("user.name", "Qterm Test"),
+            ("user.email", "qterm@example.invalid"),
+        ] {
+            assert!(
+                Command::new(&git)
+                    .args([
+                        "-C",
+                        directory.path().to_str().expect("path"),
+                        "config",
+                        key,
+                        value,
+                    ])
+                    .status()
+                    .expect("config")
+                    .success()
+            );
+        }
+        let tracked = directory.path().join("tracked.txt");
+        fs::write(&tracked, b"base\n").expect("base");
+        executor.stage_all(directory.path()).expect("stage base");
+        executor
+            .commit(directory.path(), "base")
+            .expect("commit base");
+        fs::write(&tracked, b"staged\n").expect("staged content");
+        executor
+            .stage(directory.path(), &["tracked.txt".into()])
+            .expect("stage selected content");
+        fs::write(&tracked, b"worktree\n").expect("worktree content");
+        let selected_untracked = directory.path().join("selected.tmp");
+        let retained_untracked = directory.path().join("retained.tmp");
+        fs::write(&selected_untracked, b"delete").expect("selected untracked");
+        fs::write(&retained_untracked, b"keep").expect("retained untracked");
+
+        let result = executor
+            .discard(
+                directory.path(),
+                &["tracked.txt".into(), "selected.tmp".into()],
+            )
+            .expect("discard");
+        assert_eq!(
+            String::from_utf8_lossy(&fs::read(&tracked).expect("restored tracked")).trim_end(),
+            "staged"
+        );
+        assert!(!selected_untracked.exists());
+        assert!(retained_untracked.exists());
+        assert!(
+            result
+                .changes
+                .iter()
+                .any(|change| change.path == "tracked.txt" && change.staged)
+        );
+        assert!(
+            !result
+                .changes
+                .iter()
+                .any(|change| change.path == "tracked.txt" && !change.staged)
+        );
+        assert!(
+            executor
+                .discard(directory.path(), &["missing.txt".into()])
+                .is_err()
         );
     }
 
