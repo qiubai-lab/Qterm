@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "limits": {
+    "src-tauri/src/commands/git.rs": 2031,
+    "src-tauri/src/domain/git.rs": 1284,
+    "src-tauri/src/infrastructure/persistence/json_credential_vault.rs": 1194,
+    "src-tauri/src/infrastructure/persistence/json_profile_repository.rs": 876,
+    "src-tauri/src/infrastructure/persistence/json_workspace_repository.rs": 763,
+    "src-tauri/src/infrastructure/ssh/auth.rs": 828,
+    "src-tauri/src/infrastructure/ssh/client/git.rs": 1340,
+    "src-tauri/src/infrastructure/ssh/client/tests.rs": 2199,
+    "src/app/appStyles.test.ts": 1037,
+    "src/components/dialogs/aboutUpdate.css": 520,
+    "src/components/dialogs/ConnectionDialog.tsx": 685,
+    "src/components/dialogs/CredentialDialog.tsx": 503,
+    "src/files/FileBrowserPane.test.tsx": 1104,
+    "src/files/FileBrowserPane.tsx": 738,
+    "src/git/GitPane.tsx": 1149,
+    "src/git/styles/gitBranchOverlays.css": 645,
+    "src/git/styles/gitChangePreview.css": 574,
+    "src/git/styles/gitGraph.css": 631,
+    "src/git/styles/gitRepositoryPicker.css": 508,
+    "src/git/styles/gitShell.css": 901,
+    "src/terminal/TerminalPanel.test.tsx": 889,
+    "src/terminal/TerminalPanel.tsx": 776,
+    "src/workspace/LayoutView.test.tsx": 808,
+    "src/workspace/LayoutView.tsx": 780,
+    "src/workspace/WorkspaceShell.tsx": 824
+  }
+}

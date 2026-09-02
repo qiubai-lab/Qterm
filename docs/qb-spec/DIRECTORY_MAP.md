@@ -2,6 +2,7 @@
 
 ## Root Directories
 
+- `.agents/skills/`：负责 Qterm 项目级、可自动发现的 agent 工作流与稳定规范入口；不保存单次任务计划、运行时代码或重复的可执行配置。
 - `src/`：负责 React 展示、用户交互和 Tauri IPC 客户端；不读取私钥、不实现 SSH 规则，也不持久化敏感凭据。
 - `src-tauri/`：负责桌面运行时、应用用例、领域规则和基础设施适配器；不承载 React 页面状态。
 - `scripts/`：负责仓库级可测试命令入口；当前只为 Tauri `dev` 注入开发 flavor 并把其他 CLI 参数原样转发，不承载应用业务、发布凭据或 shell 拼接。
@@ -10,6 +11,7 @@
 
 ## Important Files
 
+- `.agents/skills/qterm-maintainable-modules/SKILL.md`：非平凡功能增长与结构调整的 owner-first 开发入口，要求窄 façade、capability modules、相邻行为测试和源码尺寸 ratchet；具体数值继续以 `scripts/check-source-size.mjs` 与 baseline 为事实源。
 - `src/main.tsx`：React 入口，同步设置默认 `data-theme="dark"`，在首次渲染前引导已保存主题并挂载应用根组件；不持有 feature theme state。
 - `src/app/app.css`、`src/app/styles/themes/{dark,light,cyberpunk}.css`：固定顺序样式 manifest 与三套封闭预设 semantic token；Dark 保持缺省，Cyberpunk 复用 Dark 原生窗口模式，Light compatibility override 只承接尚未语义化的旧 feature 颜色。
 - `src/app/theme/AppThemeProvider.tsx`：应用级主题唯一状态 owner，负责 bootstrap、preview/commit/restore，以及 DOM、xterm 和原生窗口同步；不进入 Workspace persistence，也不允许任意主题值。
@@ -52,6 +54,7 @@
 - `src/lib/tauri/window.ts`：桌面平台判定与当前窗口控制适配；不拥有 Workspace 状态或窗口视觉样式。
 - `src-tauri/src/main.rs`：原生可执行入口，只委托给库组合根。
 - `scripts/tauri.mjs`、`tauri-dev-runner.mjs`：package `tauri` script 的跨平台 ESM 入口，以及只在 macOS `dev` 使用的 app-bundle runner；前者注入开发 config/runner 并原样转发其他命令，后者用参数数组执行 Cargo build、原子更新 `target/tauri-dev/.../Qterm Dev.app` 并运行，不承载业务或发布行为。
+- `scripts/check-source-size.mjs`、`source-size-baseline.json`：源码尺寸的确定性类型上限和历史热点不增长 ratchet，由 `pnpm check` 在本地与 CI 共用；baseline 只记录待拆热点，不豁免新增文件或生成新的架构规则。
 - `src-tauri/tauri.dev.conf.json`、`Info.dev.plist`：声明 `Qterm Dev` / `com.qiubai.qterm.dev` 开发身份和 macOS dev bundle 元数据，不声明窗口数组或业务配置；plist 使用非保留文件名，正式身份继续以 `tauri.conf.json` 为事实源。
 - `src-tauri/src/lib.rs`：Tauri 组合根，注册 commands、装配 adapters，把主窗口标题同步为最终 productName，按 Rust debug/release 模式选择互不 fallback 的 home locator/default-root，再派生并初始化 root/data/device/cache 后构造全部 repositories；不写程序目录、不读取另一模式或旧 AppData 位置，也不在 repository 内重复计算全局路径。
 - `src-tauri/src/domain/profile.rs`：连接配置、最多 4 个显式有序跃点、候选资格与引用完整性规则；不包含 IPC、凭证明文或 JSON 序列化模型。
@@ -72,7 +75,7 @@
 - `src-tauri/src/commands/git.rs`：Git 稳定 snapshot/merge/conflict/Submodule DTO、封闭 local/remote detail/resolve/单项 Submodule 命令、Git-purpose SSH 建连、profile/session ownership 调用、远程浏览、错误映射和阻塞用例调度 IPC；不拥有 Git 规则、输出解析、文件读写、Submodule URL/OID、递归/force 开关、任意 object/index selector 或命令执行入口。
 - `src-tauri/src/commands/profile.rs`、`commands/profile/{dto,import}.rs`：Profile CRUD façade、严格 IPC DTO 与 SSH Config parser/dialog/application coordinator 适配；不拥有导入选择、唯一命名、跨 repository commit 或 rollback 规则。
 - `src-tauri/src/commands/credential.rs`、`commands/credential/{commands,dto,files,recovery}.rs`：Credential state façade、严格 secret DTO、Tauri command、授权私钥读取与恢复文件/对话框 adapter；不把私钥正文或恢复材料序列化到 WebView，也不拥有 SSH Config 跨 repository 事务规则。
-- `src-tauri/src/infrastructure/git_cli.rs`：系统 Git 发现、固定结构化 snapshot 与 mutation 参数、porcelain v2/gitlink/`.gitmodules`/直接 Submodule status 解析、单项非递归 initialize/checkout-recorded、网络与普通操作超时/输出上限及敏感失败降级；不经 shell、不接收 WebView 命令片段、参数数组、Submodule URL/OID selector、recursive/update-remote/force 选项或持久化仓库状态。
+- `src-tauri/src/infrastructure/git_cli/mod.rs`、`git_cli/{executor,process,repository,parsers,changes,conflict,branch,submodule}.rs`：稳定的系统 Git executor façade，以及按进程边界、快照解析、更改、冲突、分支同步和直接 Submodule 分组的内部 adapter；测试按 parser、process、lifecycle、diff、conflict、sync 与 Submodule 行为位于 `git_cli/tests/`。该目录不经 shell、不接收 WebView 命令片段、参数数组、Submodule URL/OID selector、recursive/update-remote/force 选项或持久化仓库状态。
 - `src-tauri/src/domain/network.rs`、`ports/network_repository.rs`、`application/network_service.rs`：转发规则、不变量、profile 引用与配置用例边界；不包含 socket、SSH channel、运行状态或持久化格式。
 - `src-tauri/src/commands/network.rs`：Network 严格 DTO、profile-bound session 建连和规则启停 IPC；不实现 SOCKS5 或 TCP 数据泵。
 - `src-tauri/src/commands/clipboard.rs`：接收当前 SSH session ID/opaque task ID 或无参数本地准备请求，调用本地路径准备或远端暂存/取消用例，并桥接一次性最终本地粘贴文本及无敏感远端事件；不接收本机路径、文件字节、远端路径策略或权限参数。
@@ -96,6 +99,7 @@
 
 ## Module Responsibilities
 
+- `.agents/skills/`：负责把长期工程与界面规范转成可执行的 agent 决策流程；不替代 qb-spec change、测试、linter 或源码门禁。
 - `src/app/`：负责顶层布局、feature 组合与应用级预设主题生命周期；不承载认证、连接或传输规则。
 - `src/workspace/`：负责工作区结构模型、布局树变换、顶部 Workspace 导航、按连接的有界 Git 仓库历史和 block runtime 编排；不读取本地文件、验证仓库有效性或实现 SSH/SFTP。
 - `src/terminal/`：负责 xterm 实例及终端 I/O 适配；不持久化 buffer 或拥有 Workspace 生命周期。
@@ -119,6 +123,7 @@
 
 ## Forbidden Contents By Directory
 
+- `.agents/skills/`：禁止单次任务流水账、临时诊断结论、运行时业务实现，以及与 checker、schema 或测试重复且会漂移的事实源。
 - `src/`：禁止私钥正文、后端文件读取、SSH/加密实现和直接密码/口令持久化；只允许短期 UI secret state 与窄 vault IPC。
 - `commands/`：禁止业务状态机、持久化策略、任意外部命令/参数入口和原始敏感值日志。
 - `application/` 与 `domain/`：禁止依赖 Tauri、russh、xterm.js 或具体 JSON model。

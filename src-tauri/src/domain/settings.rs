@@ -154,7 +154,11 @@ mod tests {
 
     #[test]
     fn configuration_directory_uses_the_injected_default() {
-        let home = std::path::Path::new("/users/demo");
+        let home = std::path::Path::new(if cfg!(windows) {
+            r"C:\Users\demo"
+        } else {
+            "/users/demo"
+        });
         let development_default =
             ConfigurationDirectory::from_absolute_path(home.join(".qterm-dev")).expect("default");
         for input in ["", "   ", "~"] {

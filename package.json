@@ -12,9 +12,10 @@
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src vite.config.ts --max-warnings 0",
-    "test": "vitest run && node --test scripts/tauri.node-test.mjs",
+    "check:source-size": "node scripts/check-source-size.mjs",
+    "test": "vitest run && node --test scripts/tauri.node-test.mjs scripts/check-source-size.node-test.mjs",
     "test:watch": "vitest",
-    "check": "pnpm lint && pnpm test && pnpm build",
+    "check": "pnpm check:source-size && pnpm lint && pnpm test && pnpm build",
     "audit:rust": "cd src-tauri && cargo audit",
     "preview": "vite preview",
     "tauri": "node scripts/tauri.mjs"

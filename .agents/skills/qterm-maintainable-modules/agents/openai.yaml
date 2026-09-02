@@ -1,0 +1,5 @@
+interface:
+  display_name: "Qterm 可维护模块开发"
+  short_description: "约束功能增长、模块职责边界、测试布局与源码尺寸门禁"
+  default_prompt: "使用 $qterm-maintainable-modules 设计并实现这次功能，避免职责重新集中到大文件。"
+
