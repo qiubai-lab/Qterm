@@ -1,0 +1,28 @@
+.git-repository-refresh[data-updating="true"] svg {
+  transform-origin: center;
+  animation: git-repository-picker-spin 700ms linear infinite;
+}
+
+.git-primary-action[data-updating="true"] > svg {
+  transform-origin: center;
+  animation: git-repository-picker-spin 700ms linear infinite;
+}
+
+.git-repository-name[data-updating="true"] {
+  color: var(--block-border-active);
+  text-shadow: 0 0 6px color-mix(in srgb, var(--block-border-active) 32%, transparent);
+  animation: git-repository-refresh-name-breathe 1600ms ease-in-out infinite;
+}
+
+@keyframes git-repository-refresh-name-breathe {
+  0%,
+  100% {
+    color: var(--text);
+    text-shadow: 0 0 0 transparent;
+  }
+
+  50% {
+    color: var(--block-border-active);
+    text-shadow: 0 0 6px color-mix(in srgb, var(--block-border-active) 32%, transparent);
+  }
+}

@@ -98,6 +98,8 @@ describe("GitPane branches and repository actions", () => {
       await waitFor(() => expect(api.snapshot).toHaveBeenCalledTimes(2));
       const updating = screen.getByRole("button", { name: "正在更新 Git 状态" });
       expect(updating).toHaveAttribute("data-updating", "true");
+      expect(document.querySelector(".git-repository-name")).toHaveAttribute("data-updating", "true");
+      expect(updating.closest(".git-repository-card")).not.toHaveAttribute("data-updating");
       expect(stage).not.toBeDisabled();
       expect(document.querySelector(".git-primary-action")).toBe(primary);
       expect(primary).toHaveTextContent(primaryLabel ?? "");
@@ -110,6 +112,7 @@ describe("GitPane branches and repository actions", () => {
 
       pending.resolve(structuredClone(snapshot));
       await waitFor(() => expect(screen.getByRole("button", { name: "刷新 Git 状态" })).not.toHaveAttribute("data-updating"));
+      expect(document.querySelector(".git-repository-name")).not.toHaveAttribute("data-updating");
       expect(document.querySelector(".git-primary-action")).toBe(primary);
       expect(primary).toHaveTextContent(primaryLabel ?? "");
     } finally {

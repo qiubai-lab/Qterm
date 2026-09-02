@@ -86,6 +86,11 @@
     animation: none;
   }
 
+  .git-repository-name[data-updating="true"] {
+    animation: none;
+    text-shadow: none;
+  }
+
   .git-merge-flow-packet {
     animation: none;
     opacity: .72;

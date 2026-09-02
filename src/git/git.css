@@ -10,4 +10,5 @@
 @import "./styles/gitRemoteConfigurationHint.css";
 @import "./styles/gitConflictResolver.css";
 @import "./styles/gitChangePreview.css";
+@import "./styles/gitRefresh.css";
 @import "./styles/gitMedia.css";

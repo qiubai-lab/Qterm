@@ -16,6 +16,7 @@ const gitStyleFiles = [
   "gitRemoteConfigurationHint.css",
   "gitConflictResolver.css",
   "gitChangePreview.css",
+  "gitRefresh.css",
   "gitMedia.css",
 ] as const;
 const gitStyleManifest = readFileSync("src/git/git.css", "utf8").replace(/\r\n/g, "\n");
@@ -245,6 +246,18 @@ describe("Git pane style contracts", () => {
     expect(declarations(".git-graph-section .git-section-content")).toContain("min-height: 0");
     expect(declarations(".git-graph-section .git-section-content")).toContain("height: 100%");
     expect(declarations(".git-graph-section .git-section-body")).toContain("grid-template-rows: minmax(0, 1fr)");
+  });
+
+  it("highlights only the repository name while refreshing", () => {
+    const name = declarations('.git-repository-name[data-updating="true"]');
+    expect(name).toContain("color: var(--block-border-active)");
+    expect(name).toContain("animation: git-repository-refresh-name-breathe 1600ms ease-in-out infinite");
+    expect(styles).not.toContain("git-repository-refresh-card-breathe");
+    expect(styles).not.toContain('.git-repository-card[data-updating="true"]');
+    expect(styles).toContain("@keyframes git-repository-refresh-name-breathe");
+    expect(cyberTheme).toContain("--block-border-active:#fcee0a");
+    const reducedMotion = styles.slice(styles.indexOf("@media (prefers-reduced-motion: reduce)"));
+    expect(reducedMotion).toMatch(/\.git-repository-name\[data-updating="true"\] \{[\s\S]*?animation: none;[\s\S]*?text-shadow: none;/);
   });
 
   it("matches the file manager scrollbar and reserves the graph card lane", () => {

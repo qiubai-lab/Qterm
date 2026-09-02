@@ -55,7 +55,7 @@ export function GitRepositorySection({
     <div className="git-repository-card">
       <div className="git-repository-row">
         <Icon name="git" size={15}/>
-        <span className="git-repository-name">{snapshot?.repositoryName ?? repositoryPath}</span>
+        <span className="git-repository-name" data-updating={updating || undefined}>{snapshot?.repositoryName ?? repositoryPath}</span>
         {snapshot && <button ref={branchButtonRef} type="button" className="git-branch-trigger" aria-label={`切换分支，当前 ${branchLabel}`} title={mergeInProgress ? "完成或中止当前合并后才能切换分支" : `切换分支 · ${branchLabel}`} aria-haspopup="dialog" aria-expanded={Boolean(repositoryOverlay && branchOverlayKinds.has(repositoryOverlay.kind))} disabled={disabled || mergeInProgress} onClick={() => onOpenOverlay("branches")}>
           <Icon name="git" size={12}/><span>{branchLabel}</span>
         </button>}
