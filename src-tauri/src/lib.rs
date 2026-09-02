@@ -208,6 +208,11 @@ pub fn run() {
             }
         })
         .setup(|app| {
+            if let Some(product_name) = app.config().product_name.as_deref()
+                && let Some(window) = app.get_webview_window("main")
+            {
+                window.set_title(product_name)?;
+            }
             let home = app.path().home_dir()?;
             let configuration_storage =
                 ConfigurationStoragePaths::for_mode(&home, BuildMode::current());

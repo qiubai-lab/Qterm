@@ -4,6 +4,7 @@
 
 - `src/`：负责 React 展示、用户交互和 Tauri IPC 客户端；不读取私钥、不实现 SSH 规则，也不持久化敏感凭据。
 - `src-tauri/`：负责桌面运行时、应用用例、领域规则和基础设施适配器；不承载 React 页面状态。
+- `scripts/`：负责仓库级可测试命令入口；当前只为 Tauri `dev` 注入开发 flavor 并把其他 CLI 参数原样转发，不承载应用业务、发布凭据或 shell 拼接。
 - `docs/qb-spec/`：负责长期产品上下文、需求规格和实施计划；不作为运行时代码或配置来源。
 - `.github/`：负责持续集成、依赖更新和原生桌面产物构建自动化；不包含产品业务逻辑、发布凭据或部署实现。
 
@@ -50,7 +51,9 @@
 - `src/lib/tauri/workspaces.ts`：版本化 Workspace 文档的 load/save IPC 契约；不包含运行时会话字段。
 - `src/lib/tauri/window.ts`：桌面平台判定与当前窗口控制适配；不拥有 Workspace 状态或窗口视觉样式。
 - `src-tauri/src/main.rs`：原生可执行入口，只委托给库组合根。
-- `src-tauri/src/lib.rs`：Tauri 组合根，注册 commands、装配 adapters，按 Rust debug/release 模式选择互不 fallback 的 home locator/default-root，再派生并初始化 root/data/device/cache 后构造全部 repositories；不写程序目录、不读取另一模式或旧 AppData 位置，也不在 repository 内重复计算全局路径。
+- `scripts/tauri.mjs`、`tauri-dev-runner.mjs`：package `tauri` script 的跨平台 ESM 入口，以及只在 macOS `dev` 使用的 app-bundle runner；前者注入开发 config/runner 并原样转发其他命令，后者用参数数组执行 Cargo build、原子更新 `target/tauri-dev/.../Qterm Dev.app` 并运行，不承载业务或发布行为。
+- `src-tauri/tauri.dev.conf.json`、`Info.dev.plist`：声明 `Qterm Dev` / `com.qiubai.qterm.dev` 开发身份和 macOS dev bundle 元数据，不声明窗口数组或业务配置；plist 使用非保留文件名，正式身份继续以 `tauri.conf.json` 为事实源。
+- `src-tauri/src/lib.rs`：Tauri 组合根，注册 commands、装配 adapters，把主窗口标题同步为最终 productName，按 Rust debug/release 模式选择互不 fallback 的 home locator/default-root，再派生并初始化 root/data/device/cache 后构造全部 repositories；不写程序目录、不读取另一模式或旧 AppData 位置，也不在 repository 内重复计算全局路径。
 - `src-tauri/src/domain/profile.rs`：连接配置、最多 4 个显式有序跃点、候选资格与引用完整性规则；不包含 IPC、凭证明文或 JSON 序列化模型。
 - `src-tauri/src/domain/auth.rs`：短期凭据包装、可执行认证请求与稳定认证失败；不表达 profile 的 `manual` 策略，也不依赖 `russh` 或 Tauri。
 - `src-tauri/src/domain/credential.rs`、`ports/credential_vault.rs`、`application/credential_service.rs`：vault 领域语义、外部存储端口与用例边界；不依赖具体密码学文件格式或 UI。
@@ -86,7 +89,7 @@
 - `src-tauri/src/infrastructure/ssh/client.rs`、`client/manager_{core,control,files,ports}.rs`：稳定 `SshSessionManager` façade 与按核心会话、控制、文件/传输和端口转发分组的 manager 实现；不向 commands/application 泄漏 russh 或 SFTP 类型。
 - `src-tauri/src/infrastructure/ssh/client/session.rs`、`session/{terminal,files,git}.rs`：route 建连 façade 与 Terminal、Files、Git purpose-specific runner；Git runner 通过同一 profile-owned session 执行固定 conflict detail/side/delete/stage，并仅为有界结果写回复用内部 SFTP 原子写语义，各用途对外能力仍独立，取消、task drop 和关闭语义仍由共享 manager/session ownership 约束。
 - `src-tauri/src/infrastructure/ssh/client/transfer.rs`、`transfer/{files,staging,upload}.rs`：传输 dispatch façade、远端文件操作、Terminal staging/download 与 upload/流式复制实现；路径边界、取消与失败清理不进入 command 或 application。
-- `src-tauri/tauri.conf.json`、`tauri.macos.conf.json`：通用无边框桌面窗口与 macOS 原生 Overlay 标题栏的分层配置，以及构建和打包入口；不承载 Workspace 或 SSH 规则。
+- `src-tauri/tauri.conf.json`、`tauri.macos.conf.json`：正式应用身份、通用无边框桌面窗口与 macOS 原生 Overlay 标题栏的分层配置，以及构建和打包入口；不承载 Workspace 或 SSH 规则。
 - `src-tauri/capabilities/default.json`：主窗口最小 Tauri 权限清单。
 - `package.json`、`src-tauri/Cargo.toml`：前端与 Rust 的直接依赖及质量命令入口。
 - `.github/workflows/build-desktop.yml`：macOS ARM64、Windows x64 与 Linux x64 的版本标签/手动构建和 workflow artifact 上传入口；不发布 Release 或执行部署。
@@ -103,6 +106,7 @@
 - `src/components/dialogs/`：负责连接、传输、设置、帮助与确认弹窗；不定义领域规则或直接操作 Rust infrastructure。
 - `src/test/`：负责前端测试运行环境；不放置生产代码。
 - `src/lib/tauri/`：负责类型安全的前端 IPC 调用；不持有领域规则或直接访问文件系统。
+- `scripts/`：负责开发工具入口与参数路由；不承载运行时产品逻辑、用户数据迁移、任意外部命令或发布身份决策。
 - `src-tauri/src/commands/`：负责 IPC DTO 校验、secret 包装、用例调用和错误映射；不实现领域决策或 SSH 协议。
 - `src-tauri/src/application/`：负责 profile、credential、workspace、network、Git、host-key 信任、文件内容安全和剪贴板图片上传用例；不依赖 Tauri UI、原生剪贴板、process API 或具体 SSH 库类型。
 - `src-tauri/src/domain/`：负责稳定领域模型、状态、输入边界和规则；不依赖 Tauri、russh、process API 或持久化格式。
@@ -121,3 +125,4 @@
 - `infrastructure/`：禁止定义前端契约或反向控制应用层规则。
 - `docs/qb-spec/`：禁止密钥、密码、口令或其他真实凭据。
 - `.github/`：禁止提交签名证书、访问令牌或其他真实凭据；敏感值只能来自 GitHub Actions Secrets。
+- `scripts/`：禁止 shell 字符串拼接、用户数据读写和业务规则；只能调用仓库锁定的工具并保留参数边界。

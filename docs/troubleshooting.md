@@ -41,7 +41,7 @@ git -C "$(brew --repository qiubai-lab/tap)" pull
 
 ## 开发与预览
 
-- 完整功能必须使用 `pnpm tauri dev`。`pnpm dev` 只预览 Web UI，不具备 Tauri IPC，因此不能连接 SSH。
+- 完整功能必须使用 `pnpm tauri dev`。该命令会自动加载开发身份配置并显示为 `Qterm Dev`；`pnpm dev` 只预览 Web UI，不具备 Tauri IPC，因此不能连接 SSH。
 - 本机真实链路验证需要 `/usr/sbin/sshd`、`ssh-keygen` 和 SFTP server；运行 README 中的 ignored 集成测试即可。
 
 ### `pnpm tauri dev` 只显示启动命令
@@ -50,7 +50,7 @@ git -C "$(brew --repository qiubai-lab/tap)" pull
 
 ```text
 $ pnpm tauri dev
-$ tauri "dev"
+$ node scripts/tauri.mjs dev
 ```
 
 先在另一个终端运行 `rustc --version`。项目通过 `rust-toolchain.toml` 固定 Rust 1.97.1；如果 Windows 尚未安装该版本，`rustup` 会在 Tauri 启动过程中同步并下载工具链。首次下载和 Rust 依赖编译可能需要数分钟，而 `pnpm dev` 只启动 Vite，不会验证 Rust 环境，因此前端正常不代表 Tauri 工具链完整。

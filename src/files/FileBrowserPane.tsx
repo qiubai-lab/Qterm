@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent, type MouseEvent } from "react";
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FocusEvent, type FormEvent, type KeyboardEvent, type MouseEvent } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { writeText as writeClipboardText } from "@tauri-apps/plugin-clipboard-manager";
 
@@ -76,6 +76,7 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
   const menuRef = useRef<HTMLDivElement>(null);
   const uploadMenuRef = useRef<HTMLDivElement>(null);
   const uploadButtonRef = useRef<HTMLButtonElement>(null);
+  const uploadMenuPointerActive = useRef(false);
   const kind = runtime?.kind;
   const sessionId = runtime?.sessionId;
   const status = runtime?.status;
@@ -247,11 +248,16 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
       setUploadMenu(null);
       requestAnimationFrame(() => uploadButtonRef.current?.focus());
     };
+    const resetPointer = () => { uploadMenuPointerActive.current = false; };
     window.addEventListener("pointerdown", close);
+    window.addEventListener("pointerup", resetPointer);
+    window.addEventListener("pointercancel", resetPointer);
     window.addEventListener("keydown", keydown);
     return () => {
       cancelAnimationFrame(frame);
       window.removeEventListener("pointerdown", close);
+      window.removeEventListener("pointerup", resetPointer);
+      window.removeEventListener("pointercancel", resetPointer);
       window.removeEventListener("keydown", keydown);
     };
   }, [uploadMenu]);
@@ -413,6 +419,12 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
           ? (currentIndex <= 0 ? items.length - 1 : currentIndex - 1)
           : (currentIndex + 1) % items.length;
     items[nextIndex].focus();
+  }
+
+  function handleUploadMenuBlur(event: FocusEvent<HTMLDivElement>) {
+    if (uploadMenuPointerActive.current) return;
+    const nextFocus = event.relatedTarget;
+    if (nextFocus instanceof Node && !event.currentTarget.contains(nextFocus)) setUploadMenu(null);
   }
 
   async function copyPath(entry: FileEntry) {
@@ -681,7 +693,7 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
       {!showLocalRoots && listing && <FileList entries={displayedEntries} range={virtualRange} ariaLabel={`文件夹 ${listing.path}`} selectedPaths={selectedPaths} onSelect={selectEntry} onOpen={(entry) => entry.isDirectory ? void navigateTo(entry.path) : void openFile(entry, "preview")} onContextMenu={openContextMenu} onContextMenuKey={openContextMenuFromKeyboard}/>}
       {!showLocalRoots && dropActive && <div className="file-upload-drop-overlay" role="status"><Icon name="upload" size={24}/><strong>上传到当前目录</strong><span>{visiblePath}</span><small>释放鼠标以上传文件或文件夹</small></div>}
     </div>
-    {uploadMenu && <div ref={uploadMenuRef} className="file-context-menu file-upload-menu" data-placement={uploadMenu.placement} role="menu" aria-label="选择上传内容" style={{ left: uploadMenu.x, top: uploadMenu.y }} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setUploadMenu(null); }} onKeyDown={handleContextMenuKeyDown} onContextMenu={(event) => event.preventDefault()}>
+    {uploadMenu && <div ref={uploadMenuRef} className="file-context-menu file-upload-menu" data-placement={uploadMenu.placement} role="menu" aria-label="选择上传内容" style={{ left: uploadMenu.x, top: uploadMenu.y }} onPointerDownCapture={() => { uploadMenuPointerActive.current = true; }} onBlur={handleUploadMenuBlur} onKeyDown={handleContextMenuKeyDown} onContextMenu={(event) => event.preventDefault()}>
       <button role="menuitem" onClick={() => void startSelectedUpload("files")}><Icon name="file" size={13}/><span>上传文件…</span></button>
       <button role="menuitem" onClick={() => void startSelectedUpload("folder")}><Icon name="files" size={13}/><span>上传文件夹…</span></button>
     </div>}

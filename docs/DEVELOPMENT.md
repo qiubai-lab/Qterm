@@ -80,6 +80,8 @@ pnpm install --frozen-lockfile
 pnpm tauri dev
 ```
 
+该命令通过仓库内的 Tauri 入口自动合并 `src-tauri/tauri.dev.conf.json`，开发应用使用 `Qterm Dev` / `com.qiubai.qterm.dev`，可以和正式版 `Qterm` / `com.qiubai.qterm` 同时运行。macOS 上入口还会使用 `scripts/tauri-dev-runner.mjs` 将热更新二进制放入 `target/tauri-dev/.../Qterm Dev.app` 后运行，使 LaunchServices 和 UI 自动化能识别开发 identifier；Windows/Linux 继续使用 Tauri 默认 runner。无需手工传入 `--config`；如果显式追加其他 `--config`，Tauri 会在开发配置之后按参数顺序继续合并。
+
 只预览浏览器前端：
 
 ```bash
@@ -128,6 +130,8 @@ pnpm audit:rust
 ```bash
 pnpm tauri build
 ```
+
+正式 `build` 子命令不会合并开发配置，继续生成 `Qterm` / `com.qiubai.qterm` 产物。
 
 仓库的 `.github/workflows/build-desktop.yml` 在版本标签或手动触发时分别使用原生 runner 构建 macOS ARM64、Windows x64 和 Linux x64 产物；推送 `v*` 标签时会额外发布 GitHub Release。涉及原生依赖、Tauri 配置或发布打包的改动，应至少验证对应平台构建。标签发布的完整流程见[发布流程](release.md)。
 

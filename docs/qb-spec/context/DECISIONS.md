@@ -256,6 +256,12 @@ Status: accepted by explicit user decision
 
 启用 Rust `debug_assertions` 的构建使用 `~/.qterm-location.dev.json` 和默认根 `~/.qterm-dev`；未启用该配置的正式构建继续使用 `~/.qterm-location.json` 和默认根 `~/.qterm`。两种模式只读取和写入自己的 locator，缺失、损坏、未来版本或存储不可用均只回退本模式默认根，不互相 fallback、迁移、复制、覆盖或删除数据。构建模式与物理文件名由 Rust 组合根决定并注入 settings；domain、command 与 React 不推断通道，设置快照只返回当前模式默认根供恢复默认和派生路径预览。开发者仍可明确选择任意绝对自定义根，包括 `~/.qterm`，但默认流程不会引导两个模式共享。该决策不改变 Tauri identifier、window-state 或 WebView framework data。
 
+## 2026-09-02 — 开发版使用独立桌面应用身份
+
+Status: accepted by explicit user decision
+
+常规 `pnpm tauri dev` 由跨平台 Node 入口自动合并开发配置，使用 `Qterm Dev` / `com.qiubai.qterm.dev`；正式 `pnpm tauri build`、CI 与发布继续使用 `Qterm` / `com.qiubai.qterm`。由于 Tauri 在 macOS dev 模式默认直接执行裸二进制、LaunchServices 不采用其 bundle identifier，macOS 使用专用 Node runner 把每次热更新编译结果原子放入 `target/tauri-dev/.../Qterm Dev.app` 后运行；Windows/Linux 继续使用默认 runner。开发配置不声明 `app.windows`，避免 JSON Merge Patch 替换通用或平台窗口数组；`Info.dev.plist` 使用非保留文件名，避免 Tauri 自动合并进正式 bundle；Rust 组合根将主窗口标题同步为最终 productName。domain、application、IPC 与 React 不推断 flavor。独立 identifier 进一步隔离 Tauri window-state 和 WebView framework data，但不迁移、复制或删除既有 `.qterm-dev`、`.qterm`、系统数据或其他构建产物。显式追加的其他 `--config` 和 `--runner` 保留 Tauri 高级覆盖能力。
+
 ## 2026-08-20 — 终端锁采用进程内遮罩并与凭证同时解锁
 
 Status: accepted

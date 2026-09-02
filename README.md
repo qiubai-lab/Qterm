@@ -133,7 +133,7 @@ pnpm install --frozen-lockfile
 pnpm tauri dev
 ```
 
-`pnpm dev` 仅启动浏览器界面，不包含 Tauri IPC，无法建立真实 SSH/SFTP 连接。各平台依赖、测试和构建命令见[开发指引](docs/DEVELOPMENT.md)。
+`pnpm tauri dev` 自动使用 `Qterm Dev` / `com.qiubai.qterm.dev` 开发身份，可与已安装的正式版同时运行。`pnpm dev` 仅启动浏览器界面，不包含 Tauri IPC，无法建立真实 SSH/SFTP 连接。各平台依赖、测试和构建命令见[开发指引](docs/DEVELOPMENT.md)。
 
 ## 📚 文档索引
 

@@ -998,6 +998,40 @@ describe("FileBrowserPane", () => {
     await waitFor(() => expect(upload).toHaveFocus());
   });
 
+  it("keeps upload choices actionable when a pointer click blurs the focused menu item first", async () => {
+    listRemoteDirectory.mockResolvedValue({ path: "/srv", entries: [] });
+    selectUploadFiles.mockResolvedValue([]);
+    selectUploadFolder.mockResolvedValue(null);
+    const view = render(<FileBrowserPane initialPath="/srv" runtime={{ ...localRuntime, kind: "sftp", sessionId: "session-1" }} onPathChange={vi.fn()}/>);
+    const ui = within(view.container);
+    const upload = await ui.findByRole("button", { name: "上传到当前目录" });
+
+    fireEvent.click(upload);
+    let files = ui.getByRole("menuitem", { name: "上传文件…" });
+    await waitFor(() => expect(files).toHaveFocus());
+    fireEvent.pointerDown(files);
+    act(() => upload.focus());
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 25)); });
+    expect(files).toBeInTheDocument();
+    fireEvent.pointerUp(files);
+    fireEvent.click(files);
+    await waitFor(() => expect(selectUploadFiles).toHaveBeenCalledOnce());
+    await waitFor(() => expect(upload).toBeEnabled());
+    await waitFor(() => expect(upload).toHaveFocus());
+
+    fireEvent.click(upload);
+    files = ui.getByRole("menuitem", { name: "上传文件…" });
+    const folder = ui.getByRole("menuitem", { name: "上传文件夹…" });
+    await waitFor(() => expect(files).toHaveFocus());
+    fireEvent.pointerDown(folder);
+    act(() => upload.focus());
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 25)); });
+    expect(folder).toBeInTheDocument();
+    fireEvent.pointerUp(folder);
+    fireEvent.click(folder);
+    await waitFor(() => expect(selectUploadFolder).toHaveBeenCalledOnce());
+  });
+
   it("uploads selected files to the captured remote path and refreshes only that active directory", async () => {
     const entries = [{ name: "child", path: "/srv/child", isDirectory: true, isSymlink: false, size: 0, modifiedAt: null, permissionMode: 0o755 }];
     listRemoteDirectory

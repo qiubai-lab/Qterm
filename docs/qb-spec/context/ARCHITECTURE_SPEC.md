@@ -26,6 +26,8 @@ Frontend -> Tauri Commands -> Application -> Domain / Ports <- Infrastructure
 
 `src-tauri/src/lib.rs` 是组合根。Infrastructure 实现 ports；domain 和 application 不依赖 Tauri、russh、xterm.js 或具体存储格式。
 
+开发桌面 flavor 由 `scripts/tauri.mjs`、macOS 专用的 `scripts/tauri-dev-runner.mjs`、`src-tauri/tauri.dev.conf.json` 与 `Info.dev.plist` 共同拥有：常规 `pnpm tauri dev` 自动合并 `Qterm Dev` / `com.qiubai.qterm.dev`；macOS 将热更新二进制原子放入 `target/tauri-dev/.../Qterm Dev.app` 后运行，使 LaunchServices 能读取唯一 identifier，Windows/Linux 继续使用 Tauri 默认 runner。其他 Tauri 子命令原样转发并继续使用 `tauri.conf.json` 的正式身份。开发配置不声明 `app.windows`，避免覆盖通用或平台窗口数组；组合根把主窗口标题同步为最终 productName。domain、application、IPC 与 React 不推断 flavor。
+
 ## Frontend Styling and Theme Boundary
 
 - `src/app/app.css` 是唯一顶层样式 manifest，只按固定顺序导入 application foundations、当前 theme 与 feature-local CSS；Workspace、Terminal、Files、Network 和 dialogs 各自拥有带前缀的规则。
