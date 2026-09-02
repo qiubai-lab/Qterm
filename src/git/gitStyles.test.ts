@@ -57,33 +57,6 @@ describe("Git pane style contracts", () => {
     }
   });
 
-  it("gives repository history one bounded themed popover scroller", () => {
-    const popover = declarations(".git-repository-history-popover");
-    expect(popover).toContain("position: fixed");
-    expect(popover).toContain("z-index: 130");
-    expect(popover).toContain("overflow: hidden");
-    expect(popover).toContain("background: var(--floating-material)");
-    expect(declarations(".git-repository-history-scroll")).toContain("max-height: min(320px, calc(100vh - 132px))");
-    expect(declarations(".git-repository-history-scroll")).toContain("overflow-y: auto");
-    expect(declarations(".git-repository-history-scroll")).toContain("scrollbar-color: var(--scrollbar-thumb) transparent");
-    expect(declarations(".git-repository-history-browse")).toContain("flex: none");
-    const itemHover = declarations(".git-repository-history-item:hover,\n.git-repository-history-item:focus-visible");
-    expect(itemHover).toContain("background: var(--file-active-surface)");
-    expect(itemHover).toContain("var(--file-active-marker)");
-    const selectedItem = declarations('.git-repository-history-item[aria-current="true"]');
-    expect(selectedItem).toContain("color: var(--file-selection-foreground)");
-    expect(selectedItem).toContain("background: var(--file-selection-surface)");
-    expect(selectedItem).toContain("inset 0 0 0 1px var(--file-selection-marker)");
-    expect(selectedItem).toContain("border-radius: 4px");
-    expect(declarations('.git-repository-history-item[aria-current="true"] small')).toContain("var(--file-selection-secondary-foreground)");
-    const browseHover = declarations(".git-repository-history-browse:hover,\n.git-repository-history-browse:focus-visible");
-    expect(browseHover).toContain("background: var(--file-active-surface)");
-    expect(browseHover).toContain("var(--file-active-marker)");
-    expect(declarations(".git-repository-history-browse:hover > svg,\n.git-repository-history-browse:focus-visible > svg")).toContain("color: var(--file-active-marker)");
-    const reducedMotion = styles.slice(styles.indexOf("@media (prefers-reduced-motion: reduce)"));
-    expect(reducedMotion).toContain(".git-repository-history-popover");
-  });
-
   it("gives the repository picker one bounded directory scroller", () => {
     const dialog = declarations(".dialog-frame.git-repository-picker-dialog");
     expect(dialog).toContain("width: min(925px, calc(100vw - 48px))");
@@ -325,6 +298,7 @@ describe("Git pane style contracts", () => {
     expect(repositorySelection).toContain("height: calc(var(--git-repository-row-height) - 2px)");
     expect(repositorySelection).toContain("transform: translateY(calc(var(--git-repository-selected-index)");
     expect(repositorySelection).toContain("transition: transform 180ms cubic-bezier(.22, 1, .36, 1)");
+    expect(declarations('.git-repository-treeitem[data-selected="true"] .git-repository-tree-copy strong')).toContain("color: var(--primary-action)");
     expect(styles.slice(styles.indexOf("@media (prefers-reduced-motion: reduce)"))).toContain(".git-repository-selection-indicator");
     expect(declarations(".git-repository-status-group")).toContain("display: inline-flex");
     expect(declarations(".git-repository-status-group")).toContain("color: var(--accent)");

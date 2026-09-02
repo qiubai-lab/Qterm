@@ -160,7 +160,7 @@
 }
 
 .git-repository-treeitem[data-selected="true"] .git-repository-tree-copy strong {
-  color: var(--file-selection-foreground);
+  color: var(--primary-action);
 }
 
 .git-repository-tree-copy span {
