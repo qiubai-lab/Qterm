@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 
 const gitStyleFiles = [
   "gitShell.css",
+  "gitSubmodules.css",
   "gitChangeSelection.css",
   "gitGraph.css",
   "gitTargetConfig.css",

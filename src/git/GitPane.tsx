@@ -12,6 +12,7 @@ import {
   type GitCommitFile,
   type GitConflictResolution,
   type GitSnapshot,
+  type GitSubmodule,
 } from "../lib/tauri/git";
 import { gitRepositoryHistoryEntryKey } from "../workspace/gitRepositoryHistory";
 import type { GitRepositoryHistoryEntry, GitTarget } from "../workspace/model";
@@ -20,7 +21,7 @@ import { GitCommitGraph, GitCommitTooltip } from "./GitCommitGraph";
 import { GitConflictResolver } from "./GitConflictResolver";
 import { GitChangePreview } from "./GitChangePreview";
 import { buildGitGraphRows } from "./gitGraph";
-import { GitChangesSection, GitEmpty, GitRepositorySection } from "./GitPaneSections";
+import { GitChangesSection, GitEmpty, GitRepositorySection, GitSubmodulesSection } from "./GitPaneSections";
 import { gitSnapshotsPresentSameState } from "./gitSnapshot";
 import { deriveGitPrimaryAction, type GitPrimaryAction, type GitPrimaryAlternativeAction } from "./gitPrimaryAction";
 import {
@@ -56,6 +57,8 @@ interface GitChangeMenuState {
   placement: "above" | "below";
   scope: GitChangeScope;
   paths: string[];
+  canStage: boolean;
+  canDiscard: boolean;
 }
 
 interface GitDiscardConfirmation {
@@ -126,7 +129,7 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
   const [selectedUnstagedPaths, setSelectedUnstagedPaths] = useState<Set<string>>(() => new Set());
   const [changeMenu, setChangeMenu] = useState<GitChangeMenuState | null>(null);
   const [discardConfirmation, setDiscardConfirmation] = useState<GitDiscardConfirmation | null>(null);
-  const [collapsed, setCollapsed] = useState({ repository: false, changes: false, graph: true });
+  const [collapsed, setCollapsed] = useState({ repository: false, submodules: false, changes: false, graph: true });
   const epoch = useRef(0);
   const busyRef = useRef("");
   const backgroundRequestRef = useRef<number | null>(null);
@@ -159,7 +162,7 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
   const available = remote ? true : localAvailable;
   const {
     loadSnapshot, fetchSnapshot, initialize, loadCommitFiles, loadCommitFileDiff, loadChangeDiff, loadConflictDetail, resolveConflict,
-    stagePaths, stageAll, unstagePaths, unstageAll, discardPaths, commit,
+    stagePaths, stageAll, unstagePaths, unstageAll, discardPaths, commit, initializeSubmodule, checkoutSubmodule,
     createBranch, createBranchAt, createBranchFromCommit, renameBranch, deleteBranch, switchBranch, trackRemoteBranch,
     pullRepository, pushRepository, mergeBranch, continueMerge, abortMerge,
   } = useGitRepositoryClient({ remote, profileId: remoteProfileId, sessionId: remoteSessionId, status: remoteStatus });
@@ -533,12 +536,21 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
     const anchorX = keyboard ? rect.left + 18 : event.clientX;
     const anchorY = keyboard ? rect.top + rect.height / 2 : event.clientY;
     const menuHeight = scope === "unstaged" ? 68 : 38;
-    setChangeMenu({ ...fitCommitContextMenu(anchorX, anchorY, 210, menuHeight), scope, paths });
+    const selectedChanges = paths
+      .map((path) => changes.find((item) => item.path === path))
+      .filter((item): item is GitChange => Boolean(item));
+    setChangeMenu({
+      ...fitCommitContextMenu(anchorX, anchorY, 210, menuHeight),
+      scope,
+      paths,
+      canStage: selectedChanges.every((item) => !item.submodule || item.submodule.commitChanged),
+      canDiscard: selectedChanges.every((item) => !item.submodule),
+    });
   }
 
   function runChangeMenuAction(action: "stage" | "unstage") {
     if (!root || !changeMenu || busyRef.current) return;
-    if (action === "stage" && changeMenu.scope !== "unstaged") return;
+    if (action === "stage" && (changeMenu.scope !== "unstaged" || !changeMenu.canStage)) return;
     if (action === "unstage" && changeMenu.scope !== "staged") return;
     const paths = changeMenu.paths;
     setChangeMenu(null);
@@ -547,7 +559,7 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
   }
 
   function requestDiscardConfirmation() {
-    if (!changeMenu || changeMenu.scope !== "unstaged") return;
+    if (!changeMenu || changeMenu.scope !== "unstaged" || !changeMenu.canDiscard) return;
     const selected = changeMenu.paths
       .map((path) => unstaged.find((change) => change.path === path))
       .filter((change): change is GitChange => Boolean(change));
@@ -594,6 +606,7 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
     requestCommitFiles, setFocusedCommitOid, setHoveredCommitOid, toggleCommitFiles,
   } = useGitCommitInspection({ visible, snapshot, root, remote, remoteProfileId, loadCommitFiles });
   const disabled = Boolean(busy) || !remoteReady;
+  const submodules = snapshot?.submodules ?? [];
   const primaryAction = deriveGitPrimaryAction({
     snapshot,
     message,
@@ -885,6 +898,19 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
     }
   }
 
+  function submoduleTarget(submodule: GitSubmodule): GitTarget | null {
+    if (!root || submodule.path.startsWith("/") || submodule.path.split("/").includes("..")) return null;
+    const path = `${root.replace(/[\\/]+$/, "")}/${submodule.path}`;
+    return remote && remoteProfileId
+      ? { type: "remote", profileId: remoteProfileId, path }
+      : { type: "local", path };
+  }
+
+  function openSubmodule(submodule: GitSubmodule) {
+    const next = submoduleTarget(submodule);
+    if (next) onTargetChangeRef.current(next);
+  }
+
   if (available === false) return <GitEmpty icon="git" title="未找到系统 Git" detail="安装 Git 并重新打开 Qterm 后即可使用 Git 管理。"/>;
   if (!repositoryPath) return <GitEmpty icon="git" title="选择本机仓库" detail="Git Block 一次管理一个本机或 SSH 工作区仓库。" action="选择文件夹" onAction={onRequestRepositoryChange}/>;
   if (remote && !remoteReady && !snapshot) return <GitEmpty icon="git" title={runtime?.status === "connecting" || runtime?.status === "authenticating" ? "正在连接远程 Git…" : "远程 Git 尚未连接"} detail={runtime?.notice || repositoryPath} secondary="更换远程路径" onSecondary={onRequestRepositoryChange}/>;
@@ -912,6 +938,15 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
       onFetch={() => void fetchAndRefresh()}
       onOpenOverlay={openRepositoryOverlay}
     />
+    {snapshot && <GitSubmodulesSection
+      submodules={submodules}
+      collapsed={collapsed.submodules}
+      disabled={disabled}
+      onToggle={() => setCollapsed((value) => ({ ...value, submodules: !value.submodules }))}
+      onOpen={openSubmodule}
+      onInitialize={(submodule) => root && void runRecordedOperation("初始化子仓库", () => initializeSubmodule(root, submodule.path), `已初始化 ${submodule.path}`)}
+      onCheckout={(submodule) => root && void runRecordedOperation("检出子仓库记录版本", () => checkoutSubmodule(root, submodule.path), `已检出 ${submodule.path} 的记录版本`)}
+    />}
     <GitChangesSection
       snapshot={snapshot}
       collapsed={collapsed.changes}
@@ -1073,9 +1108,9 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
     />
     {visible && changeMenu && createPortal(<div ref={changeMenuRef} className="git-repository-popover git-repository-action-popover git-commit-context-menu git-change-context-menu" role="menu" aria-label="Git 更改操作" data-placement={changeMenu.placement} style={{ left: changeMenu.left, top: changeMenu.top }} onKeyDown={navigateRepositoryMenu} onContextMenu={(event) => event.preventDefault()}>
       {changeMenu.scope === "unstaged"
-        ? <button type="button" className="git-repository-action-item" role="menuitem" disabled={disabled} onClick={() => runChangeMenuAction("stage")}><Icon name="plus" size={12}/><span>{changeMenu.paths.length === 1 ? "添加到暂存区" : `将 ${changeMenu.paths.length} 个文件添加到暂存区`}</span></button>
+        ? <button type="button" className="git-repository-action-item" role="menuitem" disabled={disabled || !changeMenu.canStage} title={changeMenu.canStage ? undefined : "子仓库内部修改不会改变父仓库 gitlink"} onClick={() => runChangeMenuAction("stage")}><Icon name="plus" size={12}/><span>{changeMenu.paths.length === 1 ? "添加到暂存区" : `将 ${changeMenu.paths.length} 个文件添加到暂存区`}</span></button>
         : <button type="button" className="git-repository-action-item" role="menuitem" disabled={disabled} onClick={() => runChangeMenuAction("unstage")}><Icon name="clear" size={12}/><span>{changeMenu.paths.length === 1 ? "取消暂存" : `取消暂存 ${changeMenu.paths.length} 个文件`}</span></button>}
-      {changeMenu.scope === "unstaged" && <button type="button" className="git-repository-action-item danger" role="menuitem" disabled={disabled} onClick={requestDiscardConfirmation}><Icon name="trash" size={12}/><span>{changeMenu.paths.length === 1 ? "抛弃更改" : `抛弃 ${changeMenu.paths.length} 个文件的更改`}</span></button>}
+      {changeMenu.scope === "unstaged" && <button type="button" className="git-repository-action-item danger" role="menuitem" disabled={disabled || !changeMenu.canDiscard} title={changeMenu.canDiscard ? undefined : "请打开子仓库处理内部修改，或使用检出记录版本恢复引用"} onClick={requestDiscardConfirmation}><Icon name="trash" size={12}/><span>{changeMenu.paths.length === 1 ? "抛弃更改" : `抛弃 ${changeMenu.paths.length} 个文件的更改`}</span></button>}
     </div>, document.body)}
     {visible && discardConfirmation && createPortal(<DialogFrame title={`抛弃 ${discardConfirmation.changes.length} 个文件的更改？`} subtitle="工作区更改" compact className="git-discard-confirmation" dismissible={busy !== "discard"} onClose={closeDiscardConfirmation}>
       <div className="git-discard-confirmation-body">

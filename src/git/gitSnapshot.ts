@@ -1,4 +1,4 @@
-import type { GitBranch, GitChange, GitCommit, GitHead, GitSnapshot } from "../lib/tauri/git";
+import type { GitBranch, GitChange, GitCommit, GitHead, GitSnapshot, GitSubmodule } from "../lib/tauri/git";
 
 function sameStrings(left: string[], right: string[]): boolean {
   return left.length === right.length && left.every((value, index) => value === right[index]);
@@ -20,7 +20,23 @@ function sameChange(left: GitChange, right: GitChange): boolean {
     && left.status === right.status
     && left.staged === right.staged
     && left.conflict === right.conflict
-    && (left.conflictKind ?? null) === (right.conflictKind ?? null);
+    && (left.conflictKind ?? null) === (right.conflictKind ?? null)
+    && (left.submodule?.commitChanged ?? false) === (right.submodule?.commitChanged ?? false)
+    && (left.submodule?.trackedModified ?? false) === (right.submodule?.trackedModified ?? false)
+    && (left.submodule?.untrackedContent ?? false) === (right.submodule?.untrackedContent ?? false);
+}
+
+function sameSubmodule(left: GitSubmodule, right: GitSubmodule): boolean {
+  return left.name === right.name
+    && left.path === right.path
+    && left.recordedOid === right.recordedOid
+    && left.currentOid === right.currentOid
+    && left.initialized === right.initialized
+    && left.commitChanged === right.commitChanged
+    && left.trackedModified === right.trackedModified
+    && left.untrackedContent === right.untrackedContent
+    && left.conflict === right.conflict
+    && left.issue === right.issue;
 }
 
 function sameBranch(left: GitBranch, right: GitBranch): boolean {
@@ -53,6 +69,7 @@ export function gitSnapshotsPresentSameState(left: GitSnapshot, right: GitSnapsh
     && left.repositoryName === right.repositoryName
     && sameHead(left.head, right.head)
     && sameItems(left.changes, right.changes, sameChange)
+    && sameItems(left.submodules ?? [], right.submodules ?? [], sameSubmodule)
     && sameItems(left.branches, right.branches, sameBranch)
     && sameStrings(left.remotes, right.remotes)
     && sameItems(left.commits, right.commits, sameCommit)

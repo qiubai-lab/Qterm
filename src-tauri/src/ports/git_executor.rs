@@ -68,4 +68,6 @@ pub trait GitExecutor: Send + Sync + 'static {
     fn merge_branch(&self, repository: &Path, source_ref: &str) -> Result<GitSnapshot, GitError>;
     fn continue_merge(&self, repository: &Path) -> Result<GitSnapshot, GitError>;
     fn abort_merge(&self, repository: &Path) -> Result<GitSnapshot, GitError>;
+    fn initialize_submodule(&self, repository: &Path, path: &str) -> Result<GitSnapshot, GitError>;
+    fn checkout_submodule(&self, repository: &Path, path: &str) -> Result<GitSnapshot, GitError>;
 }

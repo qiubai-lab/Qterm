@@ -42,7 +42,7 @@ interface WorkspaceContextValue {
   selectNetworkTarget: (workspaceId: string, blockId: string, profileId: string | null) => Promise<void>;
   connectNetworkBlock: (blockId: string, profile: ConnectionProfile, auth: SessionAuth, onFailure?: () => void) => Promise<void>;
   disconnectNetworkBlock: (blockId: string) => Promise<void>;
-  selectGitTarget: (workspaceId: string, blockId: string, target: GitTarget) => Promise<void>;
+  selectGitTarget: (workspaceId: string, blockId: string, target: GitTarget, currentTarget?: GitTarget) => Promise<void>;
   connectGitBlock: (blockId: string, profile: ConnectionProfile, auth: SessionAuth, onFailure?: () => void) => Promise<void>;
   disconnectGitBlock: (blockId: string) => Promise<void>;
   isConnectionTargetCurrent: (owner: "terminal" | "files" | "network" | "git", blockId: string, profileId: string) => boolean;

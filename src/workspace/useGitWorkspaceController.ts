@@ -7,7 +7,15 @@ import { completeConnectionProgress, connectionProgressFromRouteEvent, failConne
 import type { GitTarget } from "./model";
 import type { WorkspaceAction } from "./reducer";
 import type { WorkspaceRuntimeState } from "./useWorkspaceRuntimeState";
-import { connectionIntentAllows, connectionIntentKey, consumeFailureHandler, defaultGitRuntime, nodeLabel, routeFailureNotice, workspaceErrorMessage } from "./workspaceRuntime";
+import { connectionIntentAllows, connectionIntentKey, consumeFailureHandler, defaultGitRuntime, nodeLabel, routeFailureNotice, workspaceErrorMessage, type GitRuntime } from "./workspaceRuntime";
+
+export function canReuseGitRemoteSession(currentTarget: GitTarget | undefined, target: GitTarget, runtime: GitRuntime | undefined): boolean {
+  return target.type === "remote"
+    && currentTarget?.type === "remote"
+    && target.profileId === currentTarget.profileId
+    && runtime?.status === "connected"
+    && Boolean(runtime.sessionId);
+}
 
 export function useGitWorkspaceController(state: WorkspaceRuntimeState, dispatch: Dispatch<WorkspaceAction>) {
   const { gitRuntimes, gitRuntimesRef, connectionTargetIntents, connectionFailureHandlers, updateGitRuntime, nextEpoch, isCurrentEpoch } = state;
@@ -47,15 +55,22 @@ export function useGitWorkspaceController(state: WorkspaceRuntimeState, dispatch
     updateGitRuntime(blockId, (current) => ({ ...defaultGitRuntime, stale: current.stale || Boolean(runtime?.sessionId) }));
   }, [connectionFailureHandlers, gitRuntimesRef, nextEpoch, updateGitRuntime]);
   const disconnectGitBlock = useCallback(async (blockId: string) => closeCurrentGitSession(blockId), [closeCurrentGitSession]);
-  const selectGitTarget = useCallback(async (workspaceId: string, blockId: string, target: GitTarget) => {
+  const selectGitTarget = useCallback(async (workspaceId: string, blockId: string, target: GitTarget, currentTarget?: GitTarget) => {
     const profileId = target.type === "remote" ? target.profileId : null;
     connectionTargetIntents.current.set(connectionIntentKey("git", blockId), profileId);
     dispatch({ type: "recordRecentProfile", profileId });
+    const runtime = gitRuntimesRef.current[blockId];
+    const canReuseRemoteSession = canReuseGitRemoteSession(currentTarget, target, runtime);
+    if (canReuseRemoteSession) {
+      dispatch({ type: "setGitTarget", workspaceId, blockId, target });
+      updateGitRuntime(blockId, (current) => ({ ...current, stale: false, notice: "" }));
+      return;
+    }
     await closeCurrentGitSession(blockId);
     if (!connectionIntentAllows(connectionTargetIntents.current, "git", blockId, profileId)) return;
     dispatch({ type: "setGitTarget", workspaceId, blockId, target });
     updateGitRuntime(blockId, () => ({ ...defaultGitRuntime, stale: false }));
-  }, [closeCurrentGitSession, connectionTargetIntents, dispatch, updateGitRuntime]);
+  }, [closeCurrentGitSession, connectionTargetIntents, dispatch, gitRuntimesRef, updateGitRuntime]);
   const connectGitBlock = useCallback(async (blockId: string, profile: ConnectionProfile, auth: SessionAuth, onFailure?: () => void) => {
     if (!connectionIntentAllows(connectionTargetIntents.current, "git", blockId, profile.id)) return;
     await closeCurrentGitSession(blockId);

@@ -656,8 +656,8 @@ function GitBlock(props: BlockRenderProps & { blockId: string; target: GitTarget
 
   const retargetGit = useCallback(async (target: GitTarget) => {
     if (target.type === "remote") requestedProfileRef.current = null;
-    await selectGitTarget(workspaceId, blockId, target);
-  }, [blockId, selectGitTarget, workspaceId]);
+    await selectGitTarget(workspaceId, blockId, target, props.target);
+  }, [blockId, props.target, selectGitTarget, workspaceId]);
 
   const requestRepositoryChange = useCallback(async () => {
     if (pendingRemote) return;

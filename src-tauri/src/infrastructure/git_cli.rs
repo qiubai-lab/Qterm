@@ -16,11 +16,13 @@ use crate::{
         GitBranch, GitBranchKind, GitChange, GitChangeDiff, GitCommit, GitCommitFile,
         GitCommitFileDiff, GitConflictContentKind, GitConflictDetail, GitConflictKind,
         GitConflictResolution, GitConflictResult, GitConflictVersion, GitDiffScope, GitDiffSource,
-        GitError, GitHead, GitSnapshot, MAX_CONFLICT_TEXT_BYTES, MAX_GIT_DIFF_TEXT_BYTES,
+        GitError, GitHead, GitSnapshot, GitSubmodule, GitSubmoduleChange, GitSubmoduleIssue,
+        MAX_CONFLICT_TEXT_BYTES, MAX_GIT_DIFF_TEXT_BYTES, MAX_GIT_SUBMODULES,
         find_tracking_local_branch, plan_discard, validate_abort_merge, validate_branch_source_ref,
-        validate_commit_oid, validate_continue_merge, validate_local_branch_ref,
-        validate_merge_preconditions, validate_remote_branch_ref, validate_remote_name,
-        validate_stage_all,
+        validate_checkout_submodule, validate_commit_oid, validate_continue_merge,
+        validate_initialize_submodule, validate_local_branch_ref, validate_merge_preconditions,
+        validate_remote_branch_ref, validate_remote_name, validate_stage_all,
+        validate_submodule_stage_paths,
     },
     ports::git_executor::GitExecutor,
 };
@@ -227,6 +229,58 @@ impl GitExecutor for SystemGitExecutor {
             READ_TIMEOUT,
         );
         let (head, changes) = parse_status(&status.stdout)?;
+        let index = self.git(
+            [
+                OsString::from("-C"),
+                repository.as_os_str().to_owned(),
+                OsString::from("ls-files"),
+                OsString::from("--stage"),
+                OsString::from("-z"),
+            ],
+            READ_TIMEOUT,
+        )?;
+        let config = self
+            .git(
+                [
+                    OsString::from("-C"),
+                    repository.as_os_str().to_owned(),
+                    OsString::from("config"),
+                    OsString::from("-z"),
+                    OsString::from("--file"),
+                    OsString::from(".gitmodules"),
+                    OsString::from("--get-regexp"),
+                    OsString::from("^submodule\\..*\\.path$"),
+                ],
+                READ_TIMEOUT,
+            )
+            .ok();
+        let needs_submodule_status = index.stdout.windows(6).any(|value| value == b"160000")
+            || config
+                .as_ref()
+                .is_some_and(|output| !output.stdout.is_empty());
+        let submodule_status = needs_submodule_status
+            .then(|| {
+                self.git(
+                    [
+                        OsString::from("-C"),
+                        repository.as_os_str().to_owned(),
+                        OsString::from("submodule"),
+                        OsString::from("status"),
+                    ],
+                    READ_TIMEOUT,
+                )
+            })
+            .transpose()
+            .ok()
+            .flatten();
+        let submodules = parse_submodules(
+            &index.stdout,
+            config.as_ref().map(|output| output.stdout.as_slice()),
+            submodule_status
+                .as_ref()
+                .map(|output| output.stdout.as_slice()),
+            &changes,
+        )?;
         let commits = match log {
             Ok(output) => parse_commits(&output.stdout),
             Err(GitError::CommandFailed(_)) if head.unborn => Vec::new(),
@@ -243,6 +297,7 @@ impl GitExecutor for SystemGitExecutor {
             repository_name,
             head,
             changes,
+            submodules,
             branches: parse_branches(&branches.stdout),
             remotes: parse_remotes(&remotes.stdout),
             commits,
@@ -267,6 +322,8 @@ impl GitExecutor for SystemGitExecutor {
     }
 
     fn stage(&self, repository: &Path, paths: &[String]) -> Result<GitSnapshot, GitError> {
+        let current = self.snapshot(repository)?;
+        validate_submodule_stage_paths(&current, paths)?;
         let mut args = vec![
             OsString::from("--literal-pathspecs"),
             OsString::from("add"),
@@ -725,6 +782,41 @@ impl GitExecutor for SystemGitExecutor {
         let current = self.snapshot(repository)?;
         validate_abort_merge(&current)?;
         self.mutate(repository, ["merge", "--abort"])
+    }
+
+    fn initialize_submodule(&self, repository: &Path, path: &str) -> Result<GitSnapshot, GitError> {
+        let current = self.snapshot(repository)?;
+        validate_initialize_submodule(&current, path)?;
+        self.network_mutate(
+            repository,
+            [
+                OsStr::new("--literal-pathspecs"),
+                OsStr::new("submodule"),
+                OsStr::new("update"),
+                OsStr::new("--init"),
+                OsStr::new("--checkout"),
+                OsStr::new("--"),
+                OsStr::new(path),
+            ],
+        )
+        .map_err(sanitize_submodule_operation_error)
+    }
+
+    fn checkout_submodule(&self, repository: &Path, path: &str) -> Result<GitSnapshot, GitError> {
+        let current = self.snapshot(repository)?;
+        validate_checkout_submodule(&current, path)?;
+        self.network_mutate(
+            repository,
+            [
+                OsStr::new("--literal-pathspecs"),
+                OsStr::new("submodule"),
+                OsStr::new("update"),
+                OsStr::new("--checkout"),
+                OsStr::new("--"),
+                OsStr::new(path),
+            ],
+        )
+        .map_err(sanitize_submodule_operation_error)
     }
 }
 
@@ -1461,6 +1553,15 @@ pub(crate) fn classify_failure(stderr: &[u8]) -> GitError {
     }
 }
 
+pub(crate) fn sanitize_submodule_operation_error(error: GitError) -> GitError {
+    match error {
+        GitError::CommandFailed(_) | GitError::Conflict(_) => {
+            GitError::CommandFailed("子仓库操作失败，请检查执行主机的 Git 配置与凭据".into())
+        }
+        other => other,
+    }
+}
+
 pub(crate) fn redact_url_userinfo(value: &str) -> String {
     let mut result = value.to_owned();
     let mut search_from = 0;
@@ -1531,6 +1632,7 @@ pub(crate) fn parse_status(bytes: &[u8]) -> Result<(GitHead, Vec<GitChange>), Gi
                     staged: false,
                     conflict: false,
                     conflict_kind: None,
+                    submodule: None,
                 });
             } else if line.starts_with("1 ") || line.starts_with("2 ") {
                 let rename = line.starts_with("2 ");
@@ -1538,6 +1640,7 @@ pub(crate) fn parse_status(bytes: &[u8]) -> Result<(GitHead, Vec<GitChange>), Gi
                     .splitn(if rename { 10 } else { 9 }, ' ')
                     .collect::<Vec<_>>();
                 let xy = fields.get(1).copied().unwrap_or("..");
+                let submodule = parse_submodule_change(&fields);
                 let path = fields.last().copied().unwrap_or("").to_owned();
                 let original_path = if rename {
                     chunks
@@ -1546,13 +1649,14 @@ pub(crate) fn parse_status(bytes: &[u8]) -> Result<(GitHead, Vec<GitChange>), Gi
                 } else {
                     None
                 };
-                push_xy_changes(&mut changes, path, original_path, xy);
+                push_xy_changes(&mut changes, path, original_path, xy, submodule);
                 if rename {
                     index += 1;
                 }
             } else if line.starts_with("u ") {
                 let fields = line.splitn(11, ' ').collect::<Vec<_>>();
                 let xy = fields.get(1).copied().unwrap_or("..");
+                let submodule = parse_submodule_change(&fields);
                 let path = fields.last().copied().unwrap_or("").to_owned();
                 changes.push(GitChange {
                     path,
@@ -1561,6 +1665,7 @@ pub(crate) fn parse_status(bytes: &[u8]) -> Result<(GitHead, Vec<GitChange>), Gi
                     staged: false,
                     conflict: true,
                     conflict_kind: Some(GitConflictKind::from_xy(xy)),
+                    submodule,
                 });
             }
         }
@@ -1601,6 +1706,7 @@ fn push_xy_changes(
     path: String,
     original_path: Option<String>,
     xy: &str,
+    submodule: Option<GitSubmoduleChange>,
 ) {
     let mut values = xy.chars();
     let staged = values.next().unwrap_or('.');
@@ -1617,6 +1723,7 @@ fn push_xy_changes(
             staged: false,
             conflict: true,
             conflict_kind: Some(GitConflictKind::from_xy(xy)),
+            submodule,
         });
         return;
     }
@@ -1628,6 +1735,7 @@ fn push_xy_changes(
             staged: true,
             conflict: false,
             conflict_kind: None,
+            submodule: submodule.clone(),
         });
     }
     if unstaged != '.' {
@@ -1638,8 +1746,255 @@ fn push_xy_changes(
             staged: false,
             conflict: false,
             conflict_kind: None,
+            submodule,
         });
     }
+}
+
+fn parse_submodule_change(fields: &[&str]) -> Option<GitSubmoduleChange> {
+    let marker = fields.get(2).copied().unwrap_or("N...");
+    let is_gitlink = fields.iter().skip(3).take(4).any(|mode| *mode == "160000");
+    if !is_gitlink && !marker.starts_with('S') {
+        return None;
+    }
+    let marker = marker.as_bytes();
+    Some(GitSubmoduleChange {
+        commit_changed: marker.get(1) == Some(&b'C'),
+        tracked_modified: marker.get(2) == Some(&b'M'),
+        untracked_content: marker.get(3) == Some(&b'U'),
+    })
+}
+
+#[derive(Clone)]
+struct GitlinkEntry {
+    oid: String,
+}
+
+#[derive(Clone)]
+struct SubmoduleStatusEntry {
+    oid: Option<String>,
+    initialized: bool,
+    conflict: bool,
+}
+
+pub(crate) fn parse_submodules(
+    index: &[u8],
+    config: Option<&[u8]>,
+    status: Option<&[u8]>,
+    changes: &[GitChange],
+) -> Result<Vec<GitSubmodule>, GitError> {
+    let mut gitlinks = std::collections::BTreeMap::<String, GitlinkEntry>::new();
+    for record in index
+        .split(|byte| *byte == 0)
+        .filter(|record| !record.is_empty())
+    {
+        let Some(tab) = record.iter().position(|byte| *byte == b'\t') else {
+            continue;
+        };
+        let metadata = String::from_utf8_lossy(&record[..tab]);
+        let fields = metadata.split_whitespace().collect::<Vec<_>>();
+        if fields.first() != Some(&"160000") || fields.get(2) != Some(&"0") {
+            continue;
+        }
+        let Some(oid) = fields.get(1) else { continue };
+        let path = String::from_utf8_lossy(&record[tab + 1..]).into_owned();
+        gitlinks.insert(path, GitlinkEntry { oid: (*oid).into() });
+    }
+
+    let mut configured = Vec::<(String, String)>::new();
+    if let Some(config) = config {
+        for record in config
+            .split(|byte| *byte == 0)
+            .filter(|record| !record.is_empty())
+        {
+            let value = String::from_utf8_lossy(record);
+            let Some((key, path)) = value.split_once('\n') else {
+                continue;
+            };
+            let Some(name) = key
+                .strip_prefix("submodule.")
+                .and_then(|key| key.strip_suffix(".path"))
+            else {
+                continue;
+            };
+            configured.push((name.to_owned(), path.to_owned()));
+        }
+    }
+
+    let known_paths = gitlinks
+        .keys()
+        .chain(configured.iter().map(|(_, path)| path))
+        .cloned()
+        .collect::<std::collections::BTreeSet<_>>();
+    if known_paths.len() > MAX_GIT_SUBMODULES {
+        return Err(GitError::OutputTooLarge);
+    }
+    let statuses = status.map(|value| parse_submodule_status(value, &known_paths));
+    let mut path_counts = std::collections::HashMap::<String, usize>::new();
+    let mut name_counts = std::collections::HashMap::<String, usize>::new();
+    for (name, path) in &configured {
+        *path_counts.entry(path.clone()).or_default() += 1;
+        *name_counts.entry(name.clone()).or_default() += 1;
+    }
+
+    let mut submodules = Vec::with_capacity(known_paths.len());
+    for path in known_paths {
+        let definitions = configured
+            .iter()
+            .filter(|(_, candidate)| candidate == &path)
+            .collect::<Vec<_>>();
+        let gitlink = gitlinks.get(&path);
+        let state = statuses.as_ref().and_then(|entries| entries.get(&path));
+        let mut change = GitSubmoduleChange::default();
+        let mut conflict = state.is_some_and(|state| state.conflict);
+        for item in changes.iter().filter(|change| change.path == path) {
+            if let Some(item_state) = &item.submodule {
+                change.commit_changed |= item_state.commit_changed;
+                change.tracked_modified |= item_state.tracked_modified;
+                change.untracked_content |= item_state.untracked_content;
+            }
+            conflict |= item.conflict;
+        }
+        let invalid_path = path.is_empty()
+            || path.starts_with('/')
+            || path.contains('\0')
+            || path.chars().any(char::is_control)
+            || path.split('/').any(|segment| segment == "..");
+        let issue = if invalid_path {
+            Some(GitSubmoduleIssue::InvalidPath)
+        } else if path_counts.get(&path).copied().unwrap_or(0) > 1
+            || definitions
+                .iter()
+                .any(|(name, _)| name_counts.get(name).copied().unwrap_or(0) > 1)
+        {
+            Some(GitSubmoduleIssue::DuplicatePath)
+        } else if gitlink.is_none() {
+            Some(GitSubmoduleIssue::MissingGitlink)
+        } else if definitions.is_empty() {
+            Some(GitSubmoduleIssue::MissingConfiguration)
+        } else if status.is_none() || state.is_none() {
+            Some(GitSubmoduleIssue::Unreadable)
+        } else {
+            None
+        };
+        let current_oid = state.and_then(|state| state.oid.clone());
+        let recorded_oid = gitlink.map(|entry| entry.oid.clone());
+        let initialized = state.is_some_and(|state| state.initialized);
+        let commit_changed = initialized && current_oid.is_some() && current_oid != recorded_oid;
+        submodules.push(GitSubmodule {
+            name: definitions
+                .first()
+                .map(|(name, _)| name.clone())
+                .unwrap_or_else(|| path.clone()),
+            path,
+            recorded_oid,
+            current_oid,
+            initialized,
+            commit_changed: commit_changed || change.commit_changed,
+            tracked_modified: change.tracked_modified,
+            untracked_content: change.untracked_content,
+            conflict,
+            issue,
+        });
+    }
+    Ok(submodules)
+}
+
+fn parse_submodule_status(
+    bytes: &[u8],
+    known_paths: &std::collections::BTreeSet<String>,
+) -> std::collections::HashMap<String, SubmoduleStatusEntry> {
+    let mut result = std::collections::HashMap::new();
+    for line in String::from_utf8_lossy(bytes).lines() {
+        let mut chars = line.chars();
+        let Some(prefix) = chars.next() else { continue };
+        if !matches!(prefix, ' ' | '-' | '+' | 'U') {
+            continue;
+        }
+        let remainder = chars.as_str();
+        let Some(space) = remainder.find(' ') else {
+            continue;
+        };
+        let oid = &remainder[..space];
+        if !matches!(oid.len(), 40 | 64) || !oid.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+            continue;
+        }
+        let tail = &remainder[space + 1..];
+        let quoted_path = parse_git_quoted_path(tail);
+        let path = quoted_path
+            .as_ref()
+            .and_then(|path| known_paths.get(path))
+            .or_else(|| {
+                known_paths
+                    .iter()
+                    .filter(|path| {
+                        tail == path.as_str()
+                            || tail
+                                .strip_prefix(path.as_str())
+                                .is_some_and(|suffix| suffix.starts_with(" ("))
+                    })
+                    .max_by_key(|path| path.len())
+            });
+        if let Some(path) = path {
+            result.insert(
+                path.clone(),
+                SubmoduleStatusEntry {
+                    oid: (prefix != '-').then(|| oid.to_owned()),
+                    initialized: prefix != '-',
+                    conflict: prefix == 'U',
+                },
+            );
+        }
+    }
+    result
+}
+
+fn parse_git_quoted_path(value: &str) -> Option<String> {
+    let bytes = value.as_bytes();
+    if bytes.first() != Some(&b'"') {
+        return None;
+    }
+    let mut result = Vec::new();
+    let mut index = 1;
+    while index < bytes.len() {
+        match bytes[index] {
+            b'"' => {
+                let suffix = &value[index + 1..];
+                return (suffix.is_empty() || suffix.starts_with(" ("))
+                    .then(|| String::from_utf8_lossy(&result).into_owned());
+            }
+            b'\\' => {
+                index += 1;
+                let escaped = *bytes.get(index)?;
+                if escaped.is_ascii_digit() && escaped < b'8' {
+                    let digits = bytes.get(index..index + 3)?;
+                    if digits.iter().all(|digit| (b'0'..=b'7').contains(digit)) {
+                        let octal = u16::from(digits[0] - b'0') * 64
+                            + u16::from(digits[1] - b'0') * 8
+                            + u16::from(digits[2] - b'0');
+                        result.push(u8::try_from(octal).ok()?);
+                        index += 3;
+                        continue;
+                    }
+                }
+                result.push(match escaped {
+                    b'a' => 0x07,
+                    b'b' => 0x08,
+                    b't' => b'\t',
+                    b'n' => b'\n',
+                    b'v' => 0x0b,
+                    b'f' => 0x0c,
+                    b'r' => b'\r',
+                    b'\\' => b'\\',
+                    b'"' => b'"',
+                    _ => return None,
+                });
+            }
+            byte => result.push(byte),
+        }
+        index += 1;
+    }
+    None
 }
 
 pub(crate) fn parse_branches(bytes: &[u8]) -> Vec<GitBranch> {
@@ -1755,11 +2110,13 @@ pub(crate) fn parse_commit_files(bytes: &[u8]) -> Vec<GitCommitFile> {
 mod tests {
     use super::{
         OUTPUT_LIMIT, SystemGitExecutor, classify_failure, parse_branches, parse_commit_files,
-        parse_commits, parse_status, read_bounded, run_process,
+        parse_commits, parse_status, parse_submodules, read_bounded, run_process,
+        sanitize_submodule_operation_error,
     };
     use crate::domain::git::{
         GitBranchKind, GitConflictContentKind, GitConflictKind, GitConflictResolution,
-        GitDiffSource, GitError, MAX_CONFLICT_TEXT_BYTES, find_tracking_local_branch,
+        GitDiffSource, GitError, GitSubmoduleIssue, MAX_CONFLICT_TEXT_BYTES,
+        find_tracking_local_branch,
     };
     use crate::ports::git_executor::GitExecutor;
     use std::{fs, io::Cursor, process::Command};
@@ -1782,6 +2139,122 @@ mod tests {
                 .iter()
                 .any(|change| change.path == "file.txt" && !change.staged)
         );
+    }
+
+    #[test]
+    fn parses_submodule_gitlink_configuration_and_dirty_state() {
+        let recorded = "1111111111111111111111111111111111111111";
+        let current = "2222222222222222222222222222222222222222";
+        let fixture =
+            format!("1 .M SCMU 160000 160000 160000 {recorded} {recorded} modules/child\0");
+        let (_, changes) = parse_status(fixture.as_bytes()).expect("submodule status record");
+        let index = format!("160000 {recorded} 0\tmodules/child\0");
+        let config = b"submodule.child.path\nmodules/child\0";
+        let status = format!("+{current} modules/child (heads/main)\n");
+
+        let submodules = parse_submodules(
+            index.as_bytes(),
+            Some(config),
+            Some(status.as_bytes()),
+            &changes,
+        )
+        .expect("submodules");
+
+        assert_eq!(submodules.len(), 1);
+        let submodule = &submodules[0];
+        assert_eq!(submodule.name, "child");
+        assert_eq!(submodule.path, "modules/child");
+        assert_eq!(submodule.recorded_oid.as_deref(), Some(recorded));
+        assert_eq!(submodule.current_oid.as_deref(), Some(current));
+        assert!(submodule.initialized);
+        assert!(submodule.commit_changed);
+        assert!(submodule.tracked_modified);
+        assert!(submodule.untracked_content);
+        assert_eq!(submodule.issue, None);
+        assert!(changes[0].submodule.as_ref().is_some_and(|change| {
+            change.commit_changed && change.tracked_modified && change.untracked_content
+        }));
+    }
+
+    #[test]
+    fn classifies_incomplete_submodule_metadata() {
+        let recorded = "1111111111111111111111111111111111111111";
+        let index = format!("160000 {recorded} 0\tmodules/missing-config\0");
+        let status = format!("-{recorded} modules/missing-config\n");
+        let missing_config = parse_submodules(index.as_bytes(), None, Some(status.as_bytes()), &[])
+            .expect("missing configuration");
+        assert_eq!(
+            missing_config[0].issue,
+            Some(GitSubmoduleIssue::MissingConfiguration)
+        );
+        assert!(!missing_config[0].initialized);
+
+        let orphan_config = parse_submodules(
+            b"",
+            Some(b"submodule.orphan.path\nmodules/orphan\0"),
+            Some(b""),
+            &[],
+        )
+        .expect("orphan configuration");
+        assert_eq!(
+            orphan_config[0].issue,
+            Some(GitSubmoduleIssue::MissingGitlink)
+        );
+
+        let duplicate_name_index = format!(
+            "160000 {recorded} 0\tmodules/one\0\
+             160000 {recorded} 0\tmodules/two\0"
+        );
+        let duplicate_name_config =
+            b"submodule.child.path\nmodules/one\0submodule.child.path\nmodules/two\0";
+        let duplicate_name_status = format!(" {recorded} modules/one\n {recorded} modules/two\n");
+        let duplicate_name = parse_submodules(
+            duplicate_name_index.as_bytes(),
+            Some(duplicate_name_config),
+            Some(duplicate_name_status.as_bytes()),
+            &[],
+        )
+        .expect("duplicate name");
+        assert!(
+            duplicate_name
+                .iter()
+                .all(|submodule| { submodule.issue == Some(GitSubmoduleIssue::DuplicatePath) })
+        );
+    }
+
+    #[test]
+    fn parses_git_quoted_unicode_submodule_paths() {
+        let recorded = "1111111111111111111111111111111111111111";
+        let path = "modules/中文 child";
+        let index = format!("160000 {recorded} 0\t{path}\0");
+        let config = format!("submodule.child.path\n{path}\0");
+        let status =
+            format!(" {recorded} \"modules/\\344\\270\\255\\346\\226\\207 child\" (heads/main)\n");
+
+        let submodules = parse_submodules(
+            index.as_bytes(),
+            Some(config.as_bytes()),
+            Some(status.as_bytes()),
+            &[],
+        )
+        .expect("quoted path");
+        assert_eq!(submodules.len(), 1);
+        assert_eq!(submodules[0].path, path);
+        assert!(submodules[0].initialized);
+        assert_eq!(submodules[0].issue, None);
+    }
+
+    #[test]
+    fn submodule_operation_failures_do_not_expose_repository_urls() {
+        let error = sanitize_submodule_operation_error(GitError::CommandFailed(
+            "clone of 'https://user:secret@example.com/private.git' failed".into(),
+        ));
+        let GitError::CommandFailed(detail) = error else {
+            panic!("expected command failure");
+        };
+        assert!(!detail.contains("http"));
+        assert!(!detail.contains("example.com"));
+        assert!(!detail.contains("secret"));
     }
 
     #[test]
@@ -1980,6 +2453,192 @@ refs/remotes/origin/HEAD\0origin/HEAD\0abc\0 \0\0\0refs/remotes/origin/main\n",
             Err(GitError::CommandFailed(_))
         ));
         fs::remove_file(directory.path().join(".git/index.lock")).expect("remove lock");
+    }
+
+    #[test]
+    fn real_git_submodule_snapshot_and_safe_lifecycle_preserve_parent_semantics() {
+        let git = which_git();
+        let executor = SystemGitExecutor::with_executable(git.clone());
+        let fixture = tempdir().expect("submodule fixture");
+        let grandchild = fixture.path().join("grandchild-source");
+        let child = fixture.path().join("child-source");
+        let parent = fixture.path().join("parent");
+        let parent_remote = fixture.path().join("parent-remote.git");
+        fs::create_dir(&grandchild).expect("grandchild directory");
+        fs::create_dir(&child).expect("child directory");
+        fs::create_dir(&parent).expect("parent directory");
+        executor
+            .initialize(&grandchild)
+            .expect("initialize grandchild");
+        configure_identity(&git, &grandchild);
+        fs::write(grandchild.join("nested.txt"), b"nested\n").expect("grandchild file");
+        executor.stage_all(&grandchild).expect("stage grandchild");
+        executor
+            .commit(&grandchild, "grandchild v1")
+            .expect("commit grandchild");
+        executor.initialize(&child).expect("initialize child");
+        configure_identity(&git, &child);
+        fs::write(child.join("child.txt"), b"first\n").expect("child v1");
+        run_git_test(
+            &git,
+            [
+                "-c",
+                "protocol.file.allow=always",
+                "-C",
+                path(&child),
+                "submodule",
+                "add",
+                path(&grandchild),
+                "deps/grandchild",
+            ],
+        );
+        executor.stage_all(&child).expect("stage child v1");
+        let first_oid = executor
+            .commit(&child, "child v1")
+            .expect("commit child v1")
+            .head
+            .oid
+            .expect("child v1 oid");
+
+        executor.initialize(&parent).expect("initialize parent");
+        configure_identity(&git, &parent);
+        run_git_test(
+            &git,
+            [
+                "-c",
+                "protocol.file.allow=always",
+                "-C",
+                path(&parent),
+                "submodule",
+                "add",
+                path(&child),
+                "modules/child",
+            ],
+        );
+        executor.stage_all(&parent).expect("stage submodule");
+        executor
+            .commit(&parent, "add child")
+            .expect("commit parent");
+        run_git_test(&git, ["init", "--bare", path(&parent_remote)]);
+        run_git_test(
+            &git,
+            [
+                "-C",
+                path(&parent),
+                "remote",
+                "add",
+                "origin",
+                path(&parent_remote),
+            ],
+        );
+        run_git_test(&git, ["-C", path(&parent), "push", "-u", "origin", "HEAD"]);
+
+        fs::write(child.join("child.txt"), b"second\n").expect("child v2");
+        executor.stage_all(&child).expect("stage child v2");
+        let second_oid = executor
+            .commit(&child, "child v2")
+            .expect("commit child v2")
+            .head
+            .oid
+            .expect("child v2 oid");
+        let checked_out_child = parent.join("modules/child");
+        run_git_test(&git, ["-C", path(&checked_out_child), "fetch", "origin"]);
+        run_git_test(
+            &git,
+            ["-C", path(&checked_out_child), "checkout", &second_oid],
+        );
+
+        let changed = executor
+            .snapshot(&parent)
+            .expect("changed submodule snapshot");
+        assert_eq!(changed.submodules.len(), 1);
+        assert_eq!(changed.submodules[0].path, "modules/child");
+        assert_eq!(
+            changed.submodules[0].recorded_oid.as_deref(),
+            Some(first_oid.as_str())
+        );
+        assert_eq!(
+            changed.submodules[0].current_oid.as_deref(),
+            Some(second_oid.as_str())
+        );
+        assert!(changed.submodules[0].commit_changed);
+        assert!(changed.changes.iter().any(|change| {
+            change.path == "modules/child"
+                && !change.staged
+                && change
+                    .submodule
+                    .as_ref()
+                    .is_some_and(|state| state.commit_changed)
+        }));
+
+        let staged = executor
+            .stage(&parent, &["modules/child".into()])
+            .expect("stage gitlink");
+        assert!(
+            staged
+                .changes
+                .iter()
+                .any(|change| change.path == "modules/child" && change.staged)
+        );
+        let unstaged = executor
+            .unstage(&parent, &["modules/child".into()])
+            .expect("unstage gitlink");
+        assert_eq!(rev_parse(&git, &checked_out_child, "HEAD"), second_oid);
+        assert!(unstaged.submodules[0].commit_changed);
+
+        executor
+            .checkout_submodule(&parent, "modules/child")
+            .expect("restore recorded child commit");
+        assert_eq!(rev_parse(&git, &checked_out_child, "HEAD"), first_oid);
+
+        run_git_test(
+            &git,
+            ["-C", path(&checked_out_child), "checkout", &second_oid],
+        );
+        fs::write(checked_out_child.join("child.txt"), b"dirty\n").expect("dirty child");
+        let dirty = executor.snapshot(&parent).expect("dirty child snapshot");
+        assert!(dirty.submodules[0].tracked_modified);
+        assert!(executor.stage(&parent, &["modules/child".into()]).is_ok());
+        executor
+            .unstage(&parent, &["modules/child".into()])
+            .expect("restore parent index after gitlink test");
+        assert!(matches!(
+            executor.checkout_submodule(&parent, "modules/child"),
+            Err(GitError::Conflict(_))
+        ));
+
+        run_git_test(
+            &git,
+            [
+                "-C",
+                path(&checked_out_child),
+                "reset",
+                "--hard",
+                &first_oid,
+            ],
+        );
+        run_git_test(
+            &git,
+            [
+                "-C",
+                path(&parent),
+                "submodule",
+                "deinit",
+                "-f",
+                "--",
+                "modules/child",
+            ],
+        );
+        let uninitialized = executor.snapshot(&parent).expect("uninitialized snapshot");
+        assert!(!uninitialized.submodules[0].initialized);
+        let fetched = executor.fetch(&parent).expect("fetch parent repository");
+        assert!(!fetched.submodules[0].initialized);
+        let pulled = executor.pull(&parent).expect("pull parent repository");
+        assert!(!pulled.submodules[0].initialized);
+        executor
+            .initialize_submodule(&parent, "modules/child")
+            .expect("initialize one child");
+        assert_eq!(rev_parse(&git, &checked_out_child, "HEAD"), first_oid);
     }
 
     #[test]

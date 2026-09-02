@@ -5,6 +5,7 @@ pub const MAX_COMMIT_MESSAGE_CHARS: usize = 10_000;
 pub const MAX_CONFLICT_TEXT_BYTES: usize = 2 * 1024 * 1024;
 pub const MAX_GIT_DIFF_TEXT_BYTES: usize = MAX_CONFLICT_TEXT_BYTES;
 pub const MAX_GIT_DISCARD_PATHS: usize = 500;
+pub const MAX_GIT_SUBMODULES: usize = 1_000;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum RemoteGitAction {
@@ -87,6 +88,14 @@ pub enum RemoteGitAction {
     AbortMerge {
         repository: String,
     },
+    InitializeSubmodule {
+        repository: String,
+        path: String,
+    },
+    CheckoutSubmodule {
+        repository: String,
+        path: String,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -108,6 +117,37 @@ pub struct GitChange {
     pub staged: bool,
     pub conflict: bool,
     pub conflict_kind: Option<GitConflictKind>,
+    pub submodule: Option<GitSubmoduleChange>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct GitSubmoduleChange {
+    pub commit_changed: bool,
+    pub tracked_modified: bool,
+    pub untracked_content: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GitSubmoduleIssue {
+    MissingConfiguration,
+    MissingGitlink,
+    DuplicatePath,
+    InvalidPath,
+    Unreadable,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GitSubmodule {
+    pub name: String,
+    pub path: String,
+    pub recorded_oid: Option<String>,
+    pub current_oid: Option<String>,
+    pub initialized: bool,
+    pub commit_changed: bool,
+    pub tracked_modified: bool,
+    pub untracked_content: bool,
+    pub conflict: bool,
+    pub issue: Option<GitSubmoduleIssue>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -265,6 +305,7 @@ pub struct GitSnapshot {
     pub repository_name: String,
     pub head: GitHead,
     pub changes: Vec<GitChange>,
+    pub submodules: Vec<GitSubmodule>,
     pub branches: Vec<GitBranch>,
     pub remotes: Vec<String>,
     pub commits: Vec<GitCommit>,
@@ -377,8 +418,56 @@ impl RemoteGitAction {
                 validate_remote_repository_path(repository)?;
                 validate_branch_source_ref(source_ref)
             }
+            Self::InitializeSubmodule { repository, path }
+            | Self::CheckoutSubmodule { repository, path } => {
+                validate_remote_repository_path(repository)?;
+                validate_posix_paths(std::slice::from_ref(path))
+            }
         }
     }
+}
+
+pub fn validate_initialize_submodule(snapshot: &GitSnapshot, path: &str) -> Result<(), GitError> {
+    let submodule = actionable_submodule(snapshot, path)?;
+    if submodule.initialized {
+        Err(GitError::Conflict("子仓库已经初始化".into()))
+    } else {
+        Ok(())
+    }
+}
+
+pub fn validate_checkout_submodule(snapshot: &GitSnapshot, path: &str) -> Result<(), GitError> {
+    let submodule = actionable_submodule(snapshot, path)?;
+    if !submodule.initialized {
+        return Err(GitError::Conflict("请先初始化子仓库".into()));
+    }
+    if submodule.conflict {
+        return Err(GitError::Conflict("子仓库引用存在冲突".into()));
+    }
+    if submodule.tracked_modified || submodule.untracked_content {
+        return Err(GitError::Conflict(
+            "子仓库包含未提交内容，请先打开子仓库处理".into(),
+        ));
+    }
+    if !submodule.commit_changed {
+        return Err(GitError::Conflict("子仓库已经位于父仓库记录版本".into()));
+    }
+    Ok(())
+}
+
+fn actionable_submodule<'a>(
+    snapshot: &'a GitSnapshot,
+    path: &str,
+) -> Result<&'a GitSubmodule, GitError> {
+    let submodule = snapshot
+        .submodules
+        .iter()
+        .find(|submodule| submodule.path == path)
+        .ok_or(GitError::InvalidInput)?;
+    if submodule.issue.is_some() || submodule.recorded_oid.is_none() {
+        return Err(GitError::Conflict("子仓库配置无效".into()));
+    }
+    Ok(submodule)
 }
 
 pub fn validate_repository_path(path: &Path) -> Result<(), GitError> {
@@ -497,12 +586,48 @@ pub fn validate_continue_merge(snapshot: &GitSnapshot) -> Result<(), GitError> {
 
 pub fn validate_stage_all(snapshot: &GitSnapshot) -> Result<(), GitError> {
     if snapshot.merge_in_progress && snapshot.changes.iter().any(|change| change.conflict) {
-        Err(GitError::Conflict(
+        return Err(GitError::Conflict(
             "合并冲突必须逐项确认，不能使用暂存全部批量标记".into(),
-        ))
-    } else {
-        Ok(())
+        ));
     }
+    let unstaged = snapshot
+        .changes
+        .iter()
+        .filter(|change| !change.staged && !change.conflict)
+        .collect::<Vec<_>>();
+    if !unstaged.is_empty()
+        && unstaged.iter().all(|change| {
+            change
+                .submodule
+                .as_ref()
+                .is_some_and(|submodule| !submodule.commit_changed)
+        })
+    {
+        return Err(GitError::Conflict(
+            "子仓库只有内部修改，请先打开子仓库处理".into(),
+        ));
+    }
+    Ok(())
+}
+
+pub fn validate_submodule_stage_paths(
+    snapshot: &GitSnapshot,
+    paths: &[String],
+) -> Result<(), GitError> {
+    for path in paths {
+        if let Some(change) = snapshot
+            .changes
+            .iter()
+            .find(|change| change.path == *path && !change.staged)
+            && let Some(submodule) = &change.submodule
+            && !submodule.commit_changed
+        {
+            return Err(GitError::Conflict(
+                "子仓库只有内部修改，请先打开子仓库处理".into(),
+            ));
+        }
+    }
+    Ok(())
 }
 
 pub fn validate_abort_merge(snapshot: &GitSnapshot) -> Result<(), GitError> {
@@ -623,6 +748,11 @@ pub fn plan_discard(snapshot: &GitSnapshot, paths: &[String]) -> Result<GitDisca
             .iter()
             .find(|change| change.path == *path && !change.staged && !change.conflict)
             .ok_or(GitError::InvalidInput)?;
+        if change.submodule.is_some() {
+            return Err(GitError::Conflict(
+                "子仓库引用不能通过普通丢弃操作恢复".into(),
+            ));
+        }
         if change.status == "U" {
             untracked_paths.push(path.clone());
         } else if matches!(change.status.as_str(), "R" | "C") {
@@ -642,11 +772,12 @@ pub fn plan_discard(snapshot: &GitSnapshot, paths: &[String]) -> Result<GitDisca
 mod tests {
     use super::{
         GitBranch, GitBranchKind, GitChange, GitConflictKind, GitConflictResolution, GitHead,
-        GitSnapshot, RemoteGitAction, plan_discard, validate_branch_name,
-        validate_branch_source_ref, validate_commit_message, validate_commit_oid,
-        validate_conflict_resolution, validate_local_branch_ref, validate_local_paths,
-        validate_merge_preconditions, validate_posix_paths, validate_remote_branch_ref,
-        validate_remote_name, validate_stage_all,
+        GitSnapshot, GitSubmodule, GitSubmoduleChange, RemoteGitAction, plan_discard,
+        validate_branch_name, validate_branch_source_ref, validate_commit_message,
+        validate_commit_oid, validate_conflict_resolution, validate_local_branch_ref,
+        validate_local_paths, validate_merge_preconditions, validate_posix_paths,
+        validate_remote_branch_ref, validate_remote_name, validate_stage_all,
+        validate_submodule_stage_paths,
     };
     use std::path::Path;
 
@@ -661,6 +792,7 @@ mod tests {
                 staged: false,
                 conflict: false,
                 conflict_kind: None,
+                submodule: None,
             },
             GitChange {
                 path: "new.txt".into(),
@@ -669,6 +801,7 @@ mod tests {
                 staged: false,
                 conflict: false,
                 conflict_kind: None,
+                submodule: None,
             },
             GitChange {
                 path: "renamed.txt".into(),
@@ -677,6 +810,7 @@ mod tests {
                 staged: false,
                 conflict: false,
                 conflict_kind: None,
+                submodule: None,
             },
             GitChange {
                 path: "staged.txt".into(),
@@ -685,6 +819,7 @@ mod tests {
                 staged: true,
                 conflict: false,
                 conflict_kind: None,
+                submodule: None,
             },
         ];
         let plan = plan_discard(
@@ -712,6 +847,49 @@ mod tests {
             .validate()
             .is_err()
         );
+    }
+
+    #[test]
+    fn dirty_only_submodule_changes_cannot_be_staged_as_gitlink_updates() {
+        let mut snapshot = merge_snapshot();
+        snapshot.submodules.push(GitSubmodule {
+            name: "child".into(),
+            path: "modules/child".into(),
+            recorded_oid: Some("1".repeat(40)),
+            current_oid: Some("1".repeat(40)),
+            initialized: true,
+            commit_changed: false,
+            tracked_modified: true,
+            untracked_content: false,
+            conflict: false,
+            issue: None,
+        });
+        snapshot.changes.push(GitChange {
+            path: "modules/child".into(),
+            original_path: None,
+            status: "M".into(),
+            staged: false,
+            conflict: false,
+            conflict_kind: None,
+            submodule: Some(GitSubmoduleChange {
+                commit_changed: false,
+                tracked_modified: true,
+                untracked_content: false,
+            }),
+        });
+
+        assert!(validate_submodule_stage_paths(&snapshot, &["modules/child".into()]).is_err());
+        assert!(validate_stage_all(&snapshot).is_err());
+        assert!(plan_discard(&snapshot, &["modules/child".into()]).is_err());
+
+        snapshot.submodules[0].commit_changed = true;
+        snapshot.changes[0]
+            .submodule
+            .as_mut()
+            .expect("metadata")
+            .commit_changed = true;
+        assert!(validate_submodule_stage_paths(&snapshot, &["modules/child".into()]).is_ok());
+        assert!(validate_stage_all(&snapshot).is_ok());
     }
 
     #[test]
@@ -1025,6 +1203,7 @@ mod tests {
             staged: false,
             conflict: false,
             conflict_kind: None,
+            submodule: None,
         });
         assert!(validate_merge_preconditions(&dirty, "refs/heads/feature/test").is_err());
 
@@ -1040,6 +1219,7 @@ mod tests {
             staged: false,
             conflict: true,
             conflict_kind: Some(GitConflictKind::BothModified),
+            submodule: None,
         });
         assert!(validate_stage_all(&conflicted).is_err());
         conflicted.changes[0].conflict = false;
@@ -1078,6 +1258,7 @@ mod tests {
                 behind: 0,
             },
             changes: Vec::new(),
+            submodules: Vec::new(),
             branches: vec![
                 branch("refs/heads/main", "main", GitBranchKind::Local, true),
                 branch(

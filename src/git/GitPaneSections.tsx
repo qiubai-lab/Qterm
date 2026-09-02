@@ -3,7 +3,7 @@ import type { KeyboardEvent, MouseEvent, ReactNode, RefObject } from "react";
 import { createPortal } from "react-dom";
 
 import { Icon, type IconName } from "../components/Icon";
-import type { GitChange, GitSnapshot } from "../lib/tauri/git";
+import type { GitChange, GitSnapshot, GitSubmodule, GitSubmoduleIssue } from "../lib/tauri/git";
 import type { GitRuntime } from "../workspace/WorkspaceProvider";
 import { GitPrimaryActionButton } from "./GitPrimaryActionButton";
 import type { GitPrimaryAction, GitPrimaryAlternativeAction } from "./gitPrimaryAction";
@@ -67,6 +67,65 @@ export function GitRepositorySection({
       </div>
       {remote && runtime?.stale && <div className="git-feedback stale" role="status">连接已断开，当前内容可能已过期；重新连接后将自动刷新。</div>}
       {error && snapshot && <div className="git-feedback stale" role="status">上次 Git 操作失败，已保留并重新读取可用状态。</div>}
+    </div>
+  </GitSection>;
+}
+
+const submoduleIssueLabels: Record<GitSubmoduleIssue, string> = {
+  missingConfiguration: "缺少 .gitmodules 配置",
+  missingGitlink: "缺少 gitlink",
+  duplicatePath: "配置重复",
+  invalidPath: "路径无效",
+  unreadable: "状态不可读取",
+};
+
+function submoduleState(submodule: GitSubmodule): string {
+  if (submodule.issue) return submoduleIssueLabels[submodule.issue];
+  if (submodule.conflict) return "引用冲突";
+  if (!submodule.initialized) return "未初始化";
+  const details = [
+    submodule.commitChanged ? "记录版本已变化" : null,
+    submodule.trackedModified ? "内部有修改" : null,
+    submodule.untrackedContent ? "内部有未跟踪内容" : null,
+  ].filter(Boolean);
+  return details.join(" · ") || "干净";
+}
+
+function shortOid(oid: string | null): string {
+  return oid?.slice(0, 8) ?? "--------";
+}
+
+export function GitSubmodulesSection({ submodules, collapsed, disabled, onToggle, onOpen, onInitialize, onCheckout }: {
+  submodules: GitSubmodule[];
+  collapsed: boolean;
+  disabled: boolean;
+  onToggle: () => void;
+  onOpen: (submodule: GitSubmodule) => void;
+  onInitialize: (submodule: GitSubmodule) => void;
+  onCheckout: (submodule: GitSubmodule) => void;
+}) {
+  return <GitSection className={`git-submodules-section${submodules.length === 0 ? " empty" : ""}`} title={`子仓库 ${submodules.length}`} collapsed={collapsed} onToggle={onToggle}>
+    <div className="git-submodule-scroll" role="list" aria-label="Git 子仓库">
+      {submodules.map((submodule) => {
+        const state = submoduleState(submodule);
+        const actionable = !submodule.issue && !submodule.conflict;
+        const unavailableReason = submodule.issue ? submoduleIssueLabels[submodule.issue] : submodule.conflict ? "子仓库引用存在冲突" : undefined;
+        const checkoutReason = submodule.trackedModified || submodule.untrackedContent ? "请先打开子仓库处理未提交内容" : unavailableReason;
+        return <div className="git-submodule-row" role="listitem" key={submodule.path} data-attention={state !== "干净" || undefined}>
+          <Icon name="git" size={13}/>
+          <div className="git-submodule-copy">
+            <strong title={`${submodule.name} · ${submodule.path}`}>{submodule.name}</strong>
+            <span title={submodule.path}>{submodule.path}</span>
+          </div>
+          <div className="git-submodule-state" title={`记录 ${shortOid(submodule.recordedOid)} · 当前 ${shortOid(submodule.currentOid)}`}><span>{state}</span><code>当前 {shortOid(submodule.currentOid)} · 记录 {shortOid(submodule.recordedOid)}</code></div>
+          <div className="git-submodule-actions">
+            {submodule.initialized && <button type="button" aria-label={`打开 ${submodule.path}`} title={unavailableReason} disabled={disabled || Boolean(submodule.issue)} onClick={() => onOpen(submodule)}>打开</button>}
+            {!submodule.initialized && <button type="button" aria-label={`初始化 ${submodule.path}`} title={unavailableReason} disabled={disabled || !actionable} onClick={() => onInitialize(submodule)}>初始化</button>}
+            {submodule.initialized && submodule.commitChanged && <button type="button" aria-label={`检出记录版本 ${submodule.path}`} title={checkoutReason} disabled={disabled || !actionable || submodule.trackedModified || submodule.untrackedContent} onClick={() => onCheckout(submodule)}>检出记录版本</button>}
+          </div>
+        </div>;
+      })}
+      {submodules.length === 0 && <div className="git-submodule-empty">未登记直接子仓库</div>}
     </div>
   </GitSection>;
 }
@@ -137,7 +196,7 @@ export function GitChangesSection({
   onAbortMerge,
 }: GitChangesSectionProps) {
   return <GitSection className="git-changes-section" title={`更改${snapshot ? ` ${snapshot.changes.length}` : ""}`} collapsed={collapsed} onToggle={onToggle} actions={<>
-    <button type="button" aria-label="暂存全部更改" title={mergeInProgress && conflicts.length > 0 ? "合并冲突需要逐项解决" : "暂存全部"} disabled={disabled || !root || mergeInProgress && conflicts.length > 0 || unstaged.length + conflicts.length === 0} onClick={onStageAll}><Icon name="plus" size={12}/></button>
+    <button type="button" aria-label="暂存全部更改" title={mergeInProgress && conflicts.length > 0 ? "合并冲突需要逐项解决" : "暂存全部可记录更改"} disabled={disabled || !root || mergeInProgress && conflicts.length > 0 || !unstaged.some((change) => !change.submodule || change.submodule.commitChanged)} onClick={onStageAll}><Icon name="plus" size={12}/></button>
     <button type="button" aria-label="取消暂存全部更改" title="取消暂存全部" disabled={disabled || !root || staged.length === 0} onClick={onUnstageAll}><Icon name="clear" size={12}/></button>
   </>}>
     {mergeInProgress && <div className="git-merge-state" role="status">
@@ -215,8 +274,13 @@ function GitChangeList({ title, changes, actionLabel, actionIcon, showActionText
   return <section className="git-change-group" aria-label={title}><div className="git-change-group-title">{title}<span>{changes.length}</span></div>{visible.map((change, index) => {
     const selected = selectedPaths ? selectedPaths.has(change.path) : localSelectedPath === change.path;
     const status = presentGitFileStatus(change.status, { conflict: change.conflict });
-    return <div className={`git-change-row${onPreview ? " previewable" : ""}`} role="listitem" data-selected={selected || undefined} key={`${change.path}:${change.staged}:${change.status}`} title={change.originalPath ? `${change.originalPath} → ${change.path}` : change.path} onContextMenu={onOpenContextMenu ? (event) => onOpenContextMenu(change, index, event) : undefined}>
-      {onPreview ? <button type="button" className="git-change-preview-trigger" aria-label={`预览${change.staged ? "已暂存" : "工作区"}更改 ${change.path}`} aria-pressed={selected} aria-describedby={selectionHint?.path === change.path ? selectionHintId : undefined} onClick={(event) => {
+    const previewable = Boolean(onPreview && !change.submodule);
+    const submoduleStatus = change.submodule
+      ? [change.submodule.commitChanged ? "引用变化" : null, change.submodule.trackedModified ? "内部修改" : null, change.submodule.untrackedContent ? "内部未跟踪" : null].filter(Boolean).join(" · ")
+      : null;
+    const actionDisabled = Boolean(!change.staged && change.submodule && !change.submodule.commitChanged);
+    return <div className={`git-change-row${previewable ? " previewable" : ""}`} role="listitem" data-selected={selected || undefined} key={`${change.path}:${change.staged}:${change.status}`} title={change.originalPath ? `${change.originalPath} → ${change.path}` : change.path} onContextMenu={onOpenContextMenu ? (event) => onOpenContextMenu(change, index, event) : undefined}>
+      {previewable ? <button type="button" className="git-change-preview-trigger" aria-label={`预览${change.staged ? "已暂存" : "工作区"}更改 ${change.path}`} aria-pressed={selected} aria-describedby={selectionHint?.path === change.path ? selectionHintId : undefined} onClick={(event) => {
         const modifiedSelection = event.ctrlKey || event.metaKey || event.shiftKey;
         onSelect?.(change, index, event);
         if (!selectedPaths) setLocalSelectedPath(change.path);
@@ -224,11 +288,11 @@ function GitChangeList({ title, changes, actionLabel, actionIcon, showActionText
           clearSelectionHint();
         } else if (selected) {
           clearSelectionHint();
-          onPreview(change);
+          onPreview?.(change);
         } else {
           showSelectionHint(change.path, event.currentTarget);
         }
-      }} onKeyDown={onOpenContextMenu ? (event) => { if (event.key === "ContextMenu" || event.shiftKey && event.key === "F10") onOpenContextMenu(change, index, event); } : undefined}><Icon name="file" size={13}/><span className="git-change-path">{change.path}</span><span className="git-change-status" title={`Git 状态：${status.label}`}>{status.label}</span></button> : <><Icon name={change.conflict ? "mergeConflict" : "file"} size={13}/><span className="git-change-path">{change.path}</span><span className={`git-change-status${change.conflict ? " conflict" : ""}`} title={`Git 状态：${status.label}`}>{status.label}</span></>}<button type="button" className={showActionText ? "git-conflict-action" : undefined} aria-label={`${actionLabel} ${change.path}`} title={actionLabel} onClick={() => onAction(change)}><Icon name={actionIcon} size={11}/>{showActionText && <span>解决</span>}</button>
+      }} onKeyDown={onOpenContextMenu ? (event) => { if (event.key === "ContextMenu" || event.shiftKey && event.key === "F10") onOpenContextMenu(change, index, event); } : undefined}><Icon name="file" size={13}/><span className="git-change-path">{change.path}</span><span className="git-change-status" title={`Git 状态：${status.label}`}>{status.label}</span></button> : <><Icon name={change.conflict ? "mergeConflict" : "git"} size={13}/><span className="git-change-path">{change.path}</span><span className={`git-change-status${change.conflict ? " conflict" : ""}`} title={submoduleStatus ?? `Git 状态：${status.label}`}>{submoduleStatus ?? status.label}</span></>}<button type="button" className={showActionText ? "git-conflict-action" : undefined} aria-label={`${actionLabel} ${change.path}`} title={actionDisabled ? "子仓库内部修改不会改变父仓库 gitlink" : actionLabel} disabled={actionDisabled} onClick={() => onAction(change)}><Icon name={actionIcon} size={11}/>{showActionText && <span>解决</span>}</button>
     </div>;
   })}{changes.length > visible.length && <div className="git-list-limit">另有 {changes.length - visible.length} 项，请使用终端处理后刷新</div>}{selectionHint && <GitChangeSelectionHint id={selectionHintId} feedback={selectionHint}/>}</section>;
 }

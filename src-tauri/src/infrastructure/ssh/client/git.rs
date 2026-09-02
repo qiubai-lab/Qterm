@@ -9,13 +9,14 @@ use crate::{
         GitConflictResult, GitConflictVersion, GitDiffScope, GitDiffSource, GitError, GitSnapshot,
         MAX_CONFLICT_TEXT_BYTES, MAX_GIT_DIFF_TEXT_BYTES, RemoteGitAction,
         find_tracking_local_branch, plan_discard, validate_abort_merge, validate_branch_name,
-        validate_branch_source_ref, validate_commit_oid, validate_continue_merge,
-        validate_local_branch_ref, validate_merge_preconditions, validate_posix_paths,
-        validate_remote_name, validate_remote_repository_path, validate_stage_all,
+        validate_branch_source_ref, validate_checkout_submodule, validate_commit_oid,
+        validate_continue_merge, validate_initialize_submodule, validate_local_branch_ref,
+        validate_merge_preconditions, validate_posix_paths, validate_remote_name,
+        validate_remote_repository_path, validate_stage_all, validate_submodule_stage_paths,
     },
     infrastructure::git_cli::{
         build_conflict_detail, classify_failure, parse_branches, parse_commit_files, parse_commits,
-        parse_status,
+        parse_status, parse_submodules, sanitize_submodule_operation_error,
     },
 };
 
@@ -51,6 +52,8 @@ pub(super) async fn run_remote_git_action(
             snapshot(handle, &path).await
         }
         RemoteGitAction::Stage { repository, paths } => {
+            let current = snapshot(handle, &repository).await?;
+            validate_submodule_stage_paths(&current, &paths)?;
             run_git(
                 handle,
                 &repository,
@@ -192,7 +195,33 @@ pub(super) async fn run_remote_git_action(
         } => merge_branch(handle, &repository, &source_ref).await,
         RemoteGitAction::ContinueMerge { repository } => continue_merge(handle, &repository).await,
         RemoteGitAction::AbortMerge { repository } => abort_merge(handle, &repository).await,
+        RemoteGitAction::InitializeSubmodule { repository, path } => {
+            let current = snapshot(handle, &repository).await?;
+            validate_initialize_submodule(&current, &path)?;
+            let args = submodule_update_args(&path, true);
+            run_git(handle, &repository, &args, Vec::new(), FETCH_TIMEOUT)
+                .await
+                .map_err(sanitize_submodule_operation_error)?;
+            snapshot(handle, &repository).await
+        }
+        RemoteGitAction::CheckoutSubmodule { repository, path } => {
+            let current = snapshot(handle, &repository).await?;
+            validate_checkout_submodule(&current, &path)?;
+            let args = submodule_update_args(&path, false);
+            run_git(handle, &repository, &args, Vec::new(), FETCH_TIMEOUT)
+                .await
+                .map_err(sanitize_submodule_operation_error)?;
+            snapshot(handle, &repository).await
+        }
     }
+}
+
+fn submodule_update_args(path: &str, initialize: bool) -> String {
+    format!(
+        "--literal-pathspecs submodule update {}--checkout -- {}",
+        if initialize { "--init " } else { "" },
+        posix_literal(path)
+    )
 }
 
 pub(super) async fn commit_files(
@@ -763,6 +792,48 @@ async fn snapshot(
     .await?;
     let remotes = run_git(handle, &repository, "remote", Vec::new(), READ_TIMEOUT).await?;
     let (head, changes) = parse_status(&status.stdout)?;
+    let index = run_git(
+        handle,
+        &repository,
+        "ls-files --stage -z",
+        Vec::new(),
+        READ_TIMEOUT,
+    )
+    .await?;
+    let config = run_git(
+        handle,
+        &repository,
+        "config -z --file .gitmodules --get-regexp '^submodule\\..*\\.path$'",
+        Vec::new(),
+        READ_TIMEOUT,
+    )
+    .await
+    .ok();
+    let needs_submodule_status = index.stdout.windows(6).any(|value| value == b"160000")
+        || config
+            .as_ref()
+            .is_some_and(|output| !output.stdout.is_empty());
+    let submodule_status = if needs_submodule_status {
+        run_git(
+            handle,
+            &repository,
+            "submodule status",
+            Vec::new(),
+            READ_TIMEOUT,
+        )
+        .await
+        .ok()
+    } else {
+        None
+    };
+    let submodules = parse_submodules(
+        &index.stdout,
+        config.as_ref().map(|output| output.stdout.as_slice()),
+        submodule_status
+            .as_ref()
+            .map(|output| output.stdout.as_slice()),
+        &changes,
+    )?;
     let commits = if head.unborn {
         Vec::new()
     } else {
@@ -788,6 +859,7 @@ async fn snapshot(
         repository_name,
         head,
         changes,
+        submodules,
         branches: parse_branches(&branches.stdout),
         remotes: parse_remotes(&remotes.stdout),
         commits,
@@ -1193,6 +1265,7 @@ mod tests {
     use super::{
         STAGE_PATHS_ARGS, UNSTAGE_PATHS_WITH_HEAD_ARGS, UNSTAGE_PATHS_WITHOUT_HEAD_ARGS,
         nul_payload, parse_remote_index_entry, parse_remote_tree_entry, posix_literal,
+        submodule_update_args,
     };
 
     #[test]
@@ -1223,6 +1296,27 @@ mod tests {
         assert!(STAGE_PATHS_ARGS.contains("--pathspec-file-nul"));
         assert!(UNSTAGE_PATHS_WITH_HEAD_ARGS.contains("--pathspec-file-nul"));
         assert!(UNSTAGE_PATHS_WITHOUT_HEAD_ARGS.ends_with("-z --stdin"));
+    }
+
+    #[test]
+    fn submodule_commands_are_single_path_non_recursive_and_literal() {
+        let path = "modules/it's\n-child";
+        let initialize = submodule_update_args(path, true);
+        let checkout = submodule_update_args(path, false);
+
+        assert_eq!(
+            initialize,
+            "--literal-pathspecs submodule update --init --checkout -- 'modules/it'\\''s\n-child'"
+        );
+        assert_eq!(
+            checkout,
+            "--literal-pathspecs submodule update --checkout -- 'modules/it'\\''s\n-child'"
+        );
+        for command in [initialize, checkout] {
+            assert!(!command.contains("--recursive"));
+            assert!(!command.contains("--remote"));
+            assert!(!command.contains("--force"));
+        }
     }
 
     #[test]

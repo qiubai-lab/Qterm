@@ -7,11 +7,13 @@ import {
   createGitBranch,
   createGitBranchFrom,
   createGitBranchFromCommit,
+  checkoutGitSubmodule,
   deleteGitBranch,
   discardGitPaths,
   executeRemoteGit,
   fetchGitRepository,
   initializeGitRepository,
+  initializeGitSubmodule,
   loadGitCommitFiles,
   loadGitCommitFileDiff,
   loadGitChangeDiff,
@@ -53,6 +55,8 @@ export interface GitRepositoryClient {
   loadSnapshot: (path: string) => Promise<GitSnapshot>;
   fetchSnapshot: (repository: string) => Promise<GitSnapshot>;
   initialize: (path: string) => Promise<GitSnapshot>;
+  initializeSubmodule: (repository: string, path: string) => Promise<GitSnapshot>;
+  checkoutSubmodule: (repository: string, path: string) => Promise<GitSnapshot>;
   stagePaths: (repository: string, paths: string[]) => Promise<GitSnapshot>;
   stageAll: (repository: string) => Promise<GitSnapshot>;
   unstagePaths: (repository: string, paths: string[]) => Promise<GitSnapshot>;
@@ -90,6 +94,8 @@ export function useGitRepositoryClient({ remote, profileId, sessionId, status }:
     loadSnapshot: (path) => remote ? remoteExecute({ type: "snapshot", path }) : loadGitSnapshot(path),
     fetchSnapshot: (repository) => remote ? remoteExecute({ type: "fetch", repository }) : fetchGitRepository(repository),
     initialize: (path) => remote ? remoteExecute({ type: "initialize", path }) : initializeGitRepository(path),
+    initializeSubmodule: (repository, path) => remote ? remoteExecute({ type: "initializeSubmodule", repository, path }) : initializeGitSubmodule(repository, path),
+    checkoutSubmodule: (repository, path) => remote ? remoteExecute({ type: "checkoutSubmodule", repository, path }) : checkoutGitSubmodule(repository, path),
     stagePaths: (repository, paths) => remote ? remoteExecute({ type: "stage", repository, paths }) : stageGitPaths(repository, paths),
     stageAll: (repository) => remote ? remoteExecute({ type: "stageAll", repository }) : stageAllGitChanges(repository),
     unstagePaths: (repository, paths) => remote ? remoteExecute({ type: "unstage", repository, paths }) : unstageGitPaths(repository, paths),

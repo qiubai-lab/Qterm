@@ -413,6 +413,14 @@ async fn git_actions_require_a_connected_git_purpose_session_owned_by_the_profil
         crate::domain::git::RemoteGitAction::AbortMerge {
             repository: "/srv/project".into(),
         },
+        crate::domain::git::RemoteGitAction::InitializeSubmodule {
+            repository: "/srv/project".into(),
+            path: "modules/child".into(),
+        },
+        crate::domain::git::RemoteGitAction::CheckoutSubmodule {
+            repository: "/srv/project".into(),
+            path: "modules/child".into(),
+        },
     ] {
         let expected = action.clone();
         let action_request = {

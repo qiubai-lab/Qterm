@@ -56,7 +56,9 @@ export function deriveGitPrimaryAction({ snapshot, message, busy, unavailable }:
   }
 
   const stagedCount = snapshot.changes.filter((change) => change.staged && !change.conflict).length;
-  const unstagedCount = snapshot.changes.filter((change) => !change.staged && !change.conflict).length;
+  const unstagedChanges = snapshot.changes.filter((change) => !change.staged && !change.conflict);
+  const unstagedCount = unstagedChanges.filter((change) => !change.submodule || change.submodule.commitChanged).length;
+  const dirtyOnlySubmoduleCount = unstagedChanges.length - unstagedCount;
   const conflictCount = snapshot.changes.filter((change) => change.conflict).length;
   const showMessage = snapshot.changes.length > 0 || snapshot.mergeInProgress;
 
@@ -90,6 +92,16 @@ export function deriveGitPrimaryAction({ snapshot, message, busy, unavailable }:
       showMessage: true,
       title: "将当前工作树更改加入暂存区",
     }, busy, unavailable);
+  }
+
+  if (dirtyOnlySubmoduleCount > 0) {
+    return {
+      kind: "blocked",
+      label: "请打开子仓库处理内部修改",
+      disabled: true,
+      showMessage: false,
+      title: "子仓库内部修改不会改变父仓库 gitlink",
+    };
   }
 
   if (snapshot.head.unborn) {

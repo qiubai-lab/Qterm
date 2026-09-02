@@ -484,7 +484,7 @@ describe("WorkspaceCanvas terminal actions", () => {
     expect(gitApi.selectDirectory).not.toHaveBeenCalled();
     await user.click(screen.getByRole("button", { name: "测试使用系统选择器" }));
     expect(gitApi.selectDirectory).toHaveBeenCalledWith("D:/work/project");
-    await waitFor(() => expect(selectGitTarget).toHaveBeenCalledWith("workspace-1", "git-1", { type: "local", path: "D:/work/next" }));
+    await waitFor(() => expect(selectGitTarget).toHaveBeenCalledWith("workspace-1", "git-1", { type: "local", path: "D:/work/next" }, { type: "local", path: "D:/work/project" }));
     expect(view.container.querySelector('[data-layout-block="git-1"] .block-actions')).toContainElement(choose);
   });
 
@@ -512,7 +512,7 @@ describe("WorkspaceCanvas terminal actions", () => {
     await user.click(screen.getByRole("button", { name: "测试确认远程目录" }));
 
     expect(selectGitTarget).toHaveBeenCalledOnce();
-    expect(selectGitTarget).toHaveBeenCalledWith("workspace-1", "git-1", { type: "remote", profileId: "password-profile", path: "/srv/next" });
+    expect(selectGitTarget).toHaveBeenCalledWith("workspace-1", "git-1", { type: "remote", profileId: "password-profile", path: "/srv/next" }, { type: "remote", profileId: "password-profile", path: "/srv/project" });
     expect(screen.queryByRole("dialog", { name: "测试远程仓库选择器" })).not.toBeInTheDocument();
   });
 
@@ -548,7 +548,7 @@ describe("WorkspaceCanvas terminal actions", () => {
     await user.click(screen.getByRole("button", { name: /other/ }));
 
     expect(gitApi.selectDirectory).not.toHaveBeenCalled();
-    expect(selectGitTarget).toHaveBeenCalledWith("workspace-1", "git-1", { type: "local", path: "D:/work/other" });
+    expect(selectGitTarget).toHaveBeenCalledWith("workspace-1", "git-1", { type: "local", path: "D:/work/other" }, { type: "local", path: "D:/work/project" });
   });
 
   it("isolates remote history by profile and preserves its owner when selected", async () => {
@@ -567,7 +567,7 @@ describe("WorkspaceCanvas terminal actions", () => {
     expect(screen.queryByText("D:/work/local")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /recent/ }));
 
-    expect(selectGitTarget).toHaveBeenCalledWith("workspace-1", "git-1", { type: "remote", profileId: "password-profile", path: "/srv/recent" });
+    expect(selectGitTarget).toHaveBeenCalledWith("workspace-1", "git-1", { type: "remote", profileId: "password-profile", path: "/srv/recent" }, { type: "remote", profileId: "password-profile", path: "/srv/project" });
   });
 
   it("records only the repository success reported by GitPane", async () => {

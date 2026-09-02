@@ -23,7 +23,8 @@ use crate::{
             GitBranch, GitBranchKind, GitChange, GitChangeDiff, GitCommit, GitCommitFile,
             GitCommitFileDiff, GitConflictContentKind, GitConflictDetail, GitConflictKind,
             GitConflictResolution, GitConflictResult, GitConflictVersion, GitDiffScope,
-            GitDiffSource, GitError, GitHead, GitSnapshot, RemoteGitAction,
+            GitDiffSource, GitError, GitHead, GitSnapshot, GitSubmodule, GitSubmoduleChange,
+            GitSubmoduleIssue, RemoteGitAction,
         },
         transfer::RemotePath,
     },
@@ -60,6 +61,7 @@ pub struct GitSnapshotDto {
     repository_name: String,
     head: GitHeadDto,
     changes: Vec<GitChangeDto>,
+    submodules: Vec<GitSubmoduleDto>,
     branches: Vec<GitBranchDto>,
     remotes: Vec<String>,
     commits: Vec<GitCommitDto>,
@@ -87,6 +89,40 @@ struct GitChangeDto {
     staged: bool,
     conflict: bool,
     conflict_kind: Option<GitConflictKindDto>,
+    submodule: Option<GitSubmoduleChangeDto>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct GitSubmoduleChangeDto {
+    commit_changed: bool,
+    tracked_modified: bool,
+    untracked_content: bool,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct GitSubmoduleDto {
+    name: String,
+    path: String,
+    recorded_oid: Option<String>,
+    current_oid: Option<String>,
+    initialized: bool,
+    commit_changed: bool,
+    tracked_modified: bool,
+    untracked_content: bool,
+    conflict: bool,
+    issue: Option<GitSubmoduleIssueDto>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+enum GitSubmoduleIssueDto {
+    MissingConfiguration,
+    MissingGitlink,
+    DuplicatePath,
+    InvalidPath,
+    Unreadable,
 }
 
 #[derive(Serialize)]
@@ -241,6 +277,13 @@ pub struct GitRepositoryInput {
 pub struct GitPathsInput {
     repository: String,
     paths: Vec<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct GitSubmoduleInput {
+    repository: String,
+    path: String,
 }
 
 #[derive(Deserialize)]
@@ -533,6 +576,14 @@ pub enum RemoteGitActionDto {
     AbortMerge {
         repository: String,
     },
+    InitializeSubmodule {
+        repository: String,
+        path: String,
+    },
+    CheckoutSubmodule {
+        repository: String,
+        path: String,
+    },
 }
 
 #[tauri::command]
@@ -726,6 +777,24 @@ pub async fn git_stage(
 ) -> Result<GitSnapshotDto, GitIpcError> {
     let service = Arc::clone(&state.service);
     run(move || service.stage(input.repository, input.paths)).await
+}
+
+#[tauri::command]
+pub async fn git_initialize_submodule(
+    input: GitSubmoduleInput,
+    state: State<'_, GitState>,
+) -> Result<GitSnapshotDto, GitIpcError> {
+    let service = Arc::clone(&state.service);
+    run(move || service.initialize_submodule(input.repository, input.path)).await
+}
+
+#[tauri::command]
+pub async fn git_checkout_submodule(
+    input: GitSubmoduleInput,
+    state: State<'_, GitState>,
+) -> Result<GitSnapshotDto, GitIpcError> {
+    let service = Arc::clone(&state.service);
+    run(move || service.checkout_submodule(input.repository, input.path)).await
 }
 
 #[tauri::command]
@@ -1157,6 +1226,12 @@ impl From<RemoteGitActionDto> for RemoteGitAction {
             },
             RemoteGitActionDto::ContinueMerge { repository } => Self::ContinueMerge { repository },
             RemoteGitActionDto::AbortMerge { repository } => Self::AbortMerge { repository },
+            RemoteGitActionDto::InitializeSubmodule { repository, path } => {
+                Self::InitializeSubmodule { repository, path }
+            }
+            RemoteGitActionDto::CheckoutSubmodule { repository, path } => {
+                Self::CheckoutSubmodule { repository, path }
+            }
         }
     }
 }
@@ -1168,6 +1243,7 @@ impl From<GitSnapshot> for GitSnapshotDto {
             repository_name: value.repository_name,
             head: value.head.into(),
             changes: value.changes.into_iter().map(Into::into).collect(),
+            submodules: value.submodules.into_iter().map(Into::into).collect(),
             branches: value.branches.into_iter().map(Into::into).collect(),
             remotes: value.remotes,
             commits: value.commits.into_iter().map(Into::into).collect(),
@@ -1198,6 +1274,46 @@ impl From<GitChange> for GitChangeDto {
             staged: value.staged,
             conflict: value.conflict,
             conflict_kind: value.conflict_kind.map(Into::into),
+            submodule: value.submodule.map(Into::into),
+        }
+    }
+}
+
+impl From<GitSubmoduleChange> for GitSubmoduleChangeDto {
+    fn from(value: GitSubmoduleChange) -> Self {
+        Self {
+            commit_changed: value.commit_changed,
+            tracked_modified: value.tracked_modified,
+            untracked_content: value.untracked_content,
+        }
+    }
+}
+
+impl From<GitSubmodule> for GitSubmoduleDto {
+    fn from(value: GitSubmodule) -> Self {
+        Self {
+            name: value.name,
+            path: value.path,
+            recorded_oid: value.recorded_oid,
+            current_oid: value.current_oid,
+            initialized: value.initialized,
+            commit_changed: value.commit_changed,
+            tracked_modified: value.tracked_modified,
+            untracked_content: value.untracked_content,
+            conflict: value.conflict,
+            issue: value.issue.map(Into::into),
+        }
+    }
+}
+
+impl From<GitSubmoduleIssue> for GitSubmoduleIssueDto {
+    fn from(value: GitSubmoduleIssue) -> Self {
+        match value {
+            GitSubmoduleIssue::MissingConfiguration => Self::MissingConfiguration,
+            GitSubmoduleIssue::MissingGitlink => Self::MissingGitlink,
+            GitSubmoduleIssue::DuplicatePath => Self::DuplicatePath,
+            GitSubmoduleIssue::InvalidPath => Self::InvalidPath,
+            GitSubmoduleIssue::Unreadable => Self::Unreadable,
         }
     }
 }
@@ -1380,13 +1496,14 @@ mod tests {
         GitBranchInput, GitChangeDiffInput, GitCommitFileDiffInput, GitCommitFilesInput,
         GitCommitInput, GitConflictDetailInput, GitCreateBranchFromCommitInput,
         GitDirectoryListingDto, GitIpcError, GitMergeBranchInput, GitPathInput, GitPathsInput,
-        GitRemoteBranchInput, GitResolveConflictInput, RemoteGitChangeDiffInput,
-        RemoteGitCommitFileDiffInput, RemoteGitCommitFilesInput, RemoteGitConflictDetailInput,
-        RemoteGitDirectoryInput, RemoteGitInput, RemoteGitResolveConflictInput,
+        GitRemoteBranchInput, GitResolveConflictInput, GitSubmoduleDto, GitSubmoduleInput,
+        RemoteGitChangeDiffInput, RemoteGitCommitFileDiffInput, RemoteGitCommitFilesInput,
+        RemoteGitConflictDetailInput, RemoteGitDirectoryInput, RemoteGitInput,
+        RemoteGitResolveConflictInput,
     };
     use crate::domain::{
         files::{DirectoryListing, FileEntry},
-        git::GitError,
+        git::{GitError, GitSubmodule},
     };
 
     #[test]
@@ -1406,6 +1523,30 @@ mod tests {
         let value = serde_json::to_value(dto).expect("serialize directory DTO");
         assert_eq!(value["entries"][0]["modifiedAt"], 1_725_187_200u64);
         assert_eq!(value["entries"][0]["permissionMode"], 0o754u32);
+    }
+
+    #[test]
+    fn submodule_dto_exposes_state_without_url_or_mutation_parameters() {
+        let value = serde_json::to_value(GitSubmoduleDto::from(GitSubmodule {
+            name: "child".into(),
+            path: "modules/child".into(),
+            recorded_oid: Some("1".repeat(40)),
+            current_oid: Some("2".repeat(40)),
+            initialized: true,
+            commit_changed: true,
+            tracked_modified: false,
+            untracked_content: false,
+            conflict: false,
+            issue: None,
+        }))
+        .expect("serialize submodule DTO");
+
+        assert_eq!(value["path"], "modules/child");
+        assert_eq!(value["recordedOid"], "1".repeat(40));
+        let object = value.as_object().expect("submodule object");
+        for forbidden in ["url", "command", "args", "recursive", "remote", "force"] {
+            assert!(!object.contains_key(forbidden), "{forbidden}");
+        }
     }
 
     #[test]
@@ -1443,6 +1584,40 @@ mod tests {
                 "repository": "D:/work/project",
                 "paths": ["file.txt"],
                 "args": ["reset", "--hard"]
+            }))
+            .is_err()
+        );
+        assert!(
+            serde_json::from_value::<GitSubmoduleInput>(serde_json::json!({
+                "repository": "D:/work/project",
+                "path": "modules/child",
+                "recursive": true
+            }))
+            .is_err()
+        );
+        assert!(
+            serde_json::from_value::<RemoteGitInput>(serde_json::json!({
+                "sessionId": "git-session",
+                "profileId": "profile-1",
+                "action": {
+                    "type": "initializeSubmodule",
+                    "repository": "/srv/project",
+                    "path": "modules/child",
+                    "url": "https://example.invalid/private.git"
+                }
+            }))
+            .is_err()
+        );
+        assert!(
+            serde_json::from_value::<RemoteGitInput>(serde_json::json!({
+                "sessionId": "git-session",
+                "profileId": "profile-1",
+                "action": {
+                    "type": "checkoutSubmodule",
+                    "repository": "/srv/project",
+                    "path": "modules/child",
+                    "force": true
+                }
             }))
             .is_err()
         );

@@ -53,6 +53,27 @@ describe("deriveGitPrimaryAction", () => {
     expect(derive(conflicted)).toMatchObject({ kind: "blocked", label: "请先完成合并", disabled: true, showMessage: true });
   });
 
+  it("does not offer parent staging for a dirty-only submodule", () => {
+    const dirtySubmodule = {
+      ...cleanSnapshot,
+      changes: [{
+        path: "modules/child",
+        originalPath: null,
+        status: "M",
+        staged: false,
+        conflict: false,
+        submodule: { commitChanged: false, trackedModified: true, untrackedContent: false },
+      }],
+    } satisfies GitSnapshot;
+
+    expect(derive(dirtySubmodule)).toMatchObject({
+      kind: "blocked",
+      label: "请打开子仓库处理内部修改",
+      disabled: true,
+      showMessage: false,
+    });
+  });
+
   it("maps clean tracked branches to one safe network action", () => {
     expect(derive({ ...cleanSnapshot, head: { ...cleanSnapshot.head, ahead: 2 } })).toMatchObject({ kind: "push", label: "推送 2 个提交", disabled: false, showMessage: false });
     expect(derive({ ...cleanSnapshot, head: { ...cleanSnapshot.head, behind: 3 } })).toMatchObject({ kind: "pull", label: "拉取 3 个提交", disabled: false });

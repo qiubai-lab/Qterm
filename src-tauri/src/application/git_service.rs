@@ -306,6 +306,26 @@ impl<E: GitExecutor> GitService<E> {
     pub fn abort_merge(&self, repository: String) -> Result<GitSnapshot, GitError> {
         self.executor.abort_merge(&input_path(repository)?)
     }
+
+    pub fn initialize_submodule(
+        &self,
+        repository: String,
+        path: String,
+    ) -> Result<GitSnapshot, GitError> {
+        validate_local_paths(std::slice::from_ref(&path))?;
+        self.executor
+            .initialize_submodule(&input_path(repository)?, &path)
+    }
+
+    pub fn checkout_submodule(
+        &self,
+        repository: String,
+        path: String,
+    ) -> Result<GitSnapshot, GitError> {
+        validate_local_paths(std::slice::from_ref(&path))?;
+        self.executor
+            .checkout_submodule(&input_path(repository)?, &path)
+    }
 }
 
 fn input_path(value: String) -> Result<PathBuf, GitError> {

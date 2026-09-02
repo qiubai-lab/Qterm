@@ -4,7 +4,7 @@ import { afterEach, beforeEach, vi } from "vitest";
 import type { GitSnapshot } from "../lib/tauri/git";
 
 const api = vi.hoisted(() => ({
-  available: vi.fn(), select: vi.fn(), snapshot: vi.fn(), fetch: vi.fn(), pull: vi.fn(), push: vi.fn(), initialize: vi.fn(), stage: vi.fn(), stageAll: vi.fn(), unstage: vi.fn(), unstageAll: vi.fn(), discard: vi.fn(), commit: vi.fn(), commitFiles: vi.fn(), commitFileDiff: vi.fn(), changeDiff: vi.fn(), conflictDetail: vi.fn(), resolveConflict: vi.fn(), createBranch: vi.fn(), createBranchFrom: vi.fn(), createBranchFromCommit: vi.fn(), renameBranch: vi.fn(), deleteBranch: vi.fn(), switchBranch: vi.fn(), trackRemoteBranch: vi.fn(), mergeBranch: vi.fn(), continueMerge: vi.fn(), abortMerge: vi.fn(), remote: vi.fn(), remoteCommitFiles: vi.fn(), remoteCommitFileDiff: vi.fn(), remoteChangeDiff: vi.fn(), remoteConflictDetail: vi.fn(), remoteResolveConflict: vi.fn(),
+  available: vi.fn(), select: vi.fn(), snapshot: vi.fn(), fetch: vi.fn(), pull: vi.fn(), push: vi.fn(), initialize: vi.fn(), initializeSubmodule: vi.fn(), checkoutSubmodule: vi.fn(), stage: vi.fn(), stageAll: vi.fn(), unstage: vi.fn(), unstageAll: vi.fn(), discard: vi.fn(), commit: vi.fn(), commitFiles: vi.fn(), commitFileDiff: vi.fn(), changeDiff: vi.fn(), conflictDetail: vi.fn(), resolveConflict: vi.fn(), createBranch: vi.fn(), createBranchFrom: vi.fn(), createBranchFromCommit: vi.fn(), renameBranch: vi.fn(), deleteBranch: vi.fn(), switchBranch: vi.fn(), trackRemoteBranch: vi.fn(), mergeBranch: vi.fn(), continueMerge: vi.fn(), abortMerge: vi.fn(), remote: vi.fn(), remoteCommitFiles: vi.fn(), remoteCommitFileDiff: vi.fn(), remoteChangeDiff: vi.fn(), remoteConflictDetail: vi.fn(), remoteResolveConflict: vi.fn(),
 }));
 
 vi.mock("../lib/tauri/git", () => ({
@@ -15,6 +15,8 @@ vi.mock("../lib/tauri/git", () => ({
   pullGitRepository: api.pull,
   pushGitRepository: api.push,
   initializeGitRepository: api.initialize,
+  initializeGitSubmodule: api.initializeSubmodule,
+  checkoutGitSubmodule: api.checkoutSubmodule,
   stageGitPaths: api.stage,
   stageAllGitChanges: api.stageAll,
   unstageGitPaths: api.unstage,
@@ -69,6 +71,8 @@ function setupGitPaneTests() {
     api.pull.mockResolvedValue(snapshot);
     api.push.mockResolvedValue(snapshot);
     api.stage.mockResolvedValue(snapshot);
+    api.initializeSubmodule.mockResolvedValue(snapshot);
+    api.checkoutSubmodule.mockResolvedValue(snapshot);
     api.unstage.mockResolvedValue(snapshot);
     api.discard.mockResolvedValue(snapshot);
     api.createBranch.mockResolvedValue(snapshot);
