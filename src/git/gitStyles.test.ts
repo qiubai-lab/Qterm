@@ -700,8 +700,12 @@ describe("Git pane style contracts", () => {
   });
 
   it("keeps change preview viewport-safe while its file list floats over the editor", () => {
-    expect(changePreviewStyles).toContain("width:min(1480px,calc(100vw-48px))");
-    expect(changePreviewStyles).toContain("height:min(920px,calc(100vh-48px))");
+    expect(changePreviewStyles).toContain("width:min(1480px,100%)");
+    expect(changePreviewStyles).toContain("max-width:100%");
+    expect(changePreviewStyles).toContain("height:min(920px,100%)");
+    expect(changePreviewStyles).toContain("max-height:100%");
+    expect(changePreviewStyles).not.toContain("calc(100vw-48px)");
+    expect(changePreviewStyles).not.toContain("calc(100vh-48px)");
     expect(changePreviewStyles).toContain(".git-change-preview-dialog.dialog-content{display:flex;flex:110;min-width:0;min-height:0");
     expect(changePreviewStyles).toContain(".git-change-preview-stage{position:relative");
     expect(changePreviewStyles).toContain("flex:110;min-width:0;min-height:0;overflow:hidden");
@@ -711,6 +715,14 @@ describe("Git pane style contracts", () => {
     expect(changePreviewStyles).toContain("overflow-y:auto");
     expect(changePreviewStyles).toContain(".git-change-comparison.cm-mergeViewEditors{flex:none;min-height:100%;width:100%");
     expect(changePreviewStyles).toContain(".git-change-comparison.cm-mergeView,.git-change-comparison.cm-mergeViewEditors{background:var(--editor-background)");
+    const sourceHeadings = declarations(".git-change-preview-source-headings");
+    expect(sourceHeadings).toContain("grid-template-columns: 1fr 1fr");
+    expect(sourceHeadings).toContain("min-width: 0");
+    const sourceHeading = declarations(".git-change-preview-source-headings span");
+    expect(sourceHeading).toContain("min-width: 0");
+    expect(sourceHeading).toContain("overflow: hidden");
+    expect(sourceHeading).toContain("text-overflow: ellipsis");
+    expect(sourceHeading).toContain("white-space: nowrap");
     expect(changePreviewStyles).toContain(".git-change-comparison.cm-mergeViewEditor{--git-diff-gutter-width:0px;min-height:100%");
     expect(changePreviewStyles).toContain("background:linear-gradient(toright,var(--editor-gutter-background)0calc(var(--git-diff-gutter-width)-1px),var(--editor-border)calc(var(--git-diff-gutter-width)-1px)var(--git-diff-gutter-width),var(--editor-background)var(--git-diff-gutter-width))");
     expect(changePreviewStyles).toContain("min-height:100%;height:max-content;overflow-x:hidden;overflow-y:clip");
@@ -728,6 +740,9 @@ describe("Git pane style contracts", () => {
     expect(changePreviewStyles).toContain('.git-diff-overview-marker[data-kind="addition"]');
     expect(changePreviewStyles).toContain("pointer-events:none");
     expect(changePreviewStyles).toContain(".git-change-preview-file-popover[data-open]{opacity:1;pointer-events:auto;transform:translateX(0)scale(1)");
+    const narrowPreview = changePreviewStyles.slice(changePreviewStyles.indexOf("@media(max-width:720px)"), changePreviewStyles.indexOf("@media(prefers-reduced-motion:reduce)"));
+    expect(narrowPreview).not.toContain(".git-change-preview-source-headings");
+    expect(narrowPreview).toContain(".git-change-preview-fallback{grid-template-columns:1fr");
     expect(changePreviewStyles).toContain("@media(prefers-reduced-motion:reduce)");
     expect(changePreviewStyles).toContain("@media(prefers-reduced-transparency:reduce)");
     expect(changePreviewStyles).toContain("@media(prefers-contrast:more)");
