@@ -1,4 +1,18 @@
-import type { GitCommit, GitCommitFile } from "../lib/tauri/git";
+import type { GitChange, GitCommit, GitCommitFile } from "../lib/tauri/git";
+
+export type GitChangeScope = "staged" | "unstaged";
+
+export interface GitChangeMenuState {
+  left: number;
+  top: number;
+  placement: "above" | "below";
+  scope: GitChangeScope;
+  paths: string[];
+  canStage: boolean;
+  canDiscard: boolean;
+}
+
+export interface GitDiscardConfirmation { changes: GitChange[] }
 
 export type GitRepositoryOverlayKind =
   | "branches"
@@ -15,6 +29,7 @@ export type GitRepositoryOverlayKind =
 
 export interface GitRepositoryOverlay {
   kind: GitRepositoryOverlayKind;
+  repositoryPath: string;
   left: number;
   top: number;
   placement: "above" | "below";

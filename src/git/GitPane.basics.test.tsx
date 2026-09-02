@@ -122,14 +122,13 @@ describe("GitPane basics and lifecycle", () => {
     const graph = screen.getByRole("button", { name: "图表" });
     const sectionOrder = () => Array.from(document.querySelectorAll(".git-pane > .git-section")).map((section) => {
       if (section.classList.contains("git-repository-section")) return "repository";
-      if (section.classList.contains("git-submodules-section")) return "submodules";
       if (section.classList.contains("git-changes-section")) return "changes";
       return "graph";
     });
     expect(repository).toHaveAttribute("aria-expanded", "true");
     expect(changes).toHaveAttribute("aria-expanded", "true");
     expect(graph).toHaveAttribute("aria-expanded", "false");
-    expect(sectionOrder()).toEqual(["repository", "submodules", "changes", "graph"]);
+    expect(sectionOrder()).toEqual(["repository", "changes", "graph"]);
     expect(graph.closest("section")).toHaveClass("git-graph-section", "collapsed");
     expect(graph.closest("section")?.querySelector(".git-section-body")).toHaveAttribute("aria-hidden", "true");
 
@@ -138,14 +137,14 @@ describe("GitPane basics and lifecycle", () => {
     expect(changes).toHaveAttribute("aria-expanded", "false");
     expect(changes.closest("section")).toHaveClass("git-changes-section", "collapsed");
     expect(graph.closest("section")).not.toHaveClass("collapsed");
-    expect(sectionOrder()).toEqual(["repository", "submodules", "changes", "graph"]);
+    expect(sectionOrder()).toEqual(["repository", "changes", "graph"]);
 
     fireEvent.click(changes);
     expect(changes).toHaveAttribute("aria-expanded", "true");
     expect(graph).toHaveAttribute("aria-expanded", "false");
     expect(changes.closest("section")).not.toHaveClass("collapsed");
     expect(graph.closest("section")).toHaveClass("git-graph-section", "collapsed");
-    expect(sectionOrder()).toEqual(["repository", "submodules", "changes", "graph"]);
+    expect(sectionOrder()).toEqual(["repository", "changes", "graph"]);
   });
 
   it("shows the repository path beside the section title without repeating it in the content", async () => {

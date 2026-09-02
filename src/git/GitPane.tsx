@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from "react";
 import { createPortal } from "react-dom";
-
 import { Button } from "../components/Button";
 import { Icon } from "../components/Icon";
 import { DialogActionStatus, DialogFrame } from "../components/dialogs/DialogFrame";
@@ -12,7 +11,6 @@ import {
   type GitCommitFile,
   type GitConflictResolution,
   type GitSnapshot,
-  type GitSubmodule,
 } from "../lib/tauri/git";
 import { gitRepositoryHistoryEntryKey } from "../workspace/gitRepositoryHistory";
 import type { GitRepositoryHistoryEntry, GitTarget } from "../workspace/model";
@@ -21,24 +19,30 @@ import { GitCommitGraph, GitCommitTooltip } from "./GitCommitGraph";
 import { GitConflictResolver } from "./GitConflictResolver";
 import { GitChangePreview } from "./GitChangePreview";
 import { buildGitGraphRows } from "./gitGraph";
-import { GitChangesSection, GitEmpty, GitRepositorySection, GitSubmodulesSection } from "./GitPaneSections";
+import { GitChangesSection, GitEmpty, GitRepositorySection } from "./GitPaneSections";
+import { discardImpact, fitCommitContextMenu, fitRepositoryOverlay, fitRepositorySubmenu, gitTargetKey, repositoryOverlayEstimate } from "./gitPaneViewModel";
+import type { GitRepositoryTreeNode } from "./gitRepositoryContext";
 import { gitSnapshotsPresentSameState } from "./gitSnapshot";
 import { deriveGitPrimaryAction, type GitPrimaryAction, type GitPrimaryAlternativeAction } from "./gitPrimaryAction";
 import {
-  branchOverlayKinds,
   gitFailureTitle,
   visibleOperationDetail,
+  type GitChangeMenuState,
+  type GitChangeScope,
   type GitCommitContextMenu as GitCommitContextMenuState,
   type GitMergeConfirmation,
   type GitOperationRecord,
   type GitRepositoryOverlay,
   type GitRepositoryOverlayKind,
   type GitRepositorySubmenu,
+  type GitDiscardConfirmation,
 } from "./gitPaneTypes";
 import { useGitRepositoryClient } from "./gitRepositoryClient";
 import { GitCommitContextMenu, GitRepositoryOverlays } from "./GitRepositoryOverlays";
 import { useGitCommitInspection } from "./useGitCommitInspection";
-
+import { useGitRepositoryContext } from "./useGitRepositoryContext";
+import { useGitRepositoryRowActions } from "./useGitRepositoryRowActions";
+import { useGitSubmoduleSnapshots } from "./useGitSubmoduleSnapshots";
 interface GitPaneProps {
   blockId: string;
   target: GitTarget;
@@ -47,60 +51,6 @@ interface GitPaneProps {
   onTargetChange: (target: GitTarget) => void;
   onRequestRepositoryChange?: () => void;
   onRepositoryOpened?: (repository: GitRepositoryHistoryEntry) => void;
-}
-
-type GitChangeScope = "staged" | "unstaged";
-
-interface GitChangeMenuState {
-  left: number;
-  top: number;
-  placement: "above" | "below";
-  scope: GitChangeScope;
-  paths: string[];
-  canStage: boolean;
-  canDiscard: boolean;
-}
-
-interface GitDiscardConfirmation {
-  changes: GitChange[];
-}
-
-function discardImpact(changes: GitChange[]): string {
-  const untracked = changes.filter((change) => change.status === "U").length;
-  const tracked = changes.length - untracked;
-  if (tracked > 0 && untracked > 0) return `将把 ${tracked} 个已跟踪文件恢复到暂存区版本，并永久删除 ${untracked} 个未跟踪文件`;
-  if (tracked > 0) return `将把 ${tracked} 个已跟踪文件恢复到暂存区版本`;
-  return `将永久删除 ${untracked} 个未跟踪文件`;
-}
-
-function gitTargetKey(target: GitTarget): string {
-  return target.type === "unbound" ? "unbound" : gitRepositoryHistoryEntryKey(target);
-}
-
-function fitRepositoryOverlay(anchor: DOMRect, width: number, height: number): Omit<GitRepositoryOverlay, "kind"> {
-  const gutter = 8;
-  const offset = 4;
-  const left = Math.max(gutter, Math.min(anchor.right - width, window.innerWidth - width - gutter));
-  const below = anchor.bottom + offset;
-  if (below + height <= window.innerHeight - gutter) return { left, top: below, placement: "below" };
-  return { left, top: Math.max(gutter, anchor.top - height - offset), placement: "above" };
-}
-
-function fitRepositorySubmenu(anchor: DOMRect, width: number, height: number): GitRepositorySubmenu {
-  const gutter = 8;
-  const offset = 4;
-  const right = anchor.right + offset;
-  const opensRight = right + width <= window.innerWidth - gutter;
-  const left = opensRight ? Math.max(gutter, right) : Math.max(gutter, anchor.left - width - offset);
-  const top = Math.max(gutter, Math.min(anchor.top, window.innerHeight - height - gutter));
-  return { left, top, side: opensRight ? "right" : "left" };
-}
-
-function fitCommitContextMenu(anchorX: number, anchorY: number, width: number, height: number): Pick<GitCommitContextMenuState, "left" | "top" | "placement"> {
-  const gutter = 8;
-  const left = Math.max(gutter, Math.min(anchorX, window.innerWidth - width - gutter));
-  if (anchorY + height <= window.innerHeight - gutter) return { left, top: Math.max(gutter, anchorY), placement: "below" };
-  return { left, top: Math.max(gutter, anchorY - height), placement: "above" };
 }
 
 export function GitPane({ blockId, target, runtime, visible, onTargetChange, onRequestRepositoryChange, onRepositoryOpened }: GitPaneProps) {
@@ -129,7 +79,7 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
   const [selectedUnstagedPaths, setSelectedUnstagedPaths] = useState<Set<string>>(() => new Set());
   const [changeMenu, setChangeMenu] = useState<GitChangeMenuState | null>(null);
   const [discardConfirmation, setDiscardConfirmation] = useState<GitDiscardConfirmation | null>(null);
-  const [collapsed, setCollapsed] = useState({ repository: false, submodules: false, changes: false, graph: true });
+  const [collapsed, setCollapsed] = useState({ repository: false, changes: false, graph: true });
   const epoch = useRef(0);
   const busyRef = useRef("");
   const backgroundRequestRef = useRef<number | null>(null);
@@ -139,8 +89,7 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
   const onRepositoryOpenedRef = useRef(onRepositoryOpened);
   const reportedRepositoryKeyRef = useRef<string | null>(null);
   const targetKeyRef = useRef(gitTargetKey(target));
-  const branchButtonRef = useRef<HTMLButtonElement>(null);
-  const repositoryActionsButtonRef = useRef<HTMLButtonElement>(null);
+  const openRepositoryOverlayRef = useRef<(kind: GitRepositoryOverlayKind, repositoryTarget?: string | null) => void>(() => undefined);
   const repositoryOverlayRef = useRef<HTMLElement | null>(null);
   const repositorySubmenuRef = useRef<HTMLElement | null>(null);
   const commitContextMenuRef = useRef<HTMLDivElement | null>(null);
@@ -154,6 +103,8 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
   const operationSequence = useRef(0);
   const repositorySubmenuId = useId();
   const repositoryPath = target.type === "unbound" ? null : target.path;
+  const { activePath: contextActivePath, nodes: repositoryNodes, registerSnapshot: registerRepositorySnapshot, selectRepository, toggleExpanded: toggleRepositoryExpanded, parentPathFor, snapshotFor: repositorySnapshotFor } = useGitRepositoryContext(repositoryPath);
+  const activeRepositoryPath = contextActivePath ?? repositoryPath;
   const remote = target.type === "remote";
   const remoteProfileId = target.type === "remote" ? target.profileId : null;
   const remoteSessionId = runtime?.sessionId;
@@ -166,7 +117,7 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
     createBranch, createBranchAt, createBranchFromCommit, renameBranch, deleteBranch, switchBranch, trackRemoteBranch,
     pullRepository, pushRepository, mergeBranch, continueMerge, abortMerge,
   } = useGitRepositoryClient({ remote, profileId: remoteProfileId, sessionId: remoteSessionId, status: remoteStatus });
-
+  useGitSubmoduleSnapshots({ rootPath: repositoryPath, nodes: repositoryNodes, enabled: visible && Boolean(available) && remoteReady, loadSnapshot, registerSnapshot: registerRepositorySnapshot });
   const updateBusy = useCallback((value: string) => {
     busyRef.current = value;
     setBusy(value);
@@ -179,7 +130,7 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
     onRepositoryOpenedRef.current = onRepositoryOpened;
   }, [onRepositoryOpened]);
   useEffect(() => {
-    const nextTargetKey = gitTargetKey(target);
+    const nextTargetKey = `${gitTargetKey(target)}\0${activeRepositoryPath ?? "unbound"}`;
     if (targetKeyRef.current === nextTargetKey) return;
     targetKeyRef.current = nextTargetKey;
     epoch.current += 1;
@@ -202,14 +153,19 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
     stagedSelectionAnchorRef.current = null;
     unstagedSelectionAnchorRef.current = null;
     setOperations([]);
-    if (reportedRepositoryKeyRef.current !== nextTargetKey) reportedRepositoryKeyRef.current = null;
-  }, [target, updateBusy]);
+    const cached = activeRepositoryPath ? repositorySnapshotFor(activeRepositoryPath) : null;
+    snapshotRef.current = cached;
+    setSnapshot(cached);
+    setError(null);
+    if (activeRepositoryPath === repositoryPath && reportedRepositoryKeyRef.current !== gitTargetKey(target)) reportedRepositoryKeyRef.current = null;
+  }, [activeRepositoryPath, repositoryPath, repositorySnapshotFor, target, updateBusy]);
 
   const applySnapshot = useCallback((next: GitSnapshot, preserveEquivalent = false) => {
     setError(null);
     if (preserveEquivalent && snapshotRef.current && gitSnapshotsPresentSameState(snapshotRef.current, next)) return false;
     snapshotRef.current = next;
     setSnapshot(next);
+    registerRepositorySnapshot(next);
     const eligibleStaged = new Set(next.changes.filter((change) => change.staged && !change.conflict).map((change) => change.path));
     const eligibleUnstaged = new Set(next.changes.filter((change) => !change.staged && !change.conflict).map((change) => change.path));
     setSelectedStagedPaths((current) => {
@@ -225,26 +181,28 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
       const eligible = current.scope === "staged" ? eligibleStaged : eligibleUnstaged;
       return current.paths.some((path) => !eligible.has(path)) ? null : current;
     });
-    const repository: GitRepositoryHistoryEntry = remote && remoteProfileId
-      ? { type: "remote", profileId: remoteProfileId, path: next.repositoryPath }
-      : { type: "local", path: next.repositoryPath };
-    const repositoryKey = gitRepositoryHistoryEntryKey(repository);
-    if (reportedRepositoryKeyRef.current !== repositoryKey) {
-      reportedRepositoryKeyRef.current = repositoryKey;
-      onRepositoryOpenedRef.current?.(repository);
+    if (activeRepositoryPath === repositoryPath) {
+      const repository: GitRepositoryHistoryEntry = remote && remoteProfileId
+        ? { type: "remote", profileId: remoteProfileId, path: next.repositoryPath }
+        : { type: "local", path: next.repositoryPath };
+      const repositoryKey = gitRepositoryHistoryEntryKey(repository);
+      if (reportedRepositoryKeyRef.current !== repositoryKey) {
+        reportedRepositoryKeyRef.current = repositoryKey;
+        onRepositoryOpenedRef.current?.(repository);
+      }
+      if (next.repositoryPath !== repositoryPath && !remote) onTargetChangeRef.current({ type: "local", path: next.repositoryPath });
     }
-    if (next.repositoryPath !== repositoryPath && !remote) onTargetChangeRef.current({ type: "local", path: next.repositoryPath });
     return true;
-  }, [remote, remoteProfileId, repositoryPath]);
+  }, [activeRepositoryPath, registerRepositorySnapshot, remote, remoteProfileId, repositoryPath]);
 
   const refreshSnapshot = useCallback(async () => {
-    if (!repositoryPath || !visible || !remoteReady || !available || document.visibilityState === "hidden") return;
+    if (!activeRepositoryPath || !visible || !remoteReady || !available || document.visibilityState === "hidden") return;
     if (busyRef.current || backgroundRequestRef.current !== null) return;
     const request = ++epoch.current;
     backgroundRequestRef.current = request;
     setBackgroundRefreshing(true);
     try {
-      const next = await loadSnapshot(repositoryPath);
+      const next = await loadSnapshot(activeRepositoryPath);
       if (request === epoch.current) applySnapshot(next, true);
     } catch (cause) {
       if (request === epoch.current) setError(gitError(cause));
@@ -254,22 +212,32 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
         setBackgroundRefreshing(false);
       }
     }
-  }, [applySnapshot, available, loadSnapshot, remoteReady, repositoryPath, visible]);
+  }, [activeRepositoryPath, applySnapshot, available, loadSnapshot, remoteReady, visible]);
 
   const fetchAndRefresh = useCallback(async () => {
-    if (!repositoryPath || !visible || !remoteReady || busyRef.current) return;
+    if (!activeRepositoryPath || !visible || !remoteReady || busyRef.current) return;
     const request = ++epoch.current;
     updateBusy("fetch");
     setError(null);
     try {
-      const next = await fetchSnapshot(repositoryPath);
+      const next = await fetchSnapshot(activeRepositoryPath);
       if (request === epoch.current) applySnapshot(next);
     } catch (cause) {
       if (request === epoch.current) setError(gitError(cause));
     } finally {
       if (request === epoch.current) updateBusy("");
     }
-  }, [applySnapshot, fetchSnapshot, remoteReady, repositoryPath, updateBusy, visible]);
+  }, [activeRepositoryPath, applySnapshot, fetchSnapshot, remoteReady, updateBusy, visible]);
+  const { anchorFor: repositoryRowAnchorFor, registerBranchButton, registerActionsButton, run: runRepositoryRowAction } = useGitRepositoryRowActions({
+    rootPath: repositoryPath,
+    activePath: activeRepositoryPath,
+    snapshotPath: snapshot?.repositoryPath ?? null,
+    busy: Boolean(busy),
+    backgroundRefreshing,
+    selectRepository,
+    fetchActiveRepository: fetchAndRefresh,
+    openOverlayRef: openRepositoryOverlayRef,
+  });
 
   useEffect(() => {
     if (remote) return;
@@ -599,14 +567,20 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
     window.requestAnimationFrame(() => discardReturnFocusRef.current?.focus());
   }
   const graphRows = useMemo(() => buildGitGraphRows(snapshot?.commits ?? []), [snapshot]);
-  const root = snapshot?.repositoryPath ?? repositoryPath;
+  const root = snapshot?.repositoryPath ?? activeRepositoryPath;
+  const parentRepositoryPath = activeRepositoryPath ? parentPathFor(activeRepositoryPath) : null;
+  useEffect(() => {
+    if (!snapshot || !parentRepositoryPath || !remoteReady) return;
+    let cancelled = false;
+    void loadSnapshot(parentRepositoryPath).then((parentSnapshot) => { if (!cancelled) registerRepositorySnapshot(parentSnapshot); }, () => undefined);
+    return () => { cancelled = true; };
+  }, [loadSnapshot, parentRepositoryPath, registerRepositorySnapshot, remoteReady, snapshot]);
   const {
     activeCommitOid, commitAnchorRefs, commitFilesCache, commitFilesKey, expandedCommitKey,
     commitTooltipId, commitTooltipRef, inspectedCommit, inspectedCommitFileCount,
     requestCommitFiles, setFocusedCommitOid, setHoveredCommitOid, toggleCommitFiles,
   } = useGitCommitInspection({ visible, snapshot, root, remote, remoteProfileId, loadCommitFiles });
   const disabled = Boolean(busy) || !remoteReady;
-  const submodules = snapshot?.submodules ?? [];
   const primaryAction = deriveGitPrimaryAction({
     snapshot,
     message,
@@ -683,11 +657,11 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
     }
   }
 
-  const repositoryAnchor = useCallback((kind = repositoryOverlay?.kind): HTMLButtonElement | null => {
+  const repositoryAnchor = useCallback((kind = repositoryOverlay?.kind, repositoryTarget = repositoryOverlay?.repositoryPath ?? activeRepositoryPath): HTMLButtonElement | null => {
     if (kind === "abortMerge") return mergeAbortButtonRef.current;
     if (kind === "createBranchFromCommit" && commitBranchSource) return commitAnchors.get(commitBranchSource.oid) ?? null;
-    return kind && branchOverlayKinds.has(kind) ? branchButtonRef.current : repositoryActionsButtonRef.current;
-  }, [commitAnchors, commitBranchSource, repositoryOverlay?.kind]);
+    return repositoryRowAnchorFor(kind, repositoryTarget);
+  }, [activeRepositoryPath, commitAnchors, commitBranchSource, repositoryOverlay?.kind, repositoryOverlay?.repositoryPath, repositoryRowAnchorFor]);
 
   function openCommitContextMenu(commit: GitCommit, anchorX: number, anchorY: number) {
     setRepositoryOverlay(null);
@@ -712,6 +686,7 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
     setError(null);
     setRepositoryOverlay({
       kind: "createBranchFromCommit",
+      repositoryPath: activeRepositoryPath ?? "",
       ...fitRepositoryOverlay(anchor.getBoundingClientRect(), 292, 202),
     });
   }
@@ -724,12 +699,13 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
     if (restoreFocus) window.requestAnimationFrame(() => anchor?.focus());
   }
 
-  function openRepositoryOverlay(kind: GitRepositoryOverlayKind) {
-    if (repositoryOverlay?.kind === kind) {
+  function openRepositoryOverlay(kind: GitRepositoryOverlayKind, repositoryTarget = repositoryOverlay?.repositoryPath ?? activeRepositoryPath) {
+    if (!repositoryTarget) return;
+    if (repositoryOverlay?.kind === kind && repositoryOverlay.repositoryPath === repositoryTarget) {
       closeRepositoryOverlay(true);
       return;
     }
-    const anchor = repositoryAnchor(kind);
+    const anchor = repositoryAnchor(kind, repositoryTarget);
     if (!anchor) return;
     setRepositorySubmenu(null);
     if (["createBranch", "createBranchFrom", "renameBranch", "deleteBranch", "publishBranch", "mergeBranch", "abortMerge"].includes(kind)) {
@@ -745,12 +721,12 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
       setMergeConfirmation(null);
       setMergeSourceRef(mergeSourceOptions[0]?.refName ?? "");
     }
-    const estimatedWidth = kind === "branches" ? 336 : kind === "repositoryActions" ? 210 : kind === "mergeBranch" ? 420 : 292;
-    const estimatedHeight = kind === "branches"
-      ? Math.min(376, 118 + branchOptions.length * 44)
-      : kind === "operationLog" ? 300 : kind === "repositoryActions" ? 222 : kind === "mergeBranch" ? 184 : 190;
-    setRepositoryOverlay({ kind, ...fitRepositoryOverlay(anchor.getBoundingClientRect(), estimatedWidth, estimatedHeight) });
+    const estimate = repositoryOverlayEstimate(kind, branchOptions.length);
+    setRepositoryOverlay({ kind, repositoryPath: repositoryTarget, ...fitRepositoryOverlay(anchor.getBoundingClientRect(), estimate.width, estimate.height) });
   }
+  useEffect(() => {
+    openRepositoryOverlayRef.current = openRepositoryOverlay;
+  });
 
   function openBranchManagementSubmenu(moveFocus: boolean) {
     if (repositoryOverlay?.kind !== "repositoryActions" || !branchManagementItemRef.current) return;
@@ -814,7 +790,7 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
     const overlay = repositoryOverlayRef.current;
     const next = fitRepositoryOverlay(anchor.getBoundingClientRect(), overlay.offsetWidth, overlay.offsetHeight);
     setRepositoryOverlay((current) => {
-      if (current?.kind !== repositoryOverlay.kind) return current;
+      if (current?.kind !== repositoryOverlay.kind || current.repositoryPath !== repositoryOverlay.repositoryPath) return current;
       if (current.left === next.left && current.top === next.top && current.placement === next.placement) return current;
       return { ...current, ...next };
     });
@@ -898,17 +874,45 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
     }
   }
 
-  function submoduleTarget(submodule: GitSubmodule): GitTarget | null {
-    if (!root || submodule.path.startsWith("/") || submodule.path.split("/").includes("..")) return null;
-    const path = `${root.replace(/[\\/]+$/, "")}/${submodule.path}`;
-    return remote && remoteProfileId
-      ? { type: "remote", profileId: remoteProfileId, path }
-      : { type: "local", path };
+  async function runSubmoduleOperation(name: string, node: GitRepositoryTreeNode, operation: (parentPath: string, relativePath: string) => Promise<GitSnapshot>, successDetail: string) {
+    if (!node.parentPath || !node.submodule || busyRef.current) return;
+    const request = ++epoch.current;
+    const recordId = beginOperation(name);
+    updateBusy(name);
+    setError(null);
+    try {
+      const parentSnapshot = await operation(node.parentPath, node.submodule.path);
+      if (request !== epoch.current) return;
+      registerRepositorySnapshot(parentSnapshot);
+      if (activeRepositoryPath === parentSnapshot.repositoryPath) applySnapshot(parentSnapshot);
+      if (activeRepositoryPath === node.path) {
+        const activeSnapshot = await loadSnapshot(node.path);
+        if (request !== epoch.current) return;
+        applySnapshot(activeSnapshot);
+      }
+      finishOperation(recordId, "success", successDetail);
+    } catch (cause) {
+      const failure = gitError(cause);
+      if (request === epoch.current) {
+        setError(failure);
+        finishOperation(recordId, "error", failure.message);
+        try {
+          const recoveredParent = await loadSnapshot(node.parentPath);
+          if (request === epoch.current) {
+            registerRepositorySnapshot(recoveredParent);
+            if (activeRepositoryPath === recoveredParent.repositoryPath) applySnapshot(recoveredParent);
+            setError(failure);
+          }
+        } catch { /* Keep the last known parent/child snapshots and the original failure. */ }
+      }
+    } finally {
+      if (request === epoch.current) updateBusy("");
+    }
   }
 
-  function openSubmodule(submodule: GitSubmodule) {
-    const next = submoduleTarget(submodule);
-    if (next) onTargetChangeRef.current(next);
+  function showRepositoryChanges(node: GitRepositoryTreeNode) {
+    if (node.path !== activeRepositoryPath) selectRepository(node.path);
+    setCollapsed((value) => ({ ...value, changes: false }));
   }
 
   if (available === false) return <GitEmpty icon="git" title="未找到系统 Git" detail="安装 Git 并重新打开 Qterm 后即可使用 Git 管理。"/>;
@@ -919,34 +923,29 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
 
   return <><div className="git-pane" data-block-id={blockId} data-busy={disabled || undefined} aria-busy={disabled}>
     <GitRepositorySection
-      root={root}
+      root={repositoryPath}
       repositoryPath={repositoryPath}
       snapshot={snapshot}
       collapsed={collapsed.repository}
-      branchLabel={branchLabel}
-      mergeInProgress={mergeInProgress}
       disabled={disabled}
-      updating={backgroundRefreshing || busy === "fetch"}
+      updatingPath={backgroundRefreshing || busy === "fetch" ? activeRepositoryPath : null}
       remote={remote}
       remoteReady={remoteReady}
       runtime={runtime}
       error={error}
       repositoryOverlay={repositoryOverlay}
-      branchButtonRef={branchButtonRef}
-      repositoryActionsButtonRef={repositoryActionsButtonRef}
+      repositoryNodes={repositoryNodes}
+      activeRepositoryPath={activeRepositoryPath}
       onToggle={() => setCollapsed((value) => ({ ...value, repository: !value.repository }))}
-      onFetch={() => void fetchAndRefresh()}
-      onOpenOverlay={openRepositoryOverlay}
+      onFetch={(node) => runRepositoryRowAction(node, "fetch")}
+      onOpenOverlay={(node, kind) => runRepositoryRowAction(node, kind)}
+      onShowChanges={showRepositoryChanges}
+      onRegisterBranchButton={registerBranchButton}
+      onRegisterActionsButton={registerActionsButton}
+      onSelectRepository={(node) => selectRepository(node.path)}
+      onToggleRepository={(node) => toggleRepositoryExpanded(node.path)}
+      onInitializeSubmodule={(node) => void runSubmoduleOperation("初始化子模块", node, initializeSubmodule, `已初始化 ${node.relativePath}`)}
     />
-    {snapshot && <GitSubmodulesSection
-      submodules={submodules}
-      collapsed={collapsed.submodules}
-      disabled={disabled}
-      onToggle={() => setCollapsed((value) => ({ ...value, submodules: !value.submodules }))}
-      onOpen={openSubmodule}
-      onInitialize={(submodule) => root && void runRecordedOperation("初始化子仓库", () => initializeSubmodule(root, submodule.path), `已初始化 ${submodule.path}`)}
-      onCheckout={(submodule) => root && void runRecordedOperation("检出子仓库记录版本", () => checkoutSubmodule(root, submodule.path), `已检出 ${submodule.path} 的记录版本`)}
-    />}
     <GitChangesSection
       snapshot={snapshot}
       collapsed={collapsed.changes}
@@ -1023,7 +1022,7 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
       blockId={blockId}
       snapshot={snapshot}
       root={root}
-      repositoryOverlay={repositoryOverlay}
+      repositoryOverlay={repositoryOverlay} repositoryNode={repositoryNodes.find((node) => node.path === repositoryOverlay?.repositoryPath) ?? null}
       repositorySubmenu={repositorySubmenu}
       mergeConfirmation={mergeConfirmation}
       commitBranchSource={commitBranchSource}
@@ -1086,6 +1085,7 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
         closeRepositoryOverlay(false);
         void synchronizeRepository();
       }}
+      onCheckoutSubmodule={(node) => { closeRepositoryOverlay(false); void runSubmoduleOperation("检出子模块记录版本", node, checkoutSubmodule, `已检出 ${node.relativePath} 的记录版本`); }}
       onCreateBranchAt={(name, sourceRef) => root
         ? runRecordedOperation("从分支创建", () => createBranchAt(root, name, sourceRef), `已从 ${sourceRef} 创建`)
         : Promise.resolve(false)}

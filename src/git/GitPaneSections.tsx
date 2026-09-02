@@ -3,11 +3,13 @@ import type { KeyboardEvent, MouseEvent, ReactNode, RefObject } from "react";
 import { createPortal } from "react-dom";
 
 import { Icon, type IconName } from "../components/Icon";
-import type { GitChange, GitSnapshot, GitSubmodule, GitSubmoduleIssue } from "../lib/tauri/git";
+import type { GitChange, GitSnapshot } from "../lib/tauri/git";
 import type { GitRuntime } from "../workspace/WorkspaceProvider";
 import { GitPrimaryActionButton } from "./GitPrimaryActionButton";
+import { GitRepositoryTree } from "./GitRepositoryTree";
+import type { GitRepositoryTreeNode } from "./gitRepositoryContext";
 import type { GitPrimaryAction, GitPrimaryAlternativeAction } from "./gitPrimaryAction";
-import { branchOverlayKinds, type GitRepositoryOverlay, type GitRepositoryOverlayKind } from "./gitPaneTypes";
+import type { GitRepositoryOverlay } from "./gitPaneTypes";
 import { presentGitFileStatus } from "./gitStatus";
 
 interface GitRepositorySectionProps {
@@ -15,20 +17,24 @@ interface GitRepositorySectionProps {
   repositoryPath: string;
   snapshot: GitSnapshot | null;
   collapsed: boolean;
-  branchLabel: string;
-  mergeInProgress: boolean;
   disabled: boolean;
-  updating: boolean;
+  updatingPath: string | null;
   remote: boolean;
   remoteReady: boolean;
   runtime?: GitRuntime;
   error: { code: string; message: string } | null;
   repositoryOverlay: GitRepositoryOverlay | null;
-  branchButtonRef: RefObject<HTMLButtonElement | null>;
-  repositoryActionsButtonRef: RefObject<HTMLButtonElement | null>;
+  repositoryNodes: GitRepositoryTreeNode[];
+  activeRepositoryPath: string | null;
   onToggle: () => void;
-  onFetch: () => void;
-  onOpenOverlay: (kind: GitRepositoryOverlayKind) => void;
+  onFetch: (node: GitRepositoryTreeNode) => void;
+  onOpenOverlay: (node: GitRepositoryTreeNode, kind: "branches" | "repositoryActions") => void;
+  onShowChanges: (node: GitRepositoryTreeNode) => void;
+  onRegisterBranchButton: (path: string, element: HTMLButtonElement | null) => void;
+  onRegisterActionsButton: (path: string, element: HTMLButtonElement | null) => void;
+  onSelectRepository: (node: GitRepositoryTreeNode) => void;
+  onToggleRepository: (node: GitRepositoryTreeNode) => void;
+  onInitializeSubmodule: (node: GitRepositoryTreeNode) => void;
 }
 
 export function GitRepositorySection({
@@ -36,96 +42,45 @@ export function GitRepositorySection({
   repositoryPath,
   snapshot,
   collapsed,
-  branchLabel,
-  mergeInProgress,
   disabled,
-  updating,
+  updatingPath,
   remote,
   remoteReady,
   runtime,
   error,
   repositoryOverlay,
-  branchButtonRef,
-  repositoryActionsButtonRef,
+  repositoryNodes,
+  activeRepositoryPath,
   onToggle,
   onFetch,
   onOpenOverlay,
+  onShowChanges,
+  onRegisterBranchButton,
+  onRegisterActionsButton,
+  onSelectRepository,
+  onToggleRepository,
+  onInitializeSubmodule,
 }: GitRepositorySectionProps) {
   return <GitSection className="git-repository-section" title="存储库" meta={root ?? repositoryPath} collapsed={collapsed} onToggle={onToggle}>
     <div className="git-repository-card">
-      <div className="git-repository-row">
-        <Icon name="git" size={15}/>
-        <span className="git-repository-name" data-updating={updating || undefined}>{snapshot?.repositoryName ?? repositoryPath}</span>
-        {snapshot && <button ref={branchButtonRef} type="button" className="git-branch-trigger" aria-label={`切换分支，当前 ${branchLabel}`} title={mergeInProgress ? "完成或中止当前合并后才能切换分支" : `切换分支 · ${branchLabel}`} aria-haspopup="dialog" aria-expanded={Boolean(repositoryOverlay && branchOverlayKinds.has(repositoryOverlay.kind))} disabled={disabled || mergeInProgress} onClick={() => onOpenOverlay("branches")}>
-          <Icon name="git" size={12}/><span>{branchLabel}</span>
-        </button>}
-        <div className="git-repository-actions">
-          {snapshot?.head.upstream && <span className="git-repository-sync" aria-label={`领先 ${snapshot.head.ahead} 个提交，落后 ${snapshot.head.behind} 个提交`} title={`领先 ${snapshot.head.ahead} · 落后 ${snapshot.head.behind}`}><span>↑{snapshot.head.ahead}</span><span>↓{snapshot.head.behind}</span></span>}
-          <button type="button" className="git-repository-refresh" data-updating={updating || undefined} aria-busy={updating || undefined} aria-label={updating ? "正在更新 Git 状态" : "刷新 Git 状态"} title={mergeInProgress ? "完成或中止当前合并后才能获取远程更新" : updating ? "正在更新仓库状态" : "获取远程更新并刷新"} disabled={disabled || updating || mergeInProgress} onClick={onFetch}><Icon name="sync" size={14}/></button>
-          {snapshot && <button ref={repositoryActionsButtonRef} type="button" aria-label="Git 仓库操作" title="Pull、Push、同步、合并、分支管理与操作记录" aria-haspopup="menu" aria-expanded={Boolean(repositoryOverlay && !branchOverlayKinds.has(repositoryOverlay.kind))} disabled={!remoteReady} onClick={() => onOpenOverlay("repositoryActions")}><Icon name="more" size={13}/></button>}
-        </div>
-      </div>
+      {repositoryNodes.some((node) => node.snapshot) ? <GitRepositoryTree
+        nodes={repositoryNodes}
+        activePath={activeRepositoryPath}
+        disabled={disabled}
+        updatingPath={updatingPath}
+        remoteReady={remoteReady}
+        repositoryOverlay={repositoryOverlay}
+        onSelect={onSelectRepository}
+        onToggle={onToggleRepository}
+        onInitialize={onInitializeSubmodule}
+        onFetch={onFetch}
+        onShowChanges={onShowChanges}
+        onOpenOverlay={onOpenOverlay}
+        onRegisterBranchButton={onRegisterBranchButton}
+        onRegisterActionsButton={onRegisterActionsButton}
+      /> : <div className="git-clean-state">正在读取仓库…</div>}
       {remote && runtime?.stale && <div className="git-feedback stale" role="status">连接已断开，当前内容可能已过期；重新连接后将自动刷新。</div>}
       {error && snapshot && <div className="git-feedback stale" role="status">上次 Git 操作失败，已保留并重新读取可用状态。</div>}
-    </div>
-  </GitSection>;
-}
-
-const submoduleIssueLabels: Record<GitSubmoduleIssue, string> = {
-  missingConfiguration: "缺少 .gitmodules 配置",
-  missingGitlink: "缺少 gitlink",
-  duplicatePath: "配置重复",
-  invalidPath: "路径无效",
-  unreadable: "状态不可读取",
-};
-
-function submoduleState(submodule: GitSubmodule): string {
-  if (submodule.issue) return submoduleIssueLabels[submodule.issue];
-  if (submodule.conflict) return "引用冲突";
-  if (!submodule.initialized) return "未初始化";
-  const details = [
-    submodule.commitChanged ? "记录版本已变化" : null,
-    submodule.trackedModified ? "内部有修改" : null,
-    submodule.untrackedContent ? "内部有未跟踪内容" : null,
-  ].filter(Boolean);
-  return details.join(" · ") || "干净";
-}
-
-function shortOid(oid: string | null): string {
-  return oid?.slice(0, 8) ?? "--------";
-}
-
-export function GitSubmodulesSection({ submodules, collapsed, disabled, onToggle, onOpen, onInitialize, onCheckout }: {
-  submodules: GitSubmodule[];
-  collapsed: boolean;
-  disabled: boolean;
-  onToggle: () => void;
-  onOpen: (submodule: GitSubmodule) => void;
-  onInitialize: (submodule: GitSubmodule) => void;
-  onCheckout: (submodule: GitSubmodule) => void;
-}) {
-  return <GitSection className={`git-submodules-section${submodules.length === 0 ? " empty" : ""}`} title={`子仓库 ${submodules.length}`} collapsed={collapsed} onToggle={onToggle}>
-    <div className="git-submodule-scroll" role="list" aria-label="Git 子仓库">
-      {submodules.map((submodule) => {
-        const state = submoduleState(submodule);
-        const actionable = !submodule.issue && !submodule.conflict;
-        const unavailableReason = submodule.issue ? submoduleIssueLabels[submodule.issue] : submodule.conflict ? "子仓库引用存在冲突" : undefined;
-        const checkoutReason = submodule.trackedModified || submodule.untrackedContent ? "请先打开子仓库处理未提交内容" : unavailableReason;
-        return <div className="git-submodule-row" role="listitem" key={submodule.path} data-attention={state !== "干净" || undefined}>
-          <Icon name="git" size={13}/>
-          <div className="git-submodule-copy">
-            <strong title={`${submodule.name} · ${submodule.path}`}>{submodule.name}</strong>
-            <span title={submodule.path}>{submodule.path}</span>
-          </div>
-          <div className="git-submodule-state" title={`记录 ${shortOid(submodule.recordedOid)} · 当前 ${shortOid(submodule.currentOid)}`}><span>{state}</span><code>当前 {shortOid(submodule.currentOid)} · 记录 {shortOid(submodule.recordedOid)}</code></div>
-          <div className="git-submodule-actions">
-            {submodule.initialized && <button type="button" aria-label={`打开 ${submodule.path}`} title={unavailableReason} disabled={disabled || Boolean(submodule.issue)} onClick={() => onOpen(submodule)}>打开</button>}
-            {!submodule.initialized && <button type="button" aria-label={`初始化 ${submodule.path}`} title={unavailableReason} disabled={disabled || !actionable} onClick={() => onInitialize(submodule)}>初始化</button>}
-            {submodule.initialized && submodule.commitChanged && <button type="button" aria-label={`检出记录版本 ${submodule.path}`} title={checkoutReason} disabled={disabled || !actionable || submodule.trackedModified || submodule.untrackedContent} onClick={() => onCheckout(submodule)}>检出记录版本</button>}
-          </div>
-        </div>;
-      })}
-      {submodules.length === 0 && <div className="git-submodule-empty">未登记直接子仓库</div>}
     </div>
   </GitSection>;
 }

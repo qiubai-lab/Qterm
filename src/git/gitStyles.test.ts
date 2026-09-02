@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 
 const gitStyleFiles = [
   "gitShell.css",
-  "gitSubmodules.css",
+  "gitRepositoryTree.css",
   "gitChangeSelection.css",
   "gitGraph.css",
   "gitTargetConfig.css",
@@ -310,13 +310,26 @@ describe("Git pane style contracts", () => {
   });
 
   it("uses an icon-and-text branch trigger and portaled floating layers", () => {
-    expect(declarations(".git-repository-actions")).toContain("display: flex");
-    expect(declarations(".git-repository-actions")).toContain("gap: 3px");
-    expect(declarations(".git-repository-row")).toContain("padding: 4px 6px");
-    expect(declarations(".git-repository-sync")).toContain("display: inline-flex");
-    expect(declarations(".git-repository-sync")).toContain("color: var(--accent)");
-    expect(declarations(".git-repository-sync")).toContain("background: color-mix(in srgb, var(--accent) 9%, transparent)");
-    expect(declarations(".git-repository-sync")).toContain("border: 1px solid color-mix(in srgb, var(--accent) 32%, var(--subtle))");
+    expect(declarations(".git-repository-node-controls,\n.git-repository-tree-actions")).toContain("display: flex");
+    expect(declarations(".git-repository-node-controls,\n.git-repository-tree-actions")).toContain("gap: 3px");
+    expect(declarations(".git-repository-treeitem")).toContain('grid-template-areas: "leading select actions"');
+    expect(declarations(".git-repository-tree")).toContain("gap: var(--git-repository-row-gap)");
+    expect(declarations('.git-repository-treeitem[data-depth="0"]')).toContain('grid-template-areas: "select actions"');
+    expect(declarations(".git-repository-tree-leading > svg")).toContain("color: color-mix(in srgb, var(--accent) 58%, var(--dim))");
+    expect(declarations(".git-repository-tree-leading > svg")).toContain("opacity: .76");
+    expect(styles).not.toContain(".git-repository-tree-branch");
+    expect(styles).toContain('.git-repository-treeitem[data-density="2"] .git-repository-sync');
+    expect(declarations('.git-repository-treeitem[data-depth="0"] .git-repository-tree-select')).toContain("padding-left: 8px");
+    const repositorySelection = declarations(".git-repository-selection-indicator");
+    expect(repositorySelection).toContain("position: absolute");
+    expect(repositorySelection).toContain("height: calc(var(--git-repository-row-height) - 2px)");
+    expect(repositorySelection).toContain("transform: translateY(calc(var(--git-repository-selected-index)");
+    expect(repositorySelection).toContain("transition: transform 180ms cubic-bezier(.22, 1, .36, 1)");
+    expect(styles.slice(styles.indexOf("@media (prefers-reduced-motion: reduce)"))).toContain(".git-repository-selection-indicator");
+    expect(declarations(".git-repository-status-group")).toContain("display: inline-flex");
+    expect(declarations(".git-repository-status-group")).toContain("color: var(--accent)");
+    expect(declarations(".git-repository-status-group")).toContain("background: color-mix(in srgb, var(--accent) 9%, transparent)");
+    expect(declarations(".git-repository-status-group .git-repository-sync")).toContain("border-left: 1px solid");
     expect(declarations(".git-branch-trigger")).toContain("display: flex");
     expect(declarations(".git-branch-trigger")).toContain("width: max-content");
     expect(declarations(".git-branch-trigger")).toContain("height: 19px");
@@ -324,7 +337,7 @@ describe("Git pane style contracts", () => {
     expect(declarations(".git-branch-trigger")).toContain("background: var(--primary-action)");
     expect(declarations(".git-branch-trigger")).toContain("color: var(--primary-action-contrast)");
     expect(declarations(".git-branch-trigger svg")).toContain("color: currentColor");
-    expect(styles).not.toContain(".git-repository-row select");
+    expect(styles).not.toContain(".git-repository-row");
     const popover = declarations(".git-repository-popover");
     expect(popover).toContain("position: fixed");
     expect(popover).toContain("z-index: 130");

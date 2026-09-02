@@ -1,0 +1,320 @@
+.git-repository-tree {
+  --git-repository-row-height: 30px;
+  --git-repository-row-gap: 2px;
+  --git-repository-name-budget: 104px;
+  --git-repository-branch-max: 132px;
+  --git-repository-branch-compact: 82px;
+  position: relative;
+  display: grid;
+  min-width: 0;
+  max-height: 188px;
+  gap: var(--git-repository-row-gap);
+  padding: 3px;
+  overflow: auto;
+  scrollbar-width: thin;
+}
+
+.git-repository-selection-indicator {
+  position: absolute;
+  z-index: 0;
+  top: 4px;
+  right: 3px;
+  left: 3px;
+  height: calc(var(--git-repository-row-height) - 2px);
+  border-radius: 4px;
+  background: var(--file-selection-surface);
+  box-shadow: inset 0 0 0 1px var(--file-selection-marker);
+  pointer-events: none;
+  transform: translateY(calc(var(--git-repository-selected-index) * (var(--git-repository-row-height) + var(--git-repository-row-gap))));
+  transition: transform 180ms cubic-bezier(.22, 1, .36, 1), background-color 140ms ease, box-shadow 140ms ease;
+  will-change: transform;
+}
+
+.git-repository-treeitem {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-areas: "leading select actions";
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  min-width: 0;
+  height: var(--git-repository-row-height);
+  align-items: center;
+  border-radius: 4px;
+  color: var(--muted);
+  transition: color 130ms ease, background-color 130ms ease, box-shadow 130ms ease;
+}
+
+.git-repository-treeitem[data-depth="0"] {
+  grid-template-areas: "select actions";
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.git-repository-treeitem:not([data-selected="true"]):hover {
+  color: var(--text-strong);
+  background: var(--file-active-surface);
+  box-shadow: inset 2px 0 color-mix(in srgb, var(--file-active-marker) 72%, transparent);
+}
+
+.git-repository-treeitem[data-selected="true"],
+.git-repository-treeitem[data-selected="true"]:hover {
+  color: var(--file-selection-foreground);
+  background: transparent;
+  box-shadow: none;
+}
+
+.git-repository-tree-leading {
+  position: relative;
+  display: grid;
+  width: calc(var(--git-repository-depth) * 13px + 7px);
+  height: 100%;
+  grid-area: leading;
+  place-items: center end;
+}
+
+.git-repository-tree-leading > svg {
+  color: color-mix(in srgb, var(--accent) 58%, var(--dim));
+  opacity: .76;
+}
+
+.git-repository-tree-select {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 14px minmax(0, 1fr);
+  grid-area: select;
+  align-items: center;
+  gap: 5px;
+  align-self: stretch;
+  padding: 3px 5px 3px 4px;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  text-align: left;
+}
+
+.git-repository-treeitem[data-depth="0"] .git-repository-tree-select {
+  padding-left: 8px;
+}
+
+.git-repository-tree-select:focus-visible,
+.git-repository-treeitem button:focus-visible {
+  border-radius: 4px;
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+.git-repository-treeitem[aria-disabled="true"] .git-repository-tree-select {
+  color: var(--text-disabled);
+  cursor: not-allowed;
+}
+
+.git-repository-tree-toggle {
+  position: relative;
+  display: grid;
+  width: 17px;
+  height: 17px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: var(--muted);
+  background: transparent;
+}
+
+.git-repository-tree-toggle svg {
+  transform: rotate(-90deg);
+  transition: transform 160ms cubic-bezier(.22, 1, .36, 1);
+}
+
+.git-repository-treeitem[aria-expanded="true"] .git-repository-tree-toggle svg {
+  transform: none;
+}
+
+.git-repository-tree-select > svg {
+  color: var(--accent);
+}
+
+.git-repository-treeitem[data-selected="true"] .git-repository-tree-select > svg {
+  color: var(--file-selection-marker);
+}
+
+.git-repository-tree-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.git-repository-tree-copy strong,
+.git-repository-tree-copy span,
+.git-repository-tree-state {
+  grid-column: 3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.git-repository-tree-copy strong {
+  color: var(--text);
+  font-size: 9.5px;
+  font-weight: 700;
+}
+
+.git-repository-treeitem[data-selected="true"] .git-repository-tree-copy strong {
+  color: var(--file-selection-foreground);
+}
+
+.git-repository-tree-copy span {
+  color: var(--dim);
+  font: 8px/1.2 SFMono-Regular, Consolas, monospace;
+}
+
+.git-repository-tree-state {
+  max-width: 132px;
+  color: var(--muted);
+  font-size: 8px;
+}
+
+.git-repository-treeitem[data-attention="true"] .git-repository-tree-state {
+  color: var(--warning);
+}
+
+.git-repository-node-controls,
+.git-repository-tree-actions {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 3px;
+  grid-area: actions;
+  padding-right: 4px;
+}
+
+.git-repository-node-controls > *,
+.git-repository-tree-actions > * {
+  flex: none;
+}
+
+.git-repository-node-controls > button:not(.git-branch-trigger),
+.git-repository-tree-actions button {
+  min-width: 23px;
+  min-height: 22px;
+  padding: 0 5px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: var(--muted);
+  background: transparent;
+  font-size: 8px;
+}
+
+:is(.git-repository-node-controls, .git-repository-tree-actions) button,
+.git-repository-tree-toggle {
+  --git-repository-button-edge: var(--accent);
+  appearance: none;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+:is(.git-repository-node-controls, .git-repository-tree-actions) button:is(:hover, :active):not(:disabled),
+.git-repository-tree-toggle:is(:hover, :active):not(:disabled) {
+  transform: none;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--git-repository-button-edge) 60%, transparent);
+}
+
+.git-repository-node-controls > .git-branch-trigger {
+  --git-repository-button-edge: var(--primary-action);
+  box-shadow: none;
+}
+
+.git-repository-node-controls > .git-branch-trigger:is(:hover, :active, [aria-expanded="true"]):not(:disabled) {
+  border-color: var(--primary-action);
+  color: var(--primary-action-contrast);
+  background: var(--primary-action);
+  /* Paint outside the filled surface so the highlight cannot blend into it. */
+  box-shadow: 0 0 0 1px var(--git-repository-button-edge);
+}
+
+:is(.git-repository-node-controls, .git-repository-tree-actions) button:active:not(:disabled),
+.git-repository-tree-toggle:active:not(:disabled) {
+  transform: none;
+  box-shadow: inset 0 0 0 1px var(--git-repository-button-edge);
+}
+
+.git-repository-node-controls > .git-branch-trigger:active:not(:disabled) {
+  transform: none;
+  box-shadow: 0 0 0 2px var(--git-repository-button-edge);
+  transition: none;
+}
+
+.git-repository-status-group {
+  box-sizing: border-box;
+  display: inline-flex;
+  height: 19px;
+  flex: none;
+  align-items: center;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--accent) 32%, var(--subtle));
+  border-radius: 4px;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
+  box-shadow: inset 0 1px color-mix(in srgb, var(--text) 4%, transparent);
+}
+
+.git-repository-change-count {
+  display: inline-flex;
+  height: 17px;
+  gap: 3px;
+  align-items: center;
+  padding: 0 5px;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font-size: 8px;
+  white-space: nowrap;
+}
+
+.git-repository-change-count strong {
+  font-family: SFMono-Regular, Consolas, monospace;
+  font-size: 8.5px;
+}
+
+.git-repository-status-group .git-repository-sync {
+  height: 17px;
+  padding-right: 5px;
+  padding-left: 5px;
+  border: 0;
+  border-left: 1px solid color-mix(in srgb, var(--accent) 26%, var(--subtle));
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.git-repository-node-controls .git-branch-trigger {
+  max-width: var(--git-repository-branch-max);
+}
+
+.git-repository-treeitem:not([data-density="0"]) .git-branch-trigger {
+  max-width: var(--git-repository-branch-compact);
+}
+
+.git-repository-treeitem:not([data-density="0"]) .git-repository-tree-state,
+.git-repository-treeitem[data-density="2"] .git-repository-sync,
+.git-repository-treeitem[data-density="3"] .git-repository-sync,
+.git-repository-treeitem[data-density="3"] .git-repository-status-group {
+  /* Keep intrinsic geometry measurable without occupying space or keyboard focus. */
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: max-content;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .git-repository-selection-indicator,
+  .git-repository-treeitem,
+  .git-repository-tree-toggle svg,
+  .git-repository-tree-toggle,
+  :is(.git-repository-node-controls, .git-repository-tree-actions) button {
+    transition: none;
+    will-change: auto;
+  }
+}

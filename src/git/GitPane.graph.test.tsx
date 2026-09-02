@@ -81,7 +81,7 @@ describe("GitPane commit graph", () => {
     render(<GitPane blockId="git-1" target={{ type: "local", path: "D:/work/project" }} visible onTargetChange={vi.fn()}/>);
     await screen.findByText("project");
     fireEvent.click(screen.getByRole("button", { name: "图表" }));
-    const commit = screen.getByRole("button", { name: /fix: historical commit/ });
+    const commit = await screen.findByRole("button", { name: /fix: historical commit/ });
 
     fireEvent.pointerEnter(commit);
     expect(screen.getByRole("tooltip")).toBeInTheDocument();
@@ -122,7 +122,7 @@ describe("GitPane commit graph", () => {
     render(<GitPane blockId="git-1" target={{ type: "local", path: "D:/work/project" }} visible onTargetChange={vi.fn()}/>);
     await screen.findByText("project");
     fireEvent.click(screen.getByRole("button", { name: "图表" }));
-    const commit = screen.getByRole("button", { name: /fix: historical commit/ });
+    const commit = await screen.findByRole("button", { name: /fix: historical commit/ });
     commit.focus();
     fireEvent.keyDown(commit, { key: "ContextMenu" });
     let menu = screen.getByRole("menu", { name: "fix: historical commit 提交菜单" });

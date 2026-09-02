@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-export type IconName = "workspace" | "plus" | "terminal" | "git" | "mergeConflict" | "browser" | "computer" | "server" | "network" | "connections" | "files" | "file" | "filePlus" | "folderPlus" | "edit" | "save" | "check" | "checkCircle" | "copy" | "upload" | "download" | "key" | "lock" | "trash" | "clear" | "back" | "forward" | "chevronDown" | "refresh" | "sync" | "search" | "disconnect" | "settings" | "help" | "splitHorizontal" | "splitVertical" | "menu" | "pin" | "windowMinimize" | "windowMaximize" | "close" | "more" | "eye" | "eyeOff";
+export type IconName = "workspace" | "plus" | "terminal" | "git" | "submodule" | "mergeConflict" | "browser" | "computer" | "server" | "network" | "connections" | "files" | "file" | "filePlus" | "folderPlus" | "edit" | "save" | "check" | "checkCircle" | "copy" | "upload" | "download" | "key" | "lock" | "trash" | "clear" | "back" | "forward" | "chevronDown" | "refresh" | "sync" | "search" | "disconnect" | "settings" | "help" | "splitHorizontal" | "splitVertical" | "menu" | "pin" | "windowMinimize" | "windowMaximize" | "close" | "more" | "eye" | "eyeOff";
 
 export function Icon({ name, size = 16 }: { name: IconName; size?: number }) {
   const paths: Record<IconName, ReactNode> = {
@@ -8,6 +8,7 @@ export function Icon({ name, size = 16 }: { name: IconName; size?: number }) {
     plus: <path d="M12 5v14M5 12h14"/>,
     terminal: <><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3M13 15h4"/></>,
     git: <><circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="12" r="2"/><path d="M6 7v10M8 7c0 3 2 5 8 5"/></>,
+    submodule: <><circle cx="7" cy="7" r="2"/><circle cx="17" cy="17" r="2"/><path d="M7 9v2.5a5.5 5.5 0 0 0 5.5 5.5H15"/></>,
     mergeConflict: <><circle cx="6" cy="5" r="1.8"/><circle cx="6" cy="19" r="1.8"/><circle cx="18" cy="12" r="1.8"/><path d="M6 7v10M8 7c0 2.8 1.8 5 8 5M12 8.5v3M12 14.8h.01"/></>,
     browser: <><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M3 9h18M7 6.5h.01M10 6.5h.01"/></>,
     computer: <><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></>,

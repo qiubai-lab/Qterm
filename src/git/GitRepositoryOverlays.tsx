@@ -8,6 +8,7 @@ import { RequiredFieldLabel } from "../components/RequiredFieldLabel";
 import { DialogActionStatus, DialogFrame } from "../components/dialogs/DialogFrame";
 import type { GitBranch, GitCommit, GitSnapshot } from "../lib/tauri/git";
 import { GitRemoteConfigurationHint, gitRemoteConfigurationHint } from "./GitRemoteConfigurationHint";
+import { gitSubmoduleUnavailableReason, type GitRepositoryTreeNode } from "./gitRepositoryContext";
 import {
   formatRelativeCommitTime,
   operationStatusLabel,
@@ -25,6 +26,7 @@ interface GitRepositoryOverlaysProps {
   snapshot: GitSnapshot | null;
   root: string | null;
   repositoryOverlay: GitRepositoryOverlay | null;
+  repositoryNode: GitRepositoryTreeNode | null;
   repositorySubmenu: GitRepositorySubmenu | null;
   mergeConfirmation: GitMergeConfirmation | null;
   commitBranchSource: GitCommit | null;
@@ -71,6 +73,7 @@ interface GitRepositoryOverlaysProps {
   onPull: () => void;
   onPush: () => void;
   onSynchronize: () => void;
+  onCheckoutSubmodule: (node: GitRepositoryTreeNode) => void;
   onCreateBranchAt: (name: string, sourceRef: string) => Promise<boolean>;
   onCreateBranchFromCommit: (name: string, oid: string) => Promise<boolean>;
   onRenameBranch: (refName: string, name: string) => Promise<boolean>;
@@ -113,7 +116,7 @@ export function GitRepositoryOverlays(props: GitRepositoryOverlaysProps) {
 
 function GitRepositoryOverlayContent(props: GitRepositoryOverlaysProps) {
   const {
-    blockId, snapshot, root, repositoryOverlay, repositorySubmenu, mergeConfirmation, commitBranchSource, repositoryOverlayRef,
+    blockId, snapshot, root, repositoryOverlay, repositoryNode, repositorySubmenu, mergeConfirmation, commitBranchSource, repositoryOverlayRef,
     repositorySubmenuRef, branchManagementItemRef, repositorySubmenuId, branchQuery, newBranch,
     branchSourceRef, selectedBranchRef, selectedRemote, mergeSourceRef, branchLabel, disabled, error,
     mergeInProgress, mergeWorktreeClean, branchOptions, visibleBranches, visibleLocalBranches,
@@ -121,7 +124,7 @@ function GitRepositoryOverlayContent(props: GitRepositoryOverlaysProps) {
     selectedMergeSource, operations, onBranchQueryChange, onNewBranchChange, onBranchSourceRefChange,
     onSelectedBranchRefChange, onSelectedRemoteChange, onMergeSourceRefChange, onMergeConfirmationChange,
     onOpenOverlay, onCloseOverlay, onOpenBranchSubmenu, onCloseBranchSubmenu, onDismissBranchSubmenu,
-    onNavigateMenu, onSelectBranch, onCreateBranch, onPull, onPush, onSynchronize, onCreateBranchAt, onCreateBranchFromCommit,
+    onNavigateMenu, onSelectBranch, onCreateBranch, onPull, onPush, onSynchronize, onCheckoutSubmodule, onCreateBranchAt, onCreateBranchFromCommit,
     onRenameBranch, onDeleteBranch, onPublishBranch, onAbortMerge,
   } = props;
   if (!repositoryOverlay) return null;
@@ -173,6 +176,8 @@ function GitRepositoryOverlayContent(props: GitRepositoryOverlaysProps) {
   if (repositoryOverlay.kind === "repositoryActions") {
     const tracked = Boolean(snapshot?.head.upstream);
     const remoteConfigurationRequired = Boolean(snapshot && snapshot.remotes.length === 0);
+    const submodule = repositoryNode?.submodule;
+    const checkoutReason = submodule?.trackedModified || submodule?.untrackedContent ? "请先在子模块中处理未提交内容" : submodule ? gitSubmoduleUnavailableReason(submodule) : undefined;
     return <><div ref={overlayRef} className="git-repository-popover git-repository-action-popover" role="menu" aria-label="存储库操作" onKeyDown={onNavigateMenu} {...common}>
       <div className="git-repository-popover-title"><Icon name="git" size={13}/><strong>存储库操作</strong></div>
       <GitRemoteConfigurationHint active={remoteConfigurationRequired}><button type="button" className="git-repository-action-item" role="menuitem" data-remote-configuration-required={remoteConfigurationRequired || undefined} aria-disabled={disabled || mergeInProgress || !tracked || undefined} disabled={disabled || mergeInProgress || !tracked && !remoteConfigurationRequired} title={remoteConfigurationRequired ? gitRemoteConfigurationHint : undefined} onPointerEnter={onDismissBranchSubmenu} onClick={() => tracked && onPull()}><Icon name="download" size={12}/><span>拉取</span></button></GitRemoteConfigurationHint>
@@ -180,6 +185,7 @@ function GitRepositoryOverlayContent(props: GitRepositoryOverlaysProps) {
         ? <GitRemoteConfigurationHint active={remoteConfigurationRequired}><button type="button" className="git-repository-action-item" role="menuitem" data-remote-configuration-required={remoteConfigurationRequired || undefined} aria-disabled={disabled || mergeInProgress || remoteConfigurationRequired || undefined} disabled={disabled || mergeInProgress} title={remoteConfigurationRequired ? gitRemoteConfigurationHint : undefined} onPointerEnter={onDismissBranchSubmenu} onClick={() => !remoteConfigurationRequired && onPush()}><Icon name="upload" size={12}/><span>推送</span></button></GitRemoteConfigurationHint>
         : <GitRemoteConfigurationHint active={remoteConfigurationRequired}><button type="button" className="git-repository-action-item" role="menuitem" data-remote-configuration-required={remoteConfigurationRequired || undefined} aria-disabled={disabled || mergeInProgress || !snapshot?.remotes.length || undefined} disabled={disabled || mergeInProgress || !snapshot?.remotes.length && !remoteConfigurationRequired} title={remoteConfigurationRequired ? gitRemoteConfigurationHint : undefined} onPointerEnter={onDismissBranchSubmenu} onClick={() => !remoteConfigurationRequired && onOpenOverlay("publishBranch")}><Icon name="upload" size={12}/><span>发布分支…</span></button></GitRemoteConfigurationHint>}
       <GitRemoteConfigurationHint active={remoteConfigurationRequired}><button type="button" className="git-repository-action-item" role="menuitem" data-remote-configuration-required={remoteConfigurationRequired || undefined} aria-disabled={disabled || mergeInProgress || !tracked || undefined} disabled={disabled || mergeInProgress || !tracked && !remoteConfigurationRequired} title={remoteConfigurationRequired ? gitRemoteConfigurationHint : undefined} onPointerEnter={onDismissBranchSubmenu} onClick={() => tracked && onSynchronize()}><Icon name="sync" size={12}/><span>同步</span></button></GitRemoteConfigurationHint>
+      {submodule?.initialized && submodule.commitChanged && <button type="button" className="git-repository-action-item" role="menuitem" disabled={disabled || Boolean(checkoutReason)} title={checkoutReason} onPointerEnter={onDismissBranchSubmenu} onClick={() => repositoryNode && onCheckoutSubmodule(repositoryNode)}><Icon name="back" size={12}/><span>检出记录版本</span></button>}
       <button type="button" className="git-repository-action-item" role="menuitem" disabled={disabled || mergeInProgress || mergeSourceOptions.length === 0} onPointerEnter={onDismissBranchSubmenu} onClick={() => onOpenOverlay("mergeBranch")}><Icon name="git" size={12}/><span>合并分支…</span></button>
       <div className="git-repository-action-separator" role="separator"/>
       <button ref={branchManagementItemRef} type="button" className="git-repository-action-item" role="menuitem" disabled={mergeInProgress} aria-haspopup="menu" aria-expanded={Boolean(repositorySubmenu)} aria-controls={repositorySubmenuId} onPointerEnter={() => onOpenBranchSubmenu(false)} onKeyDown={(event) => {

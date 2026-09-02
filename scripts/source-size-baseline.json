@@ -20,7 +20,7 @@
     "src/git/styles/gitChangePreview.css": 574,
     "src/git/styles/gitGraph.css": 631,
     "src/git/styles/gitRepositoryPicker.css": 508,
-    "src/git/styles/gitShell.css": 901,
+    "src/git/styles/gitShell.css": 879,
     "src/terminal/TerminalPanel.test.tsx": 889,
     "src/terminal/TerminalPanel.tsx": 776,
     "src/workspace/LayoutView.test.tsx": 808,

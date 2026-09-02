@@ -19,7 +19,7 @@ describe("GitPane branches and repository actions", () => {
     });
     render(<GitPane blockId="git-1" target={{ type: "local", path: "D:/work/project" }} visible onTargetChange={vi.fn()}/>);
     const repositoryName = await screen.findByText("project");
-    const repositoryRow = repositoryName.closest(".git-repository-row");
+    const repositoryRow = repositoryName.closest('[role="treeitem"]');
     const branchTrigger = screen.getByRole("button", { name: "切换分支，当前 main" });
     expect(repositoryRow?.closest(".git-repository-card")).toBeInTheDocument();
     expect(repositoryRow).toContainElement(branchTrigger);
