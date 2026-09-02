@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { GitChange, GitChangeDiff, GitCommit, GitCommitFile } from "../lib/tauri/git";
@@ -81,6 +81,20 @@ describe("GitChangePreview", () => {
     await waitFor(() => expect(screen.getByText("HEAD")).toBeInTheDocument());
     expect(firstLoader).toHaveBeenCalledTimes(1);
     expect(secondLoader).not.toHaveBeenCalled();
+  });
+
+  it("does not reload or clear the rendered diff for semantically identical cloned entries", async () => {
+    const onLoad = vi.fn().mockResolvedValue(detail(changes[0]));
+    const view = render(<GitChangePreview changes={changes.map((change) => ({ ...change }))} initialChange={{ ...changes[0] }} repositoryName="project" onLoad={onLoad} onClose={vi.fn()}/>);
+    expect(await screen.findByText("HEAD")).toBeInTheDocument();
+    expect(onLoad).toHaveBeenCalledTimes(1);
+
+    view.rerender(<GitChangePreview changes={changes.map((change) => ({ ...change }))} initialChange={{ ...changes[0] }} repositoryName="project" onLoad={onLoad} onClose={vi.fn()}/>);
+    await act(async () => { await Promise.resolve(); });
+
+    expect(onLoad).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("HEAD")).toBeInTheDocument();
+    expect(screen.queryByText("正在读取差异…")).not.toBeInTheDocument();
   });
 
   it("compares commit files with the first parent and navigates the commit file set", async () => {

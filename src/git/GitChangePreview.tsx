@@ -87,18 +87,23 @@ export function GitChangePreview(props: GitChangePreviewProps) {
   const [filesExpanded, setFilesExpanded] = useState(false);
   const [reloadNonce, setReloadNonce] = useState(0);
   const loadSequence = useRef(0);
-  const loaderRef = useRef<(entry: PreviewEntry) => Promise<PreviewDetail>>(() => Promise.reject(new Error("预览尚未初始化")));
+  const loaderRef = useRef<(path: string, staged: boolean) => Promise<PreviewDetail>>(() => Promise.reject(new Error("预览尚未初始化")));
   const loadWorking = commitMode ? null : props.onLoad;
   const loadCommit = commitMode ? props.onLoadCommit : null;
+  const selectedPath = selected?.path ?? "";
+  const selectedStaged = Boolean(selected?.staged);
+  const selectedLoadKey = selected
+    ? `${commitMode ? commitOid : "working"}:${selected.key}:${selected.status}:${selected.originalPath ?? ""}`
+    : "";
 
   useEffect(() => {
     loaderRef.current = commitMode
-      ? async (entry) => normalizeCommitDiff(await loadCommit!(entry.path))
-      : async (entry) => normalizeChangeDiff(await loadWorking!(entry.path, Boolean(entry.staged)));
+      ? async (path) => normalizeCommitDiff(await loadCommit!(path))
+      : async (path, staged) => normalizeChangeDiff(await loadWorking!(path, staged));
   }, [commitMode, loadCommit, loadWorking]);
 
   useEffect(() => {
-    if (!selected) {
+    if (!selectedLoadKey) {
       return;
     }
     const request = ++loadSequence.current;
@@ -109,7 +114,7 @@ export function GitChangePreview(props: GitChangePreviewProps) {
       setMessage("");
       setDetail(null);
       try {
-        const next = await loaderRef.current(selected);
+        const next = await loaderRef.current(selectedPath, selectedStaged);
         if (!cancelled && request === loadSequence.current) setDetail(next);
       } catch (reason) {
         if (!cancelled && request === loadSequence.current) setMessage(gitError(reason).message);
@@ -118,7 +123,7 @@ export function GitChangePreview(props: GitChangePreviewProps) {
       }
     });
     return () => { cancelled = true; };
-  }, [reloadNonce, selected]);
+  }, [reloadNonce, selectedLoadKey, selectedPath, selectedStaged]);
 
   function select(entry: PreviewEntry) {
     setSelectedKey(entry.key);

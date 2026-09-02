@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import type { GitSnapshot } from "../lib/tauri/git";
@@ -81,6 +81,127 @@ describe("GitPane branches and repository actions", () => {
     fireEvent.focus(window);
     await waitFor(() => expect(api.snapshot).toHaveBeenCalledTimes(3));
     intervalSpy.mockRestore();
+  });
+
+  it("keeps Git actions stable and coalesces background refresh triggers", async () => {
+    const pending = deferred<GitSnapshot>();
+    api.snapshot.mockResolvedValueOnce(snapshot).mockReturnValueOnce(pending.promise);
+    const intervalSpy = vi.spyOn(window, "setInterval");
+    try {
+      render(<GitPane blockId="git-background" target={{ type: "local", path: "D:/work/project" }} visible onTargetChange={vi.fn()}/>);
+      await screen.findByText("project");
+      const primary = document.querySelector<HTMLButtonElement>(".git-primary-action")!;
+      const primaryLabel = primary.textContent;
+      const stage = screen.getByRole("button", { name: "暂存 src/new.ts" });
+
+      fireEvent.focus(window);
+      await waitFor(() => expect(api.snapshot).toHaveBeenCalledTimes(2));
+      const updating = screen.getByRole("button", { name: "正在更新 Git 状态" });
+      expect(updating).toHaveAttribute("data-updating", "true");
+      expect(stage).not.toBeDisabled();
+      expect(document.querySelector(".git-primary-action")).toBe(primary);
+      expect(primary).toHaveTextContent(primaryLabel ?? "");
+
+      fireEvent.focus(window);
+      const intervalCall = intervalSpy.mock.calls.find(([, delay]) => delay === 15_000);
+      if (typeof intervalCall?.[0] === "function") intervalCall[0]();
+      await act(async () => { await Promise.resolve(); });
+      expect(api.snapshot).toHaveBeenCalledTimes(2);
+
+      pending.resolve(structuredClone(snapshot));
+      await waitFor(() => expect(screen.getByRole("button", { name: "刷新 Git 状态" })).not.toHaveAttribute("data-updating"));
+      expect(document.querySelector(".git-primary-action")).toBe(primary);
+      expect(primary).toHaveTextContent(primaryLabel ?? "");
+    } finally {
+      intervalSpy.mockRestore();
+    }
+  });
+
+  it("pauses background reads while the document is hidden and refreshes when it becomes visible", async () => {
+    let visibility: DocumentVisibilityState = "visible";
+    const visibilitySpy = vi.spyOn(document, "visibilityState", "get").mockImplementation(() => visibility);
+    const intervalSpy = vi.spyOn(window, "setInterval");
+    try {
+      render(<GitPane blockId="git-visibility" target={{ type: "local", path: "D:/work/project" }} visible onTargetChange={vi.fn()}/>);
+      await screen.findByText("project");
+      expect(api.snapshot).toHaveBeenCalledTimes(1);
+
+      visibility = "hidden";
+      const intervalCall = intervalSpy.mock.calls.find(([, delay]) => delay === 15_000);
+      if (typeof intervalCall?.[0] === "function") intervalCall[0]();
+      fireEvent.focus(window);
+      fireEvent(document, new Event("visibilitychange"));
+      await act(async () => { await Promise.resolve(); });
+      expect(api.snapshot).toHaveBeenCalledTimes(1);
+
+      visibility = "visible";
+      fireEvent(document, new Event("visibilitychange"));
+      await waitFor(() => expect(api.snapshot).toHaveBeenCalledTimes(2));
+    } finally {
+      intervalSpy.mockRestore();
+      visibilitySpy.mockRestore();
+    }
+  });
+
+  it("keeps the last snapshot when a background refresh fails", async () => {
+    api.snapshot.mockResolvedValueOnce(snapshot).mockRejectedValueOnce({ code: "gitCommandFailed", message: "后台读取失败" });
+    render(<GitPane blockId="git-stale" target={{ type: "local", path: "D:/work/project" }} visible onTargetChange={vi.fn()}/>);
+    await screen.findByText("project");
+
+    fireEvent.focus(window);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("后台读取失败");
+    expect(screen.getByText("project")).toBeInTheDocument();
+    expect(screen.getByText("src/staged.ts")).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("上次 Git 操作失败");
+  });
+
+  it("does not reload an open preview after an equivalent background snapshot", async () => {
+    api.snapshot.mockResolvedValueOnce(snapshot).mockResolvedValueOnce(structuredClone(snapshot));
+    render(<GitPane blockId="git-preview-refresh" target={{ type: "local", path: "D:/work/project" }} visible onTargetChange={vi.fn()}/>);
+    await screen.findByText("project");
+    const preview = screen.getByRole("button", { name: "预览已暂存更改 src/staged.ts" });
+    fireEvent.click(preview);
+    fireEvent.click(preview);
+    await screen.findByText("HEAD");
+    expect(api.changeDiff).toHaveBeenCalledTimes(1);
+
+    fireEvent.focus(window);
+    await waitFor(() => expect(api.snapshot).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.getByRole("button", { name: "刷新 Git 状态" })).not.toHaveAttribute("data-updating"));
+    await act(async () => { await Promise.resolve(); });
+
+    expect(api.changeDiff).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("HEAD")).toBeInTheDocument();
+  });
+
+  it("applies a background snapshot after its presented repository state changes", async () => {
+    api.snapshot.mockResolvedValueOnce(snapshot).mockResolvedValueOnce({ ...snapshot, repositoryName: "updated-project" });
+    render(<GitPane blockId="git-changed-refresh" target={{ type: "local", path: "D:/work/project" }} visible onTargetChange={vi.fn()}/>);
+    await screen.findByText("project");
+
+    fireEvent.focus(window);
+
+    expect(await screen.findByText("updated-project")).toBeInTheDocument();
+    expect(screen.queryByText("project", { selector: ".git-repository-name" })).not.toBeInTheDocument();
+  });
+
+  it("lets a foreground mutation win over an older background snapshot", async () => {
+    const pending = deferred<GitSnapshot>();
+    const mutated = { ...snapshot, repositoryName: "mutated-project" };
+    api.snapshot.mockResolvedValueOnce(snapshot).mockReturnValueOnce(pending.promise);
+    api.stage.mockResolvedValueOnce(mutated);
+    render(<GitPane blockId="git-background-race" target={{ type: "local", path: "D:/work/project" }} visible onTargetChange={vi.fn()}/>);
+    await screen.findByText("project");
+
+    fireEvent.focus(window);
+    await waitFor(() => expect(api.snapshot).toHaveBeenCalledTimes(2));
+    fireEvent.click(screen.getByRole("button", { name: "暂存 src/new.ts" }));
+    expect(await screen.findByText("mutated-project")).toBeInTheDocument();
+
+    pending.resolve(snapshot);
+    await waitFor(() => expect(screen.getByRole("button", { name: "刷新 Git 状态" })).not.toHaveAttribute("data-updating"));
+    expect(screen.getByText("mutated-project")).toBeInTheDocument();
   });
 
   it("explains missing remote configuration from the aggregate action and repository menu", async () => {

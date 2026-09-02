@@ -18,7 +18,7 @@ interface GitRepositorySectionProps {
   branchLabel: string;
   mergeInProgress: boolean;
   disabled: boolean;
-  busy: string;
+  updating: boolean;
   remote: boolean;
   remoteReady: boolean;
   runtime?: GitRuntime;
@@ -39,7 +39,7 @@ export function GitRepositorySection({
   branchLabel,
   mergeInProgress,
   disabled,
-  busy,
+  updating,
   remote,
   remoteReady,
   runtime,
@@ -51,7 +51,6 @@ export function GitRepositorySection({
   onFetch,
   onOpenOverlay,
 }: GitRepositorySectionProps) {
-  const updating = Boolean(busy);
   return <GitSection className="git-repository-section" title="存储库" meta={root ?? repositoryPath} collapsed={collapsed} onToggle={onToggle}>
     <div className="git-repository-card">
       <div className="git-repository-row">
@@ -62,7 +61,7 @@ export function GitRepositorySection({
         </button>}
         <div className="git-repository-actions">
           {snapshot?.head.upstream && <span className="git-repository-sync" aria-label={`领先 ${snapshot.head.ahead} 个提交，落后 ${snapshot.head.behind} 个提交`} title={`领先 ${snapshot.head.ahead} · 落后 ${snapshot.head.behind}`}><span>↑{snapshot.head.ahead}</span><span>↓{snapshot.head.behind}</span></span>}
-          <button type="button" className="git-repository-refresh" data-updating={updating || undefined} aria-label={updating ? "正在更新 Git 状态" : "刷新 Git 状态"} title={mergeInProgress ? "完成或中止当前合并后才能获取远程更新" : updating ? "正在更新仓库状态" : "获取远程更新并刷新"} disabled={disabled || mergeInProgress} onClick={onFetch}><Icon name="sync" size={14}/></button>
+          <button type="button" className="git-repository-refresh" data-updating={updating || undefined} aria-busy={updating || undefined} aria-label={updating ? "正在更新 Git 状态" : "刷新 Git 状态"} title={mergeInProgress ? "完成或中止当前合并后才能获取远程更新" : updating ? "正在更新仓库状态" : "获取远程更新并刷新"} disabled={disabled || updating || mergeInProgress} onClick={onFetch}><Icon name="sync" size={14}/></button>
           {snapshot && <button ref={repositoryActionsButtonRef} type="button" aria-label="Git 仓库操作" title="Pull、Push、同步、合并、分支管理与操作记录" aria-haspopup="menu" aria-expanded={Boolean(repositoryOverlay && !branchOverlayKinds.has(repositoryOverlay.kind))} disabled={!remoteReady} onClick={() => onOpenOverlay("repositoryActions")}><Icon name="more" size={13}/></button>}
         </div>
       </div>

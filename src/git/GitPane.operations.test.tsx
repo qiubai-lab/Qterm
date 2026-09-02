@@ -394,7 +394,9 @@ describe("GitPane merge, operations, and remote routing", () => {
     const aggregate = screen.getByRole("button", { name: "正在推送…" });
     expect(aggregate).toHaveAttribute("aria-busy", "true");
     expect(aggregate.querySelector('[data-icon="sync"]')).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "正在更新 Git 状态" }).querySelector('[data-icon="sync"]')).toBeInTheDocument();
+    const refresh = screen.getByRole("button", { name: "刷新 Git 状态" });
+    expect(refresh).toBeDisabled();
+    expect(refresh).not.toHaveAttribute("data-updating");
     fireEvent.click(screen.getByRole("button", { name: "Git 仓库操作" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "操作记录" }));
     expect(within(screen.getByRole("dialog", { name: "Git 操作记录" })).getByLabelText("进行中")).toBeInTheDocument();

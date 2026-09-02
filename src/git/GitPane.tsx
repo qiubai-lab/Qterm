@@ -21,6 +21,7 @@ import { GitConflictResolver } from "./GitConflictResolver";
 import { GitChangePreview } from "./GitChangePreview";
 import { buildGitGraphRows } from "./gitGraph";
 import { GitChangesSection, GitEmpty, GitRepositorySection } from "./GitPaneSections";
+import { gitSnapshotsPresentSameState } from "./gitSnapshot";
 import { deriveGitPrimaryAction, type GitPrimaryAction, type GitPrimaryAlternativeAction } from "./gitPrimaryAction";
 import {
   branchOverlayKinds,
@@ -103,6 +104,7 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
   const [snapshot, setSnapshot] = useState<GitSnapshot | null>(null);
   const [localAvailable, setLocalAvailable] = useState<boolean | null>(null);
   const [busy, setBusy] = useState("");
+  const [backgroundRefreshing, setBackgroundRefreshing] = useState(false);
   const [error, setError] = useState<{ code: string; message: string } | null>(null);
   const [message, setMessage] = useState("");
   const [newBranch, setNewBranch] = useState("");
@@ -127,6 +129,8 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
   const [collapsed, setCollapsed] = useState({ repository: false, changes: false, graph: true });
   const epoch = useRef(0);
   const busyRef = useRef("");
+  const backgroundRequestRef = useRef<number | null>(null);
+  const snapshotRef = useRef<GitSnapshot | null>(null);
   const messageRef = useRef<HTMLTextAreaElement>(null);
   const onTargetChangeRef = useRef(onTargetChange);
   const onRepositoryOpenedRef = useRef(onRepositoryOpened);
@@ -176,6 +180,8 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
     if (targetKeyRef.current === nextTargetKey) return;
     targetKeyRef.current = nextTargetKey;
     epoch.current += 1;
+    backgroundRequestRef.current = null;
+    setBackgroundRefreshing(false);
     updateBusy("");
     setRepositoryOverlay(null);
     setRepositorySubmenu(null);
@@ -196,9 +202,11 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
     if (reportedRepositoryKeyRef.current !== nextTargetKey) reportedRepositoryKeyRef.current = null;
   }, [target, updateBusy]);
 
-  const applySnapshot = useCallback((next: GitSnapshot) => {
-    setSnapshot(next);
+  const applySnapshot = useCallback((next: GitSnapshot, preserveEquivalent = false) => {
     setError(null);
+    if (preserveEquivalent && snapshotRef.current && gitSnapshotsPresentSameState(snapshotRef.current, next)) return false;
+    snapshotRef.current = next;
+    setSnapshot(next);
     const eligibleStaged = new Set(next.changes.filter((change) => change.staged && !change.conflict).map((change) => change.path));
     const eligibleUnstaged = new Set(next.changes.filter((change) => !change.staged && !change.conflict).map((change) => change.path));
     setSelectedStagedPaths((current) => {
@@ -223,22 +231,27 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
       onRepositoryOpenedRef.current?.(repository);
     }
     if (next.repositoryPath !== repositoryPath && !remote) onTargetChangeRef.current({ type: "local", path: next.repositoryPath });
+    return true;
   }, [remote, remoteProfileId, repositoryPath]);
 
   const refreshSnapshot = useCallback(async () => {
-    if (!repositoryPath || !visible || !remoteReady) return;
-    if (busyRef.current && busyRef.current !== "refresh") return;
+    if (!repositoryPath || !visible || !remoteReady || !available || document.visibilityState === "hidden") return;
+    if (busyRef.current || backgroundRequestRef.current !== null) return;
     const request = ++epoch.current;
-    updateBusy("refresh");
+    backgroundRequestRef.current = request;
+    setBackgroundRefreshing(true);
     try {
       const next = await loadSnapshot(repositoryPath);
-      if (request === epoch.current) applySnapshot(next);
+      if (request === epoch.current) applySnapshot(next, true);
     } catch (cause) {
-      if (request === epoch.current) { setSnapshot(null); setError(gitError(cause)); }
+      if (request === epoch.current) setError(gitError(cause));
     } finally {
-      if (request === epoch.current) updateBusy("");
+      if (backgroundRequestRef.current === request) {
+        backgroundRequestRef.current = null;
+        setBackgroundRefreshing(false);
+      }
     }
-  }, [applySnapshot, loadSnapshot, remoteReady, repositoryPath, updateBusy, visible]);
+  }, [applySnapshot, available, loadSnapshot, remoteReady, repositoryPath, visible]);
 
   const fetchAndRefresh = useCallback(async () => {
     if (!repositoryPath || !visible || !remoteReady || busyRef.current) return;
@@ -270,6 +283,14 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
   }, [refreshSnapshot, visible]);
+  useEffect(() => {
+    if (!visible || !available) return;
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") void refreshSnapshot();
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
+  }, [available, refreshSnapshot, visible]);
   useEffect(() => {
     if (!visible || !available) return;
     const timer = window.setInterval(() => void refreshSnapshot(), 15_000);
@@ -445,6 +466,7 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
   const staged = useMemo(() => snapshot?.changes.filter((change) => change.staged) ?? [], [snapshot]);
   const unstaged = useMemo(() => snapshot?.changes.filter((change) => !change.staged && !change.conflict) ?? [], [snapshot]);
   const conflicts = useMemo(() => snapshot?.changes.filter((change) => change.conflict) ?? [], [snapshot]);
+  const previewChanges = useMemo(() => [...staged, ...unstaged], [staged, unstaged]);
 
   useEffect(() => {
     if (!changeMenu) return;
@@ -878,7 +900,7 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
       branchLabel={branchLabel}
       mergeInProgress={mergeInProgress}
       disabled={disabled}
-      busy={busy}
+      updating={backgroundRefreshing || busy === "fetch"}
       remote={remote}
       remoteReady={remoteReady}
       runtime={runtime}
@@ -1073,7 +1095,7 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
       onClose={() => setConflictResolverPath(null)}
     />}
     {previewChange && snapshot && <GitChangePreview
-      changes={[...staged, ...unstaged]}
+      changes={previewChanges}
       initialChange={previewChange}
       repositoryName={snapshot.repositoryName}
       onLoad={loadChangeForDialog}

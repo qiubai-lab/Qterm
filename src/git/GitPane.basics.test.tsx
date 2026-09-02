@@ -266,16 +266,16 @@ describe("GitPane basics and lifecycle", () => {
     expect(onRepositoryOpened).toHaveBeenCalledWith({ type: "local", path: "D:/work/project" });
   });
 
-  it("keeps the newest snapshot when an earlier refresh finishes late", async () => {
+  it("keeps the new target snapshot when the previous target refresh finishes late", async () => {
     const first = deferred<GitSnapshot>();
     const second = deferred<GitSnapshot>();
     api.snapshot.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
-    render(<GitPane blockId="git-1" target={{ type: "local", path: "D:/work/project" }} visible onTargetChange={vi.fn()}/>);
+    const view = render(<GitPane blockId="git-1" target={{ type: "local", path: "D:/work/project" }} visible onTargetChange={vi.fn()}/>);
     await waitFor(() => expect(api.snapshot).toHaveBeenCalledTimes(1));
-    fireEvent.focus(window);
+    view.rerender(<GitPane blockId="git-1" target={{ type: "local", path: "D:/work/other" }} visible onTargetChange={vi.fn()}/>);
     await waitFor(() => expect(api.snapshot).toHaveBeenCalledTimes(2));
 
-    second.resolve({ ...snapshot, repositoryName: "newest-project" });
+    second.resolve({ ...snapshot, repositoryPath: "D:/work/other", repositoryName: "newest-project" });
     expect(await screen.findByText("newest-project")).toBeInTheDocument();
     first.resolve({ ...snapshot, repositoryName: "stale-project" });
     await waitFor(() => expect(screen.queryByText("stale-project")).not.toBeInTheDocument());
