@@ -65,15 +65,24 @@ describe("SettingsDialog", () => {
   it("keeps navigation separate from the independently scrolling settings panel", async () => {
     renderSettings();
     const navigation = screen.getByRole("navigation", { name: "设置分类" });
+    const navigationList = navigation.querySelector(".settings-nav-list");
+    expect(navigationList).toHaveAttribute("data-active", "general");
+    expect(navigation.querySelectorAll(".settings-nav-indicator")).toHaveLength(1);
     expect(within(navigation).getByRole("button", { name: /通用/ })).toHaveAttribute("aria-current", "page");
     expect(within(navigation).getByRole("button", { name: /安全/ })).not.toHaveAttribute("aria-current");
     expect(within(navigation).getByRole("button", { name: /高级/ })).not.toHaveAttribute("aria-current");
     await userEvent.click(within(navigation).getByRole("button", { name: /安全/ }));
+    expect(navigationList).toHaveAttribute("data-active", "security");
+    expect(navigation.querySelectorAll(".settings-nav-indicator")).toHaveLength(1);
     const securityPanel = await screen.findByRole("region", { name: "安全" });
+    expect(securityPanel.querySelector(".settings-category-panel")).toHaveClass("settings-category-forward");
     expect(await within(securityPanel).findByRole("switch", { name: "启用凭证库有效期" })).toBeInTheDocument();
     expect(within(securityPanel).getByRole("switch", { name: "启用无操作后锁定终端" })).toBeInTheDocument();
     expect(within(securityPanel).queryByText(/Windows 锁屏/)).not.toBeInTheDocument();
     expect(within(securityPanel).getByRole("button", { name: "保存设置" })).toBeInTheDocument();
+
+    await userEvent.click(within(navigation).getByRole("button", { name: /外观/ }));
+    expect(screen.getByRole("region", { name: "外观" }).querySelector(".settings-category-panel")).toHaveClass("settings-category-backward");
   });
 
   it("separates configuration directory controls from the derived path overview", async () => {

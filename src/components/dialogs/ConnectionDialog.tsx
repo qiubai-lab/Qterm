@@ -13,7 +13,7 @@ import { CredentialDialog } from "./CredentialDialog";
 import { MasterPasswordDialog } from "./MasterPasswordDialog";
 import { SshConfigImportDialog } from "./SshConfigImportDialog";
 import { ConnectionSaveFeedbackBubble, JumpProfilePicker, JumpRouteFlow, type SaveFeedback } from "./connection/ConnectionDialogSupport";
-import { authPreferenceLabel, connectionErrorCode, connectionErrorMessage, dropGroupAtPoint, duplicateProfileName, findProfileId, profileToInput } from "./connection/connectionDialogModel";
+import { authPreferenceLabel, connectionErrorCode, connectionErrorMessage, dropGroupAtPoint, duplicateProfileName, findProfileId, profileToInput } from "./connection/connectionDialogModel"; import { ConnectionSelectionIndicator } from "./connection/ConnectionSelectionIndicator"; import { useConnectionManagerMotion } from "./connection/useConnectionManagerMotion";
 
 const empty: ProfileInput = { name: "", host: "", port: 22, username: "", authPreference: "password", credentialId: null, groupId: null, jumpProfileIds: [] };
 type EditorTab = "connection" | "authentication" | "jump";
@@ -95,7 +95,7 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
   const contextProfile = contextMenu?.target.type === "profile" ? contextMenu.target.profile : null;
   const contextProfiles = contextProfile
     ? selectedIds.has(contextProfile.id) ? profiles.filter((profile) => selectedIds.has(profile.id)) : [contextProfile]
-    : [];
+    : []; const managerMotion = useConnectionManagerMotion({ selectedId, profiles, groups, collapsedGroupIds, ungroupedCollapsed });
 
   useEffect(() => {
     void refreshCredentialSummaries();
@@ -149,12 +149,12 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
   }
 
   function editProfile(profile: ConnectionProfile) {
-    const changedProfile = profile.id !== selectedId;
-    setSelectedId(profile.id);
-    setEditor({ name: profile.name, host: profile.host, port: profile.port, username: profile.username, authPreference: profile.authPreference, credentialId: profile.credentialId, groupId: profile.groupId, jumpProfileIds: profile.jumpProfileIds ?? [] });
-    setJumpRows(profile.jumpProfileIds?.length ? [...profile.jumpProfileIds] : [null]);
-    setJumpPickerOpen(null);
-    if (changedProfile && saveState === "idle") { setEditorTab("connection"); setTabMotion("idle"); }
+    const changedProfile = profile.id !== selectedId; managerMotion.showProfile(profile.id, () => {
+      setSelectedId(profile.id);
+      setEditor({ name: profile.name, host: profile.host, port: profile.port, username: profile.username, authPreference: profile.authPreference, credentialId: profile.credentialId, groupId: profile.groupId, jumpProfileIds: profile.jumpProfileIds ?? [] });
+      setJumpRows(profile.jumpProfileIds?.length ? [...profile.jumpProfileIds] : [null]); setJumpPickerOpen(null);
+      if (changedProfile) setTabMotion("idle");
+    });
   }
 
   function chooseProfile(profile: ConnectionProfile) {
@@ -218,7 +218,7 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
   }
 
   function startNewProfile(groupId: string | null = null) {
-    clearSaveFeedback(); setSelectedId(null); setSelectedIds(new Set()); setEditor({ ...empty, groupId }); setJumpRows([null]); setEditorTab("connection"); setTabMotion("idle"); setMessage(""); setSaveState("idle");
+    clearSaveFeedback(); managerMotion.showNewProfile(() => { setSelectedId(null); setSelectedIds(new Set()); setEditor({ ...empty, groupId }); setJumpRows([null]); setTabMotion("idle"); setMessage(""); setSaveState("idle"); });
   }
 
   function selectEditorTab(next: EditorTab) {
@@ -283,7 +283,7 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
           const next = new Set(current); next.delete(profile.groupId!); return next;
         });
       } else setUngroupedCollapsed(false);
-      await refreshProfiles(); setSelectedId(profile.id); setSelectedIds(new Set([profile.id]));
+      await refreshProfiles(); managerMotion.settleProfile(profile.id); setSelectedId(profile.id); setSelectedIds(new Set([profile.id]));
       setSaveState("success");
       showSaveFeedback(profile.id);
       saveResetTimerRef.current = window.setTimeout(() => { setSaveState("idle"); saveResetTimerRef.current = null; }, 1400);
@@ -489,7 +489,7 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
       key={profile.id}
       role="button"
       tabIndex={0}
-      aria-pressed={isSelected}
+      aria-pressed={isSelected} data-profile-id={profile.id} data-primary-selected={profile.id === selectedId || undefined}
       className={`${isSelected ? "connection-item selected" : "connection-item"}${isDragging ? " dragging" : ""}`}
       onClick={(event) => { if (suppressClickRef.current) { event.preventDefault(); return; } activateProfile(profile, event.metaKey || event.ctrlKey); }}
       onMouseDown={(event) => { if (event.button === 2) openContextMenu(event, { type: "profile", profile }); }}
@@ -519,7 +519,7 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
           <div className="connection-sidebar-toolbar">
             <div className="connection-list-actions"><Button size="compact" data-dialog-autofocus onClick={() => startNewProfile()}><Icon name="plus" size={11}/>新建连接</Button><Button size="compact" onClick={openNewGroup}><Icon name="plus" size={11}/>新建分组</Button></div>
           </div>
-          <div className="connection-list">
+          <div className="connection-list" ref={managerMotion.listRef}><ConnectionSelectionIndicator state={managerMotion.indicator}/>
             <section className="connection-group-section" data-profile-drop-group="">
               <header
                 className={`connection-group-heading${dropTarget === "ungrouped" ? " drop-target" : ""}`}
@@ -547,13 +547,13 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
             })}
           </div>
         </aside>
-        <div className="connection-editor">
-          <div className="connection-editor-tabs" role="tablist" aria-label="连接配置" data-active={editorTab}>
+        <div className="connection-editor"><div className="connection-editor-tabs" role="tablist" aria-label="连接配置" data-active={editorTab}>
             <span className="connection-editor-tab-indicator" aria-hidden="true"/>
             <button type="button" role="tab" aria-selected={editorTab === "connection"} tabIndex={editorTab === "connection" ? 0 : -1} onClick={() => selectEditorTab("connection")} onKeyDown={(event) => moveEditorTab(event, "connection")}><span>连接信息</span></button>
             <button type="button" role="tab" aria-selected={editorTab === "authentication"} tabIndex={editorTab === "authentication" ? 0 : -1} onClick={() => selectEditorTab("authentication")} onKeyDown={(event) => moveEditorTab(event, "authentication")}><span>认证方式</span></button>
             <button type="button" role="tab" aria-selected={editorTab === "jump"} tabIndex={editorTab === "jump" ? 0 : -1} onClick={() => selectEditorTab("jump")} onKeyDown={(event) => moveEditorTab(event, "jump")}><span>跳板连接 <StatusBadge tone="warning" presentation="tag" size="compact">实验</StatusBadge></span></button>
           </div>
+          <div ref={managerMotion.stageRef} key={managerMotion.editorTransition.key} className={`connection-editor-profile-stage ${managerMotion.editorTransition.kind}`}>
           <div className="connection-editor-scroll">
             {editorTab === "connection" && <div className={`form-grid connection-tab-panel${tabMotion === "backward" ? " tab-backward" : tabMotion === "forward" ? " tab-forward" : ""}`} role="tabpanel" aria-label="连接信息">
               <label className="span-2"><RequiredFieldLabel>名称</RequiredFieldLabel><input required value={editor.name} onChange={(event) => setEditor({ ...editor, name: event.target.value })}/></label>
@@ -589,7 +589,7 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
               </div>
               <button type="button" className="jump-route-add" disabled={jumpRows.length >= 4 || !jumpRows[jumpRows.length - 1]} onClick={addJumpRow}><Icon name="plus" size={13}/>添加跃点</button>
             </div>}
-          </div>
+          </div></div>
           <footer className="dialog-actions connection-editor-actions dialog-actions-with-status"><DialogActionStatus message={profileStorageUnsupported ? "" : message}/><div className="connection-footer-buttons">{selected && <Button variant="danger" onClick={() => requestDelete(profiles.filter((profile) => selectedIds.has(profile.id)))}>{selectedIds.size > 1 ? `删除 ${selectedIds.size} 项` : "删除"}</Button>}<Button variant="primary" className={`connection-save-button ${saveState}`} data-state={saveState} disabled={saveState !== "idle" || profileStorageUnsupported} aria-busy={saveState === "saving" || undefined} aria-live="polite" onClick={() => void save()}><span key={saveState} className="connection-save-content">{saveState === "saving" && <span className="connection-save-spinner" aria-hidden="true"/>}{saveState === "success" && <Icon name="checkCircle" size={12}/>}<span>{saveState === "saving" ? "保存中…" : saveState === "success" ? "保存成功" : "保存配置"}</span></span></Button></div></footer>
         </div>
       </div>

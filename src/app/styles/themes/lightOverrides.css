@@ -16,7 +16,8 @@
 :root[data-theme="light"] :is(.dialog-note,.confirm-copy,.settings-section-heading p,.connection-editor p,.credential-editor p) { color:var(--dim); }
 :root[data-theme="light"] :is(.settings-nav-item,.connection-profile-item,.credential-list-item,.file-row,.network-rule-row) { color:var(--muted); background:transparent; border-color:transparent; }
 :root[data-theme="light"] :is(.settings-nav-item,.connection-profile-item,.credential-list-item,.file-row,.network-rule-row):hover { color:var(--text); background:var(--hover); }
-:root[data-theme="light"] :is(.settings-nav-item.selected,.connection-profile-item.selected,.credential-list-item.selected,.file-row[data-selected],.network-rule-row.selected) { color:var(--text); background:var(--accent-bg); border-color:color-mix(in srgb,var(--accent) 42%,var(--border)); }
+:root[data-theme="light"] :is(.connection-profile-item.selected,.credential-list-item.selected,.file-row[data-selected],.network-rule-row.selected) { color:var(--text); background:var(--accent-bg); border-color:color-mix(in srgb,var(--accent) 42%,var(--border)); }
+:root[data-theme="light"] .settings-nav-item.selected,:root[data-theme="light"] .settings-nav-item.selected:hover { color:var(--navigation-accent); background:transparent; border-color:transparent; }
 :root[data-theme="light"] .file-row:hover,
 :root[data-theme="light"] .file-row:focus-visible { color:var(--text-strong); background:var(--file-active-surface); }
 :root[data-theme="light"] .file-row[data-selected] { color:var(--text-strong); background:var(--file-selection-surface); border-color:var(--file-selection-marker); }

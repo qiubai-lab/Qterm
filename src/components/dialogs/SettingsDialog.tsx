@@ -22,10 +22,13 @@ import { DialogFrame } from "./DialogFrame";
 const credentialDurations = [300, 900, 1800, 3600, 7200, 14400, 28800, 86400];
 const terminalIdleDurations = [300, 900, 1800, 3600, 7200];
 type SettingsCategory = "general" | "appearance" | "security" | "advanced";
+type SettingsCategoryDirection = "forward" | "backward";
+const settingsCategoryOrder: SettingsCategory[] = ["general", "appearance", "security", "advanced"];
 
 export function SettingsDialog({ onClose, onSecuritySettingsChanged, onTerminalSettingsChanged }: { onClose: () => void; onSecuritySettingsChanged?: (settings: SecuritySettings) => void; onTerminalSettingsChanged?: (settings: TerminalSettings) => void }) {
   const { persistedTheme, previewTheme, commitTheme, restoreTheme } = useAppTheme();
   const [category, setCategory] = useState<SettingsCategory>("general");
+  const [categoryDirection, setCategoryDirection] = useState<SettingsCategoryDirection | null>(null);
   const [general, setGeneral] = useState<GeneralSettings | null>(null);
   const [configurationDirectory, setConfigurationDirectory] = useState("");
   const [security, setSecurity] = useState<SecuritySettings | null>(null);
@@ -124,6 +127,8 @@ export function SettingsDialog({ onClose, onSecuritySettingsChanged, onTerminalS
   function selectCategory(nextCategory: SettingsCategory) {
     if (savedTimer.current !== null) window.clearTimeout(savedTimer.current);
     setSaved(false);
+    if (nextCategory === category) return;
+    setCategoryDirection(settingsCategoryOrder.indexOf(nextCategory) > settingsCategoryOrder.indexOf(category) ? "forward" : "backward");
     setCategory(nextCategory);
   }
 
@@ -131,13 +136,17 @@ export function SettingsDialog({ onClose, onSecuritySettingsChanged, onTerminalS
     <div className="settings-layout">
       <nav className="settings-sidebar" aria-label="设置分类">
         <span className="settings-sidebar-label">设置</span>
-        <SettingsNavItem category="general" current={category} icon="settings" title="通用" subtitle="数据与存储" onSelect={selectCategory}/>
-        <SettingsNavItem category="appearance" current={category} icon="eye" title="外观" subtitle="界面主题" onSelect={selectCategory}/>
-        <SettingsNavItem category="security" current={category} icon="lock" title="安全" subtitle="凭证与终端锁定" onSelect={selectCategory}/>
-        <SettingsNavItem category="advanced" current={category} icon="terminal" title="高级" subtitle="终端集成" onSelect={selectCategory}/>
+        <div className="settings-nav-list" data-active={category}>
+          <span className="settings-nav-indicator" aria-hidden="true"/>
+          <SettingsNavItem category="general" current={category} icon="settings" title="通用" subtitle="数据与存储" onSelect={selectCategory}/>
+          <SettingsNavItem category="appearance" current={category} icon="eye" title="外观" subtitle="界面主题" onSelect={selectCategory}/>
+          <SettingsNavItem category="security" current={category} icon="lock" title="安全" subtitle="凭证与终端锁定" onSelect={selectCategory}/>
+          <SettingsNavItem category="advanced" current={category} icon="terminal" title="高级" subtitle="终端集成" onSelect={selectCategory}/>
+        </div>
       </nav>
       <section className="settings-content" aria-labelledby={`${category}-settings-title`}>
         <div className="settings-content-scroll">
+          <div key={category} className={`settings-category-panel${categoryDirection ? ` settings-category-${categoryDirection}` : " settings-category-idle"}`} data-category={category}>
           {category === "general" ? <div className="settings-general-view">
             <div className="settings-section-heading"><h3 id="general-settings-title">通用</h3><p>配置 Qterm 数据根目录与存储路径。</p></div>
             {general ? <div className="settings-general-stack">
@@ -173,6 +182,7 @@ export function SettingsDialog({ onClose, onSecuritySettingsChanged, onTerminalS
               </div>
             </div> : <p className="dialog-note">正在读取设置…</p>}
           </div>}
+          </div>
         </div>
         <footer className="dialog-actions settings-actions">
           <div className="settings-feedback-slot">

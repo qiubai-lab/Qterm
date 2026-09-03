@@ -86,6 +86,8 @@ vi.mock("./MasterPasswordDialog", () => ({ MasterPasswordDialog: ({ mode, onSucc
 beforeEach(() => {
   workspaceProfiles = profiles;
   Object.defineProperty(document, "elementFromPoint", { configurable: true, value: elementFromPoint });
+  Reflect.deleteProperty(document, "startViewTransition");
+  Reflect.deleteProperty(HTMLElement.prototype, "animate");
   mocks.clearVault.mockResolvedValue(undefined);
   mocks.clearUnsupportedProfileStorage.mockResolvedValue(undefined);
   mocks.createProfile.mockResolvedValue({ ...profile, id: "profile-new" });
@@ -296,7 +298,10 @@ describe("ConnectionDialog", () => {
   });
 
   it("keeps mouse, keyboard, and context-menu profile selection inside the manager", async () => {
-    const second = { ...profile, id: "profile-2", name: "备用服务器", host: "backup.example" };
+    const second = { ...profile, id: "profile-2", name: "备用服务器", host: "backup.example", authPreference: "sshAgent" as const, credentialId: null };
+    const pageTransition = vi.fn(); Object.defineProperty(document, "startViewTransition", { configurable: true, value: pageTransition });
+    let finishExit!: () => void; const exitFinished = new Promise<void>((resolve) => { finishExit = resolve; });
+    const cancelExit = vi.fn(); Object.defineProperty(HTMLElement.prototype, "animate", { configurable: true, value: vi.fn(() => ({ cancel: cancelExit, finished: exitFinished })) });
     workspaceProfiles = [profile, second];
     const user = userEvent.setup();
     render(<ConnectionDialog onClose={vi.fn()}/>);
@@ -305,15 +310,32 @@ describe("ConnectionDialog", () => {
     fireEvent.click(screen.getByText("Production", { selector: ".connection-group-toggle strong" }).closest("button")!);
     const originalItem = screen.getByRole("button", { name: /K8S服务器/ });
     const secondItem = screen.getByRole("button", { name: /备用服务器/ });
-
+    const indicator = document.querySelector(".connection-selection-indicator");
+    expect(indicator).toHaveAttribute("data-target-id", "profile-1");
+    await user.click(screen.getByRole("tab", { name: "认证方式" }));
+    expect(screen.getByRole("tab", { name: "认证方式" })).toHaveAttribute("aria-selected", "true");
     await user.click(secondItem);
-    expect(screen.getByLabelText("名称")).toHaveValue("备用服务器");
+    expect(screen.getByRole("combobox", { name: "认证方式" })).toHaveValue("password");
+    expect(document.querySelector(".connection-editor-transition-overlay")).not.toBeInTheDocument();
+    await act(async () => { finishExit(); await exitFinished; });
+    expect(screen.getByRole("combobox", { name: "认证方式" })).toHaveValue("sshAgent");
+    expect(screen.getByRole("tab", { name: "认证方式" })).toHaveAttribute("aria-selected", "true");
+    expect(indicator).toHaveAttribute("data-target-id", "profile-2");
+    const profileStage = document.querySelector(".connection-editor-profile-stage");
+    expect(profileStage).toHaveClass("switching-down");
+    expect(pageTransition).not.toHaveBeenCalled();
+    expect(profileStage).toContainElement(screen.getByRole("tabpanel", { name: "认证方式" }));
+    expect(profileStage).not.toContainElement(screen.getByRole("tablist", { name: "连接配置" }));
     fireEvent.keyDown(originalItem, { key: "Enter" });
-    expect(screen.getByLabelText("名称")).toHaveValue("K8S服务器");
+    expect(screen.getByRole("tab", { name: "认证方式" })).toHaveAttribute("aria-selected", "true");
+    await waitFor(() => expect(document.querySelector(".connection-editor-profile-stage")).toHaveClass("switching-up"));
     fireEvent.contextMenu(secondItem);
     await user.click(within(screen.getByRole("menu", { name: "备用服务器 连接菜单" })).getByRole("menuitem", { name: "编辑连接" }));
-    expect(screen.getByLabelText("名称")).toHaveValue("备用服务器");
+    expect(screen.getByRole("tab", { name: "认证方式" })).toHaveAttribute("aria-selected", "true");
     expect(mocks.selectBlockTarget).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "新建连接" }));
+    expect(screen.getByRole("tab", { name: "认证方式" })).toHaveAttribute("aria-selected", "true");
+    expect(document.querySelector(".connection-editor-profile-stage")).toHaveClass("creating");
   });
 
   it("adds and removes profiles with the platform modifier while ordinary activation restores single selection", async () => {
