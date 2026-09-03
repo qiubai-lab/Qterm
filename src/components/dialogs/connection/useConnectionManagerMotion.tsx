@@ -27,7 +27,7 @@ export function useConnectionManagerMotion({ selectedId, profiles, groups, colla
   useLayoutEffect(() => {
     const list = listRef.current;
     const target = selectionTargetId && list
-      ? [...list.querySelectorAll<HTMLElement>("[data-profile-id]")].find((element) => element.dataset.profileId === selectionTargetId) ?? null
+      ? [...list.querySelectorAll<HTMLElement>("[data-profile-id]")].find((element) => element.dataset.profileId === selectionTargetId && !element.closest("[inert]")) ?? null
       : null;
     let animationFrame: number | null = null;
     const measure = () => {
@@ -36,11 +36,15 @@ export function useConnectionManagerMotion({ selectedId, profiles, groups, colla
         return;
       }
       const offset = target.getBoundingClientRect().top - list.getBoundingClientRect().top + list.scrollTop;
-      const ready = indicatorReadyRef.current;
-      setIndicator((current) => current.offset === offset && current.ready === ready && current.targetId === selectionTargetId && current.visible
-        ? current
-        : { offset, ready, targetId: selectionTargetId, visible: true });
-      if (!ready) {
+      const initialized = indicatorReadyRef.current;
+      setIndicator((current) => {
+        // Layout changes move the same row; only a new selection should glide.
+        const ready = initialized && (current.targetId !== selectionTargetId || current.offset === offset);
+        return current.offset === offset && current.ready === ready && current.targetId === selectionTargetId && current.visible
+          ? current
+          : { offset, ready, targetId: selectionTargetId, visible: true };
+      });
+      if (!initialized) {
         if (animationFrame !== null) window.cancelAnimationFrame(animationFrame);
         animationFrame = window.requestAnimationFrame(() => {
           indicatorReadyRef.current = true;
@@ -54,6 +58,8 @@ export function useConnectionManagerMotion({ selectedId, profiles, groups, colla
       observer = new ResizeObserver(measure);
       observer.observe(list);
       observer.observe(target);
+      // Another group's height can move the target without resizing the row.
+      list.querySelectorAll(".connection-group-section").forEach((group) => observer?.observe(group));
     }
     return () => {
       observer?.disconnect();

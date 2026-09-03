@@ -13,7 +13,7 @@ import { CredentialDialog } from "./CredentialDialog";
 import { MasterPasswordDialog } from "./MasterPasswordDialog";
 import { SshConfigImportDialog } from "./SshConfigImportDialog";
 import { ConnectionSaveFeedbackBubble, JumpProfilePicker, JumpRouteFlow, type SaveFeedback } from "./connection/ConnectionDialogSupport";
-import { authPreferenceLabel, connectionErrorCode, connectionErrorMessage, dropGroupAtPoint, duplicateProfileName, findProfileId, profileToInput } from "./connection/connectionDialogModel"; import { ConnectionSelectionIndicator } from "./connection/ConnectionSelectionIndicator"; import { useConnectionManagerMotion } from "./connection/useConnectionManagerMotion";
+import { authPreferenceLabel, connectionErrorCode, connectionErrorMessage, dropGroupAtPoint, duplicateProfileName, findProfileId, profileToInput } from "./connection/connectionDialogModel"; import { ConnectionSelectionIndicator } from "./connection/ConnectionSelectionIndicator"; import { ConnectionGroupContent } from "./connection/ConnectionGroupContent"; import { useConnectionManagerMotion } from "./connection/useConnectionManagerMotion";
 
 const empty: ProfileInput = { name: "", host: "", port: 22, username: "", authPreference: "password", credentialId: null, groupId: null, jumpProfileIds: [] };
 type EditorTab = "connection" | "authentication" | "jump";
@@ -524,7 +524,7 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
               <header
                 className={`connection-group-heading${dropTarget === "ungrouped" ? " drop-target" : ""}`}
               ><button className="connection-group-toggle" aria-expanded={!ungroupedCollapsed} title="单击折叠未分组连接" onClick={() => { clearSaveFeedback(); setUngroupedCollapsed((current) => !current); }}><span className="connection-group-chevron" aria-hidden="true">›</span><strong>未分组</strong><small>{ungroupedProfiles.length}</small></button></header>
-              {!ungroupedCollapsed && <div className="connection-group-items">{ungroupedProfiles.map(profileItem)}{ungroupedProfiles.length === 0 && <p>暂无连接</p>}</div>}
+              <ConnectionGroupContent expanded={!ungroupedCollapsed}>{ungroupedProfiles.map(profileItem)}{ungroupedProfiles.length === 0 && <p>暂无连接</p>}</ConnectionGroupContent>
             </section>
             {groups.map((group) => {
               const groupProfiles = profiles.filter((profile) => profile.groupId === group.id);
@@ -542,7 +542,7 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
                     onKeyDown={(event) => openContextMenuFromKeyboard(event, { type: "group", group })}
                   ><span className="connection-group-chevron" aria-hidden="true">›</span><strong>{group.name}</strong><small>{groupProfiles.length}</small></button>
                 </header>
-                {expanded && <div className="connection-group-items">{groupProfiles.map(profileItem)}{groupProfiles.length === 0 && <p>暂无连接</p>}</div>}
+                <ConnectionGroupContent expanded={expanded}>{groupProfiles.map(profileItem)}{groupProfiles.length === 0 && <p>暂无连接</p>}</ConnectionGroupContent>
               </section>;
             })}
           </div>

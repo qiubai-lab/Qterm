@@ -54,6 +54,60 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
 describe("CredentialDialog", () => {
+  it("initially selects the first password in list order without revealing it, including on reopen", async () => {
+    mocks.listCredentials.mockResolvedValue([
+      { id: "key-1", name: "部署私钥", kind: "privateKey", detail: "ed25519" },
+      { id: "password-1", name: "生产密码", kind: "password", detail: null },
+      { id: "password-2", name: "备用密码", kind: "password", detail: null },
+    ]);
+    const user = userEvent.setup();
+    const { unmount } = render(<CredentialDialog onClose={vi.fn()}/>);
+
+    expect(await screen.findByRole("button", { name: /生产密码密码/ })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByText("生产密码", { selector: ".credential-editor-heading strong" })).toBeInTheDocument();
+    expect(screen.getByLabelText("凭证密码")).toHaveValue("••••••••••••");
+    expect(mocks.revealCredentialPassword).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: /备用密码密码/ }));
+    expect(screen.getByText("备用密码", { selector: ".credential-editor-heading strong" })).toBeInTheDocument();
+    unmount();
+    render(<CredentialDialog onClose={vi.fn()}/>);
+    expect(await screen.findByRole("button", { name: /生产密码密码/ })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it.each([{ items: [] }, { items: [{ id: "key-1", name: "部署私钥", kind: "privateKey", detail: "ed25519" }] }])("keeps the introduction when there is no password (%j)", async ({ items }) => {
+    mocks.listCredentials.mockResolvedValue(items);
+    render(<CredentialDialog onClose={vi.fn()}/>);
+    expect(await screen.findByText("选择或创建凭证")).toBeInTheDocument();
+    await waitFor(() => expect(mocks.listCredentials).toHaveBeenCalled());
+    expect(document.querySelector('.credential-item[aria-pressed="true"]')).not.toBeInTheDocument();
+    expect(mocks.revealCredentialPassword).not.toHaveBeenCalled();
+  });
+
+  it("selects the first password after unlocking an initially locked manager", async () => {
+    mocks.getVaultStatus.mockResolvedValueOnce({ initialized: true, unlocked: false, legacy: false });
+    const user = userEvent.setup();
+    render(<CredentialDialog onClose={vi.fn()}/>);
+    expect(await screen.findByText("凭证库已锁定")).toBeInTheDocument();
+    expect(mocks.listCredentials).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "解锁凭证库" }));
+    await user.click(screen.getByRole("button", { name: "完成" }));
+    expect(await screen.findByRole("button", { name: /生产密码密码/ })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByLabelText("凭证密码")).toHaveValue("••••••••••••");
+  });
+
+  it("preserves a new credential draft when the initial list finishes loading", async () => {
+    let resolveList!: (items: Array<{ id: string; name: string; kind: string; detail: null }>) => void;
+    mocks.listCredentials.mockReturnValueOnce(new Promise((resolve) => { resolveList = resolve; }));
+    const user = userEvent.setup();
+    render(<CredentialDialog onClose={vi.fn()}/>);
+    await waitFor(() => expect(screen.getByRole("button", { name: "新建密码" })).toBeEnabled());
+    await user.click(screen.getByRole("button", { name: "新建密码" }));
+    await user.type(screen.getByRole("textbox", { name: "凭证名称" }), "未保存密码");
+    await act(async () => { resolveList([{ id: "password-1", name: "生产密码", kind: "password", detail: null }]); });
+    expect(screen.getByRole("textbox", { name: "凭证名称" })).toHaveValue("未保存密码");
+    expect(document.querySelector('.credential-item[aria-pressed="true"]')).not.toBeInTheDocument();
+  });
+
   it("renames a credential inline and supports keyboard save", async () => {
     const user = userEvent.setup();
     mocks.listCredentials.mockResolvedValue([
@@ -153,7 +207,7 @@ describe("CredentialDialog", () => {
 
   it("does not expose the global vault lock action in the dialog header", async () => {
     render(<CredentialDialog onClose={vi.fn()}/>);
-    await screen.findByText("生产密码");
+    await screen.findByRole("button", { name: /生产密码密码/ });
     expect(screen.queryByRole("button", { name: "锁定凭证库" })).not.toBeInTheDocument();
   });
 
@@ -184,7 +238,7 @@ describe("CredentialDialog", () => {
     let statusHandler: ((event: { unlocked: boolean; reason: string }) => void) | undefined;
     mocks.onVaultStatusChanged.mockImplementation(async (handler) => { statusHandler = handler; return () => undefined; });
     render(<CredentialDialog onClose={vi.fn()}/>);
-    await screen.findByText("生产密码");
+    await screen.findByRole("button", { name: /生产密码密码/ });
     const actions = screen.getByRole("dialog", { name: "凭证管理" }).querySelector(".dialog-header-actions")!;
     const copy = actions.textContent ?? "";
     expect(copy.indexOf("已解锁")).toBeLessThan(copy.indexOf("修改主密码"));
@@ -199,7 +253,7 @@ describe("CredentialDialog", () => {
     const user = userEvent.setup();
     const onClose = vi.fn();
     render(<CredentialDialog onClose={onClose}/>);
-    await screen.findByText("生产密码");
+    await screen.findByRole("button", { name: /生产密码密码/ });
     await user.click(screen.getByRole("button", { name: "清除凭证库" }));
     const dialog = screen.getByRole("dialog", { name: "清除整个凭证库？" });
     const clearButton = within(dialog).getByRole("button", { name: "永久清除" });
@@ -214,7 +268,7 @@ describe("CredentialDialog", () => {
   it("creates password credentials and allows private key actions before a name is entered", async () => {
     const user = userEvent.setup();
     render(<CredentialDialog onClose={vi.fn()}/>);
-    await screen.findByText("生产密码");
+    await screen.findByRole("button", { name: /生产密码密码/ });
     await user.click(screen.getByRole("button", { name: "新建密码" }));
     const passwordName = screen.getByLabelText("凭证名称");
     const password = screen.getByLabelText("密码");
@@ -310,7 +364,7 @@ describe("CredentialDialog", () => {
   it("requires confirmation before deleting and preserves the connection contract", async () => {
     const user = userEvent.setup();
     render(<CredentialDialog onClose={vi.fn()}/>);
-    await screen.findByText("生产密码");
+    await screen.findByRole("button", { name: /生产密码密码/ });
     await user.click(screen.getByRole("button", { name: /生产密码密码/ }));
     await user.click(screen.getByRole("button", { name: "删除凭证" }));
     const confirmation = screen.getByRole("dialog", { name: "删除凭证？" });

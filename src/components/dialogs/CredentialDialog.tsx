@@ -87,7 +87,7 @@ export function CredentialDialog({ onClose }: { onClose: () => void }) {
     showFeedback({ scope: "manager", message, tone });
   }, [showFeedback]);
 
-  const refresh = useCallback(async (preferredId?: string) => {
+  const refresh = useCallback(async (preferredId?: string, selectFirstPassword = false) => {
     const next = await getVaultStatus();
     setStatus(next);
     if (next.legacy) {
@@ -114,8 +114,8 @@ export function CredentialDialog({ onClose }: { onClose: () => void }) {
       if (selected) setView({ type: "detail", item: selected });
     } else {
       setView((current) => {
-        if (current.type !== "detail") return current;
-        const selected = nextItems.find((item) => item.id === current.item.id);
+        if (current.type === "create" || (current.type === "empty" && !selectFirstPassword)) return current;
+        const selected = current.type === "detail" ? nextItems.find((item) => item.id === current.item.id) : nextItems.find((item) => item.kind === "password");
         return selected ? { type: "detail", item: selected } : { type: "empty" };
       });
     }
@@ -123,7 +123,7 @@ export function CredentialDialog({ onClose }: { onClose: () => void }) {
 
   async function masterSucceeded() {
     setMasterMode(null);
-    try { await refresh(); } catch (error) { showManagerFeedback(errorMessage(error), "error"); }
+    try { await refresh(undefined, true); } catch (error) { showManagerFeedback(errorMessage(error), "error"); }
   }
 
   function start(kind: CredentialKind) {
@@ -286,7 +286,7 @@ export function CredentialDialog({ onClose }: { onClose: () => void }) {
     let disposed = false;
     let unlisten: (() => void) | undefined;
     queueMicrotask(() => {
-      if (!disposed) void refresh().catch((error) => showManagerFeedback(errorMessage(error), "error"));
+      if (!disposed) void refresh(undefined, true).catch((error) => showManagerFeedback(errorMessage(error), "error"));
     });
     void onVaultStatusChanged(() => {
       if (disposed) return;
