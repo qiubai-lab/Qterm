@@ -718,7 +718,7 @@ describe("application layout styles", () => {
     expect(declarations(".credential-feedback-bubble")).toContain("var(--navigation-accent)");
     expect(declarations(".credential-feedback-bubble::before")).toContain("var(--navigation-accent)");
     expect(declarations(".credential-feedback-bubble.error")).toContain("var(--danger)");
-    expect(declarations(".credential-item:hover")).toContain("background:var(--navigation-accent-bg)");
+    expect(declarations(".credential-item:hover")).toMatch(/border-color:transparent;\s*background:var\(--hover\)/);
     expect(styles).toContain(".credential-dialog .ui-button--secondary:hover:not(:disabled)");
     expect(styles).toContain("color:var(--navigation-accent);background:var(--navigation-accent-bg)");
     expect(styles).not.toContain(".credential-message");

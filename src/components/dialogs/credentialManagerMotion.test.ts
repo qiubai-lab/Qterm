@@ -13,6 +13,8 @@ describe("credential manager selection motion", () => {
     expect(styles).not.toMatch(/\.credential-selection-indicator\.ready\{[^}]*transition:[^}]*(?:top|height|width)/);
     expect(styles).toMatch(/\.credential-item\.selected\{[^}]*background:transparent[^}]*box-shadow:none/);
     expect(styles).toMatch(/\.credential-item\.selected:hover\{[^}]*background:transparent/);
+    expect(styles).toMatch(/\.credential-item\.selected\.credential-kind-icon\{[^}]*color:var\(--selection-marker\)[^}]*background:var\(--selection-surface\)/);
+    expect(styles).toMatch(/\.credential-item\.selected\.credential-item-copystrong\{color:var\(--selection-marker\)/);
   });
 
   it("uses ordered detail entry, a distinct creation entry, and reduced motion", () => {
