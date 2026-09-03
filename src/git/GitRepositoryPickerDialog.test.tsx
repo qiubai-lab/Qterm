@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -37,7 +37,11 @@ function deferred<T>() {
 }
 
 describe("GitRepositoryPickerDialog", () => {
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -87,7 +91,7 @@ describe("GitRepositoryPickerDialog", () => {
     expect(onSelect).not.toHaveBeenCalled();
 
     await user.click(screen.getByRole("button", { name: "使用系统选择器" }));
-    expect(onSelect).toHaveBeenCalledWith("D:\\project");
+    await waitFor(() => expect(onSelect).toHaveBeenCalledWith("D:\\project"));
   });
 
   it("selects on click, opens on double click, and navigates with the file-browser forward stack", async () => {
@@ -126,15 +130,14 @@ describe("GitRepositoryPickerDialog", () => {
     render(<GitRepositoryPickerDialog sessionId="git-session" profileId="profile-1" initialPath="/srv/project" onClose={vi.fn()} onSelect={onSelect}/>);
     await screen.findByRole("list", { name: "远程目录 /srv/project" });
 
-    const beta = screen.getByRole("listitem", { name: /^目录 beta/ });
-    await user.click(beta);
-    await user.click(screen.getByRole("button", { name: "选择此路径" }));
-    expect(onSelect).toHaveBeenCalledWith("/srv/project/beta");
-
     const alpha = screen.getByRole("listitem", { name: /^目录 alpha/ });
     alpha.focus();
     await user.keyboard("{Enter}");
     expect(await screen.findByRole("list", { name: "远程目录 /srv/project/alpha" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("listitem", { name: /^目录 nested/ }));
+    await user.click(screen.getByRole("button", { name: "选择此路径" }));
+    await waitFor(() => expect(onSelect).toHaveBeenCalledWith("/srv/project/alpha/nested"));
   });
 
   it("edits the path on demand and restores the current path with Escape", async () => {
@@ -167,7 +170,7 @@ describe("GitRepositoryPickerDialog", () => {
     await user.type(path, "/opt/repos/manual");
     await user.click(screen.getByRole("button", { name: "选择此路径" }));
 
-    expect(onSelect).toHaveBeenCalledOnce();
+    await waitFor(() => expect(onSelect).toHaveBeenCalledOnce());
     expect(onSelect).toHaveBeenCalledWith("/opt/repos/manual");
   });
 
@@ -227,20 +230,32 @@ describe("GitRepositoryPickerDialog", () => {
     expect(within(list).getAllByRole("listitem").length).toBeLessThan(500);
   });
 
-  it("cancels without selecting and exposes dialog semantics", async () => {
-    const user = userEvent.setup();
+  it("keeps the dialog mounted for its closing motion", () => {
+    vi.useFakeTimers();
     const onClose = vi.fn();
     const onSelect = vi.fn();
     render(<GitRepositoryPickerDialog sessionId="git-session" profileId="profile-1" initialPath="/srv/project" onClose={onClose} onSelect={onSelect}/>);
     const dialog = screen.getByRole("dialog", { name: "选择远程仓库目录" });
     expect(dialog).toHaveAttribute("aria-modal", "true");
     expect(dialog.closest(".dialog-scrim")?.parentElement).toBe(document.body);
-    const cancel = await screen.findByRole("button", { name: "取消" });
+    const cancel = screen.getByRole("button", { name: "取消" });
     expect(cancel).toHaveClass("ui-button--danger");
-    await user.click(cancel);
-    expect(onClose).toHaveBeenCalledOnce();
+    fireEvent.click(cancel);
+    expect(dialog).toHaveAttribute("data-state", "closing");
+    expect(dialog.closest(".dialog-scrim")).toHaveAttribute("data-state", "closing");
+    expect(onClose).not.toHaveBeenCalled();
     expect(onSelect).not.toHaveBeenCalled();
+    act(() => vi.advanceTimersByTime(129));
+    expect(onClose).not.toHaveBeenCalled();
+    act(() => vi.advanceTimersByTime(1));
+    expect(onClose).toHaveBeenCalledOnce();
+  });
 
-    fireEvent.keyDown(window, { key: "Escape" });
+  it("closes immediately when reduced motion is requested", async () => {
+    vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({ matches: true }));
+    const onClose = vi.fn();
+    render(<GitRepositoryPickerDialog sessionId="git-session" profileId="profile-1" initialPath="/srv/project" onClose={onClose} onSelect={vi.fn()}/>);
+    fireEvent.click(await screen.findByRole("button", { name: "取消" }));
+    expect(onClose).toHaveBeenCalledOnce();
   });
 });

@@ -17,7 +17,11 @@ beforeAll(() => {
   Object.defineProperty(Range.prototype, "getBoundingClientRect", { configurable: true, value: () => ({ x: 0, y: 0, left: 0, right: 0, top: 0, bottom: 0, width: 0, height: 0, toJSON: () => ({}) }) });
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
 
 function detail(change: GitChange): GitChangeDiff {
   return {
@@ -33,6 +37,29 @@ function detail(change: GitChange): GitChangeDiff {
 }
 
 describe("GitChangePreview", () => {
+  it("keeps the preview mounted for its closing motion", () => {
+    vi.useFakeTimers();
+    const onClose = vi.fn();
+    render(<GitChangePreview changes={[changes[0]]} initialChange={changes[0]} repositoryName="project" onLoad={vi.fn().mockResolvedValue(detail(changes[0]))} onClose={onClose}/>);
+    const dialog = screen.getByRole("dialog", { name: "预览 Git 更改" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "关闭" }));
+    expect(dialog).toHaveAttribute("data-state", "closing");
+    expect(dialog.parentElement).toHaveAttribute("data-state", "closing");
+    expect(onClose).not.toHaveBeenCalled();
+    act(() => vi.advanceTimersByTime(129));
+    expect(onClose).not.toHaveBeenCalled();
+    act(() => vi.advanceTimersByTime(1));
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it("closes the preview immediately when reduced motion is requested", () => {
+    vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({ matches: true }));
+    const onClose = vi.fn();
+    render(<GitChangePreview changes={[changes[0]]} initialChange={changes[0]} repositoryName="project" onLoad={vi.fn().mockResolvedValue(detail(changes[0]))} onClose={onClose}/>);
+    fireEvent.click(screen.getByRole("button", { name: "关闭" }));
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
   it("keeps staged and worktree entries distinct and navigates without a layout rail", async () => {
     const onLoad = vi.fn((path: string, staged: boolean) => Promise.resolve(detail(changes.find((change) => change.path === path && change.staged === staged)!)));
     render(<GitChangePreview changes={changes} initialChange={changes[0]} repositoryName="project" onLoad={onLoad} onClose={vi.fn()}/>);

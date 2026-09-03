@@ -50,4 +50,18 @@ describe("DialogFrame stack", () => {
     expect(onClose).not.toHaveBeenCalled();
     expect(screen.getByRole("dialog", { name: "嵌套父弹窗" }).parentElement).not.toHaveClass("dialog-scrim-blocking");
   });
+
+  it("keeps its dismissal surface stable while an exit transition is running", () => {
+    const onClose = vi.fn();
+    render(<DialogFrame title="正在收起" onClose={onClose} closing><button>弹窗操作</button></DialogFrame>);
+    const dialog = screen.getByRole("dialog", { name: "正在收起" });
+
+    expect(dialog).toHaveAttribute("data-state", "closing");
+    expect(dialog.parentElement).toHaveAttribute("data-state", "closing");
+    expect(dialog.parentElement).not.toHaveClass("dialog-scrim-blocking");
+    expect(screen.getByRole("button", { name: "关闭" })).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: "Escape" });
+    fireEvent.pointerDown(dialog.parentElement!);
+    expect(onClose).not.toHaveBeenCalled();
+  });
 });

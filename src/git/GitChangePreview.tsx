@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 
 import { StatusBadge } from "../components/Button";
 import { DialogFrame } from "../components/dialogs/DialogFrame";
+import { useDialogCloseTransition } from "../components/dialogs/useDialogCloseTransition";
 import { Icon } from "../components/Icon";
 import { editorLanguageForFileName } from "../editor/editorLanguage";
 import {
@@ -86,6 +87,7 @@ export function GitChangePreview(props: GitChangePreviewProps) {
   const [message, setMessage] = useState("");
   const [filesExpanded, setFilesExpanded] = useState(false);
   const [reloadNonce, setReloadNonce] = useState(0);
+  const { closing, closeWithTransition } = useDialogCloseTransition();
   const loadSequence = useRef(0);
   const loaderRef = useRef<(path: string, staged: boolean) => Promise<PreviewDetail>>(() => Promise.reject(new Error("预览尚未初始化")));
   const loadWorking = commitMode ? null : props.onLoad;
@@ -140,7 +142,8 @@ export function GitChangePreview(props: GitChangePreviewProps) {
   return <DialogFrame
     title="预览 Git 更改"
     subtitle={commitMode ? `${props.repositoryName} · ${props.commit.subject}` : props.repositoryName}
-    onClose={props.onClose}
+    onClose={() => closeWithTransition(props.onClose)}
+    closing={closing}
     wide
     className="git-change-preview-dialog"
     scrimClassName="git-change-preview-scrim"

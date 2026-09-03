@@ -160,6 +160,7 @@ describe("GitPane merge, operations, and remote routing", () => {
     await screen.findByRole("dialog", { name: "预览 Git 更改" });
     await waitFor(() => expect(api.changeDiff).toHaveBeenCalledWith("D:/work/project", "src/staged.ts", true));
     fireEvent.click(screen.getByRole("button", { name: "关闭" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "预览 Git 更改" })).not.toBeInTheDocument());
 
     const worktree = screen.getByRole("button", { name: "预览工作区更改 src/new.ts" });
     fireEvent.click(worktree);
@@ -168,6 +169,7 @@ describe("GitPane merge, operations, and remote routing", () => {
     fireEvent.click(worktree);
     await waitFor(() => expect(api.changeDiff).toHaveBeenCalledWith("D:/work/project", "src/new.ts", false));
     fireEvent.click(screen.getByRole("button", { name: "关闭" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "预览 Git 更改" })).not.toBeInTheDocument());
 
     fireEvent.click(screen.getByRole("button", { name: "暂存 src/new.ts" }));
     await waitFor(() => expect(api.stage).toHaveBeenCalledWith("D:/work/project", ["src/new.ts"]));
@@ -289,7 +291,7 @@ describe("GitPane merge, operations, and remote routing", () => {
     const resolver = await screen.findByRole("dialog", { name: "解决合并冲突" });
     fireEvent.click(within(resolver).getByRole("button", { name: "采用当前" }));
     await waitFor(() => expect(api.resolveConflict).toHaveBeenCalledWith("D:/work/project", "src/conflict.ts", { type: "useCurrent" }));
-    await waitFor(() => expect(resolver).toHaveClass("git-conflict-dialog--closing"));
+    await waitFor(() => expect(resolver).toHaveAttribute("data-state", "closing"));
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "解决合并冲突" })).not.toBeInTheDocument());
     await waitFor(() => expect(screen.getByRole("button", { name: "继续合并" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "继续合并" }));

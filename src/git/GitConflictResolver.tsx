@@ -3,6 +3,7 @@ import type { EditorView } from "@codemirror/view";
 
 import { Button, StatusBadge } from "../components/Button";
 import { DialogActionStatus, DialogFrame } from "../components/dialogs/DialogFrame";
+import { useDialogCloseTransition } from "../components/dialogs/useDialogCloseTransition";
 import { Icon } from "../components/Icon";
 import { editorLanguageForFileName } from "../editor/editorLanguage";
 import { gitError, type GitChange, type GitConflictDetail, type GitConflictResolution, type GitConflictVersion, type GitSnapshot } from "../lib/tauri/git";
@@ -11,7 +12,6 @@ import { findGitConflictBlocks, gitConflictEditorExtension, goToGitConflict } fr
 const CodeEditor = lazy(() => import("../files/CodeEditor").then((module) => ({ default: module.CodeEditor })));
 const GitConflictInputComparison = lazy(() => import("./editor/GitConflictInputComparison").then((module) => ({ default: module.GitConflictInputComparison })));
 const resultConflictExtension = gitConflictEditorExtension();
-const CONFLICT_DIALOG_EXIT_MS = 130;
 
 export function GitConflictResolver({
   conflicts,
@@ -37,7 +37,7 @@ export function GitConflictResolver({
   const [sidebarExpanded, setSidebarExpanded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [closing, setClosing] = useState(false);
+  const { closing, closeWithTransition } = useDialogCloseTransition();
   const [message, setMessage] = useState("");
   const [pendingPath, setPendingPath] = useState<string | null>(null);
   const [closeRequested, setCloseRequested] = useState(false);
@@ -46,28 +46,14 @@ export function GitConflictResolver({
   const resultViewRef = useRef<EditorView | null>(null);
   const sidebarToggleRef = useRef<HTMLButtonElement | null>(null);
   const focusNextResult = useRef(false);
-  const closeTimer = useRef<number | null>(null);
 
   const closeDialog = useCallback(() => {
-    if (closing || closeTimer.current !== null) return;
-    if (typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      onClose();
-      return;
-    }
-    setClosing(true);
-    closeTimer.current = window.setTimeout(() => {
-      closeTimer.current = null;
-      onClose();
-    }, CONFLICT_DIALOG_EXIT_MS);
-  }, [closing, onClose]);
+    closeWithTransition(onClose);
+  }, [closeWithTransition, onClose]);
 
   useEffect(() => {
     onLoadRef.current = onLoad;
   }, [onLoad]);
-
-  useEffect(() => () => {
-    if (closeTimer.current !== null) window.clearTimeout(closeTimer.current);
-  }, []);
 
   const dirty = Boolean(detail?.editable && draft !== (detail.result.content ?? ""));
   const selected = conflicts.find((change) => change.path === selectedPath) ?? conflicts[0] ?? null;
@@ -172,8 +158,9 @@ export function GitConflictResolver({
       title="解决合并冲突"
       subtitle={`${repositoryName} · ${conflicts.length} 个待解决${mergeHeadOid ? ` · ${mergeHeadOid.slice(0, 8)}` : ""}`}
       wide
-      className={`git-conflict-dialog${closing ? " git-conflict-dialog--closing" : ""}`}
-      scrimClassName={`git-conflict-scrim${closing ? " git-conflict-scrim--closing" : ""}`}
+      className="git-conflict-dialog"
+      scrimClassName="git-conflict-scrim"
+      closing={closing}
       dismissible={!busy}
       onClose={requestClose}
       headerActions={<StatusBadge tone={conflicts.length > 0 ? "warning" : "success"} size="compact">{conflicts.length} 个冲突</StatusBadge>}

@@ -24,6 +24,7 @@
 - `src/workspace/workspaceRuntime.ts`：Workspace runtime 类型、默认值、epoch/failure key、connection intent 与 route notice 纯规则；不持有 React state 或可变全局单例。
 - `src/workspace/connectionProgress.ts`、`src/components/ConnectionRouteProgress.tsx`：Terminal/Files/Network/Git SSH Block 共用的 route 事件展示状态映射与悬浮进度组件；`src/components/HostIdentity.tsx` 统一直连/route 完成态的主机概要、视口浮层和地址复制；这些组件不管理 session、认证、凭证或持久化。
 - `src/components/Button.tsx`、`button.css`：共享文本按钮、图标按钮与非交互状态标签的语义、尺寸、主题和可访问契约；不拥有 feature 事件、tabs、菜单项、列表行或选择卡片行为。
+- `src/components/dialogs/DialogFrame.tsx`、`dialogFrame.css`、`useDialogCloseTransition.ts`：共享 modal 的结构、焦点栈、进入/退出展示状态与 reduced-motion 生命周期；feature 继续拥有关闭后的业务动作和父级挂载状态，该层不执行保存、删除、连接或持久化。
 - `src/workspace/fileWindow.ts`：终端快捷方式和右侧工具轨共用的文件窗口打开策略；不创建 session 或读取文件系统。
 - `src/workspace/networkWindow.ts`：远程终端快捷方式和右侧工具轨共用的 Network Block 打开策略；不创建 session 或启动规则。
 - `src/workspace/gitWindow.ts`：右侧工具轨共用的 Git Block 上下文打开策略；从本机或远程 Files 路径以及同 profile 的有效 Terminal OSC 7 目录派生显式 target，不解析仓库或执行 Git。
@@ -109,7 +110,7 @@
 - `src/network/`：负责网络规则配置 UI、共享刷新、运行状态展示、安全暴露提示和可复制访问地址派生；不实现 SSH/SOCKS5 协议、浏览器进程启动或持久化。
 - `src/git/`：负责单仓库 Git Block 的稳定组合入口、Local/Remote action adapter、快照与刷新代次、提交检查缓存、状态驱动的单步主动作派生、分区展示、分支/同步/安全合并浮层、仅内存 attention 操作记录、最近仓库、受限目录浏览和提交图拓扑；presentation 不直接调用 Tauri IPC，feature 不拥有 Workspace 持久化、session 生命周期、Git 校验/命令/refspec/merge strategy 规则，也不直接启动 Git、自动串联 mutation、创建 SSH channel、读取文件内容、承接文件管理能力或实现 force/remote URL/高级历史改写。
 - `src/components/`：负责跨 feature 的小型展示与交互原语；不吸收 feature 状态、业务编排或领域规则。
-- `src/components/dialogs/`：负责连接、传输、设置、帮助与确认弹窗；不定义领域规则或直接操作 Rust infrastructure。
+- `src/components/dialogs/`：负责连接、传输、设置、帮助与确认弹窗，以及共享 modal 的焦点栈和短时展示生命周期；不定义领域规则、决定关闭后的业务动作或直接操作 Rust infrastructure。
 - `src/test/`：负责前端测试运行环境；不放置生产代码。
 - `src/lib/tauri/`：负责类型安全的前端 IPC 调用；不持有领域规则或直接访问文件系统。
 - `scripts/`：负责开发工具入口与参数路由；不承载运行时产品逻辑、用户数据迁移、任意外部命令或发布身份决策。

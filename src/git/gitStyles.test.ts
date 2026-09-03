@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 
 // @ts-expect-error Node built-in types are intentionally absent from the browser production config.
 import { readFileSync } from "node:fs";
-
 const gitStyleFiles = [
   "gitShell.css",
   "gitRepositoryTree.css",
@@ -715,10 +714,6 @@ describe("Git pane style contracts", () => {
     expect(conflictStyles).toContain(".git-conflict-comparison.cm-activeLineGutter{background:transparent;box-shadow:none}");
     expect(conflictStyles).toContain(".git-conflict-result.cm-activeLineGutter{color:var(--editor-gutter-foreground);box-shadow:none}");
     expect(conflictStyles).toContain(".git-conflict-result.cm-git-conflict-current,.git-conflict-result.cm-git-conflict-incoming,.git-conflict-result.cm-git-conflict-active{box-shadow:none}");
-    expect(conflictStyles).toContain(".git-conflict-dialog{animation:git-conflict-dialog-in.16scubic-bezier(.2,.8,.2,1)}");
-    expect(conflictStyles).toContain(".git-conflict-dialog--closing{animation:git-conflict-dialog-out.13sease-inforwards;");
-    expect(conflictStyles).toContain("@keyframesgit-conflict-dialog-in");
-    expect(conflictStyles).toContain("@keyframesgit-conflict-dialog-out");
     expect(conflictStyles).toContain("@media(max-width:820px)");
     expect(conflictStyles).toContain("@media(prefers-reduced-motion:reduce)");
     expect(conflictStyles).toContain(".git-conflict-file-popover{transition:opacity.1sease-out;transform:none}");

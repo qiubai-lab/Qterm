@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 
 import { Button } from "../components/Button";
 import { DialogFrame } from "../components/dialogs/DialogFrame";
+import { useDialogCloseTransition } from "../components/dialogs/useDialogCloseTransition";
 import { ExactTextInput } from "../components/ExactTextInput";
 import { Icon } from "../components/Icon";
 import { listRemoteGitDirectory, type GitDirectoryEntry, type GitDirectoryListing } from "../lib/tauri/git";
@@ -53,6 +54,7 @@ export function GitRepositoryPickerDialog(props: GitRepositoryPickerDialogProps)
   const [error, setError] = useState("");
   const request = useRef(0);
   const listScroll = useRef<HTMLDivElement>(null);
+  const { closing, closeWithTransition } = useDialogCloseTransition();
 
   const entries = listing?.entries ?? [];
   const virtualized = entries.length > pickerVirtualThreshold;
@@ -145,6 +147,9 @@ export function GitRepositoryPickerDialog(props: GitRepositoryPickerDialogProps)
     };
   }, [initialPath, load]);
 
+  const closeDialog = useCallback(() => closeWithTransition(onClose), [closeWithTransition, onClose]);
+  const selectPath = useCallback((nextPath: string) => closeWithTransition(() => onSelect(nextPath)), [closeWithTransition, onSelect]);
+
   useLayoutEffect(() => {
     const container = listScroll.current;
     if (!container) return;
@@ -183,7 +188,7 @@ export function GitRepositoryPickerDialog(props: GitRepositoryPickerDialogProps)
     setSelectingSystem(true);
     try {
       const selected = await props.onSelectSystemDirectory();
-      if (selected) onSelect(selected);
+      if (selected) selectPath(selected);
     } catch (reason) {
       setError(directoryErrorMessage(reason, true));
     } finally {
@@ -195,8 +200,9 @@ export function GitRepositoryPickerDialog(props: GitRepositoryPickerDialogProps)
     title={local ? "选择本机仓库目录" : "选择远程仓库目录"}
     subtitle={local ? "浏览本机目录，或使用系统目录选择器" : "浏览服务器目录，或直接输入远程路径"}
     className="git-repository-picker-dialog"
+    closing={closing}
     dismissible={!selectingSystem}
-    onClose={onClose}
+    onClose={closeDialog}
   >
     <div className="git-repository-picker">
       <nav className="git-repository-picker-toolbar" aria-label={`${local ? "本机" : "远程"}目录导航`}>
@@ -284,7 +290,7 @@ export function GitRepositoryPickerDialog(props: GitRepositoryPickerDialogProps)
 
       <footer className="git-repository-picker-footer" data-local={local || undefined}>
         <div><span>选择路径</span><code title={selectablePath || pathDraft}>{selectablePath || "请输入有效路径"}</code></div>
-        <div>{local && <Button loading={selectingSystem} disabled={loading} onClick={() => void selectWithSystemDialog()}>{selectingSystem ? "正在选择…" : "使用系统选择器"}</Button>}<Button variant="danger" disabled={selectingSystem} onClick={onClose}>取消</Button><Button variant="primary" disabled={!selectablePath || selectingSystem} onClick={() => selectablePath && onSelect(selectablePath)}>选择此路径</Button></div>
+        <div>{local && <Button loading={selectingSystem} disabled={loading || closing} onClick={() => void selectWithSystemDialog()}>{selectingSystem ? "正在选择…" : "使用系统选择器"}</Button>}<Button variant="danger" disabled={selectingSystem || closing} onClick={closeDialog}>取消</Button><Button variant="primary" disabled={!selectablePath || selectingSystem || closing} onClick={() => selectablePath && selectPath(selectablePath)}>选择此路径</Button></div>
       </footer>
     </div>
   </DialogFrame>, document.body);

@@ -476,9 +476,9 @@ describe("application layout styles", () => {
     expect(styles).toMatch(/prefers-reduced-transparency:reduce[\s\S]*\.terminal-block,.terminal-surface,.file-browser,.network-pane\{background:var\(--surface\)\}/);
   });
 
-  it("keeps precision controls on stable pixels during dialog entry", () => {
-    expect(styles).toContain("@keyframes dialog-in{from{opacity:0}to{opacity:1}}");
-    expect(styles).not.toMatch(/@keyframes dialog-in\{[^}]*transform:/);
+  it("gives dialogs short spatial entry motion while keeping resting controls pixel-aligned", () => {
+    expect(styles).toContain("@keyframes dialog-in{from{opacity:0;transform:translateY(6px) scale(.985)}to{opacity:1;transform:none}}");
+    expect(styles).toMatch(/prefers-reduced-motion:reduce[\s\S]*\.dialog-frame\{transform:none\}/);
     expect(lastDeclarations(".settings-nav-item")).toContain("grid-template-columns:28px minmax(0,1fr)");
     expect(lastDeclarations(".settings-nav-item:active")).toContain("transform:none");
     expect(lastDeclarations(".settings-nav-icon")).toContain("position:relative");

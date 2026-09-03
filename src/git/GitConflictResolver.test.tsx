@@ -81,7 +81,7 @@ describe("GitConflictResolver", () => {
     render(<GitConflictResolver conflicts={conflicts} initialPath="src/alpha.ts" repositoryName="repo" onLoad={vi.fn().mockResolvedValue(detail)} onResolve={vi.fn()} onClose={onClose}/>);
     const dialog = screen.getByRole("dialog", { name: "解决合并冲突" });
     fireEvent.click(within(dialog).getByRole("button", { name: "关闭" }));
-    expect(dialog).toHaveClass("git-conflict-dialog--closing");
+    expect(dialog).toHaveAttribute("data-state", "closing");
     expect(onClose).not.toHaveBeenCalled();
     act(() => vi.advanceTimersByTime(129));
     expect(onClose).not.toHaveBeenCalled();
