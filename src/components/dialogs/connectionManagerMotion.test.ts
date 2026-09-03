@@ -20,9 +20,9 @@ describe("connection manager selection motion", () => {
   });
 
   it("distinguishes profile switching from creation and honors reduced motion", () => {
-    expect(styles).toContain(".connection-editor-profile-stage.switching-down{animation:connection-profile-enter-from-below150mscubic-bezier(.2,.8,.2,1)}");
-    expect(styles).toContain(".connection-editor-profile-stage.switching-up{animation:connection-profile-enter-from-above150mscubic-bezier(.2,.8,.2,1)}");
-    expect(styles).toContain(".connection-editor-profile-stage.creating{animation:connection-profile-create240mscubic-bezier(.2,.8,.2,1)}");
+    expect(styles).toContain(".connection-editor-profile-stage.switching-down{animation:connection-profile-enter-from-below200mscubic-bezier(.33,1,.68,1)}");
+    expect(styles).toContain(".connection-editor-profile-stage.switching-up{animation:connection-profile-enter-from-above200mscubic-bezier(.33,1,.68,1)}");
+    expect(styles).toContain(".connection-editor-profile-stage.creating{animation:connection-profile-create240mscubic-bezier(.33,1,.68,1)}");
     expect(styles).not.toContain("connection-editor-profile-snapshot");
     expect(styles).not.toContain("view-transition-name");
     expect(styles).not.toContain("::view-transition-");
