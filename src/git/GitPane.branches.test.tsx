@@ -157,6 +157,18 @@ describe("GitPane branches and repository actions", () => {
     expect(screen.getByText("project")).toBeInTheDocument();
     expect(screen.getByText("src/staged.ts")).toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent("上次 Git 操作失败");
+
+    fireEvent.focus(window);
+    await waitFor(() => expect(api.snapshot).toHaveBeenCalledTimes(3));
+    expect(screen.getByRole("alert")).toHaveTextContent("后台读取失败");
+
+    const retry = deferred<GitSnapshot>();
+    api.fetch.mockReturnValueOnce(retry.promise);
+    fireEvent.click(screen.getByRole("button", { name: "刷新 Git 状态" }));
+    await waitFor(() => expect(api.fetch).toHaveBeenCalledOnce());
+    expect(screen.getByRole("alert")).toHaveTextContent("后台读取失败");
+    await act(async () => retry.resolve(snapshot));
+    await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
   });
 
   it("does not reload an open preview after an equivalent background snapshot", async () => {

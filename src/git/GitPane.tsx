@@ -160,9 +160,9 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
     if (activeRepositoryPath === repositoryPath && reportedRepositoryKeyRef.current !== gitTargetKey(target)) reportedRepositoryKeyRef.current = null;
   }, [activeRepositoryPath, repositoryPath, repositorySnapshotFor, target, updateBusy]);
 
-  const applySnapshot = useCallback((next: GitSnapshot, preserveEquivalent = false) => {
-    setError(null);
-    if (preserveEquivalent && snapshotRef.current && gitSnapshotsPresentSameState(snapshotRef.current, next)) return false;
+  const applySnapshot = useCallback((next: GitSnapshot, options: { preserveEquivalent?: boolean; preserveError?: boolean } = {}) => {
+    if (!options.preserveError) setError(null);
+    if (options.preserveEquivalent && snapshotRef.current && gitSnapshotsPresentSameState(snapshotRef.current, next)) return false;
     snapshotRef.current = next;
     setSnapshot(next);
     registerRepositorySnapshot(next);
@@ -195,7 +195,7 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
     return true;
   }, [activeRepositoryPath, registerRepositorySnapshot, remote, remoteProfileId, repositoryPath]);
 
-  const refreshSnapshot = useCallback(async () => {
+  const refreshSnapshot = useCallback(async (clearErrorOnSuccess = false) => {
     if (!activeRepositoryPath || !visible || !remoteReady || !available || document.visibilityState === "hidden") return;
     if (busyRef.current || backgroundRequestRef.current !== null) return;
     const request = ++epoch.current;
@@ -203,7 +203,7 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
     setBackgroundRefreshing(true);
     try {
       const next = await loadSnapshot(activeRepositoryPath);
-      if (request === epoch.current) applySnapshot(next, true);
+      if (request === epoch.current) applySnapshot(next, { preserveEquivalent: true, preserveError: !clearErrorOnSuccess });
     } catch (cause) {
       if (request === epoch.current) setError(gitError(cause));
     } finally {
@@ -218,7 +218,6 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
     if (!activeRepositoryPath || !visible || !remoteReady || busyRef.current) return;
     const request = ++epoch.current;
     updateBusy("fetch");
-    setError(null);
     try {
       const next = await fetchSnapshot(activeRepositoryPath);
       if (request === epoch.current) applySnapshot(next);
@@ -285,7 +284,7 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
   async function mutate(label: string, operation: () => Promise<GitSnapshot>, clearMessage = false): Promise<boolean> {
     if (busyRef.current) return false;
     const request = ++epoch.current;
-    updateBusy(label); setError(null);
+    updateBusy(label);
     try {
       const next = await operation();
       if (request !== epoch.current) return false;
@@ -335,7 +334,6 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
     const request = ++epoch.current;
     const recordId = beginOperation(name);
     updateBusy(name);
-    setError(null);
     try {
       const next = await operation();
       if (request !== epoch.current) return false;
@@ -360,7 +358,6 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
     const request = ++epoch.current;
     const recordId = beginOperation("合并分支");
     updateBusy("merge");
-    setError(null);
     try {
       const next = await mergeBranch(root, sourceRef);
       if (request !== epoch.current) return false;
@@ -397,7 +394,6 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
     const recordId = beginOperation("同步");
     let pullCompleted = false;
     updateBusy("sync");
-    setError(null);
     try {
       const pulled = await pullRepository(root);
       if (request !== epoch.current) return;
@@ -532,7 +528,6 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
       .map((path) => unstaged.find((change) => change.path === path))
       .filter((change): change is GitChange => Boolean(change));
     setChangeMenu(null);
-    setError(null);
     if (selected.length > 0) setDiscardConfirmation({ changes: selected });
   }
 
@@ -541,7 +536,6 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
     const paths = discardConfirmation.changes.map((change) => change.path);
     const request = ++epoch.current;
     updateBusy("discard");
-    setError(null);
     try {
       const next = await discardPaths(root, paths);
       if (request !== epoch.current) return;
@@ -639,7 +633,6 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
     if (!root || busyRef.current) throw new Error("Git 正在执行其他操作");
     const request = ++epoch.current;
     updateBusy("resolveConflict");
-    setError(null);
     try {
       const next = await resolveConflict(root, path, resolution);
       if (request !== epoch.current) throw new Error("仓库状态已变化，请重新打开冲突解决器");
@@ -683,7 +676,6 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
     setCommitContextMenu(null);
     setCommitBranchSource(commit);
     setNewBranch("");
-    setError(null);
     setRepositoryOverlay({
       kind: "createBranchFromCommit",
       repositoryPath: activeRepositoryPath ?? "",
@@ -710,7 +702,6 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
     setRepositorySubmenu(null);
     if (["createBranch", "createBranchFrom", "renameBranch", "deleteBranch", "publishBranch", "mergeBranch", "abortMerge"].includes(kind)) {
       setNewBranch("");
-      setError(null);
     }
     if (kind === "branches") setBranchQuery("");
     if (kind === "createBranchFrom") setBranchSourceRef(branchOptions.find((branch) => branch.current)?.refName ?? branchOptions[0]?.refName ?? "");
@@ -879,7 +870,6 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
     const request = ++epoch.current;
     const recordId = beginOperation(name);
     updateBusy(name);
-    setError(null);
     try {
       const parentSnapshot = await operation(node.parentPath, node.submodule.path);
       if (request !== epoch.current) return;
@@ -919,7 +909,7 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
   if (!repositoryPath) return <GitEmpty icon="git" title="选择本机仓库" detail="Git Block 一次管理一个本机或 SSH 工作区仓库。" action="选择文件夹" onAction={onRequestRepositoryChange}/>;
   if (remote && !remoteReady && !snapshot) return <GitEmpty icon="git" title={runtime?.status === "connecting" || runtime?.status === "authenticating" ? "正在连接远程 Git…" : "远程 Git 尚未连接"} detail={runtime?.notice || repositoryPath} secondary="更换远程路径" onSecondary={onRequestRepositoryChange}/>;
   if (error?.code === "notGitRepository") return <GitEmpty icon="git" title="尚未初始化存储库" detail={repositoryPath} action="初始化存储库" secondary={remote ? "更换远程路径" : "更换文件夹"} onAction={() => void mutate("initialize", () => initialize(repositoryPath))} onSecondary={onRequestRepositoryChange}/>;
-  if (error && !snapshot) return <GitEmpty icon="git" title={gitFailureTitle(error.code)} detail={error.message} action={error.code === "gitMissing" || error.code === "gitUnsupportedRemote" ? undefined : "重试"} secondary={remote ? "更换远程路径" : "更换文件夹"} onAction={() => void refreshSnapshot()} onSecondary={onRequestRepositoryChange}/>;
+  if (error && !snapshot) return <GitEmpty icon="git" title={gitFailureTitle(error.code)} detail={error.message} action={error.code === "gitMissing" || error.code === "gitUnsupportedRemote" ? undefined : "重试"} secondary={remote ? "更换远程路径" : "更换文件夹"} onAction={() => void refreshSnapshot(true)} onSecondary={onRequestRepositoryChange}/>;
 
   return <><div className="git-pane" data-block-id={blockId} data-busy={disabled || undefined} aria-busy={disabled}>
     <GitRepositorySection
