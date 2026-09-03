@@ -298,8 +298,8 @@ describe("Git pane style contracts", () => {
   it("uses a stable semantic merge state bar with restrained attention and explicit actions", () => {
     const mergeState = declarations(".git-merge-state");
     expect(mergeState).toContain("display: grid");
-    expect(mergeState).toContain("border: 1px solid color-mix(in srgb, var(--warning)");
-    expect(mergeState).toContain("background: color-mix(in srgb, var(--warning)");
+    expect(mergeState).toContain("border: 1px solid color-mix(in srgb, var(--danger)");
+    expect(mergeState).toContain("background: color-mix(in srgb, var(--danger-bg)");
     expect(mergeState).toContain("color: var(--text)");
     expect(declarations(".git-merge-state-copy")).toContain("min-width: 0");
     expect(declarations(".git-merge-state-actions")).toContain("display: flex");
@@ -696,7 +696,7 @@ describe("Git pane style contracts", () => {
   });
 
   it("gives the conflict manager bounded independent scrollers and semantic focus states", () => {
-    expect(conflictStyles).toContain(".dialog-frame.dialog-wide.git-conflict-dialog{width:min(1480px,calc(100vw-48px));height:min(920px,calc(100vh-48px));max-height:calc(100vh-48px)}");
+    expect(conflictStyles).toMatch(/^\.dialog-frame\.dialog-wide\.git-conflict-dialog\{width:min\(1480px,100%\);max-width:100%;height:min\(920px,100%\);max-height:100%\}/);
     expect(conflictStyles).toContain(".git-conflict-dialog>.dialog-content{display:flex;min-width:0;min-height:0;flex:1;");
     expect(conflictStyles).toContain(".git-conflict-manager{display:flex;min-width:0;min-height:0;flex:1;overflow:hidden}");
     expect(conflictStyles).toContain(".git-conflict-sidebar{position:relative;display:flex;min-width:0;min-height:0;flex:0034px;");

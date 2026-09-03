@@ -21,6 +21,13 @@ describe("repository row layout and interaction styles", () => {
     expect(css).toContain(".git-repository-treeitem button:focus-visible");
   });
 
+  it("defines repository row hover with a crisp full inset edge", () => {
+    const hover = css.match(/\.git-repository-treeitem:not\(\[data-selected="true"\]\):hover \{([^}]+)\}/u)?.[1];
+    expect(hover).toContain("background: var(--file-active-surface)");
+    expect(hover).toContain("box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--file-active-marker) 72%, var(--border))");
+    expect(hover).not.toContain("inset 2px 0");
+  });
+
   it("uses stationary edge feedback for hover and press without animating geometry", () => {
     const rest = css.match(/:is\(\.git-repository-node-controls, \.git-repository-tree-actions\) button,\s*\.git-repository-tree-toggle \{([^}]+)\}/u)?.[1];
     expect(rest).toContain("appearance: none");

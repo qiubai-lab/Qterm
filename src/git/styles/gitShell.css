@@ -321,15 +321,15 @@
   gap: 7px;
   margin: 7px 8px 0;
   padding: 6px 7px;
-  border: 1px solid color-mix(in srgb, var(--warning) 46%, var(--border));
+  border: 1px solid color-mix(in srgb, var(--danger) 46%, var(--border));
   border-radius: 7px;
   color: var(--text);
-  background: color-mix(in srgb, var(--warning) 10%, var(--raised));
-  box-shadow: inset 0 1px color-mix(in srgb, var(--warning) 10%, transparent);
+  background: color-mix(in srgb, var(--danger-bg) 72%, var(--raised));
+  box-shadow: inset 0 1px color-mix(in srgb, var(--danger) 12%, transparent);
 }
 
 .git-merge-state > svg {
-  color: var(--warning);
+  color: var(--danger);
 }
 
 .git-merge-state-copy {

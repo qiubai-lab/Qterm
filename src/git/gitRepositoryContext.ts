@@ -23,6 +23,14 @@ const issueLabels: Record<GitSubmoduleIssue, string> = {
   unreadable: "状态不可读取",
 };
 
+const issueResolutionLabels: Record<GitSubmoduleIssue, string> = {
+  missingConfiguration: "缺少 .gitmodules 配置。请修复对应路径配置后刷新仓库。",
+  missingGitlink: "父仓库索引缺少 Gitlink。请恢复子模块引用后刷新仓库。",
+  duplicatePath: "子模块名称或路径配置重复。请修正 .gitmodules 后刷新仓库。",
+  invalidPath: "子模块路径无效。请修正 .gitmodules 中的相对路径后刷新仓库。",
+  unreadable: "无法读取子模块状态。请检查路径、权限和 Git 配置后刷新仓库。",
+};
+
 export function gitSubmoduleState(submodule: GitSubmodule): string {
   if (submodule.issue) return issueLabels[submodule.issue];
   if (submodule.conflict) return "引用冲突";
@@ -39,6 +47,16 @@ export function gitSubmoduleUnavailableReason(submodule: GitSubmodule): string |
   if (submodule.issue) return issueLabels[submodule.issue];
   if (submodule.conflict) return "子模块引用存在冲突";
   return undefined;
+}
+
+export function gitRepositorySelectionUnavailableReason(node: GitRepositoryTreeNode, disabled: boolean, remoteReady: boolean): string | null {
+  const submodule = node.submodule;
+  if (submodule?.issue) return issueResolutionLabels[submodule.issue];
+  if (submodule?.conflict) return "子模块引用存在冲突。请先在父仓库解决该路径的合并冲突。";
+  if (submodule && !submodule.initialized) return "子模块尚未初始化。请点击“初始化”后再选择。";
+  if (!remoteReady) return "远程 Git 尚未连接。请恢复连接后再选择。";
+  if (disabled) return "Git 操作正在进行。请等待当前操作完成后再选择。";
+  return null;
 }
 
 export function joinGitRepositoryPath(parentPath: string, relativePath: string): string | null {

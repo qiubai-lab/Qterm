@@ -52,7 +52,7 @@
 .git-repository-treeitem:not([data-selected="true"]):hover {
   color: var(--text-strong);
   background: var(--file-active-surface);
-  box-shadow: inset 2px 0 color-mix(in srgb, var(--file-active-marker) 72%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--file-active-marker) 72%, var(--border));
 }
 
 .git-repository-treeitem[data-selected="true"],
@@ -105,6 +105,42 @@
 .git-repository-treeitem[aria-disabled="true"] .git-repository-tree-select {
   color: var(--text-disabled);
   cursor: not-allowed;
+}
+
+.git-repository-unavailable-hint {
+  position: fixed;
+  z-index: 130;
+  display: flex;
+  box-sizing: border-box;
+  width: max-content;
+  max-width: min(300px, calc(100vw - 16px));
+  gap: 7px;
+  align-items: flex-start;
+  padding: 7px 9px;
+  border: 1px solid color-mix(in srgb, var(--danger) 48%, var(--border));
+  border-radius: 7px;
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger-bg) 94%, var(--raised));
+  box-shadow: 0 8px 26px var(--shadow-strong);
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1.5;
+  pointer-events: none;
+  animation: git-repository-unavailable-hint-in 120ms ease-out;
+}
+
+.git-repository-unavailable-hint[data-placement="above"] {
+  transform: translateY(-100%);
+}
+
+.git-repository-unavailable-hint > svg {
+  flex: none;
+  margin-top: 1px;
+}
+
+@keyframes git-repository-unavailable-hint-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .git-repository-tree-toggle {
@@ -316,5 +352,9 @@
   :is(.git-repository-node-controls, .git-repository-tree-actions) button {
     transition: none;
     will-change: auto;
+  }
+
+  .git-repository-unavailable-hint {
+    animation: none;
   }
 }

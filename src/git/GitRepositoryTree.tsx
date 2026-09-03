@@ -1,7 +1,8 @@
-import { useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
+import { useId, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
 
 import { Icon } from "../components/Icon";
-import { gitSubmoduleUnavailableReason, type GitRepositoryTreeNode } from "./gitRepositoryContext";
+import { GitRepositoryUnavailableHint, type GitRepositoryUnavailableHintState } from "./GitRepositoryUnavailableHint";
+import { gitRepositorySelectionUnavailableReason, gitSubmoduleUnavailableReason, type GitRepositoryTreeNode } from "./gitRepositoryContext";
 import { branchOverlayKinds, type GitRepositoryOverlay } from "./gitPaneTypes";
 import { useGitRepositoryRowLayout } from "./useGitRepositoryRowLayout";
 
@@ -35,6 +36,8 @@ export function GitRepositoryTree({
   onRegisterActionsButton: (path: string, element: HTMLButtonElement | null) => void;
 }) {
   const [focusState, setFocusState] = useState(() => ({ activePath, path: activePath ?? nodes[0]?.path ?? "" }));
+  const [unavailableHint, setUnavailableHint] = useState<GitRepositoryUnavailableHintState | null>(null);
+  const unavailableHintId = useId();
   const itemRefs = useRef(new Map<string, HTMLButtonElement>());
   const { treeRef, densities } = useGitRepositoryRowLayout(nodes);
   const visiblePaths = useMemo(() => nodes.map((node) => node.path), [nodes]);
@@ -91,13 +94,14 @@ export function GitRepositoryTree({
       const branch = branchLabel(node);
       const branchOpen = repositoryOverlay?.repositoryPath === node.path && branchOverlayKinds.has(repositoryOverlay.kind);
       const actionsOpen = repositoryOverlay?.repositoryPath === node.path && !branchOverlayKinds.has(repositoryOverlay.kind);
+      const selectionUnavailableReason = gitRepositorySelectionUnavailableReason(node, disabled, remoteReady);
       return <div
         className="git-repository-treeitem"
         role="treeitem"
         aria-level={node.depth + 1}
         aria-selected={selected}
         aria-expanded={node.hasChildren ? node.expanded : undefined}
-        aria-disabled={!node.selectable || undefined}
+        aria-disabled={selectionUnavailableReason ? true : undefined}
         data-selected={selected || undefined}
         data-attention={submodule && node.state !== "干净" || undefined}
         data-depth={node.depth}
@@ -118,7 +122,12 @@ export function GitRepositoryTree({
           tabIndex={focusedPath === node.path ? 0 : -1}
           aria-label={`${selected ? "当前存储库" : "切换到"} ${node.name}，${node.state}`}
           aria-current={selected ? "true" : undefined}
-          onFocus={() => setFocusState({ activePath, path: node.path })}
+          aria-disabled={selectionUnavailableReason ? true : undefined}
+          aria-describedby={selectionUnavailableReason ? unavailableHintId : undefined}
+          onFocus={(event) => { setFocusState({ activePath, path: node.path }); if (selectionUnavailableReason) setUnavailableHint({ target: event.currentTarget, message: selectionUnavailableReason }); }}
+          onBlur={() => setUnavailableHint(null)}
+          onPointerEnter={(event) => { if (selectionUnavailableReason) setUnavailableHint({ target: event.currentTarget, message: selectionUnavailableReason }); }}
+          onPointerLeave={(event) => { if (document.activeElement !== event.currentTarget) setUnavailableHint(null); }}
           onClick={() => node.selectable && !disabled && onSelect(node)}
         >
           <Icon name="git" size={13}/>
@@ -139,5 +148,6 @@ export function GitRepositoryTree({
         </div>}
       </div>;
     })}
+    <GitRepositoryUnavailableHint id={unavailableHintId} hint={unavailableHint}/>
   </div>;
 }

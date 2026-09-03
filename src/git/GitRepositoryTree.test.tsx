@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import type { GitRepositoryTreeNode } from "./gitRepositoryContext";
@@ -65,14 +65,42 @@ describe("GitRepositoryTree", () => {
     expect(container.querySelector(".git-repository-selection-indicator")).toBe(indicator);
   });
 
-  it("keeps unavailable repositories readable but unselectable", () => {
-    const unavailable = node("D:/repo/modules/missing", 1, { selectable: false, state: "未初始化" });
+  it("explains unavailable repositories on hover and keyboard focus", async () => {
+    const unavailable = node("D:/repo/modules/missing", 1, { selectable: false, state: "未初始化", submodule: { name: "missing", path: "modules/missing", recordedOid: "1".repeat(40), currentOid: null, initialized: false, commitChanged: false, trackedModified: false, untrackedContent: false, conflict: false, issue: null } });
     const onSelect = vi.fn();
     render(<GitRepositoryTree {...actionProps} nodes={[node("D:/repo", 0), unavailable]} activePath="D:/repo" disabled={false} onSelect={onSelect} onToggle={vi.fn()} onInitialize={vi.fn()}/>);
 
     const item = screen.getByRole("treeitem", { name: /missing/u });
     expect(item).toHaveAttribute("aria-disabled", "true");
-    fireEvent.click(screen.getByRole("button", { name: "切换到 missing，未初始化" }));
+    const select = screen.getByRole("button", { name: "切换到 missing，未初始化" });
+    expect(select).toHaveAttribute("aria-disabled", "true");
+    fireEvent.pointerEnter(select);
+    const tooltip = await screen.findByRole("tooltip");
+    expect(tooltip).toHaveTextContent("子模块尚未初始化。请点击“初始化”后再选择。");
+    expect(tooltip.parentElement).toBe(document.body);
+    expect(select).toHaveAttribute("aria-describedby", tooltip.id);
+    fireEvent.pointerLeave(select);
+    await waitFor(() => expect(screen.queryByRole("tooltip")).not.toBeInTheDocument());
+    fireEvent.focus(select);
+    expect(await screen.findByRole("tooltip")).toHaveTextContent("子模块尚未初始化");
+    fireEvent.blur(select);
+    await waitFor(() => expect(screen.queryByRole("tooltip")).not.toBeInTheDocument());
+    fireEvent.click(select);
     expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it("explains temporary busy and disconnected selection states", async () => {
+    const child = node("D:/repo/modules/child", 1);
+    const props = { ...actionProps, nodes: [node("D:/repo", 0), child], activePath: "D:/repo", onSelect: vi.fn(), onToggle: vi.fn(), onInitialize: vi.fn() };
+    const { container, rerender } = render(<GitRepositoryTree {...props} disabled remoteReady={true}/>);
+    const select = within(container).getByRole("button", { name: "切换到 child，干净" });
+    fireEvent.pointerEnter(select);
+    expect(await screen.findByRole("tooltip")).toHaveTextContent("Git 操作正在进行");
+    fireEvent.pointerLeave(select);
+    await waitFor(() => expect(screen.queryByRole("tooltip")).not.toBeInTheDocument());
+    rerender(<GitRepositoryTree {...props} disabled remoteReady={false}/>);
+    const disconnectedSelect = within(container).getByRole("button", { name: "切换到 child，干净" });
+    fireEvent.pointerEnter(disconnectedSelect);
+    expect(await screen.findByRole("tooltip")).toHaveTextContent("远程 Git 尚未连接");
   });
 });

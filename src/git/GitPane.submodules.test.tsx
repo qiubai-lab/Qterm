@@ -77,7 +77,7 @@ describe("GitPane submodules", () => {
 
     expect(await screen.findByRole("tree", { name: "Git 存储库" })).toBeInTheDocument();
     expect(screen.queryByText("子仓库 2")).not.toBeInTheDocument();
-    expect(screen.getByText("记录版本已变化")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "切换到 ready，记录版本已变化" })).toBeInTheDocument();
     expect(screen.getByText("未初始化")).toBeInTheDocument();
     const childBranch = await screen.findByRole("button", { name: "切换 ready 分支，当前 main" });
     expect(screen.getByRole("button", { name: "当前存储库 project，父仓库" })).toBeInTheDocument();

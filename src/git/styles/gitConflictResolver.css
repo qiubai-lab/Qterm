@@ -1,4 +1,4 @@
-.dialog-frame.dialog-wide.git-conflict-dialog{width:min(1480px,calc(100vw - 48px));height:min(920px,calc(100vh - 48px));max-height:calc(100vh - 48px)}
+.dialog-frame.dialog-wide.git-conflict-dialog{width:min(1480px,100%);max-width:100%;height:min(920px,100%);max-height:100%}
 .git-conflict-dialog{animation:git-conflict-dialog-in .16s cubic-bezier(.2,.8,.2,1)}
 .git-conflict-scrim{animation:git-conflict-scrim-in .16s ease-out}
 .git-conflict-dialog--closing{animation:git-conflict-dialog-out .13s ease-in forwards;pointer-events:none}
