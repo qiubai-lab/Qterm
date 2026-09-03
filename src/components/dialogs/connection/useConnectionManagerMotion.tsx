@@ -20,30 +20,31 @@ export function useConnectionManagerMotion({ selectedId, profiles, groups, colla
   const pendingUpdateRef = useRef<(() => void) | null>(null);
   const editorTargetRef = useRef<string | null | undefined>(undefined);
   const indicatorReadyRef = useRef(false);
+  const [selectionTargetId, setSelectionTargetId] = useState<string | null>(selectedId);
   const [indicator, setIndicator] = useState<ConnectionSelectionState>({ offset: 0, ready: false, targetId: null, visible: false });
   const [editorTransition, setEditorTransition] = useState<{ key: number; kind: EditorTransition }>({ key: 0, kind: "idle" });
 
   useLayoutEffect(() => {
     const list = listRef.current;
-    const target = selectedId && list
-      ? [...list.querySelectorAll<HTMLElement>("[data-profile-id]")].find((element) => element.dataset.profileId === selectedId) ?? null
+    const target = selectionTargetId && list
+      ? [...list.querySelectorAll<HTMLElement>("[data-profile-id]")].find((element) => element.dataset.profileId === selectionTargetId) ?? null
       : null;
     let animationFrame: number | null = null;
     const measure = () => {
       if (!list || !target) {
-        setIndicator((current) => ({ ...current, targetId: selectedId, visible: false }));
+        setIndicator((current) => ({ ...current, targetId: selectionTargetId, visible: false }));
         return;
       }
       const offset = target.getBoundingClientRect().top - list.getBoundingClientRect().top + list.scrollTop;
       const ready = indicatorReadyRef.current;
-      setIndicator((current) => current.offset === offset && current.ready === ready && current.targetId === selectedId && current.visible
+      setIndicator((current) => current.offset === offset && current.ready === ready && current.targetId === selectionTargetId && current.visible
         ? current
-        : { offset, ready, targetId: selectedId, visible: true });
+        : { offset, ready, targetId: selectionTargetId, visible: true });
       if (!ready) {
         if (animationFrame !== null) window.cancelAnimationFrame(animationFrame);
         animationFrame = window.requestAnimationFrame(() => {
           indicatorReadyRef.current = true;
-          setIndicator((current) => current.targetId === selectedId ? { ...current, ready: true } : current);
+          setIndicator((current) => current.targetId === selectionTargetId ? { ...current, ready: true } : current);
         });
       }
     };
@@ -58,7 +59,11 @@ export function useConnectionManagerMotion({ selectedId, profiles, groups, colla
       observer?.disconnect();
       if (animationFrame !== null) window.cancelAnimationFrame(animationFrame);
     };
-  }, [collapsedGroupIds, groups, profiles, selectedId, ungroupedCollapsed]);
+  }, [collapsedGroupIds, groups, profiles, selectionTargetId, ungroupedCollapsed]);
+
+  useEffect(() => {
+    if (pendingProfileRef.current === null) setSelectionTargetId(selectedId);
+  }, [selectedId]);
 
   useEffect(() => () => {
     activeExitRef.current?.cancel();
@@ -87,6 +92,7 @@ export function useConnectionManagerMotion({ selectedId, profiles, groups, colla
   }, [cancelExit]);
 
   const showProfile = useCallback((profileId: string, update: () => void) => {
+    setSelectionTargetId(profileId);
     const previous = editorTargetRef.current;
     if (previous === undefined || previous === profileId) { cancelExit(); editorTargetRef.current = profileId; update(); return; }
     const knownGroupIds = new Set(groups.map((group) => group.id));
@@ -96,11 +102,11 @@ export function useConnectionManagerMotion({ selectedId, profiles, groups, colla
 
   const showNewProfile = useCallback((update: () => void) => {
     if (editorTargetRef.current === null) { update(); return; }
-    cancelExit(); editorTargetRef.current = null;
+    cancelExit(); editorTargetRef.current = null; setSelectionTargetId(null);
     setEditorTransition((current) => ({ key: current.key + 1, kind: "creating" })); update();
   }, [cancelExit]);
 
-  const settleProfile = useCallback((profileId: string) => { editorTargetRef.current = profileId; }, []);
+  const settleProfile = useCallback((profileId: string) => { editorTargetRef.current = profileId; setSelectionTargetId(profileId); }, []);
 
-  return { editorTransition, indicator, listRef, settleProfile, showNewProfile, showProfile, stageRef };
+  return { editorTransition, indicator, listRef, selectionTargetId, settleProfile, showNewProfile, showProfile, stageRef };
 }

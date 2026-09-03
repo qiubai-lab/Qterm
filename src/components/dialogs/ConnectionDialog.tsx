@@ -489,7 +489,7 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
       key={profile.id}
       role="button"
       tabIndex={0}
-      aria-pressed={isSelected} data-profile-id={profile.id} data-primary-selected={profile.id === selectedId || undefined}
+      aria-pressed={isSelected} data-profile-id={profile.id} data-primary-selected={profile.id === managerMotion.selectionTargetId || undefined}
       className={`${isSelected ? "connection-item selected" : "connection-item"}${isDragging ? " dragging" : ""}`}
       onClick={(event) => { if (suppressClickRef.current) { event.preventDefault(); return; } activateProfile(profile, event.metaKey || event.ctrlKey); }}
       onMouseDown={(event) => { if (event.button === 2) openContextMenu(event, { type: "profile", profile }); }}

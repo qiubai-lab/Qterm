@@ -315,6 +315,9 @@ describe("ConnectionDialog", () => {
     await user.click(screen.getByRole("tab", { name: "认证方式" }));
     expect(screen.getByRole("tab", { name: "认证方式" })).toHaveAttribute("aria-selected", "true");
     await user.click(secondItem);
+    expect(indicator).toHaveAttribute("data-target-id", "profile-2");
+    expect(secondItem).toHaveAttribute("data-primary-selected", "true");
+    expect(originalItem).not.toHaveAttribute("data-primary-selected");
     expect(screen.getByRole("combobox", { name: "认证方式" })).toHaveValue("password");
     expect(document.querySelector(".connection-editor-transition-overlay")).not.toBeInTheDocument();
     await act(async () => { finishExit(); await exitFinished; });
