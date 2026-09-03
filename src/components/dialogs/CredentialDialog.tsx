@@ -10,14 +10,9 @@ import { ChangeMasterPasswordDialog } from "./ChangeMasterPasswordDialog";
 import { DialogFrame } from "./DialogFrame";
 import { MasterPasswordDialog, type MasterPasswordMode } from "./MasterPasswordDialog";
 import { RecoveryMasterPasswordDialog } from "./RecoveryMasterPasswordDialog";
-import {
-  CredentialFeedbackBubble,
-  CredentialSecurityTooltip,
-  type CredentialFeedback,
-  type CredentialFeedbackInput,
-  type CredentialSecurityTooltipTarget,
-  type FeedbackTone,
-} from "./credential/CredentialDialogFeedback";
+import { CredentialFeedbackBubble, CredentialSecurityTooltip, type CredentialFeedback, type CredentialFeedbackInput, type CredentialSecurityTooltipTarget, type FeedbackTone } from "./credential/CredentialDialogFeedback";
+import { CredentialSelectionIndicator } from "./credential/CredentialSelectionIndicator";
+import { useCredentialManagerMotion } from "./credential/useCredentialManagerMotion";
 
 type View =
   | { type: "empty" }
@@ -57,8 +52,7 @@ export function CredentialDialog({ onClose }: { onClose: () => void }) {
   const [publicKeyBusyId, setPublicKeyBusyId] = useState<string | null>(null);
   const [hoveredSecurityTarget, setHoveredSecurityTarget] = useState<CredentialSecurityTooltipTarget | null>(null);
   const [focusedSecurityTarget, setFocusedSecurityTarget] = useState<CredentialSecurityTooltipTarget | null>(null);
-  const revealRequestRef = useRef(0);
-  const publicKeyRequestRef = useRef(0);
+  const revealRequestRef = useRef(0); const publicKeyRequestRef = useRef(0);
   const feedbackIdRef = useRef(0);
   const feedbackTimerRef = useRef<number | null>(null);
   const itemElementsRef = useRef(new Map<string, HTMLButtonElement>());
@@ -66,8 +60,8 @@ export function CredentialDialog({ onClose }: { onClose: () => void }) {
   const privateKeyDropRef = useRef<HTMLButtonElement>(null);
   const prepareKeyRef = useRef<(path?: string) => Promise<void>>(async () => undefined);
   const privateKeyDraftRef = useRef<PrivateKeyDraft | null>(null);
-  const securityTooltipId = useId();
-  const inspectedSecurityTarget = focusedSecurityTarget ?? hoveredSecurityTarget;
+  const securityTooltipId = useId(); const inspectedSecurityTarget = focusedSecurityTarget ?? hoveredSecurityTarget;
+  const { editorTransition, indicator, listRef, selectionTargetId, showCreate, showItem, stageRef } = useCredentialManagerMotion({ items, selectedId: view.type === "detail" ? view.item.id : null });
 
   const clearFeedback = useCallback(() => {
     if (feedbackTimerRef.current !== null) window.clearTimeout(feedbackTimerRef.current);
@@ -133,6 +127,7 @@ export function CredentialDialog({ onClose }: { onClose: () => void }) {
   }
 
   function start(kind: CredentialKind) {
+    showCreate(() => {
     const pendingDraft = privateKeyDraftRef.current;
     if (pendingDraft) void cancelPrivateKeyCredential(pendingDraft.id);
     privateKeyDraftRef.current = null;
@@ -141,6 +136,7 @@ export function CredentialDialog({ onClose }: { onClose: () => void }) {
     clearPublicKey();
     setView({ type: "create", kind });
     setName(""); setSecret(""); setPassphrase(""); clearFeedback();
+    });
   }
 
   async function savePassword() {
@@ -358,10 +354,12 @@ export function CredentialDialog({ onClose }: { onClose: () => void }) {
   function selectCredential(item: CredentialSummary) {
     clearPasswordReveal();
     setNameEdit(null);
-    setView({ type: "detail", item });
     clearFeedback();
-    if (item.kind === "privateKey") void generatePublicKey(item);
-    else clearPublicKey();
+    showItem(item.id, () => {
+      setView({ type: "detail", item });
+      if (item.kind === "privateKey") void generatePublicKey(item);
+      else clearPublicKey();
+    });
   }
 
   const blocked = Boolean(masterMode || deleteRequested || clearRequested || changeRequested || recoveryRequested || privateKeyDialog);
@@ -385,15 +383,17 @@ export function CredentialDialog({ onClose }: { onClose: () => void }) {
               <Button size="compact" disabled={!unlocked} onClick={() => start("privateKey")}><Icon name="file" size={13}/>导入私钥</Button>
             </div>
           </div>
-          <div className="credential-list" aria-label="凭证列表">
+          <div className="credential-list" aria-label="凭证列表" ref={listRef}><CredentialSelectionIndicator state={indicator}/>
             {items.map((item) => {
               const unsafeRsa = isUnsafeRsa(item);
               const securityKey = `list-${item.id}`;
+              const isSelected = selectionTargetId === item.id;
               return <button
                 ref={(element) => { if (element) itemElementsRef.current.set(item.id, element); else itemElementsRef.current.delete(item.id); }}
                 type="button"
-                className={`credential-item${view.type === "detail" && view.item.id === item.id ? " selected" : ""}`}
+                className={`credential-item${isSelected ? " selected" : ""}`}
                 key={item.id}
+                aria-pressed={isSelected} data-credential-id={item.id} data-primary-selected={isSelected || undefined}
                 aria-describedby={inspectedSecurityTarget?.key === securityKey ? securityTooltipId : undefined}
                 onFocus={(event) => {
                   if (!unsafeRsa) return;
@@ -416,7 +416,7 @@ export function CredentialDialog({ onClose }: { onClose: () => void }) {
         </aside>
 
         <section className="credential-editor-pane">
-          <div key={view.type === "detail" ? view.item.id : view.type === "create" ? view.kind : "empty"} className={`credential-editor-stage${view.type === "detail" && view.item.kind === "privateKey" ? " credential-detail-stage" : ""}${view.type === "create" && view.kind === "privateKey" ? " credential-private-key-stage" : ""}`}>
+          <div ref={stageRef} key={editorTransition.key} className={`credential-editor-stage ${editorTransition.kind}${view.type === "detail" && view.item.kind === "privateKey" ? " credential-detail-stage" : ""}${view.type === "create" && view.kind === "privateKey" ? " credential-private-key-stage" : ""}`}>
             {view.type === "create" && view.kind === "password" && <>
               <div className="credential-editor-heading"><span><Icon name="key" size={16}/></span><div><strong>新建密码凭证</strong><p>密码使用主密码保护，不写入连接配置。</p></div></div>
               <div className="credential-editor-form"><label><RequiredFieldLabel>凭证名称</RequiredFieldLabel><input data-dialog-autofocus required maxLength={80} value={name} onChange={(event) => setName(event.target.value)} placeholder="例如：生产环境账户"/></label><label><RequiredFieldLabel>密码</RequiredFieldLabel><input required type="password" autoComplete="new-password" value={secret} onChange={(event) => setSecret(event.target.value)}/></label></div>
@@ -464,7 +464,7 @@ export function CredentialDialog({ onClose }: { onClose: () => void }) {
             >不安全</span>}<IconButton label="修改凭证名称" className={`credential-name-action edit${nameEdit?.id === view.item.id ? " reserved" : ""}`} aria-hidden={nameEdit?.id === view.item.id || undefined} tabIndex={nameEdit?.id === view.item.id ? -1 : undefined} title="修改名称" disabled={busy || nameEdit?.id === view.item.id} onClick={() => { clearFeedback(); setNameEdit({ id: view.item.id, value: view.item.name }); }}><Icon name="edit" size={12}/></IconButton></span><p>此凭证可由多个连接安全引用。</p></div></div>
               <div className="credential-detail-grid"><div><span>类型</span><strong>{view.item.kind === "password" ? "密码凭证" : "私钥凭证"}</strong></div>{view.item.detail && <div><span>密钥算法</span><strong>{view.item.detail}</strong></div>}<div><span>存储状态</span><strong>已加密</strong></div></div>
               {view.item.kind === "password" && <div className="password-field credential-password-field"><label>凭证密码</label><div className="password-input-shell"><input aria-label="凭证密码" readOnly type="text" value={revealedPassword?.id === view.item.id ? revealedPassword.value : "••••••••••••"}/><button type="button" className="password-visibility-button" aria-label={revealedPassword?.id === view.item.id ? "隐藏密码" : "显示密码"} aria-pressed={revealedPassword?.id === view.item.id} disabled={revealingId === view.item.id} onClick={() => void togglePasswordReveal(view.item)}><Icon name={revealedPassword?.id === view.item.id ? "eyeOff" : "eye"} size={14}/></button></div></div>}
-              <div className="credential-detail-note"><Icon name="connections" size={15}/><p>删除凭证会解除连接引用，但不会删除连接本身。</p></div>
+              <div className="credential-detail-note"><Icon name="computer" size={15}/><p>删除凭证会解除连接引用，但不会删除连接本身。</p></div>
               {view.item.kind === "privateKey" && <section className="credential-public-key"><header><p><strong>OpenSSH 公钥</strong><span>可直接添加到服务器 authorized_keys</span></p><div className="credential-public-key-actions"><IconButton label="重新生成公钥" className="credential-public-key-action" title="重新生成公钥" loading={publicKeyBusyId === view.item.id} onClick={() => void generatePublicKey(view.item)}><Icon name="refresh" size={13}/></IconButton><IconButton label="复制公钥" className="credential-public-key-action" title="复制公钥" disabled={publicKeyBusyId === view.item.id || publicKey?.id !== view.item.id} onClick={() => { if (publicKey?.id === view.item.id) void copyPublicKey(view.item.id, publicKey.value); }}><Icon name="copy" size={13}/></IconButton></div></header><textarea aria-label="OpenSSH 公钥" aria-busy={publicKeyBusyId === view.item.id} readOnly wrap="soft" value={publicKey?.id === view.item.id ? publicKey.value : publicKeyBusyId === view.item.id ? "正在生成公钥…" : "暂时无法生成公钥，请点击刷新按钮重试。"}/></section>}
               <footer className="dialog-actions credential-editor-actions"><Button variant="danger" onClick={() => { clearFeedback(); setDeleteRequested(view.item); }}>删除凭证</Button></footer>
             </>}

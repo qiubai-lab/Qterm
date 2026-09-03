@@ -352,6 +352,8 @@ describe("CredentialDialog", () => {
     expect(screen.queryByRole("button", { name: "生成公钥" })).not.toBeInTheDocument();
     const publicKeySection = publicKey.closest(".credential-public-key")!;
     const detailNote = screen.getByText(/删除凭证会解除连接引用/).closest(".credential-detail-note")!;
+    expect(detailNote.querySelector('[data-icon="computer"]')).toBeInTheDocument();
+    expect(detailNote.querySelector('[data-icon="connections"]')).not.toBeInTheDocument();
     expect(detailNote.compareDocumentPosition(publicKeySection) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
     await user.click(screen.getByRole("button", { name: "复制公钥" }));
@@ -367,6 +369,39 @@ describe("CredentialDialog", () => {
     act(() => { if (typeof dismiss === "function") dismiss(); });
     expect(screen.queryByText("公钥已复制")).not.toBeInTheDocument();
     timeoutSpy.mockRestore();
+  });
+
+  it("moves one credential selection surface before committing ordered detail content", async () => {
+    let finishExit!: () => void;
+    const exitFinished = new Promise<void>((resolve) => { finishExit = resolve; });
+    const originalAnimate = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "animate");
+    Object.defineProperty(HTMLElement.prototype, "animate", { configurable: true, value: vi.fn(() => ({ cancel: vi.fn(), finished: exitFinished })) });
+    const user = userEvent.setup();
+    render(<CredentialDialog onClose={vi.fn()}/>);
+
+    const passwordItem = await screen.findByRole("button", { name: /生产密码密码/ });
+    const keyItem = screen.getByRole("button", { name: /部署私钥私钥/ });
+    await user.click(passwordItem);
+    expect(screen.getByText("生产密码", { selector: ".credential-editor-heading strong" })).toBeInTheDocument();
+    const indicator = document.querySelector(".credential-selection-indicator");
+    expect(indicator).toHaveAttribute("data-target-id", "password-1");
+
+    await user.click(keyItem);
+    expect(indicator).toHaveAttribute("data-target-id", "key-1");
+    expect(keyItem).toHaveAttribute("data-primary-selected", "true");
+    expect(passwordItem).not.toHaveAttribute("data-primary-selected");
+    expect(screen.getByText("生产密码", { selector: ".credential-editor-heading strong" })).toBeInTheDocument();
+    expect(screen.queryByText("部署私钥", { selector: ".credential-editor-heading strong" })).not.toBeInTheDocument();
+
+    await act(async () => { finishExit(); await exitFinished; });
+    expect(screen.getByText("部署私钥", { selector: ".credential-editor-heading strong" })).toBeInTheDocument();
+    expect(document.querySelector(".credential-editor-stage")).toHaveClass("switching-down");
+    await user.click(screen.getByRole("button", { name: "新建密码" }));
+    expect(document.querySelector(".credential-editor-stage")).toHaveClass("creating");
+    expect(indicator).not.toHaveClass("visible");
+
+    if (originalAnimate) Object.defineProperty(HTMLElement.prototype, "animate", originalAnimate);
+    else Reflect.deleteProperty(HTMLElement.prototype, "animate");
   });
 
   it("refreshes the selected private key public key before copying and disables both actions while busy", async () => {

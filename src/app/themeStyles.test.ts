@@ -171,7 +171,8 @@ describe("application theme contract", () => {
     expect(fileBrowser).toContain("background:var(--selection-marker)");
     expect(terminalChrome).toContain('.terminal-target-option[aria-pressed="true"]{color:var(--selection-marker);background:var(--selection-surface)');
     expect(terminalChrome).toMatch(/\.terminal-target-option\[aria-pressed="true"\]::after[^}]+color:var\(--selection-marker\)/);
-    expect(credentialDialog).toMatch(/\.credential-item\.selected[^}]+background:var\(--selection-surface\)[^}]+var\(--selection-marker\)/);
+    expect(credentialDialog).toMatch(/\.credential-selection-indicator[^}]+background:var\(--selection-surface\)[^}]+var\(--selection-marker\)/);
+    expect(credentialDialog).toMatch(/\.credential-item\.selected[^}]+background:transparent[^}]+box-shadow:none/);
     expect(dialogControls).toMatch(/\.segmented button\.selected[^}]+background:var\(--selection-surface\)[^}]+var\(--selection-marker\)/);
   });
 

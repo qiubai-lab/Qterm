@@ -136,6 +136,7 @@ Nested dialogs must remain stacked. Only the topmost dialog handles Escape and T
 - Use monospace for `user@host:port` and paths.
 - Keep status/authorization information at the trailing edge when it aids scanning.
 - Entity lists such as connections and credentials use a neutral raised selected background, brighter primary text, and at most one small accent indicator such as a dot.
+- Single-selection manager lists use one absolutely positioned, theme-aware selection surface behind their rows. Move that surface with `transform`; update its target immediately when selection intent changes. The destination row supplies selected foreground styling but must not draw another background, border, inset outline, or rail while the shared surface moves.
 - Dense file/path lists, including Git change lists, use the file browser as the canonical interaction treatment: hover uses `--file-active-surface` with `--file-active-marker`; selection uses `--file-selection-surface`, a one-pixel full inset outline in `--file-selection-marker`, the matching foreground tokens, and the established 4px row radius. Selected styling must remain dominant while hovered rather than being replaced by the hover surface.
 - Avoid a wide or decorative left selection block. Do not make selection rely only on color; file/path selection combines surface, full outline, foreground changes, and semantic selected state.
 - Dragging uses reduced opacity and a slight scale; drop targets get a restrained accent border/surface.
@@ -207,6 +208,14 @@ Motion must explain where state came from:
 - Tab/content slide: about 220–240ms; forward enters from +7–10px, backward from -7–10px.
 - Active block indicator moving between panes: about 300ms using `cubic-bezier(.22, 1, .36, 1)`.
 
+For single-selection list/detail managers such as connections and credentials:
+
+- Move the list selection surface to the latest target immediately, using about 280ms and `cubic-bezier(.22, 1, .36, 1)`; rapid retargeting must continue from the current visual position rather than queueing destinations.
+- Keep fixed manager headers, local tabs, and action chrome outside the detail-stage animation.
+- When moving between existing items, retain the old detail during a 90ms exit, commit the new item exactly once, then enter it from `+7px` for a later list item or `-7px` for an earlier item over about 200ms using `cubic-bezier(.33, 1, .68, 1)`.
+- New-item editors use a distinct approximately 240ms entrance with the same ease-out curve. Entering from an empty state may appear immediately instead of manufacturing an exit.
+- The moving list surface and delayed detail commit are separate state concerns: the first provides immediate selection feedback, while the second prevents mixed old/new editor content and transition flicker.
+
 Animate only `transform`, `opacity`, color, border color, and shadow where practical. Avoid animating layout dimensions for routine transitions. Keep movement interruptible by deriving it from current state instead of queued timeouts.
 
 Under `prefers-reduced-motion: reduce`, remove spatial movement and use a short fade or no animation. Under reduced transparency, remove backdrop blur/translucency. Preserve higher-contrast token overrides.
@@ -227,6 +236,7 @@ Under `prefers-reduced-motion: reduce`, remove spatial movement and use a short 
 - Keep feature state and feature-specific markup in its domain component; keep `DialogFrame` and `Icon` generic.
 - Prefer state-derived class names/data attributes over imperative DOM animation.
 - Use stable keys to replay a short content entrance only when the semantic view changes.
+- For list/detail manager motion, keep measurement and transition sequencing in a feature-local hook; the parent dialog remains the authoritative owner of selected data, drafts, and persistence.
 - Keep destructive confirmation state separate from editor state.
 - Preserve parent editor mounting while a child manager/confirmation is open.
 - Reuse the existing `Icon` names and stroke style. Add an icon there only when no existing semantic icon fits.
