@@ -13,6 +13,7 @@ const selectBlockTarget = vi.fn().mockResolvedValue(undefined);
 const selectFileTarget = vi.fn().mockResolvedValue(undefined);
 const selectNetworkTarget = vi.fn().mockResolvedValue(undefined);
 const selectGitTarget = vi.fn().mockResolvedValue(undefined);
+const stageGitRemoteTarget = vi.fn(), cancelStagedGitTarget = vi.fn().mockResolvedValue(undefined);
 const startNetworkBlockRule = vi.fn().mockResolvedValue(undefined);
 const stopNetworkBlockRule = vi.fn().mockResolvedValue(undefined);
 const clearBlockBuffer = vi.fn();
@@ -93,6 +94,7 @@ vi.mock("./WorkspaceProvider", () => ({
     selectFileTarget,
     selectNetworkTarget,
     selectGitTarget,
+    stageGitRemoteTarget, cancelStagedGitTarget,
     startNetworkBlockRule,
     stopNetworkBlockRule,
     clearBlockBuffer,
@@ -128,6 +130,7 @@ describe("WorkspaceCanvas terminal actions", () => {
     disconnectNetworkBlock.mockClear();
     restartLocalBlock.mockClear();
     selectGitTarget.mockClear();
+    stageGitRemoteTarget.mockClear(); cancelStagedGitTarget.mockClear();
     gitApi.selectDirectory.mockReset();
     terminalRegistryMocks.openTerminalSearch.mockClear();
     terminalRuntimes = { "block-1": connectedLocalRuntime };
@@ -579,26 +582,23 @@ describe("WorkspaceCanvas terminal actions", () => {
     expect(dispatch).toHaveBeenCalledWith({ type: "recordRecentGitRepository", repository: { type: "local", path: "D:/work/project" } });
   });
 
-  it("offers only the newly selected remote profile history before manual path entry", async () => {
+  it("browses from a newly selected remote profile before persisting its path", async () => {
     const user = userEvent.setup();
     const onRequestAuthConnection = vi.fn();
-    recentGitRepositories = [
-      { type: "remote", profileId: "key-profile", path: "/srv/key-only" },
-      { type: "remote", profileId: "password-profile", path: "/srv/recent" },
-      { type: "local", path: "D:/work/local" },
-    ];
-    render(<WorkspaceCanvas workspace={{ ...workspace, activeBlockId: "git-1", layout: { type: "git", blockId: "git-1", target: { type: "unbound" } } }} visible onRequestClose={vi.fn()} onRequestAuthConnection={onRequestAuthConnection}/>);
-
+    const gitWorkspace: Workspace = { ...workspace, activeBlockId: "git-1", layout: { type: "git", blockId: "git-1", target: { type: "unbound" } } };
+    const view = render(<WorkspaceCanvas workspace={gitWorkspace} visible onRequestClose={vi.fn()} onRequestAuthConnection={onRequestAuthConnection}/>);
     await user.click(screen.getByRole("button", { name: /选择Git 连接/ }));
     await user.type(screen.getByRole("searchbox", { name: "搜索Git 连接" }), "Password Server");
     await user.click(screen.getByRole("button", { name: /Password Server/ }));
-    expect(screen.getByText("/srv/recent")).toBeInTheDocument();
-    expect(screen.queryByText("/srv/key-only")).not.toBeInTheDocument();
-    expect(screen.queryByText("D:/work/local")).not.toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: /recent/ }));
-    expect(selectGitTarget).toHaveBeenCalledWith("workspace-1", "git-1", { type: "remote", profileId: "password-profile", path: "/srv/recent" });
-    expect(onRequestAuthConnection).toHaveBeenCalledWith("git", "git-1", profiles[0]);
+    await user.click(screen.getByRole("button", { name: "浏览远程目录" }));
+    expect(stageGitRemoteTarget).toHaveBeenCalledWith("git-1", "password-profile"); expect(onRequestAuthConnection).toHaveBeenCalledWith("git", "git-1", profiles[0]);
+    expect(selectGitTarget).not.toHaveBeenCalled();
+    onRequestAuthConnection.mockClear();
+    gitRuntimes = { "git-1": { sessionId: "git-session", status: "connected", hostKeyPrompt: null, notice: "", connectionProgress: null, stale: false } };
+    view.rerender(<WorkspaceCanvas workspace={gitWorkspace} visible onRequestClose={vi.fn()} onRequestAuthConnection={onRequestAuthConnection}/>);
+    expect(await screen.findByRole("dialog", { name: "测试远程仓库选择器" })).toHaveAttribute("data-initial-path", ".");
+    await user.click(screen.getByRole("button", { name: "测试确认远程目录" }));
+    expect(selectGitTarget).toHaveBeenCalledWith("workspace-1", "git-1", { type: "remote", profileId: "password-profile", path: "/srv/next" }); expect(onRequestAuthConnection).not.toHaveBeenCalled();
   });
 
   it("reconnects a persisted remote Git target with its own connection owner", async () => {

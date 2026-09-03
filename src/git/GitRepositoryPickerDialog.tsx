@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent } from "react";
+import { createPortal } from "react-dom";
 
 import { Button } from "../components/Button";
 import { DialogFrame } from "../components/dialogs/DialogFrame";
@@ -190,7 +191,7 @@ export function GitRepositoryPickerDialog(props: GitRepositoryPickerDialogProps)
     }
   }
 
-  return <DialogFrame
+  return createPortal(<DialogFrame
     title={local ? "选择本机仓库目录" : "选择远程仓库目录"}
     subtitle={local ? "浏览本机目录，或使用系统目录选择器" : "浏览服务器目录，或直接输入远程路径"}
     className="git-repository-picker-dialog"
@@ -286,7 +287,7 @@ export function GitRepositoryPickerDialog(props: GitRepositoryPickerDialogProps)
         <div>{local && <Button loading={selectingSystem} disabled={loading} onClick={() => void selectWithSystemDialog()}>{selectingSystem ? "正在选择…" : "使用系统选择器"}</Button>}<Button variant="danger" disabled={selectingSystem} onClick={onClose}>取消</Button><Button variant="primary" disabled={!selectablePath || selectingSystem} onClick={() => selectablePath && onSelect(selectablePath)}>选择此路径</Button></div>
       </footer>
     </div>
-  </DialogFrame>;
+  </DialogFrame>, document.body);
 }
 
 function DirectoryRow({ entry, index, count, virtualized, selected, disabled, local, onSelect, onOpen }: {

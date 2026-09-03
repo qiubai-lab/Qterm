@@ -234,6 +234,7 @@ describe("GitRepositoryPickerDialog", () => {
     render(<GitRepositoryPickerDialog sessionId="git-session" profileId="profile-1" initialPath="/srv/project" onClose={onClose} onSelect={onSelect}/>);
     const dialog = screen.getByRole("dialog", { name: "选择远程仓库目录" });
     expect(dialog).toHaveAttribute("aria-modal", "true");
+    expect(dialog.closest(".dialog-scrim")?.parentElement).toBe(document.body);
     const cancel = await screen.findByRole("button", { name: "取消" });
     expect(cancel).toHaveClass("ui-button--danger");
     await user.click(cancel);

@@ -1,0 +1,9 @@
+.git-change-list.virtualized {
+  position: relative;
+  overflow: hidden;
+}
+
+.git-change-list.virtualized .git-change-row {
+  position: absolute;
+  inset: 0 0 auto;
+}

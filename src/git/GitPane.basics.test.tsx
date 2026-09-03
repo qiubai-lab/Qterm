@@ -108,7 +108,7 @@ describe("GitPane basics and lifecycle", () => {
   it("renders staged and unstaged changes as separate labelled lists", async () => {
     render(<GitPane blockId="git-1" target={{ type: "local", path: "D:/work/project" }} visible onTargetChange={vi.fn()}/>);
     await screen.findByText("project");
-    const changes = screen.getByRole("list", { name: "Git 更改" });
+    const changes = screen.getByRole("group", { name: "Git 更改" });
     expect(changes.querySelectorAll(":scope > .git-change-group")).toHaveLength(2);
     expect(screen.getByRole("region", { name: "暂存的更改" })).toContainElement(screen.getByText("src/staged.ts"));
     expect(screen.getByRole("region", { name: "更改" })).toContainElement(screen.getByText("src/new.ts"));

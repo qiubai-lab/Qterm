@@ -7,6 +7,7 @@ const gitStyleFiles = [
   "gitShell.css",
   "gitRepositoryTree.css",
   "gitChangeSelection.css",
+  "gitChangeList.css",
   "gitGraph.css",
   "gitTargetConfig.css",
   "gitBranchOverlays.css",
@@ -55,6 +56,14 @@ describe("Git pane style contracts", () => {
       const lineCount = readFileSync(`src/git/styles/${file}`, "utf8").split(/\r?\n/).length - 1;
       expect(lineCount, file).toBeLessThanOrEqual(900);
     }
+  });
+
+  it("keeps virtual Git change rows in a fixed-height positioning canvas", () => {
+    expect(declarations(".git-change-list.virtualized")).toContain("position: relative");
+    expect(declarations(".git-change-list.virtualized")).toContain("overflow: hidden");
+    const row = declarations(".git-change-list.virtualized .git-change-row");
+    expect(row).toContain("position: absolute");
+    expect(row).toContain("inset: 0 0 auto");
   });
 
   it("gives the repository picker one bounded directory scroller", () => {
@@ -115,6 +124,23 @@ describe("Git pane style contracts", () => {
     expect(declarations(".git-repository-picker-row-shell button[data-selected] .git-repository-picker-name > svg,\n.git-repository-picker-row-shell button[data-selected]:hover .git-repository-picker-name > svg")).toContain("color: var(--file-selection-marker)");
     const reducedMotion = styles.slice(styles.indexOf("@media (prefers-reduced-motion: reduce)"));
     expect(reducedMotion).toContain(".git-repository-picker-row-shell button");
+  });
+
+  it("groups the remote target path and browse action into one focus surface", () => {
+    const group = declarations(".git-target-path-group");
+    expect(group).toContain("display: flex");
+    expect(group).toContain("height: 32px");
+    expect(group).toContain("overflow: hidden");
+    expect(declarations(".git-target-path-group:focus-within")).toContain("border-color: var(--focus)");
+    const input = declarations(".git-target-path-group input");
+    expect(input).toContain("appearance: none");
+    expect(input).toContain("padding: 7px 8px");
+    expect(input).toContain("line-height: 16px");
+    expect(input).not.toContain("transform:");
+    const browse = declarations(".git-target-browse");
+    expect(browse).toContain("border-left: 1px solid var(--border)");
+    expect(browse).toContain("color: var(--primary-action-contrast)");
+    expect(browse).toContain("background: var(--primary-action)");
   });
 
   it("inherits the terminal workbench background across Git content surfaces", () => {
