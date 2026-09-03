@@ -163,6 +163,9 @@ describe("GitPane basics and lifecycle", () => {
     const submit = screen.getByRole("button", { name: "提交 1 项已暂存更改" });
     expect(message.rows).toBe(1);
     expect(message).toHaveAttribute("data-max-rows", "5");
+    expect(message).toHaveAttribute("autocapitalize", "none");
+    expect(message).toHaveAttribute("autocorrect", "off");
+    expect(message).toHaveAttribute("spellcheck", "false");
     expect(message.parentElement).toHaveClass("git-commit-box");
     expect(submit).toHaveClass("git-primary-action");
     expect(submit).toHaveTextContent("提交");

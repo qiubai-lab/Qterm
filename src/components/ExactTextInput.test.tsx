@@ -2,7 +2,7 @@ import { createRef, useState } from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { ExactTextInput } from "./ExactTextInput";
+import { ExactTextArea, ExactTextInput } from "./ExactTextInput";
 
 describe("ExactTextInput", () => {
   it("preserves machine text and enforces platform text-assistance boundaries", () => {
@@ -34,3 +34,24 @@ describe("ExactTextInput", () => {
   });
 });
 
+describe("ExactTextArea", () => {
+  it("preserves multiline text and enforces platform text-assistance boundaries", () => {
+    const textareaRef = createRef<HTMLTextAreaElement>();
+    render(<ExactTextArea
+      ref={textareaRef}
+      aria-label="精确多行文本"
+      defaultValue="feat: preserve case"
+      autoCapitalize="sentences"
+      autoCorrect="on"
+      spellCheck
+      rows={2}
+    />);
+
+    const textarea = screen.getByRole("textbox", { name: "精确多行文本" });
+    expect(textareaRef.current).toBe(textarea);
+    expect(textarea).toHaveAttribute("autocapitalize", "none");
+    expect(textarea).toHaveAttribute("autocorrect", "off");
+    expect(textarea).toHaveAttribute("spellcheck", "false");
+    expect(textarea).toHaveValue("feat: preserve case");
+  });
+});

@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import type { KeyboardEvent, MouseEvent, ReactNode, RefObject } from "react";
 import { createPortal } from "react-dom";
 
+import { ExactTextArea } from "../components/ExactTextInput";
 import { Icon, type IconName } from "../components/Icon";
 import type { GitChange, GitSnapshot } from "../lib/tauri/git";
 import type { GitRuntime } from "../workspace/WorkspaceProvider";
@@ -160,7 +161,7 @@ export function GitChangesSection({
       <div className="git-merge-state-actions"><button type="button" className="secondary" disabled={disabled || conflicts.length > 0} onClick={onContinueMerge}>继续合并</button><button ref={mergeAbortButtonRef} type="button" className="danger" disabled={disabled} onClick={onAbortMerge}>中止合并</button></div>
     </div>}
     <div className="git-commit-box" data-action={primaryAction.kind}>
-      {primaryAction.showMessage && <textarea ref={messageRef} aria-label="提交消息" rows={1} data-max-rows="5" value={message} maxLength={10_000} placeholder="提交消息" onChange={(event) => onMessageChange(event.target.value)}/>}
+      {primaryAction.showMessage && <ExactTextArea ref={messageRef} aria-label="提交消息" rows={1} data-max-rows="5" value={message} maxLength={10_000} placeholder="提交消息" onChange={(event) => onMessageChange(event.target.value)}/>}
       <GitPrimaryActionButton key={`${primaryAction.kind}:${primaryAction.label}`} action={primaryAction} onAction={onPrimaryAction}/>
     </div>
     {error && <div className="git-feedback" role="alert">{error.message}</div>}
