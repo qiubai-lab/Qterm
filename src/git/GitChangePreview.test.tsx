@@ -1,5 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { syntaxTree } from "@codemirror/language";
+import { EditorView } from "@codemirror/view";
 
 import type { GitChange, GitChangeDiff, GitCommit, GitCommitFile } from "../lib/tauri/git";
 import { GitChangePreview } from "./GitChangePreview";
@@ -9,6 +11,11 @@ const changes: GitChange[] = [
   { path: "src/dual.ts", originalPath: null, status: "M", staged: false, conflict: false },
   { path: "assets/data.bin", originalPath: null, status: "A", staged: false, conflict: false },
 ];
+
+beforeAll(() => {
+  Object.defineProperty(Range.prototype, "getClientRects", { configurable: true, value: () => [] });
+  Object.defineProperty(Range.prototype, "getBoundingClientRect", { configurable: true, value: () => ({ x: 0, y: 0, left: 0, right: 0, top: 0, bottom: 0, width: 0, height: 0, toJSON: () => ({}) }) });
+});
 
 afterEach(cleanup);
 
@@ -53,6 +60,22 @@ describe("GitChangePreview", () => {
     const onLoad = vi.fn().mockResolvedValue(binary);
     render(<GitChangePreview changes={[changes[2]]} initialChange={changes[2]} repositoryName="project" onLoad={onLoad} onClose={vi.fn()}/>);
     expect(await screen.findByText("二进制内容，不提供文本差异")).toBeInTheDocument();
+  });
+
+  it("selects and loads a language parser from the changed file path", async () => {
+    const typescript = detail(changes[0]);
+    typescript.before = { kind: "text", content: "const beforeValue: number = 1;\n", size: 31, mode: 0o100644 };
+    typescript.after = { kind: "text", content: "const afterValue: number = 2;\n", size: 30, mode: 0o100644 };
+    render(<GitChangePreview changes={[changes[0]]} initialChange={changes[0]} repositoryName="project" onLoad={vi.fn().mockResolvedValue(typescript)} onClose={vi.fn()}/>);
+
+    await waitFor(() => {
+      const editors = Array.from(document.querySelectorAll<HTMLElement>(".git-change-preview-dialog .cm-editor"));
+      expect(editors).toHaveLength(2);
+      expect(editors.every((editor) => {
+        const editorView = EditorView.findFromDOM(editor);
+        return editorView && syntaxTree(editorView.state).toString().includes("TypeAnnotation");
+      })).toBe(true);
+    });
   });
 
   it("exposes retryable load errors", async () => {

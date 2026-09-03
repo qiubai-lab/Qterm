@@ -1,5 +1,5 @@
 import type { FileEntry } from "../lib/tauri/files";
-import type { EditorLanguage } from "./CodeEditor";
+import { editorLanguageForFileName, type EditorLanguage } from "../editor/editorLanguage";
 
 export type PreviewKind = EditorLanguage | "image";
 export type SortKey = "name" | "size" | "modifiedAt";
@@ -35,10 +35,7 @@ export function fileListAnchor(scrollTop: number, entries: FileEntry[]): { path:
 export function previewKindFor(name: string): PreviewKind {
   const extension = name.toLowerCase().split(".").pop() ?? "";
   if (["jpg", "jpeg", "png", "gif", "webp"].includes(extension)) return "image";
-  if (["md", "markdown", "mdown"].includes(extension)) return "markdown";
-  if (extension === "json") return "json";
-  if (["yaml", "yml"].includes(extension)) return "yaml";
-  return "text";
+  return editorLanguageForFileName(name);
 }
 
 export function imageMime(name: string): string {

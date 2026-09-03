@@ -1,5 +1,7 @@
 import { cleanup, render, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
+import { syntaxTree } from "@codemirror/language";
+import { EditorView } from "@codemirror/view";
 
 import { GitChangeComparison } from "./GitChangeComparison";
 import {
@@ -46,6 +48,25 @@ describe("GitChangeComparison", () => {
     const editors = Array.from(view.container.querySelectorAll(".cm-editor"));
     expect(editors).toHaveLength(2);
     expect(editors.every((editor) => editor.querySelectorAll(".cm-lineNumbers .cm-gutterElement:not([style*='visibility: hidden'])").length === 1)).toBe(true);
+  });
+
+  it("loads the selected language parser into both diff panes", async () => {
+    const view = render(<GitChangeComparison
+      before={"const beforeValue = 1;\n"}
+      after={"const afterValue = 2;\n"}
+      beforeLabel="HEAD"
+      afterLabel="工作区"
+      language="javascript"
+    />);
+
+    await waitFor(() => {
+      const editors = Array.from(view.container.querySelectorAll<HTMLElement>(".cm-editor"));
+      expect(editors).toHaveLength(2);
+      expect(editors.every((editor) => {
+        const editorView = EditorView.findFromDOM(editor);
+        return editorView && syntaxTree(editorView.state).toString().includes("VariableDeclaration");
+      })).toBe(true);
+    });
   });
 
   it("maps and coalesces semantic diff ranges into legible overview markers", () => {

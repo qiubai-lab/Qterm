@@ -8,14 +8,12 @@ import {
   useState,
 } from "react";
 import { minimalSetup } from "codemirror";
-import { json } from "@codemirror/lang-json";
-import { markdown } from "@codemirror/lang-markdown";
-import { yaml } from "@codemirror/lang-yaml";
 import { MergeView } from "@codemirror/merge";
 import { EditorState, type Extension } from "@codemirror/state";
 import { EditorView, lineNumbers } from "@codemirror/view";
 
-import type { EditorLanguage } from "../../files/CodeEditor";
+import type { EditorLanguage } from "../../editor/editorLanguage";
+import { useEditorLanguage } from "../../editor/useEditorLanguage";
 import {
   buildOverviewMarkers,
   clamp,
@@ -63,13 +61,14 @@ export function GitChangeComparison({ before, after, beforeLabel, afterLabel, la
   const drag = useRef<{ pointerId: number; startY: number; startScrollTop: number } | null>(null);
   const [overview, setOverview] = useState<OverviewLayout>(hiddenOverview);
   const scrollId = `git-diff-scroll-${useId().replace(/:/g, "")}`;
+  const languageSupport = useEditorLanguage(language);
 
   useEffect(() => {
     if (!host.current) return;
     setOverview(hiddenOverview);
     const mergeView = new MergeView({
-      a: { doc: before, extensions: comparisonExtensions(language, beforeLabel) },
-      b: { doc: after, extensions: comparisonExtensions(language, afterLabel) },
+      a: { doc: before, extensions: comparisonExtensions(languageSupport, beforeLabel) },
+      b: { doc: after, extensions: comparisonExtensions(languageSupport, afterLabel) },
       parent: host.current,
       orientation: "a-b",
       highlightChanges: true,
@@ -119,7 +118,7 @@ export function GitChangeComparison({ before, after, beforeLabel, afterLabel, la
       scrollElement.current = null;
       mergeView.destroy();
     };
-  }, [after, afterLabel, before, beforeLabel, language, scrollId]);
+  }, [after, afterLabel, before, beforeLabel, language, languageSupport, scrollId]);
 
   function setSharedScrollTop(next: number) {
     const scroller = scrollElement.current;
@@ -266,11 +265,7 @@ function overviewWithScroll(current: OverviewLayout, scroller: HTMLElement, trac
   };
 }
 
-function comparisonExtensions(language: EditorLanguage, label: string): Extension {
-  const languageExtension = language === "markdown" ? markdown()
-    : language === "json" ? json()
-    : language === "yaml" ? yaml()
-    : [];
+function comparisonExtensions(languageSupport: Extension, label: string): Extension {
   return [
     minimalSetup,
     lineNumbers(),
@@ -278,6 +273,6 @@ function comparisonExtensions(language: EditorLanguage, label: string): Extensio
     EditorState.readOnly.of(true),
     EditorView.editable.of(false),
     EditorView.contentAttributes.of({ "aria-label": label }),
-    languageExtension,
+    languageSupport,
   ];
 }

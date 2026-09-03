@@ -4,7 +4,7 @@ import type { EditorView } from "@codemirror/view";
 import { Button, StatusBadge } from "../components/Button";
 import { DialogActionStatus, DialogFrame } from "../components/dialogs/DialogFrame";
 import { Icon } from "../components/Icon";
-import { previewKindFor } from "../files/fileBrowserModel";
+import { editorLanguageForFileName } from "../editor/editorLanguage";
 import { gitError, type GitChange, type GitConflictDetail, type GitConflictResolution, type GitConflictVersion, type GitSnapshot } from "../lib/tauri/git";
 import { findGitConflictBlocks, gitConflictEditorExtension, goToGitConflict } from "./editor/gitConflictEditorExtension";
 
@@ -98,10 +98,7 @@ export function GitConflictResolver({
     return () => { cancelled = true; };
   }, [activePath]);
 
-  const language = useMemo(() => {
-    const kind = previewKindFor(activePath);
-    return kind === "image" ? "text" : kind;
-  }, [activePath]);
+  const language = useMemo(() => editorLanguageForFileName(activePath), [activePath]);
   const conflictBlocks = useMemo(() => findGitConflictBlocks(draft), [draft]);
 
   function closeSidebar() {

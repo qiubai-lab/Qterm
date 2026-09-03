@@ -1,18 +1,18 @@
-import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { createPortal } from "react-dom";
 import { basicSetup } from "codemirror";
-import { json, jsonParseLinter } from "@codemirror/lang-json";
-import { markdown } from "@codemirror/lang-markdown";
-import { yaml } from "@codemirror/lang-yaml";
+import { jsonParseLinter } from "@codemirror/lang-json";
 import { linter } from "@codemirror/lint";
 import { Compartment, EditorState, type Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { readText as readClipboardText, writeText as writeClipboardText } from "@tauri-apps/plugin-clipboard-manager";
 import { parseDocument } from "yaml";
 
+import { plainTextLanguageSupport, type EditorLanguage } from "../editor/editorLanguage";
+import { useEditorLanguage } from "../editor/useEditorLanguage";
 import { fitContextMenu } from "./fileBrowserModel";
 
-export type EditorLanguage = "markdown" | "json" | "yaml" | "text";
+export type { EditorLanguage } from "../editor/editorLanguage";
 type EditorContextMenuState = { anchorX: number; anchorY: number; x: number; y: number; placement: "above" | "below"; hasSelection: boolean; hasContent: boolean };
 type EditorOperationMessage = { text: string; tone: "success" | "error" };
 
@@ -39,8 +39,18 @@ export function CodeEditor({ value, language, readOnly = false, ariaLabel, exten
   const onViewReadyRef = useRef(onViewReady);
   const extensionsRef = useRef(extensions);
   const featureExtensions = useRef(new Compartment());
+  const languageExtensions = useRef(new Compartment());
   const [contextMenu, setContextMenu] = useState<EditorContextMenuState | null>(null);
   const [operationMessage, setOperationMessage] = useState<EditorOperationMessage | null>(null);
+  const languageSupport = useEditorLanguage(language);
+  const syntaxExtensions = useMemo<Extension>(() => [
+    languageSupport,
+    language === "json" ? linter(jsonParseLinter()) : [],
+    language === "yaml" ? linter((view) => {
+      const document = parseDocument(view.state.doc.toString());
+      return document.errors.map((error) => ({ from: 0, to: Math.min(1, view.state.doc.length), severity: "error" as const, message: error.message }));
+    }) : [],
+  ], [language, languageSupport]);
 
   useEffect(() => {
     onChangeRef.current = onChange;
@@ -60,13 +70,6 @@ export function CodeEditor({ value, language, readOnly = false, ariaLabel, exten
 
   useEffect(() => {
     if (!host.current) return;
-    const languageExtension = language === "markdown" ? markdown()
-      : language === "json" ? [json(), linter(jsonParseLinter())]
-      : language === "yaml" ? [yaml(), linter((view) => {
-        const document = parseDocument(view.state.doc.toString());
-        return document.errors.map((error) => ({ from: 0, to: Math.min(1, view.state.doc.length), severity: "error" as const, message: error.message }));
-      })]
-      : [];
     const view = new EditorView({
       parent: host.current,
       state: EditorState.create({
@@ -80,7 +83,7 @@ export function CodeEditor({ value, language, readOnly = false, ariaLabel, exten
           EditorView.editorAttributes.of((editorView) => (
             editorView.state.selection.ranges.some((range) => !range.empty) ? { class: "cm-has-selection" } : null
           )),
-          languageExtension,
+          languageExtensions.current.of(plainTextLanguageSupport),
           featureExtensions.current.of(extensionsRef.current),
           EditorView.updateListener.of((update) => {
             if (!readOnly && update.docChanged) onChangeRef.current(update.state.doc.toString());
@@ -121,7 +124,11 @@ export function CodeEditor({ value, language, readOnly = false, ariaLabel, exten
       editor.current = null;
       view.destroy();
     };
-  }, [ariaLabel, language, readOnly]);
+  }, [ariaLabel, readOnly]);
+
+  useEffect(() => {
+    editor.current?.dispatch({ effects: languageExtensions.current.reconfigure(syntaxExtensions) });
+  }, [syntaxExtensions]);
 
   useEffect(() => {
     editor.current?.dispatch({ effects: featureExtensions.current.reconfigure(extensions) });

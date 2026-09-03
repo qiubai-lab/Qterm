@@ -13,6 +13,7 @@
 
 - `.agents/skills/qterm-maintainable-modules/SKILL.md`：非平凡功能增长与结构调整的 owner-first 开发入口，要求窄 façade、capability modules、相邻行为测试和源码尺寸 ratchet；具体数值继续以 `scripts/check-source-size.mjs` 与 baseline 为事实源。
 - `src/main.tsx`：React 入口，同步设置默认 `data-theme="dark"`，在首次渲染前引导已保存主题并挂载应用根组件；不持有 feature theme state。
+- `src/editor/editorLanguage.ts`、`useEditorLanguage.ts`：跨 Files/Git 编辑表面的文件名语言识别、精选 CodeMirror 解析器动态加载/缓存/纯文本回退与 React 加载生命周期 owner；不拥有文件读取、Git diff、lint 规则、编辑状态或持久化。
 - `src/app/app.css`、`src/app/styles/themes/{dark,light,cyberpunk}.css`：固定顺序样式 manifest 与三套封闭预设 semantic token；Dark 保持缺省，Cyberpunk 复用 Dark 原生窗口模式，Light compatibility override 只承接尚未语义化的旧 feature 颜色。
 - `src/app/theme/AppThemeProvider.tsx`：应用级主题唯一状态 owner，负责 bootstrap、preview/commit/restore，以及 DOM、xterm 和原生窗口同步；不进入 Workspace persistence，也不允许任意主题值。
 - `src/app/App.tsx`：前端组合入口，只装配 App theme、Workspace provider 与 shell；不直接调用底层 SSH 库。
@@ -104,6 +105,7 @@
 - `src/workspace/`：负责工作区结构模型、布局树变换、顶部 Workspace 导航、按连接的有界 Git 仓库历史和 block runtime 编排；不读取本地文件、验证仓库有效性或实现 SSH/SFTP。
 - `src/terminal/`：负责 xterm 实例及终端 I/O 适配；不持久化 buffer 或拥有 Workspace 生命周期。
 - `src/files/`：负责内部文件窗口展示、导航、下载反馈与瞬时预览编辑状态；不直接访问本地文件系统或 SSH infrastructure。
+- `src/editor/`：负责跨 feature 的编辑器语言识别、解析器适配和异步加载生命周期；不读取文件、不计算 Git 差异，也不拥有 feature 编辑状态或后端能力。
 - `src/network/`：负责网络规则配置 UI、共享刷新、运行状态展示、安全暴露提示和可复制访问地址派生；不实现 SSH/SOCKS5 协议、浏览器进程启动或持久化。
 - `src/git/`：负责单仓库 Git Block 的稳定组合入口、Local/Remote action adapter、快照与刷新代次、提交检查缓存、状态驱动的单步主动作派生、分区展示、分支/同步/安全合并浮层、仅内存 attention 操作记录、最近仓库、受限目录浏览和提交图拓扑；presentation 不直接调用 Tauri IPC，feature 不拥有 Workspace 持久化、session 生命周期、Git 校验/命令/refspec/merge strategy 规则，也不直接启动 Git、自动串联 mutation、创建 SSH channel、读取文件内容、承接文件管理能力或实现 force/remote URL/高级历史改写。
 - `src/components/`：负责跨 feature 的小型展示与交互原语；不吸收 feature 状态、业务编排或领域规则。

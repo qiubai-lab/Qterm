@@ -1,13 +1,12 @@
 import { useEffect, useRef } from "react";
 import { basicSetup } from "codemirror";
-import { json } from "@codemirror/lang-json";
-import { markdown } from "@codemirror/lang-markdown";
-import { yaml } from "@codemirror/lang-yaml";
 import { MergeView } from "@codemirror/merge";
 import { EditorState, type Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 
-import { CodeEditor, type EditorLanguage } from "../../files/CodeEditor";
+import type { EditorLanguage } from "../../editor/editorLanguage";
+import { useEditorLanguage } from "../../editor/useEditorLanguage";
+import { CodeEditor } from "../../files/CodeEditor";
 import type { GitConflictVersion } from "../../lib/tauri/git";
 
 export function GitConflictInputComparison({ current, incoming, language }: {
@@ -19,12 +18,13 @@ export function GitConflictInputComparison({ current, incoming, language }: {
   const comparable = current.kind === "text" && incoming.kind === "text";
   const currentContent = current.content ?? "";
   const incomingContent = incoming.content ?? "";
+  const languageSupport = useEditorLanguage(language);
 
   useEffect(() => {
     if (!comparable || !host.current) return;
     const mergeView = new MergeView({
-      a: { doc: incomingContent, extensions: inputExtensions(language, "传入版本") },
-      b: { doc: currentContent, extensions: inputExtensions(language, "当前版本") },
+      a: { doc: incomingContent, extensions: inputExtensions(languageSupport, "传入版本") },
+      b: { doc: currentContent, extensions: inputExtensions(languageSupport, "当前版本") },
       parent: host.current,
       orientation: "a-b",
       highlightChanges: true,
@@ -32,7 +32,7 @@ export function GitConflictInputComparison({ current, incoming, language }: {
       diffConfig: { timeout: 250 },
     });
     return () => mergeView.destroy();
-  }, [comparable, currentContent, incomingContent, language]);
+  }, [comparable, currentContent, incomingContent, language, languageSupport]);
 
   if (comparable) return <div ref={host} className="git-conflict-comparison file-code-editor" data-read-only aria-label="冲突输入比较"/>;
 
@@ -42,18 +42,14 @@ export function GitConflictInputComparison({ current, incoming, language }: {
   </div>;
 }
 
-function inputExtensions(language: EditorLanguage, label: string): Extension {
-  const languageExtension = language === "markdown" ? markdown()
-    : language === "json" ? json()
-    : language === "yaml" ? yaml()
-    : [];
+function inputExtensions(languageSupport: Extension, label: string): Extension {
   return [
     basicSetup,
     EditorView.lineWrapping,
     EditorState.readOnly.of(true),
     EditorView.editable.of(false),
     EditorView.contentAttributes.of({ "aria-label": label }),
-    languageExtension,
+    languageSupport,
   ];
 }
 

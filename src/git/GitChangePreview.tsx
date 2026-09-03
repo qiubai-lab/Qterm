@@ -3,7 +3,7 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { StatusBadge } from "../components/Button";
 import { DialogFrame } from "../components/dialogs/DialogFrame";
 import { Icon } from "../components/Icon";
-import { previewKindFor } from "../files/fileBrowserModel";
+import { editorLanguageForFileName } from "../editor/editorLanguage";
 import {
   gitError,
   type GitChange,
@@ -173,10 +173,7 @@ export function GitChangePreview(props: GitChangePreviewProps) {
 }
 
 function DiffContent({ detail }: { detail: PreviewDetail }) {
-  const language = useMemo(() => {
-    const kind = previewKindFor(detail.path);
-    return kind === "image" ? "text" : kind;
-  }, [detail.path]);
+  const language = useMemo(() => editorLanguageForFileName(detail.path), [detail.path]);
   const comparable = comparableText(detail.before) && comparableText(detail.after);
   return <div className="git-change-preview-diff">
     <div className="git-change-preview-source-headings"><span>{detail.beforeLabel}</span><span>{detail.afterLabel}</span></div>

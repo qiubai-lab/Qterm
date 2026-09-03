@@ -29,6 +29,7 @@ const networkAccessDialog = readFileSync("src/network/NetworkAccessDialog.tsx", 
 const connectionDialogComponent = readFileSync("src/components/dialogs/ConnectionDialog.tsx", "utf8");
 const fileBrowserComponent = readFileSync("src/files/FileBrowserPane.tsx", "utf8");
 const notices = readFileSync("src/app/styles/notices.css", "utf8");
+const editorHighlightStyle = readFileSync("src/editor/editorHighlightStyle.ts", "utf8");
 
 describe("application theme contract", () => {
   it("owns the default dark theme at the application root", () => {
@@ -58,11 +59,27 @@ describe("application theme contract", () => {
       "--terminal-ansi-red", "--terminal-ansi-yellow", "--terminal-ansi-blue", "--terminal-ansi-magenta", "--terminal-ansi-cyan", "--terminal-ansi-white",
       "--file-active-surface", "--file-active-marker", "--file-selection-surface", "--file-selection-foreground", "--file-selection-secondary-foreground", "--file-selection-marker",
       "--editor-background", "--editor-foreground", "--editor-gutter-background", "--editor-active-line", "--editor-selection", "--editor-selection-foreground", "--editor-selection-marker",
+      "--editor-syntax-meta", "--editor-syntax-keyword", "--editor-syntax-atom", "--editor-syntax-literal", "--editor-syntax-string", "--editor-syntax-regexp", "--editor-syntax-definition", "--editor-syntax-local", "--editor-syntax-type", "--editor-syntax-class", "--editor-syntax-special", "--editor-syntax-property", "--editor-syntax-comment", "--editor-syntax-invalid",
     ]) {
       expect(theme).toContain(`${token}:`);
       expect(lightTheme).toContain(`${token}:`);
       expect(cyberpunkTheme).toContain(`${token}:`);
     }
+  });
+
+  it("uses a calmer, brighter syntax palette on the default dark editor", () => {
+    const background = tokenHex(theme, "--editor-background");
+    expect(contrastRatio(tokenHex(theme, "--editor-foreground"), background), "editor foreground contrast").toBeGreaterThanOrEqual(14);
+    expect(contrastRatio(tokenHex(theme, "--editor-gutter-foreground"), tokenHex(theme, "--editor-gutter-background")), "editor gutter contrast").toBeGreaterThanOrEqual(4.5);
+    for (const token of [
+      "--editor-syntax-meta", "--editor-syntax-keyword", "--editor-syntax-atom", "--editor-syntax-literal", "--editor-syntax-string", "--editor-syntax-regexp", "--editor-syntax-definition", "--editor-syntax-local", "--editor-syntax-type", "--editor-syntax-class", "--editor-syntax-special", "--editor-syntax-property", "--editor-syntax-comment", "--editor-syntax-invalid",
+    ]) {
+      expect(contrastRatio(tokenHex(theme, token), background), `${token} contrast`).toBeGreaterThanOrEqual(4.5);
+      expect(editorHighlightStyle).toContain(`var(${token})`);
+    }
+    expect(hexChroma(tokenHex(theme, "--editor-syntax-definition")), "definition color saturation proxy").toBeLessThanOrEqual(64);
+    expect(tokenHex(theme, "--editor-syntax-definition")).not.toBe("#0000ff");
+    expect(tokenHex(theme, "--editor-syntax-property")).not.toBe("#0000cc");
   });
 
   it("keeps the Cyberpunk palette readable and separates signature from status semantics", () => {
@@ -458,4 +475,9 @@ function relativeLuminance(hex: string): number {
   const channels = [1, 3, 5].map((offset) => Number.parseInt(hex.slice(offset, offset + 2), 16) / 255)
     .map((value) => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
   return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
+}
+
+function hexChroma(hex: string): number {
+  const channels = [1, 3, 5].map((offset) => Number.parseInt(hex.slice(offset, offset + 2), 16));
+  return Math.max(...channels) - Math.min(...channels);
 }
