@@ -24,7 +24,7 @@
     "src/terminal/TerminalPanel.test.tsx": 889,
     "src/terminal/TerminalPanel.tsx": 776,
     "src/workspace/LayoutView.test.tsx": 808,
-    "src/workspace/LayoutView.tsx": 780,
-    "src/workspace/WorkspaceShell.tsx": 824
+    "src/workspace/LayoutView.tsx": 658,
+    "src/workspace/WorkspaceShell.tsx": 811
   }
 }

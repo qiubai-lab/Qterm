@@ -147,7 +147,7 @@ test("development config isolates identity without replacing window arrays", asy
 
   assert.equal(production.productName, "Qterm");
   assert.equal(production.identifier, "com.qiubai.qterm");
-  assert.equal("macOS" in production.bundle, false);
+  assert.equal(production.bundle.macOS.signingIdentity, "-");
 });
 
 test("macOS development bundle uses a non-reserved plist input", async () => {

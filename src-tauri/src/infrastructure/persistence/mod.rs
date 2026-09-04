@@ -8,3 +8,5 @@ pub mod json_settings_repository;
 pub mod json_terminal_settings_repository;
 pub mod json_update_settings_repository;
 pub mod json_workspace_repository;
+
+pub mod json_notification_settings_repository;

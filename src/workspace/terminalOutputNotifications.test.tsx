@@ -1,0 +1,30 @@
+import { act, cleanup, renderHook } from "@testing-library/react";
+import { afterEach, expect, it, vi } from "vitest";
+import { useWorkspaceRuntimeState } from "./useWorkspaceRuntimeState";
+import { useTerminalWorkspaceController } from "./useTerminalWorkspaceController";
+import { createWorkspaceDocument } from "./model";
+const mocks = vi.hoisted(() => ({ connect: vi.fn(), outputs: [] as Array<(data: Uint8Array) => void> }));
+vi.mock("../lib/tauri/localSessions", () => ({ connectLocalSession: mocks.connect, closeLocalSession: vi.fn().mockResolvedValue(undefined), writeLocalSession: vi.fn().mockResolvedValue(undefined), resizeLocalSession: vi.fn(), getLocalTerminalCapabilities: vi.fn().mockResolvedValue({ windowsPty: null }) }));
+afterEach(() => { cleanup(); Reflect.deleteProperty(window, "__TAURI_INTERNALS__"); });
+it("observes output before writer availability, does not replay it, and ignores a replaced session", async () => {
+  Object.defineProperty(window, "__TAURI_INTERNALS__", { configurable: true, value: {} });
+  mocks.connect.mockImplementation(async (_columns, _rows, _event, output) => { mocks.outputs.push(output); return { sessionId: `session-${mocks.outputs.length}`, cwd: "/tmp" }; });
+  const document = createWorkspaceDocument(); const blockId = document.workspaces[0].activeBlockId;
+  const { result } = renderHook(() => {
+    const state = useWorkspaceRuntimeState(document, vi.fn());
+    return { state, terminal: useTerminalWorkspaceController(state, vi.fn()) };
+  });
+  const observer = vi.fn(); const writer = vi.fn();
+  act(() => { result.current.state.registerTerminalOutputObserver(observer); });
+  await act(() => result.current.terminal.startLocalBlock(blockId, 80, 24, false));
+  const data = Uint8Array.of(7);
+  act(() => mocks.outputs[0](data));
+  expect(observer).toHaveBeenCalledTimes(1);
+  act(() => { result.current.terminal.registerWriter(blockId, writer, vi.fn(), () => ({ columns: 80, rows: 24 })); });
+  expect(writer).toHaveBeenCalledWith(data); expect(observer).toHaveBeenCalledTimes(1);
+  await act(() => result.current.terminal.disconnectBlock(blockId));
+  await act(() => result.current.terminal.restartLocalBlock(blockId, false));
+  act(() => mocks.outputs[0](data)); expect(observer).toHaveBeenCalledTimes(1);
+  act(() => mocks.outputs[1](data)); expect(observer).toHaveBeenCalledTimes(2);
+  expect(observer.mock.calls[0][1]).not.toBe(observer.mock.calls[1][1]);
+});

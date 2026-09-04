@@ -13,3 +13,5 @@ pub mod settings_service;
 pub mod ssh_config_import;
 pub mod terminal_staging_service;
 pub mod workspace_service;
+
+pub mod notification_service;

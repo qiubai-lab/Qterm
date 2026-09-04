@@ -1,3 +1,5 @@
+import { focusWorkspaceBlock, findBlockType } from "./workspaceFocus";
+import { WorkspaceNotificationLabel } from "../terminal/notifications/WorkspaceNotificationLabel";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 
 import { resolveAppShortcut, shortcutLabel } from "../app/shortcuts";
@@ -17,7 +19,7 @@ import { getSettings, updateUpdateSettings, type SecuritySettings, type Terminal
 import { checkForUpdateOnStartupOnce } from "../lib/updateCheck";
 import { closeCurrentWindow, currentDesktopPlatform, isCurrentWindowAlwaysOnTop, minimizeCurrentWindow, setCurrentWindowAlwaysOnTop, startDraggingCurrentWindow, toggleMaximizeCurrentWindow } from "../lib/tauri/window";
 import { TERMINAL_ATTENTION_MS } from "../terminal/terminalAttention";
-import { focusTerminalBlock, openTerminalSearch } from "../terminal/terminalViewRegistry";
+import { openTerminalSearch } from "../terminal/terminalViewRegistry";
 import { WorkspaceCanvas, type ConnectionOwner } from "./LayoutView";
 import { resolveConfiguredAuth } from "./configuredAuth";
 import { adjacentBlockId } from "./blockNavigation";
@@ -670,7 +672,7 @@ export function WorkspaceShell() {
           const dragStyle = isDragged ? { "--workspace-tab-drag-x": `${workspaceDragVisual.offsetX}px` } as CSSProperties : undefined;
           return <div ref={(element) => { if (element) workspaceTabRefs.current.set(workspace.id, element); else workspaceTabRefs.current.delete(workspace.id); }} key={workspace.id} data-workspace-id={workspace.id} data-drop-shift={dropShift} style={dragStyle} className={`workspace-tab${workspace.id === activeWorkspace.id ? " selected" : ""}${isDragged ? " dragging" : ""}${isDropTarget ? " drop-target" : ""}`} onPointerDown={(event) => beginWorkspaceDrag(event, workspace.id)}>
           {renaming?.id === workspace.id ? <div className="workspace-tab-rename"><Icon name="workspace" size={13}/><input autoFocus aria-label={`重命名 ${workspace.name}`} value={renaming.value} onChange={(event) => setRenaming({ ...renaming, value: event.target.value })} onBlur={commitRename} onKeyDown={(event) => { if (event.key === "Enter") commitRename(); if (event.key === "Escape") setRenaming(null); }}/></div>
-            : <button className="workspace-tab-select" onClick={(event) => { if (!suppressWorkspaceDragClick(event, workspace.id)) dispatch({ type: "selectWorkspace", workspaceId: workspace.id }); }} onDoubleClick={(event) => { if (!suppressWorkspaceDragClick(event, workspace.id)) setRenaming({ id: workspace.id, value: workspace.name }); }}><Icon name="workspace" size={13}/><span>{workspace.name}</span></button>}
+            : <button className="workspace-tab-select" onClick={(event) => { if (!suppressWorkspaceDragClick(event, workspace.id)) dispatch({ type: "selectWorkspace", workspaceId: workspace.id }); }} onDoubleClick={(event) => { if (!suppressWorkspaceDragClick(event, workspace.id)) setRenaming({ id: workspace.id, value: workspace.name }); }}><Icon name="workspace" size={13}/><WorkspaceNotificationLabel workspace={workspace}/></button>}
           {document.workspaces.length > 1 && <IconButton className="workspace-tab-close" size="compact" label={`关闭 ${workspace.name}`} onClick={() => closeWorkspace(workspace)}><Icon name="close" size={12}/></IconButton>}
         </div>})}
         <IconButton className="new-workspace-tab" size="compact" label="新建工作区" title={`新建 Workspace (${shortcutLabel("newWorkspace", desktopPlatform)})`} onClick={() => dispatch({ type: "addWorkspace" })}><Icon name="plus" size={14}/></IconButton>
@@ -800,21 +802,6 @@ function isEditableOutsideTerminal(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   if (target.closest(".terminal-surface")) return false;
   return Boolean(target.closest("input,textarea,select,[contenteditable=true]"));
-}
-
-function focusWorkspaceBlock(blockId: string): boolean {
-  if (focusTerminalBlock(blockId)) return true;
-  const block = Array.from(globalThis.document.querySelectorAll<HTMLElement>("[data-layout-block]"))
-    .find((element) => element.dataset.layoutBlock === blockId);
-  block?.focus();
-  return Boolean(block);
-}
-
-function findBlockType(workspace: Workspace, blockId: string): "terminal" | "files" | "network" | "git" | null {
-  const visit = (node: Workspace["layout"]): "terminal" | "files" | "network" | "git" | null => node.type === "split"
-    ? visit(node.first) ?? visit(node.second)
-    : node.blockId === blockId ? node.type : null;
-  return visit(workspace.layout);
 }
 
 function hasLocalTerminal(node: LayoutNode): boolean {

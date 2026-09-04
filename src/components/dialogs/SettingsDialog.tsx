@@ -17,6 +17,7 @@ import { Button } from "../Button";
 import { Icon } from "../Icon";
 import { ConfigurationDirectorySetting } from "./ConfigurationDirectorySetting";
 import { ConfigurationPaths } from "./ConfigurationPaths";
+import { TerminalNotificationSetting } from "./TerminalNotificationSetting";
 import { DialogFrame } from "./DialogFrame";
 
 const credentialDurations = [300, 900, 1800, 3600, 7200, 14400, 28800, 86400];
@@ -180,6 +181,7 @@ export function SettingsDialog({ onClose, onSecuritySettingsChanged, onTerminalS
                 <span><strong>OSC 7 终端目录跟踪</strong><small>开启后显示并验证终端目录状态；远程登录会识别 Shell，并仅向当前会话注入 OSC 7 Hook。关闭后不再解析或显示 OSC 7 状态。</small></span>
                 <SettingsSwitch label="OSC 7 终端目录跟踪" checked={terminal.remoteShellIntegrationEnabled} disabled={busy} onChange={changeRemoteShellIntegration}/>
               </div>
+              <TerminalNotificationSetting/>
             </div> : <p className="dialog-note">正在读取设置…</p>}
           </div>}
           </div>

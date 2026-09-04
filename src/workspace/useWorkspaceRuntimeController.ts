@@ -81,6 +81,8 @@ export function useWorkspaceRuntimeController(state: WorkspaceRuntimeState, docu
 
   const activeWorkspace = document.workspaces.find((workspace) => workspace.id === document.activeWorkspaceId) ?? document.workspaces[0];
   return {
+    registerTerminalOutputObserver: state.registerTerminalOutputObserver,
+    getTerminalEpoch: state.getTerminalEpoch,
     runtimes, fileRuntimes, networkRuntimes, gitRuntimes, localTerminalCapabilities: state.localTerminalCapabilities,
     activeWorkspace, activeBlockId: activeWorkspace.activeBlockId,
     ...terminal, ...files, ...network, ...git,

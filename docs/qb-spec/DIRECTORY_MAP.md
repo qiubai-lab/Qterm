@@ -11,6 +11,12 @@
 
 ## Important Files
 
+- `src/terminal/notifications/`：实验性终端通知的有界流解析、epoch 隔离、未读派生状态、限流与设置 provider；只观察实时输出，不修改渲染字节、不拥有 session 或持久化 Workspace。
+- `src/components/dialogs/TerminalNotificationSetting.tsx`、`src/lib/tauri/notifications.ts`：高级设置开关展示与通知 IPC façade；缺失设置默认开启，错误不覆盖已有设置。
+- `src/terminal/TerminalHeaderActions.tsx`、`src/workspace/workspaceFocus.ts`：终端头部操作菜单与工作区焦点辅助；由布局/工作区入口组合，不持有通知策略。
+- `src-tauri/src/application/notification_service.rs`、`ports/notification.rs`、`commands/notification.rs`、`infrastructure/notifications.rs`、`infrastructure/notifications/macos.rs`、`infrastructure/persistence/json_notification_settings_repository.rs`：通知用例、端口、IPC、原生发送与独立 `device/notifications.json` 持久化；开关与发送串行，发送用例按独立正文偏好裁剪内容，原生接受已净化的来源与可选正文。
+- `docs/terminal-notifications.md`：终端通知协议范围、CLI 接入与人工复验说明。
+
 - `.agents/skills/qterm-maintainable-modules/SKILL.md`：非平凡功能增长与结构调整的 owner-first 开发入口，要求窄 façade、capability modules、相邻行为测试和源码尺寸 ratchet；具体数值继续以 `scripts/check-source-size.mjs` 与 baseline 为事实源。
 - `src/main.tsx`：React 入口，同步设置默认 `data-theme="dark"`，在首次渲染前引导已保存主题并挂载应用根组件；不持有 feature theme state。
 - `src/editor/editorLanguage.ts`、`useEditorLanguage.ts`：跨 Files/Git 编辑表面的文件名语言识别、精选 CodeMirror 解析器动态加载/缓存/纯文本回退与 React 加载生命周期 owner；不拥有文件读取、Git diff、lint 规则、编辑状态或持久化。
@@ -134,3 +140,5 @@
 - `docs/qb-spec/`：禁止密钥、密码、口令或其他真实凭据。
 - `.github/`：禁止提交签名证书、访问令牌或其他真实凭据；敏感值只能来自 GitHub Actions Secrets。
 - `scripts/`：禁止 shell 字符串拼接、用户数据读写和业务规则；只能调用仓库锁定的工具并保留参数边界。
+
+- `scripts/tauri-dev-runner.mjs`：macOS 开发 bundle 构造、完整 ad-hoc 签名及进程启动；签名 identity 与 Info.dev.plist 一致，保证原生通知服务识别真实应用身份。

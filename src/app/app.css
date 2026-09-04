@@ -22,3 +22,5 @@
 @import "./styles/notices.css";
 @import "./styles/lateOverrides.css";
 @import "./styles/themes/lightOverrides.css";
+
+@import "../terminal/notifications/notifications.css";
