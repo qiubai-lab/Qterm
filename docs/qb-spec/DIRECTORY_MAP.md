@@ -11,6 +11,8 @@
 
 ## Important Files
 
+- `src/terminal/terminalLayout.ts`：终端尺寸测量与布局同步 owner；Windows ConPTY 在拖动停稳并处理已接收输出后提交尺寸，其余终端即时适配；`resizeScheduler.ts` 继续负责有序 IPC 与去重。`scripts/conpty-resize-probe.mjs` 和 `src-tauri/examples/conpty_resize_probe.rs` 提供真实 Windows PTY 回归检查。
+
 - `src/terminal/notifications/`：实验性终端通知的有界流解析、epoch 隔离、未读派生状态、限流与设置 provider；`TerminalProtocolTag.tsx` 展示统一协议标签与提示，`workspaceNotice.ts` 管理前台瞬时气泡，`WorkspaceNotificationBubble.tsx` 负责定位、暂停倒计时与交互；只观察实时输出，不修改渲染字节、不拥有 session 或持久化 Workspace。
 - `src/components/dialogs/TerminalNotificationSetting.tsx`、`src/lib/tauri/notifications.ts`：高级设置开关展示与通知 IPC façade；缺失设置默认开启，错误不覆盖已有设置。
 - `src/terminal/TerminalHeaderActions.tsx`、`src/workspace/workspaceFocus.ts`：终端头部操作菜单与工作区焦点辅助；由布局/工作区入口组合，不持有通知策略。

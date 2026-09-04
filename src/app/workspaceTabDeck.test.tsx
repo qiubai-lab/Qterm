@@ -31,11 +31,18 @@ it("expands a preview without selecting it and retains the selected card (AC-002
   fireEvent.pointerMove(select(2), { clientX: 80, clientY: 16, pointerType: "mouse" });
   expect(tab(2)).toHaveAttribute("data-expanded");
   expect(tab(2)).not.toHaveClass("selected");
+  const close = within(tab(2) as HTMLElement).getByRole("button", { name: "关闭 工作区-2" });
+  expect(close).not.toHaveAttribute("inert");
   expect(tab(7)).toHaveAttribute("data-expanded");
   fireEvent.pointerLeave(nav);
   expect(tab(2)).not.toHaveAttribute("data-expanded");
+  expect(close).toBeInTheDocument();
+  expect(close).toHaveAttribute("inert");
+  expect(close).toHaveAttribute("aria-hidden", "true");
   fireEvent.pointerMove(select(2), { clientX: 80, clientY: 16, pointerType: "mouse" });
   expect(tab(2)).toHaveAttribute("data-expanded");
+  expect(within(tab(2) as HTMLElement).getByRole("button", { name: "关闭 工作区-2" })).toBe(close);
+  expect(close).not.toHaveAttribute("inert");
   fireEvent.click(select(2));
   expect(tab(2)).toHaveClass("selected");
   expect(tab(2)).toHaveAttribute("data-expanded");
