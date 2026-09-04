@@ -1,7 +1,7 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import { api, setupGitPaneTests, snapshot } from "./GitPane.testHarness";
+import { api, deferred, setupGitPaneTests, snapshot } from "./GitPane.testHarness";
 import { GitPane } from "./GitPane";
 
 setupGitPaneTests();
@@ -118,9 +118,14 @@ describe("GitPane commit graph", () => {
   });
 
   it("supports keyboard commit menus, focus restoration, and merge gating", async () => {
-    api.snapshot.mockResolvedValueOnce({ ...snapshot, mergeInProgress: true, commits: [historicalCommit] });
+    const loading = deferred<typeof snapshot>();
+    api.snapshot.mockReturnValue(loading.promise);
     render(<GitPane blockId="git-1" target={{ type: "local", path: "D:/work/project" }} visible onTargetChange={vi.fn()}/>);
-    await screen.findByText("project");
+    await waitFor(() => expect(api.snapshot).toHaveBeenCalled());
+    // Flush the merge-state effect that collapses the graph before opening it.
+    await act(async () => loading.resolve({ ...snapshot, mergeInProgress: true, commits: [historicalCommit] }));
+    expect(screen.getByText("合并未完成")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "图表" })).toHaveAttribute("aria-expanded", "false");
     fireEvent.click(screen.getByRole("button", { name: "图表" }));
     const commit = await screen.findByRole("button", { name: /fix: historical commit/ });
     commit.focus();

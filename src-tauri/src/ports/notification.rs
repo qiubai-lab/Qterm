@@ -7,8 +7,14 @@ pub trait NotificationSettingsRepository: Send + Sync {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NotificationDeliveryError {
+    // Only the macOS adapter constructs these errors; keep the shared IPC contract on all targets.
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     PermissionDenied,
-    Native { domain: String, code: isize },
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+    Native {
+        domain: String,
+        code: isize,
+    },
     Unavailable,
 }
 
