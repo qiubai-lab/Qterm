@@ -1,0 +1,30 @@
+.workspace-deck-extent { flex:none; height:1px; pointer-events:none; }
+.workspace-tab-strip[data-stacked] .workspace-tab-selection { display:none; }
+.workspace-tab-strip[data-stacked] .workspace-tab {
+  position:absolute; top:5px; left:0; margin:0;
+  width:calc(var(--workspace-visible-width, 128px) + 8px); min-width:0; max-width:none;
+  transform:translate3d(calc(var(--workspace-deck-x, 0px) + var(--workspace-deck-shift, 0px)),0,0);
+  clip-path:inset(-4px 0 -4px -2px round 7px);
+  background:var(--chrome); border-color:var(--border);
+  box-shadow:-3px 0 7px var(--shadow-soft);
+  transition:color 120ms ease,background-color 120ms ease,border-color 120ms ease;
+}
+.workspace-tab-strip[data-stacked] .workspace-tab[data-expanded] { width:var(--workspace-visible-width, 128px); background:var(--raised); }
+.workspace-tab-strip[data-stacked] .workspace-tab-select { width:128px; flex:0 0 128px; }
+.workspace-tab-strip[data-stacked] .workspace-tab.selected {
+  background:linear-gradient(var(--workspace-tab-active-background),var(--workspace-tab-active-background)),var(--chrome);
+  border-color:var(--workspace-tab-active-border); box-shadow:var(--workspace-tab-active-shadow);
+}
+.workspace-tab-strip[data-stacked] .workspace-tab:hover:not(.selected) {
+  background:linear-gradient(var(--workspace-tab-hover-background),var(--workspace-tab-hover-background)),var(--chrome);
+  border-color:var(--workspace-tab-hover-border);
+}
+.workspace-tab-strip[data-stacked] .workspace-tab.dragging {
+  transform:translate3d(calc(var(--workspace-deck-x, 0px) + var(--workspace-tab-drag-x, 0px)),-1px,0);
+  width:128px; clip-path:none; background:var(--raised); box-shadow:0 5px 14px var(--shadow-strong);
+}
+.workspace-tab-strip[data-stacked] .workspace-tab.drop-target::after { inset:0; width:var(--workspace-visible-width); }
+.workspace-tab-strip[data-stacked] .new-workspace-slot { margin-left:auto; z-index:calc(var(--workspace-deck-top) + 1); }
+.workspace-tab-strip[data-stacked] .workspace-tab:not([data-expanded]) .workspace-tab-select { justify-content:flex-start; padding-left:29px; padding-right:0; }
+.workspace-tab-strip[data-stacked] .workspace-tab-select:focus-visible { outline-offset:-2px; border-radius:6px; }
+@media (prefers-reduced-motion:reduce) { .workspace-tab-strip[data-stacked] .workspace-tab { transition:none; } }

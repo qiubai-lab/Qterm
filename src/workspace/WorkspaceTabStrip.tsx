@@ -1,16 +1,18 @@
-import { useCallback, useRef, useState, type ComponentPropsWithRef } from "react";
+import { useCallback, useEffect, useRef, useState, type ComponentPropsWithRef } from "react";
 import { useWorkspace } from "./WorkspaceProvider";
 import { WorkspaceTabMenu } from "./WorkspaceTabMenu";
 import { WorkspaceBatchCloseDialog } from "./WorkspaceBatchCloseDialog";
 import { workspaceCloseLabels, workspaceCloseTargets, type WorkspaceCloseSide } from "./workspaceClose";
 
 interface CloseBatch { anchorId: string; ids: string[]; side: WorkspaceCloseSide }
-export function WorkspaceTabStrip({ disabled, ...props }: ComponentPropsWithRef<"nav"> & { disabled: boolean }) {
+export function WorkspaceTabStrip({ disabled, onInteractionAnchorChange, ...props }: ComponentPropsWithRef<"nav"> & { disabled: boolean; onInteractionAnchorChange?: (id: string | null) => void }) {
   const { document: state, dispatch, blocksForWorkspace, closeSessions, connectedCount } = useWorkspace();
   const [menu, setMenu] = useState<{ anchorId: string; x: number; y: number } | null>(null);
   const [request, setRequest] = useState<CloseBatch | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const interactionAnchor = menu?.anchorId ?? request?.anchorId ?? null;
+  useEffect(() => { onInteractionAnchorChange?.(interactionAnchor); }, [interactionAnchor, onInteractionAnchorChange]);
   const busyRef = useRef(false);
   const anchor = useRef<HTMLButtonElement | null>(null);
   const closeMenu = useCallback((restore = true) => { setMenu(null); if (restore) anchor.current?.focus(); }, []);

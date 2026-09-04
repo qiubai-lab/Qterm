@@ -32,6 +32,7 @@
   backdrop-filter:blur(18px) saturate(125%); -webkit-backdrop-filter:blur(18px) saturate(125%);
   transform-origin:center top; animation:workspace-notification-appear 220ms cubic-bezier(.16,1,.3,1);
 }
+.workspace-notification-bubble[data-state="closing"] { pointer-events:none; animation:workspace-notification-disappear 140ms cubic-bezier(.4,0,1,1) forwards; }
 .workspace-notification-open { flex:1; min-width:0; display:flex; align-items:flex-start; gap:9px; padding:9px; text-align:left; border:0; border-radius:7px; color:inherit; background:transparent; cursor:pointer; transition:background-color 120ms ease,transform 120ms ease; }
 .workspace-notification-symbol { position:relative; display:grid; flex:0 0 27px; height:27px; place-items:center; border-radius:8px; background:color-mix(in srgb,var(--workspace-notice-color) 10%,transparent); color:var(--workspace-notice-color); }
 .workspace-notification-symbol i { position:absolute; right:3px; top:3px; width:4px; height:4px; border-radius:50%; background:var(--workspace-notice-color); }
@@ -45,8 +46,9 @@
 .workspace-notification-close:active { background:var(--hover); }
 .workspace-notification-bubble button:focus-visible { outline:2px solid var(--focus); outline-offset:-1px; }
 @keyframes workspace-notification-appear { from { opacity:0; transform:translateY(-4px) scale(.98); } to { opacity:1; transform:translateY(0) scale(1); } }
+@keyframes workspace-notification-disappear { from { opacity:1; transform:translateY(0) scale(1); } to { opacity:0; transform:translateY(-3px) scale(.985); } }
 @media (prefers-reduced-motion:reduce) {
-  .workspace-tab:not(.selected):has(.workspace-notification-label[data-unread]),.workspace-notification-bubble { animation:none; }
+  .workspace-tab:not(.selected):has(.workspace-notification-label[data-unread]),.workspace-notification-bubble,.workspace-notification-bubble[data-state="closing"] { animation:none; }
   .workspace-notification-open { transition:none; }
   .workspace-notification-open:active { transform:none; }
 }

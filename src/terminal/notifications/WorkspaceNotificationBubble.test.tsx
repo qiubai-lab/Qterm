@@ -21,7 +21,7 @@ it("expires after four seconds, pauses on hover, and keeps pause across merged e
   fireEvent.mouseLeave(bubble);
   act(() => vi.advanceTimersByTime(3999));
   expect(dismiss).not.toHaveBeenCalled();
-  act(() => vi.advanceTimersByTime(1));
+  act(() => vi.advanceTimersByTime(141));
   expect(dismiss).toHaveBeenCalledWith(2);
 });
 it("uses opt-in body and supports activation, keyboard pause and Escape dismissal", () => {
@@ -35,6 +35,17 @@ it("uses opt-in body and supports activation, keyboard pause and Escape dismissa
   fireEvent.click(button);
   expect(activate).toHaveBeenCalledOnce();
   fireEvent.keyDown(button, { key: "Escape" });
+  expect(dismiss).not.toHaveBeenCalled();
+  act(() => vi.advanceTimersByTime(140));
+  expect(dismiss).toHaveBeenCalledWith(1);
+});
+
+it("keeps the bubble mounted while a manual dismissal animates out", () => {
+  render(<WorkspaceNotificationBubble {...props}/>);
+  fireEvent.click(screen.getByRole("button", { name: "关闭通知气泡" }));
+  expect(screen.getByRole("status").closest("div")).toHaveAttribute("data-state", "closing");
+  expect(dismiss).not.toHaveBeenCalled();
+  act(() => vi.advanceTimersByTime(140));
   expect(dismiss).toHaveBeenCalledWith(1);
 });
 it("cancels timers on unmount", () => {
@@ -56,6 +67,7 @@ it("clamps an offscreen source to the visible strip edge and dismisses under a m
   expect(screen.getByRole("status").closest("div")).toHaveStyle({ left: "8px", top: "46px" });
   const modal = document.createElement("div"); modal.setAttribute("role", "dialog");
   await act(async () => { document.body.append(modal); });
+  act(() => vi.advanceTimersByTime(140));
   expect(dismiss).toHaveBeenCalledWith(1);
   modal.remove(); strip.remove();
 });

@@ -7,7 +7,7 @@ import { readFileSync } from "node:fs";
 const styles = readCssBundle("src/app/app.css");
 const lightOverrides = readFileSync("src/app/styles/themes/lightOverrides.css", "utf8");
 const defaultCapability = JSON.parse(readFileSync("src-tauri/capabilities/default.json", "utf8")) as { permissions: string[] };
-const workspaceShellSource = readFileSync("src/workspace/WorkspaceShell.tsx", "utf8");
+const workspaceShellSource = readFileSync("src/workspace/WorkspaceTabs.tsx", "utf8");
 const tauriConfig = JSON.parse(readFileSync("src-tauri/tauri.conf.json", "utf8")) as {
   app: { windows: Array<{ theme?: string; transparent?: boolean; shadow?: boolean; windowEffects?: { effects: string[]; state?: string; radius?: number } }> };
 };

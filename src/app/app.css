@@ -25,3 +25,5 @@
 @import "./styles/themes/lightOverrides.css";
 
 @import "../terminal/notifications/notifications.css";
+
+@import "../workspace/workspaceTabDeck.css";
