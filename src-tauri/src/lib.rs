@@ -220,7 +220,7 @@ pub fn run() {
                     window.set_title(product_name)?;
                 }
                 #[cfg(target_os = "macos")]
-                infrastructure::window_chrome::schedule_traffic_light_alignment(
+                infrastructure::window_chrome::install_traffic_light_alignment(
                     &window.as_ref().window(),
                 )?;
             }

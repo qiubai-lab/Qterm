@@ -125,7 +125,18 @@ async function prepareBundle({ sourceExecutable, bundleRoot }) {
   await chmod(temporaryExecutable, 0o755);
   await rename(temporaryExecutable, bundledExecutable);
   // Bind Info.plist and the real development bundle identity for macOS services.
-  const signing = spawn("/usr/bin/codesign", ["--force", "--sign", "-", "--identifier", "com.qiubai.qterm.dev", bundleRoot], { stdio: "inherit" });
+  const signing = spawn(
+    "/usr/bin/codesign",
+    [
+      "--force",
+      "--sign",
+      "-",
+      "--identifier",
+      "com.qiubai.qterm.dev",
+      bundleRoot,
+    ],
+    { stdio: "inherit" },
+  );
   if (await waitForChildWithSignalForwarding(signing) !== 0) {
     throw new Error("Failed to sign the Qterm development bundle.");
   }
@@ -167,7 +178,13 @@ async function terminateExistingBundleInstances(bundledExecutable) {
   }
 
   for (const pid of pids.filter(processIsRunning)) {
-    process.kill(pid, "SIGKILL");
+    try {
+      process.kill(pid, "SIGKILL");
+    } catch (error) {
+      if (error?.code !== "ESRCH") {
+        throw error;
+      }
+    }
   }
 }
 

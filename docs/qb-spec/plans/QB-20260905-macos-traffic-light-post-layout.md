@@ -26,7 +26,7 @@ Implement REQ-001 through REQ-004 from the matching change spec while retaining 
 
 ## Design
 
-The adapter coalesces requests for Qterm's single main window with an atomic pending flag. It schedules an alignment pass through Tauri's main-thread queue, then schedules one more pass from that callback. Completion releases the flag. The adapter also decides which Tauri window events represent native relayout opportunities, leaving the composition root responsible only for forwarding setup and window events.
+The adapter installs an AppKit `NSWindowDidUpdateNotification` observer scoped to Qterm's main `NSWindow`. The callback performs an idempotent geometry reconciliation after native updates, which covers first presentation without guessing event-loop timing. The retained observer is removed when the window is destroyed. Existing coalesced Tauri event scheduling remains a fallback for explicit move, resize, focus, and scale changes; the composition root only installs the adapter and forwards lifecycle events.
 
 ## Implementation Tasks
 
@@ -34,7 +34,9 @@ The adapter coalesces requests for Qterm's single main window with an atomic pen
 - [x] Expand realignment triggers to startup, resize, move, focus restoration, and scale changes.
 - [x] Add event-policy regression tests next to the adapter.
 - [x] Make each macOS dev launch replace stale instances of its exact bundle path and cover process matching.
-- [ ] Verify formatting, tests, lint/type/build checks, and the actual development launch path.
+- [x] Install and clean up the native window-update observer.
+- [x] Make native frame reconciliation idempotent and add adjacent regression coverage.
+- [x] Re-run formatting, tests, lint/type/build checks, and the actual development launch path; retain the spec as active until pixel-level visual confirmation.
 
 ## Acceptance To Verification
 
