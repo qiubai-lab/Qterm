@@ -6,6 +6,7 @@
 @import "./styles/foundations.css";
 @import "./styles/shell.css";
 @import "../workspace/workspace.css";
+@import "../workspace/workspaceTabMenu.css";
 @import "../terminal/terminalChrome.css";
 @import "../network/network.css";
 @import "../files/fileBrowser.css";

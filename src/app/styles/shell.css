@@ -4,7 +4,7 @@
 .app-shell[data-platform="macos"] .app-chrome { padding-left:78px; }
 .app-brand { display:flex; height:40px; flex:none; gap:7px; align-items:center; padding:0 13px; color:var(--text-strong); }
 .app-brand svg { color:var(--signature); }
-.app-brand span { font-size:12px; font-weight:600; letter-spacing:-.01em; }
+.app-brand span { -webkit-user-select:none; user-select:none; font-size:12px; font-weight:600; letter-spacing:-.01em; }
 .app-shell[data-platform="macos"] .app-brand { position:relative; z-index:1; height:30px; gap:6px; margin:0 7px 0 9px; padding:0 8px; }
 .app-shell[data-platform="macos"] .app-brand::before { position:absolute; z-index:0; inset:0 0 0 -80px; border:1px solid var(--brand-plate-border); border-radius:7px; background:var(--brand-plate-background); box-shadow:var(--brand-plate-shadow); backdrop-filter:blur(8px) saturate(115%); -webkit-backdrop-filter:blur(8px) saturate(115%); content:""; pointer-events:none; }
 .app-shell[data-platform="macos"] .app-brand svg { position:relative; z-index:1; width:14px; height:14px; color:color-mix(in srgb,var(--signature) 72%,var(--muted)); }
@@ -26,16 +26,17 @@
 .workspace-tab.drop-target[data-drop-shift="right"]::after { right:calc(100% + 3px); }
 .workspace-tab-strip.drop-settling .workspace-tab { transition:none; }
 .workspace-tab-strip.dragging,.workspace-tab-strip.dragging * { cursor:grabbing!important; }
-.workspace-tab-select { position:relative; display:flex; min-width:0; flex:1; height:100%; align-items:center; justify-content:center; padding:0 29px; border:0; color:inherit; background:transparent; }
+.workspace-tab-select { -webkit-user-select:none; user-select:none; position:relative; display:flex; min-width:0; flex:1; height:100%; align-items:center; justify-content:center; padding:0 29px; border:0; color:inherit; background:transparent; }
 .workspace-tab-select svg { position:absolute; left:8px; flex:none; }
 .workspace-tab.selected .workspace-tab-select svg { color:var(--accent); }
-.workspace-tab-select span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:11px; }
+.workspace-tab-select span { -webkit-user-select:none; user-select:none; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:11px; }
 .workspace-tab-rename { position:relative; display:flex; min-width:0; width:0; flex:1; height:100%; align-items:center; justify-content:center; padding:0 29px; color:var(--text); }
 .workspace-tab-rename svg { position:absolute; left:8px; flex:none; }
 .workspace-tab-rename input { min-width:0; width:0; height:20px; flex:1; margin:0; padding:0 1px; border:0; border-radius:0; color:inherit; background:transparent; box-shadow:inset 0 -1px 0 var(--focus); font-size:11px; text-align:center; }
 .workspace-tab-rename input:focus,.workspace-tab-rename input:focus-visible { border:0; outline:0; box-shadow:inset 0 -1px 0 var(--focus); }
 .workspace-tab-close { position:absolute; top:1px; right:2px; }
-.new-workspace-tab { margin-left:2px; }
+.new-workspace-slot { position:sticky; right:0; z-index:4; display:grid; flex:0 0 auto; height:calc(100% - 2px); align-items:center; padding-right:2px; background:var(--chrome); }
+.new-workspace-tab.ui-icon-button { margin-left:2px; }
 .new-workspace-tab.ui-icon-button:hover:not(:disabled) { border-color:var(--chrome-action-border); color:var(--icon-hover); background:var(--chrome-action-hover); box-shadow:0 1px 2px var(--shadow-soft); }
 .new-workspace-tab.ui-icon-button:active:not(:disabled) { border-color:var(--chrome-action-border); background:var(--chrome-action-pressed); box-shadow:none; transform:scale(.94); }
 .workspace-tab-close.ui-icon-button:hover:not(:disabled) { border-color:color-mix(in srgb,var(--danger) 58%,var(--border)); color:var(--danger); background:var(--danger-bg); box-shadow:0 1px 2px var(--shadow-soft); }

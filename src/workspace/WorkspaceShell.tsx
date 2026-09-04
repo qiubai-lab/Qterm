@@ -1,3 +1,5 @@
+import { WorkspaceTabStrip } from "./WorkspaceTabStrip";
+import { createWorkspaceCloseRequest, type CloseRequest } from "./workspaceClose";
 import { focusWorkspaceBlock, findBlockType } from "./workspaceFocus";
 import { WorkspaceNotificationLabel } from "../terminal/notifications/WorkspaceNotificationLabel";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
@@ -26,13 +28,12 @@ import { adjacentBlockId } from "./blockNavigation";
 import { blockIds } from "./layout";
 import { openFileWindowAction } from "./fileWindow";
 import { openGitWindowAction } from "./gitWindow";
-import type { LayoutNode, Workspace } from "./model";
+import type { LayoutNode } from "./model";
 import { openNetworkWindowAction } from "./networkWindow";
 import { useWorkspace } from "./WorkspaceProvider";
 
 type Tool = "connections" | "credentials" | "settings" | "help";
 type WorkspaceTransitionDirection = "forward" | "backward";
-interface CloseRequest { title: string; detail: string; ids: string[]; execute: () => void }
 interface DisconnectRequest { owner: ConnectionOwner; blockId: string; name: string; local: boolean }
 interface TitlebarGesture { pointerId: number; x: number; y: number }
 interface TitlebarClick { at: number; x: number; y: number }
@@ -48,7 +49,7 @@ const TITLEBAR_DOUBLE_CLICK_MS = 350;
 export function WorkspaceShell() {
   const desktopPlatform = currentDesktopPlatform();
   const usesNativeWindowControls = desktopPlatform === "macos";
-  const { hydrated, document, activeWorkspace, dispatch, runtimes, fileRuntimes, networkRuntimes, gitRuntimes, clearTerminalOsc7State, splitTerminalBlock, connectBlock, connectFileBlock, connectNetworkBlock, connectGitBlock, disconnectBlock, disconnectFileBlock, disconnectNetworkBlock, disconnectGitBlock, isConnectionTargetCurrent, connectedCount, closeSessions, blocksForWorkspace, acceptBlockHostKey, rejectBlockHostKey, acceptFileHostKey, rejectFileHostKey, acceptNetworkHostKey, rejectNetworkHostKey, acceptGitHostKey, rejectGitHostKey, storageNotice, dismissStorageNotice } = useWorkspace();
+  const { hydrated, document, activeWorkspace, dispatch, runtimes, fileRuntimes, networkRuntimes, gitRuntimes, clearTerminalOsc7State, splitTerminalBlock, connectBlock, connectFileBlock, connectNetworkBlock, connectGitBlock, disconnectBlock, disconnectFileBlock, disconnectNetworkBlock, disconnectGitBlock, isConnectionTargetCurrent, connectedCount, closeSessions, acceptBlockHostKey, rejectBlockHostKey, acceptFileHostKey, rejectFileHostKey, acceptNetworkHostKey, rejectNetworkHostKey, acceptGitHostKey, rejectGitHostKey, storageNotice, dismissStorageNotice } = useWorkspace();
   const [tool, setTool] = useState<Tool | null>(null);
   const [renaming, setRenaming] = useState<{ id: string; value: string } | null>(null);
   const [closeRequest, setCloseRequest] = useState<CloseRequest | null>(null);
@@ -190,11 +191,6 @@ export function WorkspaceShell() {
     const title = blockType === "files" ? "关闭文件窗口？" : blockType === "network" ? "关闭网络窗口？" : "关闭终端？";
     const detail = blockType === "files" ? "活动文件连接会同时断开。" : blockType === "network" ? "活动网络转发和 SSH 连接会同时停止。" : "活动终端会话会同时断开，终端缓冲不会保留。";
     requestClose({ title, detail, ids: [blockId], execute: () => dispatch({ type: "closeBlock", workspaceId: activeWorkspace.id, blockId }) });
-  }
-
-  function closeWorkspace(workspace: Workspace) {
-    const ids = blocksForWorkspace(workspace);
-    requestClose({ title: `关闭 ${workspace.name}？`, detail: "Workspace 内的布局和所有终端会话会同时关闭。", ids, execute: () => dispatch({ type: "closeWorkspace", workspaceId: workspace.id }) });
   }
 
   function commitRename() {
@@ -515,7 +511,7 @@ export function WorkspaceShell() {
       const command = resolveAppShortcut(event, desktopPlatform);
       if (!command) return;
       const modalOpen = Boolean(tool || authRequest || vaultUnlockRequest || lockChoiceOpen || closeRequest || disconnectRequest || hostPromptOpen);
-      if (modalOpen) return;
+      if (modalOpen || globalThis.document.querySelector('.workspace-batch-close-dialog, [role="menu"]')) return;
       const allowedWhileLocked = command.type === "newWorkspace" || command.type === "selectWorkspace" || command.type === "cycleWorkspace";
       if (terminalLocked && !allowedWhileLocked) return;
 
@@ -555,7 +551,7 @@ export function WorkspaceShell() {
   }, [activeWorkspace.activeBlockId, activeWorkspace.id, activeWorkspace.layout, authRequest, closeRequest, desktopPlatform, disconnectRequest, dispatch, document.workspaces, hostPromptOpen, lockChoiceOpen, remoteShellIntegrationEnabled, splitTerminalBlock, terminalLocked, tool, vaultUnlockRequest]);
 
   useEffect(() => {
-    if (terminalLocked) return;
+    if (terminalLocked || globalThis.document.querySelector('[role="dialog"]')) return;
     const activeElement = globalThis.document.activeElement;
     const focusedBlockId = activeElement instanceof Element
       ? activeElement.closest<HTMLElement>("[data-layout-block]")?.dataset.layoutBlock
@@ -653,7 +649,7 @@ export function WorkspaceShell() {
       <div className="app-brand" aria-label="Qterm">
         <Icon name="terminal" size={15}/><span>Qterm</span>
       </div>
-      <nav ref={workspaceTabStripRef} className={`workspace-tab-strip${workspaceDragVisual ? " dragging" : ""}${workspaceDropSettling ? " drop-settling" : ""}`} aria-label="工作区">
+      <WorkspaceTabStrip disabled={terminalLocked} ref={workspaceTabStripRef} className={`workspace-tab-strip${workspaceDragVisual ? " dragging" : ""}${workspaceDropSettling ? " drop-settling" : ""}`} aria-label="工作区">
         <span
           aria-hidden="true"
           className={`workspace-tab-selection${workspaceTabIndicator.ready ? " ready" : ""}`}
@@ -673,10 +669,10 @@ export function WorkspaceShell() {
           return <div ref={(element) => { if (element) workspaceTabRefs.current.set(workspace.id, element); else workspaceTabRefs.current.delete(workspace.id); }} key={workspace.id} data-workspace-id={workspace.id} data-drop-shift={dropShift} style={dragStyle} className={`workspace-tab${workspace.id === activeWorkspace.id ? " selected" : ""}${isDragged ? " dragging" : ""}${isDropTarget ? " drop-target" : ""}`} onPointerDown={(event) => beginWorkspaceDrag(event, workspace.id)}>
           {renaming?.id === workspace.id ? <div className="workspace-tab-rename"><Icon name="workspace" size={13}/><input autoFocus aria-label={`重命名 ${workspace.name}`} value={renaming.value} onChange={(event) => setRenaming({ ...renaming, value: event.target.value })} onBlur={commitRename} onKeyDown={(event) => { if (event.key === "Enter") commitRename(); if (event.key === "Escape") setRenaming(null); }}/></div>
             : <button className="workspace-tab-select" onClick={(event) => { if (!suppressWorkspaceDragClick(event, workspace.id)) dispatch({ type: "selectWorkspace", workspaceId: workspace.id }); }} onDoubleClick={(event) => { if (!suppressWorkspaceDragClick(event, workspace.id)) setRenaming({ id: workspace.id, value: workspace.name }); }}><Icon name="workspace" size={13}/><WorkspaceNotificationLabel workspace={workspace}/></button>}
-          {document.workspaces.length > 1 && <IconButton className="workspace-tab-close" size="compact" label={`关闭 ${workspace.name}`} onClick={() => closeWorkspace(workspace)}><Icon name="close" size={12}/></IconButton>}
+          {document.workspaces.length > 1 && <IconButton className="workspace-tab-close" size="compact" label={`关闭 ${workspace.name}`} onClick={() => requestClose(createWorkspaceCloseRequest(workspace, () => dispatch({ type: "closeWorkspace", workspaceId: workspace.id })))}><Icon name="close" size={12}/></IconButton>}
         </div>})}
-        <IconButton className="new-workspace-tab" size="compact" label="新建工作区" title={`新建 Workspace (${shortcutLabel("newWorkspace", desktopPlatform)})`} onClick={() => dispatch({ type: "addWorkspace" })}><Icon name="plus" size={14}/></IconButton>
-      </nav>
+        <div className="new-workspace-slot"><IconButton className="new-workspace-tab" size="compact" label="新建工作区" title={`新建工作区 (${shortcutLabel("newWorkspace", desktopPlatform)})`} onClick={() => dispatch({ type: "addWorkspace" })}><Icon name="plus" size={14}/></IconButton></div>
+      </WorkspaceTabStrip>
       <div className="window-controls" aria-label="窗口控制">
         <button className="window-pin" aria-label={windowAlwaysOnTop ? "取消窗口置顶" : "置顶窗口"} aria-pressed={windowAlwaysOnTop} aria-busy={windowPinBusy || undefined} title={windowAlwaysOnTop ? "取消置顶" : "置顶窗口"} disabled={windowPinBusy} onClick={() => void toggleWindowAlwaysOnTop()}><Icon name="pin" size={14}/></button>
         {!usesNativeWindowControls && <>

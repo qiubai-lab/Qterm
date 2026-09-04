@@ -1,3 +1,4 @@
+import { closeWorkspaceBatch } from "./workspaceClose";
 import { blockIds, clearTerminalRestoreDirectories, closeTerminal, findLeaf, moveTerminal, setFilesPath, setFilesProfile, setGitTarget, setNetworkProfile, setTerminalProfile, setTerminalRestoreDirectory, splitTerminal, terminalBlockIds, updateSplitRatio, type DropPosition } from "./layout";
 import { recordRecentGitRepository } from "./gitRepositoryHistory";
 import { createFilesNode, createGitNode, createId, createNetworkNode, createTerminalNode, createWorkspace, isValidTerminalRestoreDirectory, type GitRepositoryHistoryEntry, type GitTarget, type SplitDirection, type Workspace, type WorkspaceDocument } from "./model";
@@ -10,6 +11,7 @@ export type WorkspaceAction =
   | { type: "addWorkspace" }
   | { type: "renameWorkspace"; workspaceId: string; name: string }
   | { type: "closeWorkspace"; workspaceId: string }
+  | { type: "closeWorkspaces"; workspaceIds: string[]; anchorId: string }
   | { type: "reorderWorkspace"; workspaceId: string; targetWorkspaceId: string }
   | { type: "selectBlock"; workspaceId: string; blockId: string }
   | { type: "splitBlock"; workspaceId: string; blockId: string; direction: SplitDirection; newBlockId: string; splitId: string }
@@ -47,6 +49,7 @@ export function workspaceReducer(state: WorkspaceDocument, action: WorkspaceActi
       return { ...state, activeWorkspaceId: workspace.id, workspaces: [...state.workspaces, workspace] };
     }
     case "renameWorkspace": return mapWorkspace(state, action.workspaceId, (workspace) => ({ ...workspace, name: cleanName(action.name, workspace.name) }));
+    case "closeWorkspaces": return closeWorkspaceBatch(state, action.workspaceIds, action.anchorId);
     case "closeWorkspace": {
       if (state.workspaces.length === 1) return state;
       const index = state.workspaces.findIndex((workspace) => workspace.id === action.workspaceId);

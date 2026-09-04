@@ -556,7 +556,7 @@ describe("application layout styles", () => {
     expect(styles).toMatch(/\.ui-button:focus-visible,\s*\.ui-icon-button:focus-visible,[^{]+\{\s*outline:2px solid var\(--focus\)/);
     expect(declarations(".workspace-tab-close")).toContain("position:absolute");
     expect(declarations(".workspace-tab-close")).toContain("top:1px");
-    expect(declarations(".new-workspace-tab")).toContain("margin-left:2px");
+    expect(declarations(".new-workspace-tab.ui-icon-button")).toContain("margin-left:2px");
     expect(declarations(".new-workspace-tab.ui-icon-button:hover:not(:disabled)")).toContain("background:var(--chrome-action-hover)");
     expect(declarations(".new-workspace-tab.ui-icon-button:active:not(:disabled)")).toContain("background:var(--chrome-action-pressed)");
     expect(declarations(".workspace-tab-close.ui-icon-button:hover:not(:disabled)")).toContain("color:var(--danger)");

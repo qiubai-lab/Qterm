@@ -1,0 +1,8 @@
+.terminal-context-menu.workspace-tab-menu { z-index:95; width:max-content; max-width:calc(100vw - 16px); }
+.workspace-tab-menu button { white-space:nowrap; cursor:pointer; }
+.workspace-tab-menu button small { flex:none; min-width:2ch; color:var(--menu-secondary-text); font-size:9px; font-variant-numeric:tabular-nums; text-align:right; }
+.workspace-tab-menu button:hover:not(:disabled) small,.workspace-tab-menu button:focus-visible:not(:disabled) small { color:inherit; }
+.workspace-tab-menu button:disabled small { color:inherit; }
+.workspace-tab-menu:focus-visible { outline:1px solid var(--focus); }
+.workspace-close-targets { max-height:140px; overflow:auto; margin:10px 0; padding:8px 8px 8px 24px; border:1px solid var(--border); border-radius:5px; background:var(--surface); color:var(--text); font-size:11px; line-height:1.8; }
+.workspace-close-targets li { overflow-wrap:anywhere; }

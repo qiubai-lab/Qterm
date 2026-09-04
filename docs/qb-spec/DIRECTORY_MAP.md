@@ -23,6 +23,7 @@
 - `src/app/app.css`、`src/app/styles/themes/{dark,light,cyberpunk}.css`：固定顺序样式 manifest 与三套封闭预设 semantic token；Dark 保持缺省，Cyberpunk 复用 Dark 原生窗口模式，Light compatibility override 只承接尚未语义化的旧 feature 颜色。
 - `src/app/theme/AppThemeProvider.tsx`：应用级主题唯一状态 owner，负责 bootstrap、preview/commit/restore，以及 DOM、xterm 和原生窗口同步；不进入 Workspace persistence，也不允许任意主题值。
 - `src/app/App.tsx`、`useBrowserContextMenuGuard.ts`：前端组合入口装配 App theme、Workspace provider、shell 与仅阻止 WebView 原生菜单的应用级 `contextmenu` 生命周期；不停止 feature 事件传播、不决定 Qterm 菜单内容，也不直接调用底层 SSH 库。
+- `src/workspace/WorkspaceTabStrip.tsx`、`WorkspaceTabMenu.tsx`、`WorkspaceBatchCloseDialog.tsx`、`workspaceClose.ts`：工作区右键菜单、左右/其他目标选择及一次性批量关闭确认；复用现有 closeSessions，reducer 原子移除并保留基准页，不持有新的会话状态。
 - `src/workspace/WorkspaceShell.tsx`：顶部 Workspace 标签、工具轨、Terminal/Files/Network/Git 认证路由、route 凭证库解锁、关闭编排、快捷键与一次性启动更新提示入口；不请求任意更新地址、解析跳板图、布局树或 SSH 协议。
 - `src/workspace/model.ts`、`layout.ts`、`reducer.ts`、`gitRepositoryHistory.ts`：schema v10 可持久化工作区契约、Git `Unbound | Local | Remote` target、按本机或 profile 隔离的有界 Git 仓库 MRU、使用调用方提供稳定 ID 的纯布局树变换与低频结构状态；不持有 session、xterm、Git 快照、远程命令、一次性启动目录或凭据。
 - `src/workspace/WorkspaceProvider.tsx`、`useWorkspacePersistence.ts`：兼容的单一 Workspace Context façade，以及 hydration、debounced save、close flush 和 profile refresh owner；Git target retarget 可在同 profile 的已连接 Git session 上只切换路径，Provider 不直接实现会话事件或连接生命周期，运行时状态不持久化。

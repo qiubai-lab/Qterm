@@ -153,10 +153,10 @@ describe("application shell", () => {
     expect(workspaceNavigation.querySelectorAll(".workspace-tab-selection")).toHaveLength(1);
     expect(workspaceNavigation.querySelector(".workspace-tab-selection")).toHaveAttribute("aria-hidden", "true");
     expect(within(workspaceNavigation).getByRole("button", { name: "工作区-1" })).toBeInTheDocument();
-    expect(within(workspaceNavigation).getByRole("button", { name: "新建工作区" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "新建工作区" })).toBeInTheDocument();
     expect(screen.queryByRole("navigation", { name: "当前工作区标签页" })).not.toBeInTheDocument();
 
-    await user.click(within(workspaceNavigation).getByRole("button", { name: "新建工作区" }));
+    await user.click(screen.getByRole("button", { name: "新建工作区" }));
     expect(within(workspaceNavigation).getByRole("button", { name: "工作区-2" })).toBeInTheDocument();
     expect(screen.getAllByLabelText("SSH 终端")).toHaveLength(2);
     expect(screen.getByRole("complementary", { name: "工具" })).toBeInTheDocument();
@@ -173,7 +173,7 @@ describe("application shell", () => {
     const workspaceNavigation = screen.getByRole("navigation", { name: "工作区" });
     const workspace1 = within(workspaceNavigation).getByRole("button", { name: "工作区-1" });
 
-    await user.click(within(workspaceNavigation).getByRole("button", { name: "新建工作区" }));
+    await user.click(screen.getByRole("button", { name: "新建工作区" }));
     const workspace2 = within(workspaceNavigation).getByRole("button", { name: "工作区-2" });
     const stages = screen.getAllByLabelText("SSH 终端").map((terminal) => terminal.closest(".workspace-canvas-stage"));
 
@@ -200,8 +200,8 @@ describe("application shell", () => {
     render(<App/>);
 
     const workspaceNavigation = screen.getByRole("navigation", { name: "工作区" });
-    await user.click(within(workspaceNavigation).getByRole("button", { name: "新建工作区" }));
-    await user.click(within(workspaceNavigation).getByRole("button", { name: "新建工作区" }));
+    await user.click(screen.getByRole("button", { name: "新建工作区" }));
+    await user.click(screen.getByRole("button", { name: "新建工作区" }));
     const workspace1 = within(workspaceNavigation).getByRole("button", { name: "工作区-1" });
     const workspace2 = within(workspaceNavigation).getByRole("button", { name: "工作区-2" });
     const workspace3 = within(workspaceNavigation).getByRole("button", { name: "工作区-3" });
@@ -245,7 +245,7 @@ describe("application shell", () => {
     render(<App/>);
 
     const workspaceNavigation = screen.getByRole("navigation", { name: "工作区" });
-    await user.click(within(workspaceNavigation).getByRole("button", { name: "新建工作区" }));
+    await user.click(screen.getByRole("button", { name: "新建工作区" }));
     const workspace1 = within(workspaceNavigation).getByRole("button", { name: "工作区-1" });
     const workspace2 = within(workspaceNavigation).getByRole("button", { name: "工作区-2" });
     const workspace1Tab = workspace1.closest<HTMLElement>(".workspace-tab")!;
@@ -278,7 +278,7 @@ describe("application shell", () => {
     render(<App/>);
 
     const workspaceNavigation = screen.getByRole("navigation", { name: "工作区" });
-    await user.click(within(workspaceNavigation).getByRole("button", { name: "新建工作区" }));
+    await user.click(screen.getByRole("button", { name: "新建工作区" }));
     const workspaceName = within(workspaceNavigation).getByRole("button", { name: "工作区-1" });
     const workspaceTab = workspaceName.closest(".workspace-tab");
     expect(workspaceTab).not.toBeNull();
