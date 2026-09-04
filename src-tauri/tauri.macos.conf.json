@@ -11,10 +11,6 @@
         "decorations": true,
         "titleBarStyle": "Overlay",
         "hiddenTitle": true,
-        "trafficLightPosition": {
-          "x": 14,
-          "y": 22
-        },
         "theme": "Dark",
         "transparent": true,
         "windowEffects": {

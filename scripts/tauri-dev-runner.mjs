@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { spawn } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import {
   chmod,
   copyFile,
@@ -8,11 +8,26 @@ import {
   rename,
 } from "node:fs/promises";
 import path from "node:path";
+import { promisify } from "node:util";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const TAURI_DIRECTORY = fileURLToPath(new URL("../src-tauri/", import.meta.url));
 const BINARY_NAME = "Qterm";
 const DEVELOPMENT_APP_NAME = "Qterm Dev.app";
+const execFileAsync = promisify(execFile);
+
+export function matchingBundleProcessIds(processList, bundledExecutable) {
+  return processList
+    .split("\n")
+    .map((line) => line.match(/^\s*(\d+)\s+(.+)$/))
+    .filter(
+      (match) =>
+        match !== null &&
+        (match[2] === bundledExecutable ||
+          match[2].startsWith(`${bundledExecutable} `)),
+    )
+    .map((match) => Number.parseInt(match[1], 10));
+}
 
 export function parseRunnerArguments(args) {
   const separatorIndex = args.indexOf("--");
@@ -117,6 +132,45 @@ async function prepareBundle({ sourceExecutable, bundleRoot }) {
   return bundledExecutable;
 }
 
+function processIsRunning(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    if (error?.code === "ESRCH") {
+      return false;
+    }
+    throw error;
+  }
+}
+
+async function terminateExistingBundleInstances(bundledExecutable) {
+  const { stdout } = await execFileAsync("/bin/ps", ["-axo", "pid=,command="]);
+  const pids = matchingBundleProcessIds(stdout, bundledExecutable).filter(
+    (pid) => pid !== process.pid,
+  );
+  for (const pid of pids) {
+    try {
+      process.kill(pid, "SIGTERM");
+    } catch (error) {
+      if (error?.code !== "ESRCH") {
+        throw error;
+      }
+    }
+  }
+
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    if (pids.every((pid) => !processIsRunning(pid))) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+
+  for (const pid of pids.filter(processIsRunning)) {
+    process.kill(pid, "SIGKILL");
+  }
+}
+
 async function run() {
   if (process.platform !== "darwin") {
     throw new Error("The Qterm app-bundle development runner is only supported on macOS.");
@@ -140,6 +194,9 @@ async function run() {
     TAURI_DIRECTORY,
     cargoArguments,
     process.env.CARGO_TARGET_DIR,
+  );
+  await terminateExistingBundleInstances(
+    path.join(layout.bundleRoot, "Contents", "MacOS", BINARY_NAME),
   );
   const bundledExecutable = await prepareBundle(layout);
   const app = spawn(bundledExecutable, appArguments, {

@@ -97,6 +97,7 @@
 - `src-tauri/src/commands/clipboard.rs`：接收当前 SSH session ID/opaque task ID 或无参数本地准备请求，调用本地路径准备或远端暂存/取消用例，并桥接一次性最终本地粘贴文本及无敏感远端事件；不接收本机路径、文件字节、远端路径策略或权限参数。
 - `src-tauri/src/commands/browser.rs`：Chrome/Edge 白名单 DTO、SOCKS5 规则类型复核与浏览器 adapter 调用；不接受可执行路径、命令参数或实现平台探测。
 - `src-tauri/src/infrastructure/browser/`：共享 SOCKS5 greeting、固定 Chromium 参数和机器本地隔离 Profile，并以 Windows、macOS、Linux adapter 受限探测和无 Shell 启动 Chrome/Edge；不修改系统代理、支持沙箱化 Linux 浏览器、复用日常 Profile 或管理浏览器退出。
+- `src-tauri/src/infrastructure/window_chrome.rs`：macOS 原生标题栏几何 adapter；按 AppKit 实际按钮尺寸把系统交通灯对齐到 40px 应用顶栏，并在原生窗口 relayout 后恢复位置；不拥有前端样式、Workspace 状态或跨平台窗口策略。
 - `src-tauri/src/infrastructure/persistence/json_network_repository.rs`：`network-forwards.json` schema v1 的严格、无敏感字段、原子持久化适配器。
 - `src-tauri/src/infrastructure/persistence/json_workspace_repository.rs`：`workspaces.json` schema v10 的严格、无敏感字段、原子持久化与受支持旧版本显式迁移适配器；不保存 session、Git snapshot、仓库内容或连接凭据。
 - `src-tauri/src/ports/settings_repository.rs`、`src-tauri/src/infrastructure/persistence/json_{appearance,update,terminal}_settings_repository.rs`：设备外观/更新/终端集成偏好 ports 与独立 schema v1 适配器；只保存封闭预设或布尔偏好，不覆盖损坏/未来文件，也不修改 security settings。

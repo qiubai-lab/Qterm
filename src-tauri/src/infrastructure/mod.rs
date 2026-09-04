@@ -7,4 +7,7 @@ pub mod local;
 pub mod persistence;
 pub mod ssh;
 
+#[cfg(target_os = "macos")]
+pub mod window_chrome;
+
 pub mod notifications;

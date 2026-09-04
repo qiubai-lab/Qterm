@@ -9,6 +9,7 @@ import {
   withDevelopmentConfig,
 } from "./tauri.mjs";
 import {
+  matchingBundleProcessIds,
   parseRunnerArguments,
   resolveBundleLayout,
 } from "./tauri-dev-runner.mjs";
@@ -132,6 +133,20 @@ test("macOS runner resolves debug, release and target-specific bundle layouts", 
       ),
     },
   );
+});
+
+test("macOS runner replaces only exact stale development bundle processes", () => {
+  const executable =
+    "/tmp/Qterm target/tauri-dev/debug/Qterm Dev.app/Contents/MacOS/Qterm";
+  const processList = [
+    `  120 ${executable}`,
+    `  121 ${executable} --inspect`,
+    `  122 ${executable}-helper`,
+    "  123 /Applications/Qterm.app/Contents/MacOS/Qterm",
+    "  124 node scripts/tauri-dev-runner.mjs",
+  ].join("\n");
+
+  assert.deepEqual(matchingBundleProcessIds(processList, executable), [120, 121]);
 });
 
 test("development config isolates identity without replacing window arrays", async () => {
