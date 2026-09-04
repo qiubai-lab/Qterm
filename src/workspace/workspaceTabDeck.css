@@ -17,8 +17,16 @@
   background:var(--workspace-deck-fill,transparent); content:""; pointer-events:none;
 }
 .workspace-tab-strip[data-stacked] .workspace-tab[data-expanded] { width:var(--workspace-visible-width, 128px); --workspace-deck-fill:var(--raised); }
-/* Keep content geometry stable while the spring animates the clipping card. */
-.workspace-tab-strip[data-stacked] .workspace-tab-select { width:126px; flex:0 0 126px; overflow:hidden; border-radius:inherit; clip-path:inset(0 max(0px, calc(128px - var(--workspace-visible-width, 128px))) 0 0); }
+/* Animate the leading space instead of switching justify-content discretely. */
+.workspace-tab-strip[data-stacked] .workspace-tab-select {
+  display:grid; grid-template-columns:minmax(0,1fr) minmax(0,max-content) minmax(0,1fr);
+  width:100%; flex:1; overflow:hidden; border-radius:inherit;
+  transition:grid-template-columns 180ms cubic-bezier(.2,.8,.2,1),padding-right 180ms cubic-bezier(.2,.8,.2,1);
+}
+.workspace-tab-strip[data-stacked] .workspace-tab-select > .workspace-notification-label { grid-column:2; }
+.workspace-tab-strip[data-stacked] .workspace-tab:not([data-expanded]) .workspace-tab-select {
+  grid-template-columns:minmax(0,0fr) minmax(0,max-content) minmax(0,1fr); padding-right:0;
+}
 .workspace-tab-strip[data-stacked] .workspace-tab.selected {
   --workspace-deck-fill:var(--workspace-tab-active-background);
   border-color:var(--workspace-tab-active-border); box-shadow:var(--workspace-tab-active-shadow);
@@ -36,7 +44,7 @@
 .workspace-tab-strip[data-stacked] .workspace-tab-close { opacity:1; transition:opacity 120ms ease; }
 .workspace-tab-strip[data-stacked] .workspace-tab:not([data-expanded]) .workspace-tab-close { opacity:0; pointer-events:none; }
 .workspace-tab-strip[data-stacked] .workspace-tab-select:focus-visible { outline-offset:-2px; border-radius:6px; }
-@media (prefers-reduced-motion:reduce) { .workspace-tab-strip[data-stacked] .workspace-tab { transition:none; } }
+@media (prefers-reduced-motion:reduce) { .workspace-tab-strip[data-stacked] :is(.workspace-tab,.workspace-tab-select,.workspace-tab-close) { transition:none; } }
 
 .workspace-tab-scroll.ui-icon-button { flex:0 0 26px; }
 .workspace-tab-scroll.ui-icon-button:disabled { opacity:.3; }
