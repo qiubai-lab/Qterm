@@ -338,7 +338,7 @@ describe("application layout styles", () => {
 
     expect(macosWindow.decorations).toBe(true);
     expect(macosWindow.titleBarStyle).toBe("Overlay");
-    expect(macosWindow.trafficLightPosition).toEqual({ x: 14, y: 18 });
+    expect(macosWindow.trafficLightPosition).toEqual({ x: 14, y: 22 });
     expect(macosWindow.windowEffects).toEqual({
       effects: ["hudWindow", "mica", "acrylic", "blur"],
       state: "followsWindowActiveState",
