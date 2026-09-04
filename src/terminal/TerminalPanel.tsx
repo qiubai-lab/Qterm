@@ -19,7 +19,7 @@ import {
 } from "../lib/tauri/sessions";
 import { useWorkspace } from "../workspace/WorkspaceProvider";
 import { parseOsc7Cwd } from "./osc7";
-import { createResizeScheduler, type ResizeScheduler } from "./resizeScheduler";
+import { createTerminalLayout, type TerminalLayout } from "./terminalLayout";
 import { createTerminalInputScheduler, type TerminalInputScheduler } from "./terminalInputScheduler";
 import { ensureTerminalSearch, type TerminalSearchHost } from "./terminalSearch";
 import { bindTerminalTheme, readTerminalSearchColors, readTerminalTheme } from "./terminalTheme";
@@ -30,7 +30,6 @@ import {
 } from "./TerminalStagingStatus";
 
 interface TerminalView extends TerminalSearchHost {
-  fit: FitAddon;
   decoder: TextDecoder;
   element: HTMLElement;
   input: { dispose: () => void };
@@ -41,7 +40,7 @@ interface TerminalView extends TerminalSearchHost {
   write: (data: string) => Promise<void>;
   inputScheduler: TerminalInputScheduler;
   resize: { send: (columns: number, rows: number) => Promise<void> };
-  resizeScheduler: ResizeScheduler;
+  layout: TerminalLayout;
   themeBinding: { dispose: () => void };
   disposeTimer: number | null;
 }
@@ -354,14 +353,13 @@ export function TerminalPanel({ blockId, sessionKey, visible, local, osc7Enabled
         }
       },
       () => {
-        restoreTerminalLayout(view);
+        view.layout.restore();
         return { columns: view.terminal.cols, rows: view.terminal.rows };
       },
     );
     const observer = new ResizeObserver(() => {
       if (!container.offsetParent) return;
-      if (!restoreTerminalLayout(view)) return;
-      view.resizeScheduler.request(view.terminal.cols, view.terminal.rows);
+      view.layout.restore();
     });
     observer.observe(container);
     return () => {
@@ -419,31 +417,29 @@ export function TerminalPanel({ blockId, sessionKey, visible, local, osc7Enabled
     const restore = () => {
       if (cancelled) return;
       const view = viewRef.current;
-      if (!view || !restoreTerminalLayout(view)) {
+      if (!view || !view.layout.restore()) {
         attempts += 1;
         if (attempts < 12) frame = requestAnimationFrame(restore);
         return;
       }
-      view.resizeScheduler.request(view.terminal.cols, view.terminal.rows);
     };
     frame = requestAnimationFrame(restore);
     return () => { cancelled = true; cancelAnimationFrame(frame); };
   }, [blockId, local, visible]);
 
   useEffect(() => {
-    if (local || !visible || !inputEnabled || !connectedSessionId) return;
+    if (!visible || !inputEnabled || !connectedSessionId) return;
     let frame = 0;
     let cancelled = false;
     let attempts = 0;
     const synchronize = () => {
       if (cancelled) return;
       const view = viewRef.current;
-      if (!view || !restoreTerminalLayout(view)) {
+      if (!view || !view.layout.restore(true)) {
         attempts += 1;
         if (attempts < 12) frame = requestAnimationFrame(synchronize);
         return;
       }
-      view.resizeScheduler.request(view.terminal.cols, view.terminal.rows, true);
     };
     frame = requestAnimationFrame(synchronize);
     return () => { cancelled = true; cancelAnimationFrame(frame); };
@@ -658,14 +654,6 @@ function fitContextMenu(anchorX: number, anchorY: number, menuWidth: number, men
   } as const;
 }
 
-function restoreTerminalLayout(view: TerminalView): boolean {
-  const dimensions = view.fit.proposeDimensions();
-  if (!dimensions || !Number.isFinite(dimensions.cols) || !Number.isFinite(dimensions.rows) || dimensions.cols < 2 || dimensions.rows < 1) return false;
-  view.fit.fit();
-  view.terminal.refresh(0, Math.max(0, view.terminal.rows - 1));
-  return true;
-}
-
 function acquireTerminalView(sessionKey: string, container: HTMLElement, windowsPty: { backend: "conpty"; buildNumber: number } | undefined, resizeDelayMs: number): TerminalView {
   const existing = terminalViews.get(sessionKey);
   if (existing) {
@@ -698,13 +686,13 @@ function acquireTerminalView(sessionKey: string, container: HTMLElement, windows
     throw new Error("xterm did not create a terminal element");
   }
   const resize: TerminalView["resize"] = { send: async () => undefined };
-  const resizeScheduler = createResizeScheduler((columns, rows) => resize.send(columns, rows), resizeDelayMs);
+  fit.fit();
+  const layout = createTerminalLayout(terminal, fit, (columns, rows) => resize.send(columns, rows), resizeDelayMs);
   const themeBinding = bindTerminalTheme((theme) => { terminal.options.theme = theme; });
   const writeTarget: { send: (data: string) => Promise<void> } = { send: () => Promise.resolve() };
   const inputScheduler = createTerminalInputScheduler((data) => writeTarget.send(data));
   const view: TerminalView = {
     terminal,
-    fit,
     decoder: new TextDecoder(),
     element,
     input: { dispose: () => undefined },
@@ -716,7 +704,7 @@ function acquireTerminalView(sessionKey: string, container: HTMLElement, windows
     write: async () => undefined,
     inputScheduler,
     resize,
-    resizeScheduler,
+    layout,
     themeBinding,
     disposeTimer: null,
   };
@@ -766,7 +754,7 @@ function scheduleTerminalViewDisposal(sessionKey: string, view: TerminalView) {
     view.inputScheduler.dispose();
     view.cwdHandler.dispose();
     view.searchResultsHandler?.dispose();
-    view.resizeScheduler.dispose();
+    view.layout.dispose();
     view.themeBinding.dispose();
     view.terminal.dispose();
     terminalViews.delete(sessionKey);

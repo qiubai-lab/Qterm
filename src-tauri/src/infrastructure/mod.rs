@@ -6,3 +6,5 @@ pub mod git_cli;
 pub mod local;
 pub mod persistence;
 pub mod ssh;
+
+pub mod notifications;

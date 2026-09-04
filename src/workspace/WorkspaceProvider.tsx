@@ -1,4 +1,5 @@
 /* eslint-disable react-refresh/only-export-components -- provider and its typed hook are one public boundary. */
+import type { TerminalOutputObserver } from "../terminal/notifications/notificationRuntime";
 import { createContext, useContext, useMemo, useReducer, type Dispatch, type ReactNode } from "react";
 
 import type { LocalTerminalCapabilities } from "../lib/tauri/localSessions";
@@ -27,6 +28,8 @@ interface WorkspaceContextValue {
   localTerminalCapabilities: LocalTerminalCapabilities | null;
   activeWorkspace: Workspace;
   activeBlockId: string;
+  registerTerminalOutputObserver: (observer: TerminalOutputObserver) => () => void;
+  getTerminalEpoch: (blockId: string) => number | undefined;
   registerWriter: (blockId: string, writer: (data: Uint8Array) => void, clearer: (reset: boolean) => void, readSize: () => TerminalSizeInput) => () => void;
   clearBlockBuffer: (blockId: string, reset?: boolean) => void;
   setBlockCwd: (blockId: string, cwd: string) => void;

@@ -1,0 +1,6 @@
+.terminal-context-menu.workspace-tab-menu { z-index:95; width:max-content; max-width:calc(100vw - 16px); }
+.workspace-tab-menu button { white-space:nowrap; cursor:pointer; }
+.workspace-tab-menu button small { flex:none; min-width:2ch; color:var(--menu-secondary-text); font-size:9px; font-variant-numeric:tabular-nums; text-align:right; }
+.workspace-tab-menu button:hover:not(:disabled) small,.workspace-tab-menu button:focus-visible:not(:disabled) small { color:inherit; }
+.workspace-tab-menu button:disabled small { color:inherit; }
+.workspace-tab-menu:focus-visible { outline:1px solid var(--focus); }

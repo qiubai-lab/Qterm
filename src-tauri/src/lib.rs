@@ -1,3 +1,7 @@
+use commands::notification::{
+    NotificationState, notification_body_settings_get, notification_body_settings_update,
+    notification_settings_get, notification_settings_update, terminal_notification_send,
+};
 mod application;
 mod commands;
 mod domain;
@@ -191,6 +195,7 @@ impl DataPaths {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default()
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init());
@@ -226,6 +231,9 @@ pub fn run() {
                 resolve_active_configuration(&configuration_repository, &default_configuration);
             let paths = DataPaths::from_root(active_configuration.path().to_path_buf());
             paths.initialize()?;
+            app.manage(NotificationState::new(
+                paths.device.join("notifications.json"),
+            ));
             app.manage(ClipboardState::new(paths.cache.join("clipboard")));
             app.manage(SettingsState::new(
                 JsonSettingsRepository::new(paths.settings.clone()),
@@ -305,6 +313,11 @@ pub fn run() {
             settings_update_security,
             settings_update_appearance,
             settings_update_updates,
+            notification_settings_get,
+            notification_settings_update,
+            terminal_notification_send,
+            notification_body_settings_get,
+            notification_body_settings_update,
             settings_update_terminal,
             session_connect,
             session_accept_host_key,

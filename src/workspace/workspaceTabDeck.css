@@ -1,0 +1,58 @@
+.workspace-tab-bar { display:flex; min-width:0; flex:1; height:100%; gap:3px; align-items:center; }
+.workspace-tab-bar > .workspace-tab-strip { flex:0 1 auto; width:max-content; }
+.workspace-tab-bar[data-stacked] > .workspace-tab-strip { flex:1; width:0; }
+.workspace-tab-bar > .new-workspace-slot { position:relative; right:auto; }
+.workspace-deck-extent { flex:none; height:1px; pointer-events:none; }
+.workspace-tab-strip[data-stacked] .workspace-tab-selection { display:none; }
+.workspace-tab-strip[data-stacked] .workspace-tab {
+  position:absolute; top:5px; left:0; margin:0;
+  width:var(--workspace-visible-width, 128px); min-width:0; max-width:none;
+  transform:translate3d(calc(var(--workspace-deck-x, 0px) + var(--workspace-deck-shift, 0px)),0,0);
+  background:var(--chrome); border-color:var(--border);
+  box-shadow:-3px 0 7px var(--shadow-soft);
+  transition:color 120ms ease,background-color 120ms ease,border-color 120ms ease;
+}
+.workspace-tab-strip[data-stacked] .workspace-tab::before {
+  position:absolute; z-index:-1; inset:0; border-radius:inherit;
+  background:var(--workspace-deck-fill,transparent); content:""; pointer-events:none;
+}
+.workspace-tab-strip[data-stacked] .workspace-tab[data-expanded] { width:var(--workspace-visible-width, 128px); --workspace-deck-fill:var(--raised); }
+/* The deck spring owns title alignment as well as the card geometry. */
+.workspace-tab-strip[data-stacked] .workspace-tab-select {
+  justify-content:flex-start; padding-left:calc(29px + var(--workspace-title-inset, 0px)); padding-right:var(--workspace-title-end, 0px);
+  width:100%; flex:1; overflow:hidden; border-radius:inherit;
+}
+.workspace-tab-strip[data-stacked] .workspace-tab.selected {
+  --workspace-deck-fill:var(--workspace-tab-active-background);
+  border-color:var(--workspace-tab-active-border); box-shadow:var(--workspace-tab-active-shadow);
+}
+.workspace-tab-strip[data-stacked] .workspace-tab:hover:not(.selected) {
+  --workspace-deck-fill:var(--workspace-tab-hover-background);
+  border-color:var(--workspace-tab-hover-border);
+}
+.workspace-tab-strip[data-stacked] .workspace-tab.dragging {
+  transform:translate3d(calc(var(--workspace-deck-x, 0px) + var(--workspace-tab-drag-x, 0px)),-1px,0);
+  width:128px; --workspace-deck-fill:var(--raised); box-shadow:0 5px 14px var(--shadow-strong);
+}
+.workspace-tab-strip[data-stacked] .workspace-tab.drop-target::after { inset:0; width:var(--workspace-visible-width); }
+
+.workspace-tab-strip[data-stacked] .workspace-tab-close { opacity:1; transition:opacity 120ms ease; }
+.workspace-tab-strip[data-stacked] .workspace-tab:not([data-expanded]) .workspace-tab-close { opacity:0; pointer-events:none; }
+.workspace-tab-strip[data-stacked] .workspace-tab-select:focus-visible { outline-offset:-2px; border-radius:6px; }
+@media (prefers-reduced-motion:reduce) { .workspace-tab-strip[data-stacked] :is(.workspace-tab,.workspace-tab-select,.workspace-tab-close) { transition:none; } }
+
+.workspace-tab-scroll.ui-icon-button { flex:0 0 26px; }
+.workspace-tab-scroll.ui-icon-button:disabled { opacity:.3; }
+.workspace-tab-strip { --workspace-edge-left:0px; --workspace-edge-right:0px; }
+.workspace-tab-strip[data-hidden-left] { --workspace-edge-left:6px; }
+.workspace-tab-strip[data-hidden-right] { --workspace-edge-right:6px; }
+/* Mask colors encode opacity only; they do not paint a theme surface. */
+.workspace-tab-strip[data-hidden-left],.workspace-tab-strip[data-hidden-right] {
+  mask-image:linear-gradient(to right,transparent,black var(--workspace-edge-left),black calc(100% - var(--workspace-edge-right)),transparent);
+  -webkit-mask-image:linear-gradient(to right,transparent,black var(--workspace-edge-left),black calc(100% - var(--workspace-edge-right)),transparent);
+}
+
+.new-workspace-slot:focus-visible { outline:2px solid var(--focus); outline-offset:-2px; border-radius:6px; }
+.new-workspace-tab:disabled { pointer-events:none; }
+.workspace-limit-hint { position:fixed; z-index:130; display:grid; gap:4px; width:220px; max-width:calc(100vw - 16px); padding:9px 11px; border:1px solid var(--border); border-radius:7px; background:var(--raised); color:var(--muted); box-shadow:0 6px 18px var(--shadow-strong); font-size:10px; line-height:1.5; pointer-events:none; }
+.workspace-limit-hint strong { color:var(--text); font-size:11px; font-weight:600; }

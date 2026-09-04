@@ -91,7 +91,7 @@ vi.mock("@xterm/xterm", () => ({
     rows = 24;
     element: HTMLElement | null = null;
     dispose = vi.fn();
-    write = vi.fn();
+    write = vi.fn((_data: string, callback?: () => void) => callback?.());
     refresh = vi.fn();
     clear = vi.fn();
     reset = vi.fn();
@@ -376,7 +376,7 @@ describe("TerminalPanel view lifetime", () => {
     act(() => vi.runAllTimers());
 
     expect(fit.proposeDimensions).toHaveBeenCalledTimes(2);
-    expect(fit.fit).toHaveBeenCalledOnce();
+    expect(fit.fit).toHaveBeenCalledTimes(2);
     expect(terminal.refresh).toHaveBeenCalledWith(0, 23);
     view.unmount();
   });
@@ -414,14 +414,14 @@ describe("TerminalPanel view lifetime", () => {
     view.unmount();
   });
 
-  it("force-synchronizes the current dimensions when an SSH session id becomes available", async () => {
+  it.each([false, true])("force-synchronizes dimensions when a session becomes available (local=%s)", async local => {
     mocks.runtimes = { "block-ssh-size": { status: "connecting", sessionId: null } };
-    const view = render(<TerminalPanel blockId="block-ssh-size" sessionKey="block-ssh-size:ssh" local={false} visible/>);
+    const view = render(<TerminalPanel blockId="block-ssh-size" sessionKey="block-ssh-size:ssh" local={local} visible/>);
     await act(async () => vi.runAllTimersAsync());
     mocks.resizeBlock.mockClear();
 
     mocks.runtimes = { "block-ssh-size": { status: "connected", sessionId: "ssh-1" } };
-    view.rerender(<TerminalPanel blockId="block-ssh-size" sessionKey="block-ssh-size:ssh" local={false} visible/>);
+    view.rerender(<TerminalPanel blockId="block-ssh-size" sessionKey="block-ssh-size:ssh" local={local} visible/>);
     await act(async () => vi.runAllTimersAsync());
 
     expect(mocks.resizeBlock).toHaveBeenCalledWith("block-ssh-size", 80, 24);

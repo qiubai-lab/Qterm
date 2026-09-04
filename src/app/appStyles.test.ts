@@ -7,7 +7,7 @@ import { readFileSync } from "node:fs";
 const styles = readCssBundle("src/app/app.css");
 const lightOverrides = readFileSync("src/app/styles/themes/lightOverrides.css", "utf8");
 const defaultCapability = JSON.parse(readFileSync("src-tauri/capabilities/default.json", "utf8")) as { permissions: string[] };
-const workspaceShellSource = readFileSync("src/workspace/WorkspaceShell.tsx", "utf8");
+const workspaceShellSource = readFileSync("src/workspace/WorkspaceTabs.tsx", "utf8");
 const tauriConfig = JSON.parse(readFileSync("src-tauri/tauri.conf.json", "utf8")) as {
   app: { windows: Array<{ theme?: string; transparent?: boolean; shadow?: boolean; windowEffects?: { effects: string[]; state?: string; radius?: number } }> };
 };
@@ -168,7 +168,7 @@ describe("application layout styles", () => {
     expect(tag).toContain('font:700 7px/10px "SFMono-Regular",Consolas,monospace');
     expect(tag).toContain("background:transparent");
     expect(tagText).toContain("display:block");
-    expect(tagText).toContain("transform:translateY(1px)");
+    expect(tagText).not.toContain("transform:");
     expect(ready).toContain("--osc7-tag-border:color-mix(in srgb,var(--selection-marker) 20%,var(--border))");
     expect(ready).toContain("--osc7-tag-text:color-mix(in srgb,var(--selection-marker) 55%,var(--dim))");
     expect(ready).toContain("--osc7-tag-surface:transparent");
@@ -338,7 +338,7 @@ describe("application layout styles", () => {
 
     expect(macosWindow.decorations).toBe(true);
     expect(macosWindow.titleBarStyle).toBe("Overlay");
-    expect(macosWindow.trafficLightPosition).toEqual({ x: 14, y: 18 });
+    expect(macosWindow.trafficLightPosition).toEqual({ x: 14, y: 22 });
     expect(macosWindow.windowEffects).toEqual({
       effects: ["hudWindow", "mica", "acrylic", "blur"],
       state: "followsWindowActiveState",
@@ -541,13 +541,13 @@ describe("application layout styles", () => {
     expect(lightOverrides).not.toContain(".workspace-tab[data-active]");
   });
 
-  it("uses shared theme-aware compact icon buttons for workspace close and create actions", () => {
+  it("uses shared theme-aware compact icon buttons for workspace close, create and overflow actions", () => {
     const iconButton = declarations(".icon-button");
     const quietHover = declarations(".icon-button:hover:not(:disabled)");
 
     expect(workspaceShellSource).toContain('className="workspace-tab-close"');
     expect(workspaceShellSource).toContain('className="new-workspace-tab"');
-    expect(workspaceShellSource.match(/<IconButton/g)).toHaveLength(2);
+    expect(workspaceShellSource.match(/<IconButton/g)).toHaveLength(4);
     expect(iconButton).toContain("color:var(--icon)");
     expect(iconButton).toContain("background:transparent");
     expect(quietHover).toContain("color:var(--icon-hover)");
@@ -556,7 +556,7 @@ describe("application layout styles", () => {
     expect(styles).toMatch(/\.ui-button:focus-visible,\s*\.ui-icon-button:focus-visible,[^{]+\{\s*outline:2px solid var\(--focus\)/);
     expect(declarations(".workspace-tab-close")).toContain("position:absolute");
     expect(declarations(".workspace-tab-close")).toContain("top:1px");
-    expect(declarations(".new-workspace-tab")).toContain("margin-left:2px");
+    expect(declarations(".new-workspace-tab.ui-icon-button")).toContain("margin-left:2px");
     expect(declarations(".new-workspace-tab.ui-icon-button:hover:not(:disabled)")).toContain("background:var(--chrome-action-hover)");
     expect(declarations(".new-workspace-tab.ui-icon-button:active:not(:disabled)")).toContain("background:var(--chrome-action-pressed)");
     expect(declarations(".workspace-tab-close.ui-icon-button:hover:not(:disabled)")).toContain("color:var(--danger)");

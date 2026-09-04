@@ -14,3 +14,5 @@ pub mod session;
 pub mod settings;
 pub mod transfer;
 pub mod workspace;
+
+pub mod notification;

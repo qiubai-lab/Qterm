@@ -10,3 +10,5 @@ pub mod remote_shell_cache;
 pub mod settings_repository;
 pub mod terminal_staging;
 pub mod workspace_repository;
+
+pub mod notification;

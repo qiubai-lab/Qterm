@@ -11,13 +11,27 @@
 
 ## Important Files
 
+- `native/conpty/`：G0 隔离原型的上游版本锁、MIT 许可与原生输出边界补丁；`scripts/build-conpty-prototype.ps1` 构建未发布的测试 host，`scripts/conpty-ordered-probe-consumer.mjs` 只供真实 PTY 探针消费 QTR0 帧。尚未作为生产 runtime 或应用 IPC 协议接线。
+
+- `src/components/ThemedTooltipButton.tsx`、`themedTooltip.css`：跨终端、Git、文件和网络窗口共享的主题提示按钮与浮层样式；只负责提示展示、定位和无障碍交互，不拥有操作业务逻辑。`src/workspace/BlockHeaderClose.tsx` 组合窗口头部关闭入口。
+
+- `src/terminal/terminalLayout.ts`：终端尺寸测量与布局同步 owner；Windows ConPTY 在拖动停稳并处理已接收输出后提交尺寸，其余终端即时适配；`resizeScheduler.ts` 继续负责有序 IPC 与去重。`scripts/conpty-resize-probe.mjs` 和 `src-tauri/examples/conpty_resize_probe.rs` 提供真实 Windows PTY 回归检查。
+
+- `src/terminal/notifications/`：实验性终端通知的有界流解析、epoch 隔离、未读派生状态、限流与设置 provider；`TerminalProtocolTag.tsx` 展示统一协议标签与提示，`workspaceNotice.ts` 管理前台瞬时气泡，`WorkspaceNotificationBubble.tsx` 负责定位、暂停倒计时与交互；只观察实时输出，不修改渲染字节、不拥有 session 或持久化 Workspace。
+- `src/components/dialogs/TerminalNotificationSetting.tsx`、`src/lib/tauri/notifications.ts`：高级设置开关展示与通知 IPC façade；缺失设置默认开启，错误不覆盖已有设置。
+- `src/terminal/TerminalHeaderActions.tsx`、`src/workspace/workspaceFocus.ts`：终端头部操作菜单与工作区焦点辅助；由布局/工作区入口组合，不持有通知策略。
+- `src-tauri/src/application/notification_service.rs`、`ports/notification.rs`、`commands/notification.rs`、`infrastructure/notifications.rs`、`infrastructure/notifications/macos.rs`、`infrastructure/persistence/json_notification_settings_repository.rs`：通知用例、端口、IPC、原生发送与独立 `device/notifications.json` 持久化；开关与发送串行，发送用例按独立正文偏好裁剪内容，原生接受已净化的来源与可选正文。
+- `docs/terminal-notifications.md`：终端通知协议范围、CLI 接入与人工复验说明。
+
 - `.agents/skills/qterm-maintainable-modules/SKILL.md`：非平凡功能增长与结构调整的 owner-first 开发入口，要求窄 façade、capability modules、相邻行为测试和源码尺寸 ratchet；具体数值继续以 `scripts/check-source-size.mjs` 与 baseline 为事实源。
 - `src/main.tsx`：React 入口，同步设置默认 `data-theme="dark"`，在首次渲染前引导已保存主题并挂载应用根组件；不持有 feature theme state。
 - `src/editor/editorLanguage.ts`、`useEditorLanguage.ts`：跨 Files/Git 编辑表面的文件名语言识别、精选 CodeMirror 解析器动态加载/缓存/纯文本回退与 React 加载生命周期 owner；不拥有文件读取、Git diff、lint 规则、编辑状态或持久化。
 - `src/app/app.css`、`src/app/styles/themes/{dark,light,cyberpunk}.css`：固定顺序样式 manifest 与三套封闭预设 semantic token；Dark 保持缺省，Cyberpunk 复用 Dark 原生窗口模式，Light compatibility override 只承接尚未语义化的旧 feature 颜色。
 - `src/app/theme/AppThemeProvider.tsx`：应用级主题唯一状态 owner，负责 bootstrap、preview/commit/restore，以及 DOM、xterm 和原生窗口同步；不进入 Workspace persistence，也不允许任意主题值。
 - `src/app/App.tsx`、`useBrowserContextMenuGuard.ts`：前端组合入口装配 App theme、Workspace provider、shell 与仅阻止 WebView 原生菜单的应用级 `contextmenu` 生命周期；不停止 feature 事件传播、不决定 Qterm 菜单内容，也不直接调用底层 SSH 库。
-- `src/workspace/WorkspaceShell.tsx`：顶部 Workspace 标签、工具轨、Terminal/Files/Network/Git 认证路由、route 凭证库解锁、关闭编排、快捷键与一次性启动更新提示入口；不请求任意更新地址、解析跳板图、布局树或 SSH 协议。
+- `src/workspace/WorkspaceTabStrip.tsx`、`WorkspaceTabMenu.tsx`、`WorkspaceBatchCloseDialog.tsx`、`workspaceClose.ts`：工作区右键菜单、左右/其他目标选择及一次性批量关闭确认；复用现有 closeSessions，reducer 原子移除并保留基准页，不持有新的会话状态。
+- `src/workspace/WorkspaceTabs.tsx`、`workspaceTabDeck.ts`、`useWorkspaceTabDeck.ts`、`useWorkspaceTabDrag.ts`：工作区导航、窄窗口堆叠几何、稳定悬停/键盘展开、可中断弹簧、可见区域拖拽；只拥有导航展示状态，复用 Workspace Context，不持久化堆叠状态。
+- `src/workspace/WorkspaceShell.tsx`：组合顶部 Workspace 导航、工具轨、Terminal/Files/Network/Git 认证路由、route 凭证库解锁、关闭编排、快捷键与一次性启动更新提示入口；不请求任意更新地址、解析跳板图、布局树或 SSH 协议。
 - `src/workspace/model.ts`、`layout.ts`、`reducer.ts`、`gitRepositoryHistory.ts`：schema v10 可持久化工作区契约、Git `Unbound | Local | Remote` target、按本机或 profile 隔离的有界 Git 仓库 MRU、使用调用方提供稳定 ID 的纯布局树变换与低频结构状态；不持有 session、xterm、Git 快照、远程命令、一次性启动目录或凭据。
 - `src/workspace/WorkspaceProvider.tsx`、`useWorkspacePersistence.ts`：兼容的单一 Workspace Context façade，以及 hydration、debounced save、close flush 和 profile refresh owner；Git target retarget 可在同 profile 的已连接 Git session 上只切换路径，Provider 不直接实现会话事件或连接生命周期，运行时状态不持久化。
 - `src/workspace/useWorkspaceRuntimeState.ts`、`useWorkspaceRuntimeController.ts`、`use{Terminal,File,Network,Git}WorkspaceController.ts`：按 `blockId` 隔离的单一 runtime 状态内核、跨用途清理组合器，以及四类独立的事件/connect/disconnect/host-key controller；Git controller 还拥有未持久化 remote target 前的 profile intent 暂存、取消清理与确认复用；共享 epoch、intent、writer、buffer 和 session ownership，不引入第二套 store 或可变全局单例。
@@ -134,3 +148,5 @@
 - `docs/qb-spec/`：禁止密钥、密码、口令或其他真实凭据。
 - `.github/`：禁止提交签名证书、访问令牌或其他真实凭据；敏感值只能来自 GitHub Actions Secrets。
 - `scripts/`：禁止 shell 字符串拼接、用户数据读写和业务规则；只能调用仓库锁定的工具并保留参数边界。
+
+- `scripts/tauri-dev-runner.mjs`：macOS 开发 bundle 构造、完整 ad-hoc 签名及进程启动；签名 identity 与 Info.dev.plist 一致，保证原生通知服务识别真实应用身份。

@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 
 import { Button } from "./Button";
 import { Icon } from "./Icon";
+import { ThemedTooltipButton } from "./ThemedTooltipButton";
 
 export interface HostIdentitySummary {
   name: string;
@@ -130,20 +131,20 @@ export function HostIdentity({ profile, label = `${profile.username}@${profile.h
   </div> : null;
 
   return <>
-    <button
-      ref={triggerRef}
+    <ThemedTooltipButton
+      anchorRef={triggerRef}
       type="button"
       className={["host-identity-trigger", className].filter(Boolean).join(" ")}
       aria-haspopup="dialog"
       aria-expanded={open}
       aria-label={`查看 ${profile.name} 主机概要，${label}`}
-      title="查看主机概要并复制地址"
+      tooltip="查看主机概要并复制地址"
       onClick={() => {
         setCopyState("idle");
         setPosition(null);
         setOpen((value) => !value);
       }}
-    >{label}</button>
+    >{label}</ThemedTooltipButton>
     {popover && createPortal(popover, document.body)}
   </>;
 }

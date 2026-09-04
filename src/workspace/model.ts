@@ -82,7 +82,7 @@ export function createGitNode(target: GitTarget): GitNode {
   return { type: "git", blockId: createId("git"), target };
 }
 
-export function createWorkspace(name = "Workspace 1"): Workspace {
+export function createWorkspace(name = "工作区-1"): Workspace {
   const terminal = createTerminalNode();
   return { id: createId("workspace"), name, activeBlockId: terminal.blockId, layout: terminal };
 }

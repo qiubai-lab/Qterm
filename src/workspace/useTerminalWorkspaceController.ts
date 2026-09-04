@@ -25,12 +25,13 @@ import {
 
 export function useTerminalWorkspaceController(state: WorkspaceRuntimeState, dispatch: Dispatch<WorkspaceAction>) {
   const {
-    runtimes, setRuntimes, writers, clearers, terminalSizeReaders, writerOwners, pendingTerminalOutput,
+    terminalOutputObserver, runtimes, setRuntimes, writers, clearers, terminalSizeReaders, writerOwners, pendingTerminalOutput,
     runtimesRef, documentRef, connectionTargetIntents, finishedEpochs, startingLocal, activeLocalSessions,
     pendingLocalInput, pendingInitialDirectories, connectionFailureHandlers, updateRuntime, nextEpoch, isCurrentEpoch,
   } = state;
 
-  const deliverTerminalOutput = useCallback((blockId: string, data: Uint8Array) => {
+  const deliverTerminalOutput = useCallback((blockId: string, epoch: number, data: Uint8Array) => {
+    terminalOutputObserver.current?.(blockId, epoch, data);
     const writer = writers.current.get(blockId);
     if (writer) {
       writer(data);
@@ -44,7 +45,7 @@ export function useTerminalWorkspaceController(state: WorkspaceRuntimeState, dis
     pending.chunks.push(chunk);
     pending.bytes += chunk.byteLength;
     pendingTerminalOutput.current.set(blockId, pending);
-  }, [pendingTerminalOutput, writers]);
+  }, [pendingTerminalOutput, terminalOutputObserver, writers]);
 
   const clearBlockBuffer = useCallback((blockId: string, reset = false) => {
     pendingTerminalOutput.current.delete(blockId);
@@ -152,7 +153,7 @@ export function useTerminalWorkspaceController(state: WorkspaceRuntimeState, dis
           }
           updateRuntime(blockId, (runtime) => ({ ...runtime, status: event.state, sessionId: event.state === "closed" ? null : runtime.sessionId }));
         },
-        (data) => { if (isCurrentEpoch(blockId, epoch)) deliverTerminalOutput(blockId, data); },
+        (data) => { if (isCurrentEpoch(blockId, epoch)) deliverTerminalOutput(blockId, epoch, data); },
         osc7Enabled,
         pendingInitialDirectories.current.get(blockId) ?? (osc7Enabled ? terminalRestoreDirectory(blockId, null) : undefined),
       );
@@ -205,7 +206,7 @@ export function useTerminalWorkspaceController(state: WorkspaceRuntimeState, dis
       const sessionId = await connectSession(
         { profileId: profile.id, auth, terminalSize, initialDirectory: pendingInitialDirectories.current.get(blockId) ?? terminalRestoreDirectory(blockId, profile.id) },
         (event) => onSessionEvent(blockId, epoch, event),
-        (data) => { if (isCurrentEpoch(blockId, epoch)) deliverTerminalOutput(blockId, data); },
+        (data) => { if (isCurrentEpoch(blockId, epoch)) deliverTerminalOutput(blockId, epoch, data); },
       );
       if (!isCurrentEpoch(blockId, epoch)) await closeSession(sessionId).catch(() => undefined);
       else if (!finishedEpochs.current.has(key)) updateRuntime(blockId, (runtime) => ({ ...runtime, sessionId, kind: "ssh" }));

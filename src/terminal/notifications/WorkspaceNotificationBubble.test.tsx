@@ -1,0 +1,73 @@
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { createRef } from "react";
+import { WorkspaceNotificationBubble } from "./WorkspaceNotificationBubble";
+const dismiss = vi.fn();
+const activate = vi.fn();
+const props = { notice: { workspaceId: "w", blockId: "b", epoch: 1, body: "完成", count: 1, revision: 1 }, name: "Workspace 2", showBody: false, anchor: createRef<HTMLSpanElement>(), dismiss, activate };
+beforeEach(() => { vi.useFakeTimers(); vi.clearAllMocks(); vi.stubGlobal("ResizeObserver", class { observe() {} disconnect() {} }); });
+afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllGlobals(); });
+it("expires after four seconds, pauses on hover, and keeps pause across merged events", () => {
+  const view = render(<WorkspaceNotificationBubble {...props}/>);
+  expect(screen.getByRole("status")).toHaveTextContent("该工作区有终端通知");
+  act(() => vi.advanceTimersByTime(2000));
+  const bubble = screen.getByRole("status").closest("div")!;
+  fireEvent.mouseEnter(bubble);
+  act(() => vi.advanceTimersByTime(5000));
+  expect(dismiss).not.toHaveBeenCalled();
+  view.rerender(<WorkspaceNotificationBubble {...props} notice={{ ...props.notice, revision: 2, count: 2 }}/>);
+  act(() => vi.advanceTimersByTime(5000));
+  expect(dismiss).not.toHaveBeenCalled();
+  fireEvent.mouseLeave(bubble);
+  act(() => vi.advanceTimersByTime(3999));
+  expect(dismiss).not.toHaveBeenCalled();
+  act(() => vi.advanceTimersByTime(141));
+  expect(dismiss).toHaveBeenCalledWith(2);
+});
+it("uses opt-in body and supports activation, keyboard pause and Escape dismissal", () => {
+  render(<WorkspaceNotificationBubble {...props} showBody/>);
+  expect(screen.getByRole("status")).toHaveTextContent("完成");
+  expect(screen.queryByText("查看终端")).not.toBeInTheDocument();
+  const button = screen.getByRole("button", { name: "查看 Workspace 2 的终端通知" });
+  act(() => button.focus());
+  act(() => vi.advanceTimersByTime(6000));
+  expect(dismiss).not.toHaveBeenCalled();
+  fireEvent.click(button);
+  expect(activate).toHaveBeenCalledOnce();
+  fireEvent.keyDown(button, { key: "Escape" });
+  expect(dismiss).not.toHaveBeenCalled();
+  act(() => vi.advanceTimersByTime(140));
+  expect(dismiss).toHaveBeenCalledWith(1);
+});
+
+it("keeps the bubble mounted while a manual dismissal animates out", () => {
+  render(<WorkspaceNotificationBubble {...props}/>);
+  fireEvent.click(screen.getByRole("button", { name: "关闭通知气泡" }));
+  expect(screen.getByRole("status").closest("div")).toHaveAttribute("data-state", "closing");
+  expect(dismiss).not.toHaveBeenCalled();
+  act(() => vi.advanceTimersByTime(140));
+  expect(dismiss).toHaveBeenCalledWith(1);
+});
+it("cancels timers on unmount", () => {
+  const view = render(<WorkspaceNotificationBubble {...props}/>);
+  view.unmount();
+  act(() => vi.advanceTimersByTime(5000));
+  expect(dismiss).not.toHaveBeenCalled();
+});
+it("clamps an offscreen source to the visible strip edge and dismisses under a modal", async () => {
+  const tab = document.createElement("div");
+  tab.className = "workspace-tab";
+  const strip = document.createElement("div");
+  strip.className = "workspace-tab-strip";
+  const anchor = document.createElement("span");
+  strip.append(tab); tab.append(anchor); document.body.append(strip);
+  vi.spyOn(tab, "getBoundingClientRect").mockReturnValue({ left: -600, width: 140 } as DOMRect);
+  vi.spyOn(strip, "getBoundingClientRect").mockReturnValue({ left: 20, right: 800, bottom: 40 } as DOMRect);
+  render(<WorkspaceNotificationBubble {...props} anchor={{ current: anchor }}/>);
+  expect(screen.getByRole("status").closest("div")).toHaveStyle({ left: "8px", top: "46px" });
+  const modal = document.createElement("div"); modal.setAttribute("role", "dialog");
+  await act(async () => { document.body.append(modal); });
+  act(() => vi.advanceTimersByTime(140));
+  expect(dismiss).toHaveBeenCalledWith(1);
+  modal.remove(); strip.remove();
+});

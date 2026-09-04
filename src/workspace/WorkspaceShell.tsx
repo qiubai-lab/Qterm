@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { WorkspaceTabs } from "./WorkspaceTabs";
+import { type CloseRequest } from "./workspaceClose";
+import { focusWorkspaceBlock, findBlockType } from "./workspaceFocus";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 
-import { resolveAppShortcut, shortcutLabel } from "../app/shortcuts";
-import { IconButton } from "../components/Button";
+import { resolveAppShortcut } from "../app/shortcuts";
 import { Icon, type IconName } from "../components/Icon";
 import { ConnectionDialog } from "../components/dialogs/ConnectionDialog";
 import { CredentialDialog } from "../components/dialogs/CredentialDialog";
@@ -17,28 +19,23 @@ import { getSettings, updateUpdateSettings, type SecuritySettings, type Terminal
 import { checkForUpdateOnStartupOnce } from "../lib/updateCheck";
 import { closeCurrentWindow, currentDesktopPlatform, isCurrentWindowAlwaysOnTop, minimizeCurrentWindow, setCurrentWindowAlwaysOnTop, startDraggingCurrentWindow, toggleMaximizeCurrentWindow } from "../lib/tauri/window";
 import { TERMINAL_ATTENTION_MS } from "../terminal/terminalAttention";
-import { focusTerminalBlock, openTerminalSearch } from "../terminal/terminalViewRegistry";
+import { openTerminalSearch } from "../terminal/terminalViewRegistry";
 import { WorkspaceCanvas, type ConnectionOwner } from "./LayoutView";
 import { resolveConfiguredAuth } from "./configuredAuth";
 import { adjacentBlockId } from "./blockNavigation";
 import { blockIds } from "./layout";
 import { openFileWindowAction } from "./fileWindow";
 import { openGitWindowAction } from "./gitWindow";
-import type { LayoutNode, Workspace } from "./model";
+import type { LayoutNode } from "./model";
 import { openNetworkWindowAction } from "./networkWindow";
 import { useWorkspace } from "./WorkspaceProvider";
 
 type Tool = "connections" | "credentials" | "settings" | "help";
 type WorkspaceTransitionDirection = "forward" | "backward";
-interface CloseRequest { title: string; detail: string; ids: string[]; execute: () => void }
 interface DisconnectRequest { owner: ConnectionOwner; blockId: string; name: string; local: boolean }
 interface TitlebarGesture { pointerId: number; x: number; y: number }
 interface TitlebarClick { at: number; x: number; y: number }
-interface WorkspaceTabSlot { id: string; centerX: number }
-interface WorkspaceDragGesture { id: string; pointerId: number; x: number; y: number; active: boolean; offsetX: number; targetId: string | null; slots: WorkspaceTabSlot[] }
-interface WorkspaceDragVisual { id: string; offsetX: number; targetId: string | null }
 
-const WORKSPACE_DRAG_THRESHOLD_PX = 10;
 const TITLEBAR_DRAG_THRESHOLD_PX = 5;
 const TITLEBAR_DOUBLE_CLICK_DISTANCE_PX = 5;
 const TITLEBAR_DOUBLE_CLICK_MS = 350;
@@ -46,9 +43,8 @@ const TITLEBAR_DOUBLE_CLICK_MS = 350;
 export function WorkspaceShell() {
   const desktopPlatform = currentDesktopPlatform();
   const usesNativeWindowControls = desktopPlatform === "macos";
-  const { hydrated, document, activeWorkspace, dispatch, runtimes, fileRuntimes, networkRuntimes, gitRuntimes, clearTerminalOsc7State, splitTerminalBlock, connectBlock, connectFileBlock, connectNetworkBlock, connectGitBlock, disconnectBlock, disconnectFileBlock, disconnectNetworkBlock, disconnectGitBlock, isConnectionTargetCurrent, connectedCount, closeSessions, blocksForWorkspace, acceptBlockHostKey, rejectBlockHostKey, acceptFileHostKey, rejectFileHostKey, acceptNetworkHostKey, rejectNetworkHostKey, acceptGitHostKey, rejectGitHostKey, storageNotice, dismissStorageNotice } = useWorkspace();
+  const { hydrated, document, activeWorkspace, dispatch, runtimes, fileRuntimes, networkRuntimes, gitRuntimes, clearTerminalOsc7State, splitTerminalBlock, connectBlock, connectFileBlock, connectNetworkBlock, connectGitBlock, disconnectBlock, disconnectFileBlock, disconnectNetworkBlock, disconnectGitBlock, isConnectionTargetCurrent, connectedCount, closeSessions, acceptBlockHostKey, rejectBlockHostKey, acceptFileHostKey, rejectFileHostKey, acceptNetworkHostKey, rejectNetworkHostKey, acceptGitHostKey, rejectGitHostKey, storageNotice, dismissStorageNotice } = useWorkspace();
   const [tool, setTool] = useState<Tool | null>(null);
-  const [renaming, setRenaming] = useState<{ id: string; value: string } | null>(null);
   const [closeRequest, setCloseRequest] = useState<CloseRequest | null>(null);
   const [disconnectRequest, setDisconnectRequest] = useState<DisconnectRequest | null>(null);
   const [authRequest, setAuthRequest] = useState<{ owner: ConnectionOwner; blockId: string; profile: ConnectionProfile } | null>(null);
@@ -65,20 +61,10 @@ export function WorkspaceShell() {
   const [availableUpdateVersion, setAvailableUpdateVersion] = useState<string | null>(null);
   const [windowAlwaysOnTop, setWindowAlwaysOnTop] = useState(false);
   const [windowPinBusy, setWindowPinBusy] = useState(false);
-  const [workspaceDragVisual, setWorkspaceDragVisual] = useState<WorkspaceDragVisual | null>(null);
-  const [workspaceDropSettling, setWorkspaceDropSettling] = useState(false);
-  const [workspaceTabIndicator, setWorkspaceTabIndicator] = useState({ x: 0, width: 0, ready: false });
   const [workspaceTransition, setWorkspaceTransition] = useState<{ workspaceId: string; direction: WorkspaceTransitionDirection | null }>(() => ({ workspaceId: activeWorkspace.id, direction: null }));
   const [localTerminalAttentionWorkspaceId, setLocalTerminalAttentionWorkspaceId] = useState<string | null>(null);
-  const workspaceTabStripRef = useRef<HTMLElement | null>(null);
-  const workspaceTabRefs = useRef(new Map<string, HTMLDivElement>());
   const previousWorkspaceOrderRef = useRef(document.workspaces.map((workspace) => workspace.id));
   const workspaceTransitionOrderOverrideRef = useRef<string[] | null>(null);
-  const workspaceDragRef = useRef<WorkspaceDragGesture | null>(null);
-  const workspaceDragCleanupRef = useRef<(() => void) | null>(null);
-  const workspaceDragClickSuppressionRef = useRef<string | null>(null);
-  const workspaceDragClickTimerRef = useRef<number | null>(null);
-  const workspaceDropSettleFrameRef = useRef<number | null>(null);
   const titlebarGestureRef = useRef<TitlebarGesture | null>(null);
   const titlebarGestureCleanupRef = useRef<(() => void) | null>(null);
   const titlebarLastClickRef = useRef<TitlebarClick | null>(null);
@@ -140,25 +126,6 @@ export function WorkspaceShell() {
   }, [activeWorkspace, document.workspaces, hydrated, showLocalTerminalAttention]);
 
   useLayoutEffect(() => {
-    const strip = workspaceTabStripRef.current;
-    const selectedTab = workspaceTabRefs.current.get(activeWorkspace.id);
-    if (!strip || !selectedTab) return;
-
-    const positionIndicator = () => {
-      const stripRect = strip.getBoundingClientRect();
-      const tabRect = selectedTab.getBoundingClientRect();
-      const x = tabRect.left - stripRect.left + strip.scrollLeft;
-      setWorkspaceTabIndicator((current) => current.x === x && current.width === tabRect.width && current.ready
-        ? current
-        : { x, width: tabRect.width, ready: true });
-    };
-
-    positionIndicator();
-    window.addEventListener("resize", positionIndicator);
-    return () => window.removeEventListener("resize", positionIndicator);
-  }, [activeWorkspace.id, workspaceOrder]);
-
-  useLayoutEffect(() => {
     const nextOrder = document.workspaces.map((workspace) => workspace.id);
     const transitionOrder = workspaceTransitionOrderOverrideRef.current ?? previousWorkspaceOrderRef.current;
     workspaceTransitionOrderOverrideRef.current = null;
@@ -188,91 +155,6 @@ export function WorkspaceShell() {
     const title = blockType === "files" ? "关闭文件窗口？" : blockType === "network" ? "关闭网络窗口？" : "关闭终端？";
     const detail = blockType === "files" ? "活动文件连接会同时断开。" : blockType === "network" ? "活动网络转发和 SSH 连接会同时停止。" : "活动终端会话会同时断开，终端缓冲不会保留。";
     requestClose({ title, detail, ids: [blockId], execute: () => dispatch({ type: "closeBlock", workspaceId: activeWorkspace.id, blockId }) });
-  }
-
-  function closeWorkspace(workspace: Workspace) {
-    const ids = blocksForWorkspace(workspace);
-    requestClose({ title: `关闭 ${workspace.name}？`, detail: "Workspace 内的布局和所有终端会话会同时关闭。", ids, execute: () => dispatch({ type: "closeWorkspace", workspaceId: workspace.id }) });
-  }
-
-  function commitRename() {
-    if (!renaming) return;
-    dispatch({ type: "renameWorkspace", workspaceId: renaming.id, name: renaming.value });
-    setRenaming(null);
-  }
-
-  function beginWorkspaceDrag(event: ReactPointerEvent<HTMLDivElement>, workspaceId: string) {
-    if (event.button !== 0 || (event.target as HTMLElement).closest("input,.workspace-tab-close")) return;
-    workspaceDragCleanupRef.current?.();
-    const slots = document.workspaces.flatMap((workspace) => {
-      const element = workspaceTabRefs.current.get(workspace.id);
-      if (!element) return [];
-      const rect = element.getBoundingClientRect();
-      return [{ id: workspace.id, centerX: rect.left + rect.width / 2 }];
-    });
-    const origin: WorkspaceDragGesture = { id: workspaceId, pointerId: event.pointerId, x: event.clientX, y: event.clientY, active: false, offsetX: 0, targetId: null, slots };
-    workspaceDragRef.current = origin;
-    const move = (pointer: PointerEvent) => {
-      const state = workspaceDragRef.current;
-      if (!state || pointer.pointerId !== state.pointerId) return;
-      const offsetX = pointer.clientX - state.x;
-      const offsetY = pointer.clientY - state.y;
-      if (!state.active) {
-        if (Math.abs(offsetY) >= WORKSPACE_DRAG_THRESHOLD_PX && Math.abs(offsetY) >= Math.abs(offsetX)) {
-          finish();
-          return;
-        }
-        if (Math.abs(offsetX) < WORKSPACE_DRAG_THRESHOLD_PX || Math.abs(offsetX) <= Math.abs(offsetY)) return;
-      }
-      pointer.preventDefault();
-      const nextTargetId = resolveWorkspaceDropTarget(state.slots, workspaceId, offsetX);
-      const nextGesture = { ...state, active: true, offsetX, targetId: nextTargetId };
-      workspaceDragRef.current = nextGesture;
-      setWorkspaceDragVisual({ id: workspaceId, offsetX, targetId: nextTargetId });
-    };
-    const finish = () => {
-      workspaceDragRef.current = null;
-      setWorkspaceDragVisual(null);
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", end);
-      window.removeEventListener("pointercancel", cancel);
-      if (workspaceDragCleanupRef.current === finish) workspaceDragCleanupRef.current = null;
-    };
-    const end = (pointer: PointerEvent) => {
-      const state = workspaceDragRef.current;
-      if (!state || pointer.pointerId !== state.pointerId) return;
-      if (state.active) {
-        workspaceDragClickSuppressionRef.current = workspaceId;
-        if (workspaceDragClickTimerRef.current !== null) window.clearTimeout(workspaceDragClickTimerRef.current);
-        workspaceDragClickTimerRef.current = window.setTimeout(() => {
-          workspaceDragClickSuppressionRef.current = null;
-          workspaceDragClickTimerRef.current = null;
-        }, 0);
-        if (state.targetId) {
-          setWorkspaceDropSettling(true);
-          if (workspaceDropSettleFrameRef.current !== null) window.cancelAnimationFrame(workspaceDropSettleFrameRef.current);
-          workspaceDropSettleFrameRef.current = window.requestAnimationFrame(() => {
-            workspaceDropSettleFrameRef.current = window.requestAnimationFrame(() => {
-              workspaceDropSettleFrameRef.current = null;
-              setWorkspaceDropSettling(false);
-            });
-          });
-          if (activeWorkspace.id !== workspaceId) {
-            workspaceTransitionOrderOverrideRef.current = moveWorkspaceInOrder(state.slots.map((slot) => slot.id), workspaceId, state.targetId);
-          }
-          dispatch({ type: "reorderWorkspace", workspaceId, targetWorkspaceId: state.targetId });
-          if (activeWorkspace.id !== workspaceId) dispatch({ type: "selectWorkspace", workspaceId });
-        }
-      }
-      finish();
-    };
-    const cancel = (pointer: PointerEvent) => {
-      if (pointer.pointerId === workspaceDragRef.current?.pointerId) finish();
-    };
-    workspaceDragCleanupRef.current = finish;
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", end);
-    window.addEventListener("pointercancel", cancel);
   }
 
   function beginWindowDrag(event: ReactPointerEvent<HTMLElement>) {
@@ -330,13 +212,6 @@ export function WorkspaceShell() {
     window.addEventListener("pointercancel", cancel);
   }
 
-  function suppressWorkspaceDragClick(event: ReactMouseEvent<HTMLButtonElement>, workspaceId: string): boolean {
-    if (workspaceDragClickSuppressionRef.current !== workspaceId) return false;
-    event.preventDefault();
-    event.stopPropagation();
-    return true;
-  }
-
   async function toggleWindowAlwaysOnTop() {
     if (windowPinBusy) return;
     const next = !windowAlwaysOnTop;
@@ -382,10 +257,7 @@ export function WorkspaceShell() {
   }, [commitVaultStatus]);
 
   useEffect(() => () => {
-    workspaceDragCleanupRef.current?.();
     titlebarGestureCleanupRef.current?.();
-    if (workspaceDragClickTimerRef.current !== null) window.clearTimeout(workspaceDragClickTimerRef.current);
-    if (workspaceDropSettleFrameRef.current !== null) window.cancelAnimationFrame(workspaceDropSettleFrameRef.current);
   }, []);
 
   useEffect(() => {
@@ -513,7 +385,7 @@ export function WorkspaceShell() {
       const command = resolveAppShortcut(event, desktopPlatform);
       if (!command) return;
       const modalOpen = Boolean(tool || authRequest || vaultUnlockRequest || lockChoiceOpen || closeRequest || disconnectRequest || hostPromptOpen);
-      if (modalOpen) return;
+      if (modalOpen || globalThis.document.querySelector('.workspace-batch-close-dialog, [role="menu"]')) return;
       const allowedWhileLocked = command.type === "newWorkspace" || command.type === "selectWorkspace" || command.type === "cycleWorkspace";
       if (terminalLocked && !allowedWhileLocked) return;
 
@@ -553,7 +425,7 @@ export function WorkspaceShell() {
   }, [activeWorkspace.activeBlockId, activeWorkspace.id, activeWorkspace.layout, authRequest, closeRequest, desktopPlatform, disconnectRequest, dispatch, document.workspaces, hostPromptOpen, lockChoiceOpen, remoteShellIntegrationEnabled, splitTerminalBlock, terminalLocked, tool, vaultUnlockRequest]);
 
   useEffect(() => {
-    if (terminalLocked) return;
+    if (terminalLocked || globalThis.document.querySelector('[role="dialog"]')) return;
     const activeElement = globalThis.document.activeElement;
     const focusedBlockId = activeElement instanceof Element
       ? activeElement.closest<HTMLElement>("[data-layout-block]")?.dataset.layoutBlock
@@ -639,42 +511,12 @@ export function WorkspaceShell() {
         : !vaultStatus.initialized
           ? "请先初始化凭证库"
         : "锁定终端";
-  const draggedWorkspaceIndex = workspaceDragVisual
-    ? document.workspaces.findIndex((workspace) => workspace.id === workspaceDragVisual.id)
-    : -1;
-  const dropTargetWorkspaceIndex = workspaceDragVisual?.targetId
-    ? document.workspaces.findIndex((workspace) => workspace.id === workspaceDragVisual.targetId)
-    : -1;
-
   return <main className="app-shell" data-platform={desktopPlatform}>
     <header className="app-chrome" onPointerDown={beginWindowDrag}>
       <div className="app-brand" aria-label="Qterm">
         <Icon name="terminal" size={15}/><span>Qterm</span>
       </div>
-      <nav ref={workspaceTabStripRef} className={`workspace-tab-strip${workspaceDragVisual ? " dragging" : ""}${workspaceDropSettling ? " drop-settling" : ""}`} aria-label="工作区">
-        <span
-          aria-hidden="true"
-          className={`workspace-tab-selection${workspaceTabIndicator.ready ? " ready" : ""}`}
-          style={{ width: workspaceTabIndicator.width, transform: `translate3d(${workspaceTabIndicator.x}px, 0, 0)` }}
-        />
-        {document.workspaces.map((workspace, workspaceIndex) => {
-          const isDragged = workspaceDragVisual?.id === workspace.id;
-          const isDropTarget = workspaceDragVisual?.targetId === workspace.id;
-          const dropShift = draggedWorkspaceIndex >= 0 && dropTargetWorkspaceIndex > draggedWorkspaceIndex
-            && workspaceIndex > draggedWorkspaceIndex && workspaceIndex <= dropTargetWorkspaceIndex
-            ? "left"
-            : draggedWorkspaceIndex >= 0 && dropTargetWorkspaceIndex >= 0 && dropTargetWorkspaceIndex < draggedWorkspaceIndex
-              && workspaceIndex >= dropTargetWorkspaceIndex && workspaceIndex < draggedWorkspaceIndex
-              ? "right"
-              : undefined;
-          const dragStyle = isDragged ? { "--workspace-tab-drag-x": `${workspaceDragVisual.offsetX}px` } as CSSProperties : undefined;
-          return <div ref={(element) => { if (element) workspaceTabRefs.current.set(workspace.id, element); else workspaceTabRefs.current.delete(workspace.id); }} key={workspace.id} data-workspace-id={workspace.id} data-drop-shift={dropShift} style={dragStyle} className={`workspace-tab${workspace.id === activeWorkspace.id ? " selected" : ""}${isDragged ? " dragging" : ""}${isDropTarget ? " drop-target" : ""}`} onPointerDown={(event) => beginWorkspaceDrag(event, workspace.id)}>
-          {renaming?.id === workspace.id ? <div className="workspace-tab-rename"><Icon name="workspace" size={13}/><input autoFocus aria-label={`重命名 ${workspace.name}`} value={renaming.value} onChange={(event) => setRenaming({ ...renaming, value: event.target.value })} onBlur={commitRename} onKeyDown={(event) => { if (event.key === "Enter") commitRename(); if (event.key === "Escape") setRenaming(null); }}/></div>
-            : <button className="workspace-tab-select" onClick={(event) => { if (!suppressWorkspaceDragClick(event, workspace.id)) dispatch({ type: "selectWorkspace", workspaceId: workspace.id }); }} onDoubleClick={(event) => { if (!suppressWorkspaceDragClick(event, workspace.id)) setRenaming({ id: workspace.id, value: workspace.name }); }}><Icon name="workspace" size={13}/><span>{workspace.name}</span></button>}
-          {document.workspaces.length > 1 && <IconButton className="workspace-tab-close" size="compact" label={`关闭 ${workspace.name}`} onClick={() => closeWorkspace(workspace)}><Icon name="close" size={12}/></IconButton>}
-        </div>})}
-        <IconButton className="new-workspace-tab" size="compact" label="新建工作区" title={`新建 Workspace (${shortcutLabel("newWorkspace", desktopPlatform)})`} onClick={() => dispatch({ type: "addWorkspace" })}><Icon name="plus" size={14}/></IconButton>
-      </nav>
+      <WorkspaceTabs disabled={terminalLocked} requestClose={requestClose} onReorderSelection={order => { workspaceTransitionOrderOverrideRef.current = order; }}/>
       <div className="window-controls" aria-label="窗口控制">
         <button className="window-pin" aria-label={windowAlwaysOnTop ? "取消窗口置顶" : "置顶窗口"} aria-pressed={windowAlwaysOnTop} aria-busy={windowPinBusy || undefined} title={windowAlwaysOnTop ? "取消置顶" : "置顶窗口"} disabled={windowPinBusy} onClick={() => void toggleWindowAlwaysOnTop()}><Icon name="pin" size={14}/></button>
         {!usesNativeWindowControls && <>
@@ -766,24 +608,6 @@ function isInteractiveTitlebarTarget(target: EventTarget): boolean {
   return target instanceof Element && Boolean(target.closest("button,input,[data-workspace-id]"));
 }
 
-function resolveWorkspaceDropTarget(slots: WorkspaceTabSlot[], workspaceId: string, offsetX: number): string | null {
-  const draggedSlot = slots.find((slot) => slot.id === workspaceId);
-  if (!draggedSlot) return null;
-  const projectedCenter = draggedSlot.centerX + offsetX;
-  const nearestSlot = slots.reduce((nearest, slot) => Math.abs(slot.centerX - projectedCenter) < Math.abs(nearest.centerX - projectedCenter) ? slot : nearest, draggedSlot);
-  return nearestSlot.id === workspaceId ? null : nearestSlot.id;
-}
-
-function moveWorkspaceInOrder(order: string[], workspaceId: string, targetWorkspaceId: string): string[] {
-  const from = order.indexOf(workspaceId);
-  const to = order.indexOf(targetWorkspaceId);
-  if (from < 0 || to < 0 || from === to) return order;
-  const nextOrder = [...order];
-  const [workspace] = nextOrder.splice(from, 1);
-  nextOrder.splice(to, 0, workspace);
-  return nextOrder;
-}
-
 function RailButton({ tool, icon, label, active, notice, onClick }: { tool: Tool; icon: IconName; label: string; active: boolean; notice?: string; onClick: (tool: Tool | null) => void }) {
   return <button className={`rail-button${active ? " active" : ""}${notice ? " update-attention" : ""}`} aria-label={notice ? `${label}，${notice}` : label} title={notice} aria-pressed={active} onClick={() => onClick(active ? null : tool)}><Icon name={icon}/><span className="rail-button-label">{label}</span></button>;
 }
@@ -800,21 +624,6 @@ function isEditableOutsideTerminal(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   if (target.closest(".terminal-surface")) return false;
   return Boolean(target.closest("input,textarea,select,[contenteditable=true]"));
-}
-
-function focusWorkspaceBlock(blockId: string): boolean {
-  if (focusTerminalBlock(blockId)) return true;
-  const block = Array.from(globalThis.document.querySelectorAll<HTMLElement>("[data-layout-block]"))
-    .find((element) => element.dataset.layoutBlock === blockId);
-  block?.focus();
-  return Boolean(block);
-}
-
-function findBlockType(workspace: Workspace, blockId: string): "terminal" | "files" | "network" | "git" | null {
-  const visit = (node: Workspace["layout"]): "terminal" | "files" | "network" | "git" | null => node.type === "split"
-    ? visit(node.first) ?? visit(node.second)
-    : node.blockId === blockId ? node.type : null;
-  return visit(workspace.layout);
 }
 
 function hasLocalTerminal(node: LayoutNode): boolean {

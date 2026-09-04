@@ -1,3 +1,4 @@
+import type { TerminalOutputObserver } from "../terminal/notifications/notificationRuntime";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 
 import { getLocalTerminalCapabilities, type LocalTerminalCapabilities } from "../lib/tauri/localSessions";
@@ -24,6 +25,11 @@ export function useWorkspaceRuntimeState(document: WorkspaceDocument, setStorage
   const [networkRuntimes, setNetworkRuntimes] = useState<Record<string, NetworkRuntime>>({});
   const [gitRuntimes, setGitRuntimes] = useState<Record<string, GitRuntime>>({});
   const [localTerminalCapabilities, setLocalTerminalCapabilities] = useState<LocalTerminalCapabilities | null>(null);
+  const terminalOutputObserver = useRef<TerminalOutputObserver | null>(null);
+  const registerTerminalOutputObserver = useCallback((observer: TerminalOutputObserver) => {
+    terminalOutputObserver.current = observer;
+    return () => { if (terminalOutputObserver.current === observer) terminalOutputObserver.current = null; };
+  }, []);
   const writers = useRef(new Map<string, (data: Uint8Array) => void>());
   const clearers = useRef(new Map<string, (reset: boolean) => void>());
   const terminalSizeReaders = useRef(new Map<string, () => TerminalSizeInput>());
@@ -89,6 +95,10 @@ export function useWorkspaceRuntimeState(document: WorkspaceDocument, setStorage
     sessionEpochs.current.set(blockId, epoch);
     return epoch;
   }, []);
+  const getTerminalEpoch = useCallback((blockId: string) => {
+    const epoch = sessionEpochs.current.get(blockId);
+    return epoch !== undefined && !finishedEpochs.current.has(`${blockId}:${epoch}`) ? epoch : undefined;
+  }, []);
   const isCurrentEpoch = useCallback((blockId: string, epoch: number) => sessionEpochs.current.get(blockId) === epoch, []);
 
   useEffect(() => {
@@ -104,6 +114,7 @@ export function useWorkspaceRuntimeState(document: WorkspaceDocument, setStorage
   }, [setStorageNotice]);
 
   return {
+    terminalOutputObserver, registerTerminalOutputObserver, getTerminalEpoch,
     runtimes, setRuntimes, fileRuntimes, setFileRuntimes, networkRuntimes, setNetworkRuntimes, gitRuntimes, setGitRuntimes,
     localTerminalCapabilities, writers, clearers, terminalSizeReaders, writerOwners, pendingTerminalOutput,
     runtimesRef, fileRuntimesRef, networkRuntimesRef, gitRuntimesRef, documentRef, sessionEpochs,

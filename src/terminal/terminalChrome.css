@@ -22,7 +22,7 @@
 .terminal-target-status-action:disabled { color:var(--text-disabled);background:transparent;cursor:not-allowed;transform:none; }
 .terminal-block.active .terminal-target[data-remote="true"][data-status="connected"] .terminal-target-endpoint { color:var(--block-active-endpoint-text); }
 .terminal-osc7-tag { display:inline-flex; height:12px; flex:none; align-items:center; padding:0 3px; border:1px solid var(--border); border-radius:3px; color:var(--dim); background:transparent; cursor:help; font:700 7px/10px "SFMono-Regular",Consolas,monospace; letter-spacing:0; text-decoration:none; transition:color 140ms ease,border-color 140ms ease,background-color 140ms ease; }
-.terminal-osc7-tag>span { display:block; transform:translateY(1px); }
+.terminal-osc7-tag>span { display:block; }
 .terminal-osc7-tag[data-state="ready"] { --osc7-tag-border:color-mix(in srgb,var(--selection-marker) 20%,var(--border)); --osc7-tag-text:color-mix(in srgb,var(--selection-marker) 55%,var(--dim)); --osc7-tag-surface:transparent; border-color:var(--osc7-tag-border); color:var(--osc7-tag-text); background:var(--osc7-tag-surface); }
 .terminal-block:not(.active) .terminal-osc7-tag[data-state="ready"]:hover { --osc7-tag-border:color-mix(in srgb,var(--selection-marker) 32%,var(--border)); --osc7-tag-text:color-mix(in srgb,var(--selection-marker) 78%,var(--dim)); --osc7-tag-surface:color-mix(in srgb,var(--selection-surface) 32%,transparent); }
 .terminal-block.active .terminal-osc7-tag[data-state="ready"] { --osc7-tag-border:color-mix(in srgb,var(--selection-marker) 42%,var(--border)); --osc7-tag-text:var(--selection-marker); --osc7-tag-surface:color-mix(in srgb,var(--selection-surface) 72%,transparent); }

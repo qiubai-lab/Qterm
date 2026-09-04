@@ -1,3 +1,5 @@
+import { MAX_WORKSPACES } from "./workspaceLimits";
+import { closeWorkspaceBatch } from "./workspaceClose";
 import { blockIds, clearTerminalRestoreDirectories, closeTerminal, findLeaf, moveTerminal, setFilesPath, setFilesProfile, setGitTarget, setNetworkProfile, setTerminalProfile, setTerminalRestoreDirectory, splitTerminal, terminalBlockIds, updateSplitRatio, type DropPosition } from "./layout";
 import { recordRecentGitRepository } from "./gitRepositoryHistory";
 import { createFilesNode, createGitNode, createId, createNetworkNode, createTerminalNode, createWorkspace, isValidTerminalRestoreDirectory, type GitRepositoryHistoryEntry, type GitTarget, type SplitDirection, type Workspace, type WorkspaceDocument } from "./model";
@@ -10,6 +12,7 @@ export type WorkspaceAction =
   | { type: "addWorkspace" }
   | { type: "renameWorkspace"; workspaceId: string; name: string }
   | { type: "closeWorkspace"; workspaceId: string }
+  | { type: "closeWorkspaces"; workspaceIds: string[]; anchorId: string }
   | { type: "reorderWorkspace"; workspaceId: string; targetWorkspaceId: string }
   | { type: "selectBlock"; workspaceId: string; blockId: string }
   | { type: "splitBlock"; workspaceId: string; blockId: string; direction: SplitDirection; newBlockId: string; splitId: string }
@@ -40,10 +43,15 @@ export function workspaceReducer(state: WorkspaceDocument, action: WorkspaceActi
     }
     case "selectWorkspace": return state.workspaces.some((workspace) => workspace.id === action.workspaceId) ? { ...state, activeWorkspaceId: action.workspaceId } : state;
     case "addWorkspace": {
-      const workspace = createWorkspace(`Workspace ${state.workspaces.length + 1}`);
+      if (state.workspaces.length >= MAX_WORKSPACES) return state;
+      const occupiedNames = new Set(state.workspaces.map(workspace => workspace.name));
+      let number = 1;
+      while (occupiedNames.has(`工作区-${number}`)) number += 1;
+      const workspace = createWorkspace(`工作区-${number}`);
       return { ...state, activeWorkspaceId: workspace.id, workspaces: [...state.workspaces, workspace] };
     }
     case "renameWorkspace": return mapWorkspace(state, action.workspaceId, (workspace) => ({ ...workspace, name: cleanName(action.name, workspace.name) }));
+    case "closeWorkspaces": return closeWorkspaceBatch(state, action.workspaceIds, action.anchorId);
     case "closeWorkspace": {
       if (state.workspaces.length === 1) return state;
       const index = state.workspaces.findIndex((workspace) => workspace.id === action.workspaceId);
