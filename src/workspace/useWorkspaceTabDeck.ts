@@ -1,7 +1,8 @@
 import { useEffect, useLayoutEffect, useMemo, useCallback, useRef, useState, type RefObject, type PointerEvent, type FocusEvent } from "react";
-import { layoutWorkspaceDeck, type DeckCard } from "./workspaceTabDeck";
+import { layoutWorkspaceDeck, WORKSPACE_TAB_WIDTH, type DeckCard } from "./workspaceTabDeck";
 
-interface MotionCard { x: number; width: number; vx: number; vw: number }
+interface MotionCard { x: number; width: number; expansion: number; vx: number; vw: number; ve: number }
+const paintedWidth = (card: DeckCard) => Math.min(WORKSPACE_TAB_WIDTH, card.width + (card.expanded ? 0 : 8));
 interface Options {
   ids: string[]; selectedId: string; lockedId: string | null; dragging: boolean;
   strip: RefObject<HTMLElement | null>; tabs: RefObject<Map<string, HTMLDivElement>>;
@@ -46,11 +47,19 @@ export function useWorkspaceTabDeck({ ids, selectedId, lockedId, dragging, strip
     if (!node) return;
     let frame = 0;
     const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)");
+    // Measure intrinsic text once per layout, never during the animation frame.
+    const titleInsets = new Map(layout.cards.map(card => {
+      const title = tabs.current.get(card.id)?.querySelector<HTMLElement>(".workspace-notification-title");
+      return [card.id, Math.max(0, (WORKSPACE_TAB_WIDTH - 2 - 58 - (title?.scrollWidth ?? 68)) / 2)];
+    }));
     const apply = (card: DeckCard, value: MotionCard) => {
       const tab = tabs.current.get(card.id);
       if (!tab) return;
       tab.style.setProperty("--workspace-deck-x", `${value.x}px`);
       tab.style.setProperty("--workspace-visible-width", `${value.width}px`);
+      const expansion = Math.max(0, Math.min(1, value.expansion));
+      tab.style.setProperty("--workspace-title-inset", `${expansion * (titleInsets.get(card.id) ?? 0)}px`);
+      tab.style.setProperty("--workspace-title-end", `${expansion * 29}px`);
     };
     if (!layout.stacked) {
       motion.current.clear();
@@ -60,7 +69,7 @@ export function useWorkspaceTabDeck({ ids, selectedId, lockedId, dragging, strip
     const alive = new Set(layout.cards.map(card => card.id));
     for (const id of motion.current.keys()) if (!alive.has(id)) motion.current.delete(id);
     for (const card of layout.cards) {
-      if (!motion.current.has(card.id)) motion.current.set(card.id, { x: card.x, width: card.width + (card.expanded ? 0 : 8), vx: 0, vw: 0 });
+      if (!motion.current.has(card.id)) motion.current.set(card.id, { x: card.x, width: paintedWidth(card), expansion: Number(card.expanded), vx: 0, vw: 0, ve: 0 });
       apply(card, motion.current.get(card.id)!);
     }
     if (dragging) return;
@@ -71,13 +80,14 @@ export function useWorkspaceTabDeck({ ids, selectedId, lockedId, dragging, strip
       let unsettled = false;
       for (const card of layout.cards) {
         const value = motion.current.get(card.id)!;
-        if (reduced?.matches || dragging) { value.x = card.x; value.width = card.width + (card.expanded ? 0 : 8); value.vx = 0; value.vw = 0; }
+        if (reduced?.matches || dragging) { value.x = card.x; value.width = paintedWidth(card); value.expansion = Number(card.expanded); value.vx = 0; value.vw = 0; value.ve = 0; }
         else {
           // Critically damped spring; velocities survive retargets and interrupted previews.
-          for (const [key, velocity, target] of [["x", "vx", card.x], ["width", "vw", card.width + (card.expanded ? 0 : 8)]] as const) {
+          for (const [key, velocity, target] of [["x", "vx", card.x], ["width", "vw", paintedWidth(card)], ["expansion", "ve", Number(card.expanded)]] as const) {
             value[velocity] += (400 * (target - value[key]) - 40 * value[velocity]) * dt;
             value[key] += value[velocity] * dt;
-            if (Math.abs(target - value[key]) < .1 && Math.abs(value[velocity]) < .5) { value[key] = target; value[velocity] = 0; }
+            const precision = key === "expansion" ? .001 : .1;
+            if (Math.abs(target - value[key]) < precision && Math.abs(value[velocity]) < precision * 5) { value[key] = target; value[velocity] = 0; }
             else unsettled = true;
           }
         }
