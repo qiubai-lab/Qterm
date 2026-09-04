@@ -99,15 +99,18 @@ mod tests {
         }
     }
     #[test]
-    fn content_preference_defaults_off_and_persists_independently() {
+    fn content_preference_defaults_on_and_persists_independently() {
         let dir = tempfile::tempdir().unwrap();
         let main = JsonNotificationSettingsRepository::new(dir.path().join("notifications.json"));
         let body = JsonNotificationSettingsRepository::with_default(
             dir.path().join("notification-content.json"),
-            false,
+            true,
         );
         assert!(main.load().unwrap());
+        assert!(body.load().unwrap());
+        body.save(false).unwrap();
         assert!(!body.load().unwrap());
+        assert!(main.load().unwrap());
         body.save(true).unwrap();
         main.save(false).unwrap();
         assert!(body.load().unwrap());

@@ -20,7 +20,7 @@ impl NotificationState {
             JsonNotificationSettingsRepository::new(path.clone()),
             JsonNotificationSettingsRepository::with_default(
                 path.with_file_name("notification-content.json"),
-                false,
+                true,
             ),
         ))))
     }

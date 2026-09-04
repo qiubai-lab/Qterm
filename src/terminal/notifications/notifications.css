@@ -1,5 +1,4 @@
 .terminal-notification-tag{cursor:pointer}
-.terminal-notification-tag[data-state="unread"]{color:var(--warning);border-color:var(--warning);background:var(--warning-bg)}
 .terminal-notification-tag:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
 .settings-experimental-tag{display:inline-flex;vertical-align:middle;margin-left:4px;padding:2px 4px;border:1px solid color-mix(in srgb,var(--warning) 45%,var(--border));border-radius:4px;color:var(--warning);background:var(--warning-bg);font-size:8px;font-weight:600;line-height:1.2}
 .settings-notification-option{min-width:0}

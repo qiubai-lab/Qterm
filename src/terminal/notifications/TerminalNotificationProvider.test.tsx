@@ -49,7 +49,7 @@ describe("experimental terminal notification controls", () => {
     feed("\x07"); expect(screen.getByRole("button")).toHaveAttribute("data-state", "ready");
     vi.mocked(document.hasFocus).mockReturnValue(false);
     feed("\x07"); await waitFor(() => expect(mocks.send).toHaveBeenCalledOnce());
-    expect(screen.getByRole("button")).toHaveAttribute("data-state", "unread");
+    expect(screen.getByRole("button")).toHaveAttribute("aria-label", "终端有未读通知，点击查看");
     expect(await screen.findByRole("alert")).toHaveTextContent("native unavailable");
     vi.mocked(document.hasFocus).mockReturnValue(true);
     fireEvent(window, new Event("focus"));
@@ -62,12 +62,12 @@ describe("experimental terminal notification controls", () => {
     act(() => { screen.getByRole("button").parentElement!.focus(); mocks.nativeFocus?.({ payload: false }); });
     feed("\x07");
     await waitFor(() => expect(mocks.send).toHaveBeenCalledOnce());
-    expect(screen.getByRole("button")).toHaveAttribute("data-state", "unread");
+    expect(screen.getByRole("button")).toHaveAttribute("aria-label", "终端有未读通知，点击查看");
     act(() => mocks.nativeFocus?.({ payload: true }));
     expect(screen.getByRole("button")).toHaveAttribute("data-state", "ready");
   });
 
-  it("sends source by default and includes OSC content only after opt-in", async () => {
+  it("respects saved body opt-out and includes OSC content after enabling", async () => {
     mocks.get.mockResolvedValue(true);
     render(<Harness/>); await screen.findByRole("button");
     expect(screen.getByRole("switch", { name: "显示通知正文" })).not.toBeChecked();
@@ -93,7 +93,7 @@ describe("experimental terminal notification controls", () => {
     expect(mocks.send).not.toHaveBeenCalled();
     fireEvent.click(screen.getByText("w:2"));
     expect(screen.queryByText("w:2")).not.toBeInTheDocument();
-    expect(screen.getByRole("button")).toHaveAttribute("data-state", "unread");
+    expect(screen.getByRole("button")).toHaveAttribute("aria-label", "终端有未读通知，点击查看");
     workspace.document.activeWorkspaceId = "w";
     feed("\x07");
     expect(screen.queryByText("w:1")).not.toBeInTheDocument();

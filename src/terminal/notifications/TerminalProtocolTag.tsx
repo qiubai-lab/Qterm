@@ -36,12 +36,12 @@ export function TerminalProtocolTag({ blockId, connected, directoryState, direct
   if (!enabled) return null;
   const directoryStatus = directoryState === "ready" ? "已收到目录" : directoryState === "attention" ? "未收到目录，使用回退目录" : "等待目录上报";
   return <>
-    <button ref={trigger} type="button" className="terminal-osc7-tag terminal-notification-tag" data-state={unread ? "unread" : directoryState ?? "ready"}
+    <button ref={trigger} type="button" className="terminal-osc7-tag terminal-notification-tag" data-state={directoryState ?? "ready"}
       aria-label={message} aria-live="polite" aria-describedby={position ? id : undefined}
       onMouseEnter={show} onMouseLeave={hide} onFocus={show} onBlur={hide}
       onKeyDown={event => { if (event.key === "Escape") { event.stopPropagation(); hide(); } }}
       onPointerDown={event => event.stopPropagation()}
-      onClick={() => { if (unread) focusTerminalBlock(blockId); }}><span aria-hidden="true">osc{unread ? " ·" : ""}</span></button>
+      onClick={() => { if (unread) focusTerminalBlock(blockId); }}><span aria-hidden="true">osc</span></button>
     {position && createPortal(<div id={id} role="tooltip" className="terminal-protocol-tooltip" style={position}>
       {directoryState && <p><strong>OSC 7</strong><span>同步当前目录 · {directoryStatus}</span></p>}
       {notifications.enabled && <>

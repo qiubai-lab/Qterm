@@ -27,10 +27,22 @@ it("combines enabled protocols in one compact hover tooltip and hides disabled o
   view.rerender(<TerminalProtocolTag blockId="b" connected/>);
   expect(screen.queryByRole("button")).not.toBeInTheDocument();
 });
+it.each(["ready", "waiting", "attention"] as const)("keeps the %s directory appearance when a notification arrives", directoryState => {
+  const view = render(<TerminalProtocolTag blockId="b" connected directoryState={directoryState}/>);
+  const tag = screen.getByRole("button");
+  const originalClass = tag.className;
+  state.unread = true;
+  view.rerender(<TerminalProtocolTag blockId="b" connected directoryState={directoryState}/>);
+  expect(tag).toHaveAttribute("data-state", directoryState);
+  expect(tag.className).toBe(originalClass);
+  expect(tag.textContent).toBe("osc");
+  expect(tag).toHaveAccessibleName("终端有未读通知，点击查看");
+});
 it("keeps notification-only mode and unread source focusing without requiring OSC 7", () => {
   state.unread = true;
   const view = render(<TerminalProtocolTag blockId="b" connected/>);
-  expect(screen.getByRole("button")).toHaveAttribute("data-state", "unread");
+  expect(screen.getByRole("button")).toHaveAttribute("data-state", "ready");
+  expect(screen.getByRole("button").textContent).toBe("osc");
   fireEvent.mouseEnter(screen.getByRole("button"));
   expect(screen.queryByText("OSC 7", { selector: "strong" })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button"));
