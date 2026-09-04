@@ -1,0 +1,23 @@
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import type { Workspace } from "../../workspace/model";
+import { WorkspaceNotificationLabel } from "./WorkspaceNotificationLabel";
+const mocks = vi.hoisted(() => ({ dispatch: vi.fn(), focus: vi.fn(), dismiss: vi.fn(), epoch: 1 }));
+vi.mock("../../workspace/WorkspaceProvider", () => ({ useWorkspace: () => ({ dispatch: mocks.dispatch, getTerminalEpoch: () => mocks.epoch }) }));
+vi.mock("../terminalViewRegistry", () => ({ focusTerminalBlock: mocks.focus }));
+vi.mock("./TerminalNotificationProvider", () => ({ useTerminalNotifications: () => ({ unread: () => true, showBody: true, dismissNotice: mocks.dismiss, notice: { workspaceId: "w", blockId: "b", epoch: 1, body: "done", count: 1, revision: 1 } }) }));
+const workspace = { id: "w", name: "Source", layout: { type: "terminal", blockId: "b", profileId: null } } as Workspace;
+beforeEach(() => { mocks.epoch = 1; vi.clearAllMocks(); vi.useFakeTimers(); vi.stubGlobal("ResizeObserver", class { observe() {} disconnect() {} }); });
+afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllGlobals(); });
+it("switches workspace and focuses only the still-current source session", () => {
+  render(<div className="workspace-tab-strip"><div className="workspace-tab"><button><WorkspaceNotificationLabel workspace={workspace}/></button></div></div>);
+  fireEvent.click(screen.getByRole("button", { name: "查看 Source 的终端通知" }));
+  expect(mocks.dispatch).toHaveBeenCalledWith({ type: "selectWorkspace", workspaceId: "w" });
+  act(() => vi.advanceTimersByTime(20));
+  expect(mocks.focus).toHaveBeenCalledWith("b");
+  mocks.focus.mockClear();
+  fireEvent.click(screen.getByRole("button", { name: "查看 Source 的终端通知" }));
+  mocks.epoch = 2;
+  act(() => vi.advanceTimersByTime(20));
+  expect(mocks.focus).not.toHaveBeenCalled();
+});

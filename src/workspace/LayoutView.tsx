@@ -1,5 +1,5 @@
 import { TerminalHeaderActions } from "../terminal/TerminalHeaderActions";
-import { TerminalNotificationTag } from "../terminal/notifications/TerminalNotificationProvider";
+import { TerminalProtocolTag } from "../terminal/notifications/TerminalProtocolTag";
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 import { Icon } from "../components/Icon";
 import { ConnectionRouteProgress } from "../components/ConnectionRouteProgress";
@@ -322,8 +322,7 @@ function TerminalBlock(props: BlockRenderProps & { blockId: string; profileId: s
     <header className="terminal-block-header" onPointerDown={(event) => props.beginDrag(event, props.blockId)}>
       <TerminalTargetPicker profiles={profiles} groups={profileGroups} recentProfileIds={document?.recentProfileIds ?? []} selectedProfileId={props.profileId} status={status} detail={detail} hideDetail={Boolean(runtime?.connectionProgress)} localAttention={props.localTerminalAttention} onSelect={(profileId) => void chooseTarget(profileId)} onManageConnections={props.onOpenConnectionManager} onRequestDisconnect={status === "connected" && props.profileId !== null ? requestDisconnect : undefined} statusAction={statusAction}/>
       <ConnectionRouteProgress progress={runtime?.connectionProgress} endpoint={endpoint} profile={profile} onRequestDisconnect={status === "connected" && props.profileId !== null ? requestDisconnect : undefined} statusAction={runtime?.connectionProgress ? statusAction : undefined}/>
-      <TerminalNotificationTag blockId={props.blockId} connected={status === "connected"}/>
-      {osc7TagState && <abbr key={osc7TagState === "attention" ? osc7Attention?.sequence : "stable"} className="terminal-osc7-tag" data-state={osc7TagState} aria-label={osc7TagMessage} aria-live="polite" title={osc7TagMessage}><span aria-hidden="true">OSC7</span></abbr>}
+      <TerminalProtocolTag blockId={props.blockId} connected={status === "connected"} directoryState={osc7TagState} directoryMessage={osc7TagMessage}/>
       <TerminalHeaderActions
         closeDisabled={terminalBlockIds(props.workspace.layout).length === 1}
         onClose={() => props.onRequestClose(props.blockId)}

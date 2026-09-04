@@ -1,17 +1,19 @@
+import { TerminalProtocolTag as TerminalNotificationTag } from "./TerminalProtocolTag";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { TerminalOutputObserver } from "./notificationRuntime";
-import { TerminalNotificationProvider, TerminalNotificationTag } from "./TerminalNotificationProvider";
+import { TerminalNotificationProvider, useTerminalNotifications } from "./TerminalNotificationProvider";
 import { TerminalNotificationSetting } from "../../components/dialogs/TerminalNotificationSetting";
 const mocks = vi.hoisted(() => ({ getBody: vi.fn(), updateBody: vi.fn(), get: vi.fn(), update: vi.fn(), send: vi.fn(), observer: null as TerminalOutputObserver | null, epoch: 1, native: false, nativeFocus: null as ((event: { payload: boolean }) => void) | null }));
 vi.mock("@tauri-apps/api/core", () => ({ isTauri: () => mocks.native }));
 vi.mock("@tauri-apps/api/window", () => ({ getCurrentWindow: () => ({ isFocused: async () => true, onFocusChanged: async (callback: (event: { payload: boolean }) => void) => { mocks.nativeFocus = callback; return () => { mocks.nativeFocus = null; }; } }) }));
 vi.mock("../../lib/tauri/notifications", () => ({ getNotificationBodySettings: mocks.getBody, updateNotificationBodySettings: mocks.updateBody, getNotificationSettings: mocks.get, updateNotificationSettings: mocks.update, sendTerminalNotification: mocks.send }));
-const workspace = { document: { workspaces: [{ id: "w", layout: { type: "terminal", blockId: "a", profileId: null } }] }, runtimes: {}, getTerminalEpoch: () => mocks.epoch, registerTerminalOutputObserver: (observer: TerminalOutputObserver) => { mocks.observer = observer; return () => { mocks.observer = null; }; } };
+const workspace = { document: { activeWorkspaceId: "other", workspaces: [{ id: "w", layout: { type: "terminal", blockId: "a", profileId: null } }] }, runtimes: {}, getTerminalEpoch: () => mocks.epoch, registerTerminalOutputObserver: (observer: TerminalOutputObserver) => { mocks.observer = observer; return () => { mocks.observer = null; }; } };
 vi.mock("../../workspace/WorkspaceProvider", () => ({ useWorkspace: () => workspace }));
-function Harness() { return <TerminalNotificationProvider><TerminalNotificationSetting/><section data-layout-block="a" tabIndex={0}><TerminalNotificationTag blockId="a" connected/></section></TerminalNotificationProvider>; }
+function NoticeProbe() { const { notice, dismissNotice } = useTerminalNotifications(); return notice ? <output onClick={() => dismissNotice(notice.revision)}>{notice.workspaceId}:{notice.count}</output> : null; }
+function Harness() { return <TerminalNotificationProvider><TerminalNotificationSetting/><NoticeProbe/><section data-layout-block="a" tabIndex={0}><TerminalNotificationTag blockId="a" connected/></section></TerminalNotificationProvider>; }
 const feed = (value: string, epoch = 1) => act(() => mocks.observer?.("a", epoch, new TextEncoder().encode(value)));
-beforeEach(() => { vi.clearAllMocks(); mocks.native = false; mocks.epoch = 1; mocks.get.mockResolvedValue(false); mocks.getBody.mockResolvedValue(false); mocks.updateBody.mockResolvedValue(undefined); mocks.update.mockResolvedValue(undefined); mocks.send.mockResolvedValue(undefined); vi.spyOn(document, "hasFocus").mockReturnValue(false); });
+beforeEach(() => { vi.clearAllMocks(); workspace.document.activeWorkspaceId = "other"; mocks.native = false; mocks.epoch = 1; mocks.get.mockResolvedValue(false); mocks.getBody.mockResolvedValue(false); mocks.updateBody.mockResolvedValue(undefined); mocks.update.mockResolvedValue(undefined); mocks.send.mockResolvedValue(undefined); vi.spyOn(document, "hasFocus").mockReturnValue(false); });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 describe("experimental terminal notification controls", () => {
   it("respects saved off, saves enabling, shows unread then clears immediately after disabling", async () => {
@@ -80,6 +82,27 @@ describe("experimental terminal notification controls", () => {
     await screen.findByRole("button");
     feed("\x1b]777;notify;Codex;完成了检查\x07");
     expect(mocks.send).toHaveBeenLastCalledWith("本地终端 · 工作区", "Codex：完成了检查");
+  });
+
+  it("routes foreground cross-workspace events to a merged bubble without OS alerts or implicit read", async () => {
+    mocks.get.mockResolvedValue(true);
+    vi.mocked(document.hasFocus).mockReturnValue(true);
+    const view = render(<Harness/>); await screen.findByRole("button");
+    feed("\x07"); feed("\x07");
+    expect(screen.getByText("w:2")).toBeInTheDocument();
+    expect(mocks.send).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByText("w:2"));
+    expect(screen.queryByText("w:2")).not.toBeInTheDocument();
+    expect(screen.getByRole("button")).toHaveAttribute("data-state", "unread");
+    workspace.document.activeWorkspaceId = "w";
+    feed("\x07");
+    expect(screen.queryByText("w:1")).not.toBeInTheDocument();
+    workspace.document.activeWorkspaceId = "other";
+    feed("\x07");
+    expect(screen.getByText("w:1")).toBeInTheDocument();
+    fireEvent(window, new Event("blur"));
+    expect(screen.queryByText("w:1")).not.toBeInTheDocument();
+    view.unmount();
   });
 
 });

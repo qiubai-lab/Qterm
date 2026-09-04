@@ -168,7 +168,7 @@ describe("application layout styles", () => {
     expect(tag).toContain('font:700 7px/10px "SFMono-Regular",Consolas,monospace');
     expect(tag).toContain("background:transparent");
     expect(tagText).toContain("display:block");
-    expect(tagText).toContain("transform:translateY(1px)");
+    expect(tagText).not.toContain("transform:");
     expect(ready).toContain("--osc7-tag-border:color-mix(in srgb,var(--selection-marker) 20%,var(--border))");
     expect(ready).toContain("--osc7-tag-text:color-mix(in srgb,var(--selection-marker) 55%,var(--dim))");
     expect(ready).toContain("--osc7-tag-surface:transparent");

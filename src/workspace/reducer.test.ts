@@ -78,6 +78,7 @@ describe("workspace reducer", () => {
     const added = workspaceReducer(initial, { type: "addWorkspace" });
     const secondId = added.activeWorkspaceId;
     expect(added.workspaces).toHaveLength(2);
+    expect(added.workspaces.map((workspace) => workspace.name)).toEqual(["工作区-1", "工作区-2"]);
     expect(new Set(added.workspaces.map((workspace) => workspace.id)).size).toBe(2);
     expect(new Set(added.workspaces.flatMap((workspace) => blockIds(workspace.layout))).size).toBe(2);
     const reordered = workspaceReducer(added, { type: "reorderWorkspace", workspaceId: secondId, targetWorkspaceId: firstId });

@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useState } from "react";
@@ -387,10 +387,10 @@ describe("WorkspaceCanvas terminal actions", () => {
 
     const waiting = screen.getByLabelText("OSC 7 已启用，尚未收到当前会话的目录信息。");
     const endpoint = view.container.querySelector(".terminal-target-endpoint");
-    expect(waiting).toHaveTextContent("OSC7");
+    expect(waiting).toHaveTextContent("osc");
     expect(waiting.querySelector("span")).toHaveAttribute("aria-hidden", "true");
     expect(waiting).toHaveAttribute("data-state", "waiting");
-    expect(waiting).toHaveAttribute("title", "OSC 7 已启用，尚未收到当前会话的目录信息。");
+    fireEvent.mouseEnter(waiting); expect(screen.getByRole("tooltip")).toHaveTextContent("等待目录上报");
     if (!endpoint) throw new Error("remote endpoint should be rendered");
     expect(endpoint.compareDocumentPosition(waiting) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
@@ -398,10 +398,10 @@ describe("WorkspaceCanvas terminal actions", () => {
     view.rerender(renderCanvas());
     const ready = screen.getByLabelText("OSC 7 初始化成功，已开始跟踪当前终端目录。");
     expect(ready).toHaveAttribute("data-state", "ready");
-    expect(ready).toHaveAttribute("title", "OSC 7 初始化成功，已开始跟踪当前终端目录。");
+    fireEvent.mouseEnter(ready); expect(screen.getByRole("tooltip")).toHaveTextContent("已收到目录");
 
     view.rerender(<WorkspaceCanvas workspace={remoteWorkspace} visible remoteShellIntegrationEnabled={false} onRequestClose={vi.fn()} onRequestAuthConnection={vi.fn()}/>);
-    expect(screen.queryByText("OSC7")).not.toBeInTheDocument();
+    expect(screen.queryByText("osc")).not.toBeInTheDocument();
   });
 
   it("keeps OSC 7 display and validation disabled while opening the local launch directory", () => {
@@ -409,14 +409,14 @@ describe("WorkspaceCanvas terminal actions", () => {
     terminalRuntimes = { "block-1": { ...connectedLocalRuntime, cwd: "/stale", cwdSource: "osc7" } };
     const view = render(<WorkspaceCanvas workspace={workspace} visible remoteShellIntegrationEnabled={false} onRequestClose={vi.fn()} onRequestAuthConnection={vi.fn()}/>);
 
-    expect(screen.queryByText("OSC7")).not.toBeInTheDocument();
+    expect(screen.queryByText("osc")).not.toBeInTheDocument();
     const openDirectory = within(view.container).getByRole("button", { name: "打开终端文件夹" });
     expect(openDirectory).toBeEnabled();
     expect(openDirectory).toHaveAttribute("title", "打开启动目录 C:/launch");
     act(() => openDirectory.click());
     expect(dispatch).toHaveBeenCalledWith({ type: "openFiles", workspaceId: "workspace-1", anchorBlockId: "block-1", profileId: null, path: "C:/launch" });
     act(() => vi.advanceTimersByTime(10_000));
-    expect(screen.queryByText("OSC7")).not.toBeInTheDocument();
+    expect(screen.queryByText("osc")).not.toBeInTheDocument();
   });
 
   it("opens the remote home directory when OSC 7 is disabled", () => {
@@ -430,7 +430,7 @@ describe("WorkspaceCanvas terminal actions", () => {
     openDirectory.click();
 
     expect(dispatch).toHaveBeenCalledWith({ type: "openFiles", workspaceId: "workspace-1", anchorBlockId: "block-1", profileId: "password-profile", path: "." });
-    expect(screen.queryByText("OSC7")).not.toBeInTheDocument();
+    expect(screen.queryByText("osc")).not.toBeInTheDocument();
   });
 
   it("allows only a remote terminal to create a network leaf inheriting its profile", async () => {

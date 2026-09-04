@@ -11,7 +11,7 @@
 
 ## Important Files
 
-- `src/terminal/notifications/`：实验性终端通知的有界流解析、epoch 隔离、未读派生状态、限流与设置 provider；只观察实时输出，不修改渲染字节、不拥有 session 或持久化 Workspace。
+- `src/terminal/notifications/`：实验性终端通知的有界流解析、epoch 隔离、未读派生状态、限流与设置 provider；`TerminalProtocolTag.tsx` 展示统一协议标签与提示，`workspaceNotice.ts` 管理前台瞬时气泡，`WorkspaceNotificationBubble.tsx` 负责定位、暂停倒计时与交互；只观察实时输出，不修改渲染字节、不拥有 session 或持久化 Workspace。
 - `src/components/dialogs/TerminalNotificationSetting.tsx`、`src/lib/tauri/notifications.ts`：高级设置开关展示与通知 IPC façade；缺失设置默认开启，错误不覆盖已有设置。
 - `src/terminal/TerminalHeaderActions.tsx`、`src/workspace/workspaceFocus.ts`：终端头部操作菜单与工作区焦点辅助；由布局/工作区入口组合，不持有通知策略。
 - `src-tauri/src/application/notification_service.rs`、`ports/notification.rs`、`commands/notification.rs`、`infrastructure/notifications.rs`、`infrastructure/notifications/macos.rs`、`infrastructure/persistence/json_notification_settings_repository.rs`：通知用例、端口、IPC、原生发送与独立 `device/notifications.json` 持久化；开关与发送串行，发送用例按独立正文偏好裁剪内容，原生接受已净化的来源与可选正文。

@@ -40,7 +40,10 @@ export function workspaceReducer(state: WorkspaceDocument, action: WorkspaceActi
     }
     case "selectWorkspace": return state.workspaces.some((workspace) => workspace.id === action.workspaceId) ? { ...state, activeWorkspaceId: action.workspaceId } : state;
     case "addWorkspace": {
-      const workspace = createWorkspace(`Workspace ${state.workspaces.length + 1}`);
+      const occupiedNames = new Set(state.workspaces.map(workspace => workspace.name));
+      let number = 1;
+      while (occupiedNames.has(`工作区-${number}`)) number += 1;
+      const workspace = createWorkspace(`工作区-${number}`);
       return { ...state, activeWorkspaceId: workspace.id, workspaces: [...state.workspaces, workspace] };
     }
     case "renameWorkspace": return mapWorkspace(state, action.workspaceId, (workspace) => ({ ...workspace, name: cleanName(action.name, workspace.name) }));
