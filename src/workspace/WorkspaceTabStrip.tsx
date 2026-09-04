@@ -40,8 +40,10 @@ export function WorkspaceTabStrip({ disabled, onInteractionAnchorChange, ...prop
     try {
       const ids = Array.from(new Set(targets.flatMap(blocksForWorkspace)));
       await closeSessions(ids);
-      dispatch({ type: "closeWorkspaces", workspaceIds: targets.map(item => item.id), anchorId: request.anchorId });
-      setRequest(null);
+      return () => {
+        dispatch({ type: "closeWorkspaces", workspaceIds: targets.map(item => item.id), anchorId: request.anchorId });
+        setRequest(null);
+      };
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "部分会话未能关闭，请重试。工作区布局已保留。");
     } finally { busyRef.current = false; setBusy(false); }
@@ -55,6 +57,6 @@ export function WorkspaceTabStrip({ disabled, onInteractionAnchorChange, ...prop
     }}>
     {props.children}
     {menu && <WorkspaceTabMenu {...menu} workspaces={state.workspaces} onChoose={choose} onDismiss={closeMenu}/>}
-    {request && <WorkspaceBatchCloseDialog title={workspaceCloseLabels[request.side]} targets={targets} sessions={connectedCount(targets.flatMap(blocksForWorkspace))} busy={busy} error={error} onCancel={() => { if (!busyRef.current) setRequest(null); }} onConfirm={() => void confirm()}/>}
+    {request && <WorkspaceBatchCloseDialog title={workspaceCloseLabels[request.side]} targets={targets} sessions={connectedCount(targets.flatMap(blocksForWorkspace))} busy={busy} error={error} onCancel={() => { if (!busyRef.current) setRequest(null); }} onConfirm={confirm}/>}
   </nav>;
 }

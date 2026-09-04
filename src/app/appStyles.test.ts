@@ -541,13 +541,13 @@ describe("application layout styles", () => {
     expect(lightOverrides).not.toContain(".workspace-tab[data-active]");
   });
 
-  it("uses shared theme-aware compact icon buttons for workspace close and create actions", () => {
+  it("uses shared theme-aware compact icon buttons for workspace close, create and overflow actions", () => {
     const iconButton = declarations(".icon-button");
     const quietHover = declarations(".icon-button:hover:not(:disabled)");
 
     expect(workspaceShellSource).toContain('className="workspace-tab-close"');
     expect(workspaceShellSource).toContain('className="new-workspace-tab"');
-    expect(workspaceShellSource.match(/<IconButton/g)).toHaveLength(2);
+    expect(workspaceShellSource.match(/<IconButton/g)).toHaveLength(4);
     expect(iconButton).toContain("color:var(--icon)");
     expect(iconButton).toContain("background:transparent");
     expect(quietHover).toContain("color:var(--icon-hover)");

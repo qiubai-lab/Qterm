@@ -15,15 +15,17 @@ beforeEach(() => {
   state = { ...createWorkspaceDocument(), workspaces: ["A", "B", "C", "D"].map(name => ({ ...createWorkspace(name), id: name })), activeWorkspaceId: "A" };
 });
 afterEach(cleanup);
-it("does not select on right click; asks once even without sessions and cancels safely", () => {
+it("does not select on right click; asks once even without sessions and cancels safely", async () => {
   render(<Harness/>); open();
   expect(mocks.dispatch).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("menuitem", { name: "关闭其他工作区" }));
   expect(screen.getAllByRole("dialog")).toHaveLength(1);
   expect(screen.getByText("将关闭 3 个工作区，断开 0 个活动会话")).toBeInTheDocument();
   expect(mocks.close).not.toHaveBeenCalled();
+  expect(screen.queryByRole("list")).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "取消" }));
-  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  expect(screen.getByRole("dialog")).toHaveAttribute("data-state", "closing");
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   expect(mocks.close).not.toHaveBeenCalled();
 });
 it("cleans the whole confirmed batch once before dispatch, and prevents double submit", async () => {
@@ -38,6 +40,9 @@ it("cleans the whole confirmed batch once before dispatch, and prevents double s
   expect(mocks.dispatch).not.toHaveBeenCalled();
   expect(screen.getByRole("button", { name: "取消" })).toBeDisabled();
   await act(async () => resolve());
+  expect(screen.getByRole("dialog")).toHaveAttribute("data-state", "closing");
+  expect(mocks.dispatch).not.toHaveBeenCalled();
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   expect(mocks.dispatch).toHaveBeenCalledWith({ type: "closeWorkspaces", workspaceIds: ["C", "D"], anchorId: "B" });
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 });
@@ -97,4 +102,18 @@ it("closes a menu when a modal appears asynchronously", async () => {
   await act(async () => document.body.append(dialog));
   expect(screen.queryByRole("menu")).not.toBeInTheDocument();
   dialog.remove();
+});
+it("skips exit delays under reduced motion and can reopen after cancellation", async () => {
+  vi.stubGlobal("matchMedia", () => ({ matches: true }));
+  try {
+    render(<Harness/>); open();
+    fireEvent.click(screen.getByRole("menuitem", { name: "关闭其他工作区" }));
+    fireEvent.click(screen.getByRole("button", { name: "取消" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    open();
+    fireEvent.click(screen.getByRole("menuitem", { name: "关闭右侧工作区" }));
+    fireEvent.click(screen.getByRole("button", { name: "关闭 2 个工作区" }));
+    await waitFor(() => expect(mocks.dispatch).toHaveBeenCalledOnce());
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  } finally { vi.unstubAllGlobals(); }
 });

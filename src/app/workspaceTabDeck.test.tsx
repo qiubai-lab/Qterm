@@ -7,10 +7,10 @@ vi.mock("../lib/tauri/window", () => ({
   setCurrentWindowAlwaysOnTop: vi.fn(), minimizeCurrentWindow: vi.fn(),
   toggleMaximizeCurrentWindow: vi.fn(), closeCurrentWindow: vi.fn(), startDraggingCurrentWindow: vi.fn(),
 }));
-let width = 480;
+let width = 540;
 beforeEach(() => {
-  width = 480;
-  vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockImplementation(function(this: HTMLElement) { return this.classList.contains("workspace-tab-strip") ? width : 0; });
+  width = 540;
+  vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockImplementation(function(this: HTMLElement) { return this.classList.contains("workspace-tab-bar") ? width : this.classList.contains("workspace-tab-strip") ? width - 33 : 0; });
   vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() })));
   Object.defineProperty(HTMLElement.prototype, "scrollTo", { configurable: true, value: vi.fn() });
 });
@@ -67,4 +67,25 @@ it("keeps rename editable and restores flat tabs on resize (AC-001, AC-003)", as
   fireEvent(window, new Event("resize"));
   await waitFor(() => expect(nav).not.toHaveAttribute("data-stacked"));
   expect(within(nav).getAllByRole("button", { name: /^关闭 工作区-/ })).toHaveLength(7);
+});
+it("reserves overflow navigation only when collapsed tabs no longer fit", async () => {
+  const { nav } = await setup();
+  expect(within(nav).queryByLabelText("显示左侧工作区")).toBeNull();
+  width = 480;
+  fireEvent(window, new Event("resize"));
+  expect(within(nav).getByLabelText("显示左侧工作区")).toBeInTheDocument();
+  expect(within(nav).getByLabelText("显示右侧工作区")).toBeInTheDocument();
+  fireEvent.click(within(nav).getByRole("button", { name: "工作区-1" }));
+  const leftArrow = within(nav).getByLabelText("显示左侧工作区");
+  const viewport = nav.querySelector<HTMLElement>(".workspace-tab-strip")!;
+  vi.mocked(viewport.scrollTo).mockClear();
+  fireEvent.pointerMove(within(nav).getByRole("button", { name: "工作区-2" }), { clientX: 160, clientY: 16, pointerType: "mouse" });
+  expect(within(nav).getByLabelText("显示左侧工作区")).toBe(leftArrow);
+  expect(viewport.scrollTo).not.toHaveBeenCalled();
+  fireEvent.pointerLeave(nav);
+  expect(within(nav).getByLabelText("显示左侧工作区")).toBe(leftArrow);
+  expect(within(nav).getByLabelText("新建工作区").closest(".workspace-tab-strip")).toBeNull();
+  width = 1200;
+  fireEvent(window, new Event("resize"));
+  expect(within(nav).queryByLabelText("显示左侧工作区")).toBeNull();
 });

@@ -1,3 +1,4 @@
+import { MAX_WORKSPACES } from "./workspaceLimits";
 import { closeWorkspaceBatch } from "./workspaceClose";
 import { blockIds, clearTerminalRestoreDirectories, closeTerminal, findLeaf, moveTerminal, setFilesPath, setFilesProfile, setGitTarget, setNetworkProfile, setTerminalProfile, setTerminalRestoreDirectory, splitTerminal, terminalBlockIds, updateSplitRatio, type DropPosition } from "./layout";
 import { recordRecentGitRepository } from "./gitRepositoryHistory";
@@ -42,6 +43,7 @@ export function workspaceReducer(state: WorkspaceDocument, action: WorkspaceActi
     }
     case "selectWorkspace": return state.workspaces.some((workspace) => workspace.id === action.workspaceId) ? { ...state, activeWorkspaceId: action.workspaceId } : state;
     case "addWorkspace": {
+      if (state.workspaces.length >= MAX_WORKSPACES) return state;
       const occupiedNames = new Set(state.workspaces.map(workspace => workspace.name));
       let number = 1;
       while (occupiedNames.has(`工作区-${number}`)) number += 1;

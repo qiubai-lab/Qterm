@@ -66,7 +66,7 @@ export function WorkspaceNotificationBubble({ notice, name, showBody, anchor, di
       if (!rect || !bounds) return;
       const width = bubble.current?.offsetWidth || 240;
       const visibleWidth = strip?.dataset.stacked ? Number.parseFloat(tab?.style.getPropertyValue("--workspace-visible-width") ?? "") || rect.width : rect.width;
-      const center = Math.max(bounds.left, Math.min(bounds.right - 33, rect.left + visibleWidth / 2));
+      const center = Math.max(bounds.left, Math.min(bounds.right, rect.left + visibleWidth / 2));
       setPosition({ left: Math.max(8, Math.min(window.innerWidth - width - 8, center - width / 2)), top: bounds.bottom + 6 });
     };
     update();

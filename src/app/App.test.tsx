@@ -258,7 +258,7 @@ describe("application shell", () => {
     fireEvent.pointerDown(workspace1, { button: 0, pointerId: 13, clientX: 20, clientY: 20 });
     fireEvent.pointerMove(window, { pointerId: 13, clientX: 90, clientY: 21, buttons: 1 });
     fireEvent.pointerUp(window, { pointerId: 13, clientX: 90, clientY: 21 });
-    expect(workspaceNavigation).toHaveClass("drop-settling");
+    expect(workspaceNavigation.querySelector(".workspace-tab-strip")).toHaveClass("drop-settling");
     fireEvent.click(workspace1);
     fireEvent.doubleClick(workspace1);
 

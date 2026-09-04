@@ -18,3 +18,7 @@ supersedes: []
 REQ-001 至 REQ-004：工作区右键菜单及一次性批量关闭流程。
 ## Constraints / Quality
 复用现有会话清理和 DialogFrame，不改 IPC/schema。新增规则与展示归 workspace，WorkspaceShell 保持组合入口且不超过 source-size 基线。standard 验收闭合，无阻塞问题。
+
+## 2026-09-04 确认弹窗调整
+用户要求移除工作区名称列表，保留数量、活动会话数和影响说明。复用 DialogFrame 的 160ms 入场及 130ms 退出动效：取消、关闭按钮、Escape/遮罩和确认成功均走退出生命周期；失败保留弹窗。确认成功先清理会话，退出完成后原子移除工作区，退出期间禁止重复操作。减少动态效果下立即完成。
+验证：14 项弹窗/菜单/实际 Shell 回归通过；堆叠相关组件回归、ESLint、TypeScript、source-size 通过。实际浏览器确认列表已移除、dialog-in/dialog-out 生效、取消不删工作区、确认后一次移除目标。

@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject, type PointerEvent, type FocusEvent } from "react";
+import { useEffect, useLayoutEffect, useMemo, useCallback, useRef, useState, type RefObject, type PointerEvent, type FocusEvent } from "react";
 import { layoutWorkspaceDeck, type DeckCard } from "./workspaceTabDeck";
 
 interface MotionCard { x: number; width: number; vx: number; vw: number }
@@ -13,17 +13,32 @@ export function useWorkspaceTabDeck({ ids, selectedId, lockedId, dragging, strip
   const pointer = useRef({ x: -1, y: -1 });
   const motion = useRef(new Map<string, MotionCard>());
   const previewId = lockedId ?? (dragging ? hovered : focused ?? hovered);
-  const layout = useMemo(() => layoutWorkspaceDeck(ids, selectedId, previewId, available), [ids, selectedId, previewId, available]);
+  const naturalLayout = useMemo(() => layoutWorkspaceDeck(ids, selectedId, previewId, available), [ids, selectedId, previewId, available]);
+  // Reserve navigation for the largest ordinary preview, independent of the hovered id.
+  const navigationLayout = useMemo(() => layoutWorkspaceDeck(ids, selectedId, ids.find(id => id !== selectedId) ?? null, available - 8), [ids, selectedId, available]);
+  const overflowing = available > 0 && navigationLayout.width > available - 41 + 1;
+  const layout = useMemo(() => overflowing ? layoutWorkspaceDeck(ids, selectedId, previewId, available - 66) : naturalLayout.stacked ? layoutWorkspaceDeck(ids, selectedId, previewId, available - 8) : naturalLayout, [ids, selectedId, previewId, available, overflowing, naturalLayout]);
   const previousSelection = useRef("");
+  const revealingSelection = useRef(false);
+  const revealCard = useCallback((node: HTMLElement | null, id: string) => {
+    const card = motion.current.get(id);
+    if (!node || !card) return;
+    if (card.x < node.scrollLeft) node.scrollTo({ left: Math.floor(card.x), behavior: "instant" });
+    else if (card.x + card.width + 8 > node.scrollLeft + node.clientWidth) node.scrollTo({ left: Math.ceil(card.x + card.width + 8 - node.clientWidth), behavior: "instant" });
+  }, []);
   useLayoutEffect(() => {
     const node = strip.current;
     if (!node) return;
-    const update = () => setAvailable(node.clientWidth);
+    const update = () => {
+      setAvailable(node.parentElement?.clientWidth ?? node.clientWidth);
+    };
     update();
     const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(update);
     observer?.observe(node);
+    if (node.parentElement) observer?.observe(node.parentElement);
+    node.addEventListener("scroll", update, { passive: true });
     window.addEventListener("resize", update);
-    return () => { observer?.disconnect(); window.removeEventListener("resize", update); };
+    return () => { observer?.disconnect(); node.removeEventListener("scroll", update); window.removeEventListener("resize", update); };
   }, [strip]);
 
   useLayoutEffect(() => {
@@ -45,7 +60,7 @@ export function useWorkspaceTabDeck({ ids, selectedId, lockedId, dragging, strip
     const alive = new Set(layout.cards.map(card => card.id));
     for (const id of motion.current.keys()) if (!alive.has(id)) motion.current.delete(id);
     for (const card of layout.cards) {
-      if (!motion.current.has(card.id)) motion.current.set(card.id, { x: card.x, width: card.width, vx: 0, vw: 0 });
+      if (!motion.current.has(card.id)) motion.current.set(card.id, { x: card.x, width: card.width + (card.expanded ? 0 : 8), vx: 0, vw: 0 });
       apply(card, motion.current.get(card.id)!);
     }
     if (dragging) return;
@@ -56,10 +71,10 @@ export function useWorkspaceTabDeck({ ids, selectedId, lockedId, dragging, strip
       let unsettled = false;
       for (const card of layout.cards) {
         const value = motion.current.get(card.id)!;
-        if (reduced?.matches || dragging) { value.x = card.x; value.width = card.width; value.vx = 0; value.vw = 0; }
+        if (reduced?.matches || dragging) { value.x = card.x; value.width = card.width + (card.expanded ? 0 : 8); value.vx = 0; value.vw = 0; }
         else {
           // Critically damped spring; velocities survive retargets and interrupted previews.
-          for (const [key, velocity, target] of [["x", "vx", card.x], ["width", "vw", card.width]] as const) {
+          for (const [key, velocity, target] of [["x", "vx", card.x], ["width", "vw", card.width + (card.expanded ? 0 : 8)]] as const) {
             value[velocity] += (400 * (target - value[key]) - 40 * value[velocity]) * dt;
             value[key] += value[velocity] * dt;
             if (Math.abs(target - value[key]) < .1 && Math.abs(value[velocity]) < .5) { value[key] = target; value[velocity] = 0; }
@@ -68,24 +83,25 @@ export function useWorkspaceTabDeck({ ids, selectedId, lockedId, dragging, strip
         }
         apply(card, value);
       }
+      if (previewId && !dragging) revealCard(node, previewId);
+      else if (revealingSelection.current) revealCard(node, selectedId);
+      if (!unsettled) revealingSelection.current = false;
       node.dispatchEvent(new Event("workspace-tab-layout"));
       if (unsettled) frame = requestAnimationFrame(step);
     };
     frame = requestAnimationFrame(step);
     return () => cancelAnimationFrame(frame);
-  }, [layout, dragging, strip, tabs]);
+  }, [layout, dragging, strip, tabs, revealCard, previewId, selectedId]);
 
   useLayoutEffect(() => {
     const node = strip.current;
-    const key = `${selectedId}:${available}:${layout.stacked}:${ids.join(",")}`;
+    const key = `${selectedId}:${available}:${layout.stacked}:${overflowing}:${ids.join(",")}`;
     if (!node || previousSelection.current === key) return;
     previousSelection.current = key;
     if (!layout.stacked) return;
-    const card = layout.cards.find(card => card.id === selectedId);
-    if (!card) return;
-    if (card.x < node.scrollLeft) node.scrollTo({ left: card.x });
-    else if (card.x + card.width > node.scrollLeft + available - 33) node.scrollTo({ left: card.x + card.width - available + 33 });
-  }, [layout, ids, selectedId, available, strip]);
+    revealingSelection.current = true;
+    revealCard(node, selectedId);
+  }, [layout, ids, selectedId, available, overflowing, strip, revealCard]);
 
   useEffect(() => {
     if (!lockedId && !dragging && pointer.current.x === -1) setHovered(null);
@@ -111,6 +127,7 @@ export function useWorkspaceTabDeck({ ids, selectedId, lockedId, dragging, strip
   };
   return {
     layout,
+    overflowing,
     events: {
       onPointerMove,
       onPointerLeave: () => { pointer.current = { x: -1, y: -1 }; if (!lockedId && !dragging) setHovered(null); },
