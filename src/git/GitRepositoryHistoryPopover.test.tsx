@@ -25,6 +25,9 @@ describe("GitRepositoryHistoryPopover", () => {
 
     const trigger = screen.getByRole("button", { name: "打开本机仓库" });
     expect(trigger).toHaveAttribute("aria-haspopup", "dialog");
+    expect(trigger).not.toHaveAttribute("title");
+    fireEvent.mouseEnter(trigger);
+    expect(screen.getByRole("tooltip")).toHaveTextContent("打开本机仓库");
     await user.click(trigger);
 
     const dialog = screen.getByRole("dialog", { name: "打开仓库" });

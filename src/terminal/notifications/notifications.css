@@ -59,7 +59,10 @@
   .workspace-notification-body { color:var(--text-strong); }
 }
 
-.terminal-protocol-tooltip { position:fixed; z-index:95; width:224px; max-width:calc(100vw - 16px); padding:8px; border:1px solid var(--border); border-radius:6px; background:var(--raised); color:var(--text); box-shadow:0 5px 16px var(--shadow-strong); pointer-events:none; }
-.terminal-protocol-tooltip p { display:flex; gap:7px; align-items:baseline; margin:0; font-size:10px; line-height:1.65; }
-.terminal-protocol-tooltip strong { flex:none; width:48px; color:var(--selection-marker); font-size:9px; }
+.terminal-protocol-tooltip p { display:flex; gap:8px; align-items:baseline; margin:0; padding:1px 0; font-size:10px; line-height:1.6; }
+.terminal-protocol-tooltip strong { flex:0 0 46px; color:var(--text); font:600 9px/1.6 "SFMono-Regular",Consolas,monospace; }
 .terminal-protocol-tooltip span { min-width:0; color:var(--muted); }
+.terminal-protocol-directory small { color:var(--dim); font-size:inherit; }
+.terminal-protocol-directory small[data-state="ready"] { color:var(--accent); }
+.terminal-protocol-directory small[data-state="attention"] { color:var(--warning); }
+.terminal-protocol-directory + .terminal-protocol-notifications { margin-top:4px; padding-top:4px; border-top:1px solid var(--subtle); }

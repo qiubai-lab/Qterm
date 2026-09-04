@@ -1,0 +1,174 @@
+diff --git a/src/host/VtIo.cpp b/src/host/VtIo.cpp
+index e2891ab..60f4735 100644
+--- a/src/host/VtIo.cpp
++++ b/src/host/VtIo.cpp
+@@ -23,7 +23,10 @@ using namespace Microsoft::Console::Interactivity;
+ 
+ [[nodiscard]] HRESULT VtIo::Initialize(const ConsoleArguments* const pArgs)
+ {
+-    _lookingForCursorPosition = pArgs->GetInheritCursor();
++    _lookingForCursorPosition = pArgs->GetInheritCursor();
++    wchar_t orderedProbe[2]{};
++    _orderedProbe = GetEnvironmentVariableW(L"QTERM_ORDERED_PROBE", orderedProbe, 2) == 1 && orderedProbe[0] == L'1';
++    _orderedSize = { pArgs->GetWidth(), pArgs->GetHeight() };
+ 
+     // If we were already given VT handles, set up the VT IO engine to use those.
+     if (pArgs->InConptyMode())
+@@ -454,7 +457,7 @@ void VtIo::_uncork()
+     }
+ }
+ 
+-void VtIo::_flushNow()
++void VtIo::_flushNow()
+ {
+     size_t minSize = 0;
+ 
+@@ -497,7 +500,7 @@ void VtIo::_flushNow()
+ 
+     // If _back (now _front) was empty, we can return early. If all _front contains is
+     // DECSC/DECRC that was added by BackupCursor & us, we can also return early.
+-    if (_front.size() <= minSize)
++    if (_front.size() <= minSize && !(_orderedProbe && (_orderedResize || !_orderedHello)))
+     {
+         return;
+     }
+@@ -509,7 +512,40 @@ void VtIo::_flushNow()
+         return;
+     }
+ 
+-    const auto write = gsl::narrow_cast<DWORD>(_front.size());
++    if (_orderedProbe)
++    {
++        // G0 prototype envelope, deliberately not a production ABI.
++        // Every application byte is framed; application VT cannot forge controls.
++        std::string framed;
++        const auto frame = [&](uint32_t kind, std::string_view payload) {
++            const auto append = [&](uint64_t value, int count) {
++                for (int i = 0; i < count; ++i) framed.push_back(static_cast<char>(value >> (i * 8)));
++            };
++            framed.append("QTR0", 4);
++            append(kind, 4);
++            append(++_orderedSeq, 8);
++            append(payload.size(), 4);
++            append(_orderedSize.width, 2);
++            append(_orderedSize.height, 2);
++            framed.append(payload);
++        };
++        if (!_orderedHello)
++        {
++            _orderedHello = true;
++            frame(1, {});
++        }
++        if (_orderedResize)
++        {
++            _orderedResize = false;
++            frame(2, {});
++        }
++        for (size_t offset = 0; offset < _front.size(); offset += 65536)
++        {
++            frame(3, std::string_view{ _front }.substr(offset, 65536));
++        }
++        _front = std::move(framed);
++    }
++    const auto write = gsl::narrow_cast<DWORD>(_front.size());
+ 
+     TraceLoggingWrite(
+         g_hConhostV2EventTraceProvider,
+@@ -539,7 +575,32 @@ void VtIo::_flushNow()
+             return;
+         }
+     }
+-}
++}
++
++bool VtIo::BeginOrderedResize()
++{
++    if (!_orderedProbe) return false;
++    // Seal old-size output before changing console state. Writer's async front
++    // buffer is serialized by _flushNow before the next record is submitted.
++    _flushNow();
++    ++_corked;
++    return true;
++}
++
++void VtIo::EndOrderedResize(til::size size, bool success)
++{
++    if (!success)
++    {
++        // A partial native failure cannot be represented as successful resize.
++        _hOutput.reset();
++        _back.clear();
++        --_corked;
++        return;
++    }
++    _orderedSize = size;
++    _orderedResize = true;
++    _uncork();
++}
+ 
+ void VtIo::Writer::BackupCursor() const
+ {
+diff --git a/src/host/VtIo.hpp b/src/host/VtIo.hpp
+index f2164a6..99aaf3a 100644
+--- a/src/host/VtIo.hpp
++++ b/src/host/VtIo.hpp
+@@ -64,7 +64,9 @@ namespace Microsoft::Console::VirtualTerminal
+         void SetDeviceAttributes(til::enumset<DeviceAttribute, uint64_t> attributes) noexcept;
+         til::enumset<DeviceAttribute, uint64_t> GetDeviceAttributes() const noexcept;
+         void SendCloseEvent();
+-        void CreatePseudoWindow();
++        void CreatePseudoWindow();
++        bool BeginOrderedResize();
++        void EndOrderedResize(til::size size, bool success);
+ 
+     private:
+         enum class State : uint8_t
+@@ -106,7 +108,12 @@ namespace Microsoft::Console::VirtualTerminal
+         State _state = State::Uninitialized;
+         bool _lookingForCursorPosition = false;
+         bool _closeEventSent = false;
+-        int _corked = 0;
++        int _corked = 0;
++        bool _orderedProbe = false;
++        bool _orderedHello = false;
++        bool _orderedResize = false;
++        til::size _orderedSize{ 80, 24 };
++        uint64_t _orderedSeq = 0;
+ 
+ #ifdef UNIT_TESTING
+         friend class VtIoTests;
+diff --git a/src/host/screenInfo.cpp b/src/host/screenInfo.cpp
+index 136ccc4..b4d1a59 100644
+--- a/src/host/screenInfo.cpp
++++ b/src/host/screenInfo.cpp
+@@ -1461,7 +1461,13 @@ NT_CATCH_RETURN()
+         gci.CookedReadData().EraseBeforeResize();
+     }
+ 
+-    const auto fWrapText = gci.GetWrapText();
++    const auto fWrapText = gci.GetWrapText();
++    auto* orderedIo = gci.GetVtIo();
++    const bool orderedResize = IsActiveScreenBuffer() && orderedIo && orderedIo->BeginOrderedResize();
++    bool orderedCommitted = false;
++    const auto orderedRollback = wil::scope_exit([&] {
++        if (orderedResize && !orderedCommitted) orderedIo->EndOrderedResize({}, false);
++    });
+     // GH#3493: Don't reflow the alt buffer.
+     //
+     // VTE only rewraps the contents of the (normal screen + its scrollback
+@@ -1479,8 +1485,13 @@ NT_CATCH_RETURN()
+         status = NTSTATUS_FROM_HRESULT(ResizeTraditional(coordNewScreenSize));
+     }
+ 
+-    if (SUCCEEDED_NTSTATUS(status))
+-    {
++    if (SUCCEEDED_NTSTATUS(status))
++    {
++        if (orderedResize)
++        {
++            orderedIo->EndOrderedResize(GetBufferSize().Dimensions(), true);
++            orderedCommitted = true;
++        }
+         if (HasAccessibilityEventing())
+         {
+             NotifyAccessibilityEventing(0, 0, coordNewScreenSize.width - 1, coordNewScreenSize.height - 1);

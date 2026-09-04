@@ -20,9 +20,20 @@ node scripts/conpty-resize-probe.mjs current
 node scripts/conpty-resize-probe.mjs fixed
 ```
 
-The probe starts an isolated `cmd.exe /d`, uses the real system build number and portable-pty, delivers output to xterm with 60ms simulated channel latency, and repeatedly changes the viewport between 6 and 24 rows. `current` characterizes the previous scheduler and prints duplicates; `fixed` uses the production layout controller, asserts one welcome banner and preserved copyright text, checks settled dimensions, and executes a marker command to verify input still works. Both terminate their child shell. Default fixed mode takes about six seconds; a 20-second watchdog bounds failures.
+The probe starts an isolated `cmd.exe /d`, uses the real system build number and portable-pty, delivers output to xterm with 60ms simulated channel latency, and repeatedly changes the viewport between 6 and 24 rows. `current` characterizes the previous scheduler and prints duplicates; `fixed` uses the production layout controller, asserts one welcome banner and preserved copyright text, checks settled dimensions, and executes a marker command to verify input still works. Both terminate their child shell. The watchdog scales with the requested interval and output latency.
 
 `PROBE_OUTPUT_DELAY` overrides the channel delay in milliseconds; an optional third argument changes each drag step interval (default 16ms). `PROBE_TRACE=1` prints the synthetic session's raw output and resize requests. The native probe needs Windows and a debug example build; ordinary `pnpm check` does not launch native shells.
+
+`PROBE_FIXTURE=scrollback` adds 40 long wrapped lines and two legitimate duplicate
+lines before resizing. `PROBE_FIXTURE=live` runs 80 numbered PowerShell output
+lines while both columns and rows change. `PROBE_EXECUTABLE` selects an isolated
+probe executable; `runtimePath` reports the DLL actually loaded. `resizeApiReturns`
+must not be confused with a native output boundary.
+
+The current production workaround still fails at `fixed 140` with
+`PROBE_OUTPUT_DELAY=200`. The [G0 native prototype](../native/conpty/README.md)
+adds `ordered` mode, real native boundary counts and a framed consumer. That
+mode requires the patched host; it is not connected to the Qterm application.
 
 ## Desktop check
 

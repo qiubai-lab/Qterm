@@ -339,7 +339,7 @@ describe("WorkspaceCanvas terminal actions", () => {
 
     expect(screen.getByLabelText("OSC 7 已启用，尚未收到当前会话的目录信息。")).toHaveAttribute("data-state", "waiting");
     const openDirectory = within(view.container).getByRole("button", { name: "打开终端文件夹" });
-    expect(openDirectory).toHaveAttribute("title", "打开启动目录 C:/launch");
+    fireEvent.mouseEnter(openDirectory); expect(screen.getByRole("tooltip")).toHaveTextContent( "打开启动目录 C:/launch");
     act(() => openDirectory.click());
 
     const attention = screen.getByLabelText("未检测到本地终端的 OSC 7 当前目录，文件管理将自动回退到启动目录。");
@@ -371,7 +371,7 @@ describe("WorkspaceCanvas terminal actions", () => {
     const view = render(<WorkspaceCanvas workspace={remoteWorkspace} visible remoteShellIntegrationEnabled onRequestClose={vi.fn()} onRequestAuthConnection={vi.fn()}/>);
 
     const openDirectory = within(view.container).getByRole("button", { name: "打开终端文件夹" });
-    expect(openDirectory).toHaveAttribute("title", "打开远程主目录");
+    fireEvent.mouseEnter(openDirectory); expect(screen.getByRole("tooltip")).toHaveTextContent( "打开远程主目录");
     act(() => openDirectory.click());
 
     expect(screen.getByLabelText("未检测到远程终端的 OSC 7 当前目录，文件管理将自动回退到远程主目录。")).toHaveAttribute("data-state", "attention");
@@ -412,7 +412,7 @@ describe("WorkspaceCanvas terminal actions", () => {
     expect(screen.queryByText("osc")).not.toBeInTheDocument();
     const openDirectory = within(view.container).getByRole("button", { name: "打开终端文件夹" });
     expect(openDirectory).toBeEnabled();
-    expect(openDirectory).toHaveAttribute("title", "打开启动目录 C:/launch");
+    fireEvent.mouseEnter(openDirectory); expect(screen.getByRole("tooltip")).toHaveTextContent( "打开启动目录 C:/launch");
     act(() => openDirectory.click());
     expect(dispatch).toHaveBeenCalledWith({ type: "openFiles", workspaceId: "workspace-1", anchorBlockId: "block-1", profileId: null, path: "C:/launch" });
     act(() => vi.advanceTimersByTime(10_000));
@@ -426,7 +426,7 @@ describe("WorkspaceCanvas terminal actions", () => {
 
     const openDirectory = within(view.container).getByRole("button", { name: "打开终端文件夹" });
     expect(openDirectory).toBeEnabled();
-    expect(openDirectory).toHaveAttribute("title", "打开远程主目录");
+    fireEvent.mouseEnter(openDirectory); expect(screen.getByRole("tooltip")).toHaveTextContent( "打开远程主目录");
     openDirectory.click();
 
     expect(dispatch).toHaveBeenCalledWith({ type: "openFiles", workspaceId: "workspace-1", anchorBlockId: "block-1", profileId: "password-profile", path: "." });

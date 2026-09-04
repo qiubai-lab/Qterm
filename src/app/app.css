@@ -27,3 +27,4 @@
 @import "../terminal/notifications/notifications.css";
 
 @import "../workspace/workspaceTabDeck.css";
+@import "../components/themedTooltip.css";

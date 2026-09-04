@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { createPortal } from "react-dom";
 
 import { Icon, type IconName } from "../components/Icon";
+import { ThemedTooltipButton } from "../components/ThemedTooltipButton";
 import { HostIdentity } from "../components/HostIdentity";
 import { ExactTextInput } from "../components/ExactTextInput";
 import type { ConnectionProfile, ProfileGroup } from "../lib/tauri/profiles";
@@ -427,15 +428,15 @@ export function TerminalTargetPicker({ profiles, groups = [], recentProfileIds =
     {!hideDetail && (selected && status === "connected"
       ? <HostIdentity profile={selected} label={detail} className="terminal-target-endpoint" dangerAction={onRequestDisconnect ? { label: "断开连接", onSelect: onRequestDisconnect } : undefined}/>
       : <small>{detail}</small>)}
-    {!hideDetail && statusAction && <button
+    {!hideDetail && statusAction && <ThemedTooltipButton
       type="button"
       className="terminal-target-status-action"
       data-tone={statusAction.tone}
       aria-label={statusAction.label}
-      title={statusAction.label}
+      tooltip={statusAction.label}
       disabled={statusAction.disabled}
       onClick={statusAction.onSelect}
-    ><Icon name={statusAction.icon} size={11}/></button>}
+    ><Icon name={statusAction.icon} size={11}/></ThemedTooltipButton>}
     {popover && createPortal(<>{popover}{submenu}</>, document.body)}
   </div>;
 }

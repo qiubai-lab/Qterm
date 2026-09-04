@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { createPortal } from "react-dom";
 import { Icon, type IconName } from "../components/Icon";
+import { ThemedTooltipButton } from "../components/ThemedTooltipButton";
 
 interface TerminalHeaderAction {
   label: string;
@@ -97,19 +98,19 @@ export function TerminalHeaderActions({ actions, closeDisabled, onClose }: { act
   return <>
     <div className="block-actions terminal-header-actions">
       <div className="terminal-header-secondary-actions">
-        {actions.map((action) => <button key={action.label} type="button" aria-label={action.label} title={action.title ?? action.label} disabled={action.disabled} onClick={action.onSelect}><Icon name={action.icon} size={13}/></button>)}
+        {actions.map((action) => <ThemedTooltipButton key={action.label} aria-label={action.label} tooltip={action.title ?? action.label} disabled={action.disabled} onClick={action.onSelect}><Icon name={action.icon} size={13}/></ThemedTooltipButton>)}
       </div>
-      <button
-        ref={moreButtonRef}
+      <ThemedTooltipButton
+        anchorRef={moreButtonRef}
         type="button"
         className="terminal-header-more"
         aria-label="更多终端操作"
-        title="更多终端操作"
+        tooltip="更多终端操作"
         aria-haspopup="menu"
         aria-expanded={Boolean(menuPosition)}
         onClick={() => menuPosition ? closeMenu() : openMenu()}
-      ><Icon name="more" size={13}/></button>
-      <button type="button" className="terminal-header-close" aria-label="关闭终端" title="关闭" disabled={closeDisabled} onClick={onClose}><Icon name="close" size={13}/></button>
+      ><Icon name="more" size={13}/></ThemedTooltipButton>
+      <ThemedTooltipButton className="terminal-header-close" aria-label="关闭终端" tooltip="关闭" disabled={closeDisabled} onClick={onClose}><Icon name="close" size={13}/></ThemedTooltipButton>
     </div>
     {menuPosition && createPortal(<div
       ref={menuRef}

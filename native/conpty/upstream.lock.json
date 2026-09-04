@@ -1,0 +1,14 @@
+{
+  "stage": "g0-prototype-not-for-production",
+  "repository": "https://github.com/microsoft/terminal.git",
+  "tag": "v1.24.11911.0",
+  "commit": "5a830b2bf7c053d5c7ac22208fe5a346cb5dd3dc",
+  "vcpkgRepository": "https://github.com/microsoft/vcpkg.git",
+  "vcpkgCommit": "04a9d8e5212d01ee1dd9478eadd9caade4f8b0d4",
+  "packageUrl": "https://github.com/microsoft/terminal/releases/download/v1.24.11911.0/Microsoft.Windows.Console.ConPTY.1.24.260710001.nupkg",
+  "packageSha256": "9382ad7becb7e4d84e300578d8e4f4df28f43d979d9055d978c42913c47e0e9d",
+  "x64DllSha256": "39fba2713e2495117b1591ae8c32a3b904bea7aa66069cf7815e2844c76d75d8",
+  "stockX64HostSha256": "b7fd936c2668b87b9ecf7b3366dc6568afc1c6f981874cba3e955a1c35cf8160",
+  "license": "MIT",
+  "protocol": "QTR0-experimental"
+}

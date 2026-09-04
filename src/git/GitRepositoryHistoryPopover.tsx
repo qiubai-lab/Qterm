@@ -2,6 +2,7 @@ import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type 
 import { createPortal } from "react-dom";
 
 import { Icon } from "../components/Icon";
+import { ThemedTooltipButton } from "../components/ThemedTooltipButton";
 import { isSameGitRepository } from "../workspace/gitRepositoryHistory";
 import type { GitRepositoryHistoryEntry } from "../workspace/model";
 
@@ -123,17 +124,17 @@ export function GitRepositoryHistoryPopover({
   }
 
   return <>
-    <button
-      ref={triggerRef}
+    <ThemedTooltipButton
+      anchorRef={triggerRef}
       type="button"
       className="git-repository-history-trigger"
       aria-label={triggerLabel}
-      title={triggerLabel}
+      tooltip={triggerLabel}
       aria-haspopup="dialog"
       aria-expanded={Boolean(visiblePosition)}
       disabled={disabled}
       onClick={() => visiblePosition ? close() : open()}
-    ><Icon name="files" size={13}/></button>
+    ><Icon name="files" size={13}/></ThemedTooltipButton>
     {visiblePosition && createPortal(<div
       ref={popoverRef}
       className="git-repository-history-popover"

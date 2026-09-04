@@ -1,11 +1,31 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { TerminalProtocolTag } from "./TerminalProtocolTag";
 const state = vi.hoisted(() => ({ enabled: true, unread: false, focus: vi.fn() }));
 vi.mock("./TerminalNotificationProvider", () => ({ useTerminalNotifications: () => ({ enabled: state.enabled, unread: () => state.unread }) }));
 vi.mock("../terminalViewRegistry", () => ({ focusTerminalBlock: state.focus }));
 beforeEach(() => { state.enabled = true; state.unread = false; vi.clearAllMocks(); });
-afterEach(cleanup);
+afterEach(() => { cleanup(); vi.useRealTimers(); });
+it("retains the bubble during exit and reverses an interrupted close without remounting", () => {
+  vi.useFakeTimers();
+  render(<TerminalProtocolTag blockId="b" connected directoryState="ready"/>);
+  const tag = screen.getByRole("button");
+  fireEvent.mouseEnter(tag);
+  const bubble = screen.getByRole("tooltip");
+  expect(bubble).toHaveTextContent("OSC 7");
+  fireEvent.mouseLeave(tag);
+  expect(bubble).toBeInTheDocument();
+  expect(bubble).toHaveAttribute("data-open", "false");
+  expect(tag).not.toHaveAttribute("aria-describedby");
+  act(() => vi.advanceTimersByTime(80));
+  fireEvent.mouseEnter(tag);
+  expect(screen.getByRole("tooltip")).toBe(bubble);
+  act(() => vi.advanceTimersByTime(160));
+  expect(bubble).toHaveAttribute("data-open", "true");
+  fireEvent.keyDown(tag, { key: "Escape" });
+  act(() => vi.advanceTimersByTime(160));
+  expect(bubble).not.toBeInTheDocument();
+});
 it("combines enabled protocols in one compact hover tooltip and hides disabled ones", () => {
   const view = render(<TerminalProtocolTag blockId="b" connected directoryState="ready"/>);
   expect(screen.getAllByRole("button")).toHaveLength(1);

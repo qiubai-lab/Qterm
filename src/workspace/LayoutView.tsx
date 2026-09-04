@@ -2,6 +2,7 @@ import { TerminalHeaderActions } from "../terminal/TerminalHeaderActions";
 import { TerminalProtocolTag } from "../terminal/notifications/TerminalProtocolTag";
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 import { Icon } from "../components/Icon";
+import { BlockHeaderClose } from "./BlockHeaderClose";
 import { ConnectionRouteProgress } from "../components/ConnectionRouteProgress";
 import { FileBrowserPane } from "../files/FileBrowserPane";
 import { GitPane } from "../git/GitPane";
@@ -394,9 +395,7 @@ function FilesBlock(props: BlockRenderProps & { blockId: string; profileId: stri
     <header className="terminal-block-header" onPointerDown={(event) => props.beginDrag(event, props.blockId)}>
       <TerminalTargetPicker profiles={profiles} groups={profileGroups} recentProfileIds={document?.recentProfileIds ?? []} selectedProfileId={props.profileId} status={runtime.status} detail={detail} hideDetail={Boolean(runtime.connectionProgress)} onSelect={(profileId) => void chooseTarget(profileId)} onManageConnections={props.onOpenConnectionManager} icon="files" localName="本机文件" localDetail="本地文件系统" ariaContext="文件连接" onRequestDisconnect={runtime.status === "connected" && profile ? requestDisconnect : undefined} statusAction={statusAction}/>
       <ConnectionRouteProgress progress={runtime.connectionProgress} endpoint={endpoint} profile={profile} onRequestDisconnect={runtime.status === "connected" && profile ? requestDisconnect : undefined} statusAction={runtime.connectionProgress ? statusAction : undefined}/>
-      <div className="block-actions">
-        <button aria-label="关闭文件窗口" title="关闭" onClick={() => props.onRequestClose(props.blockId)}><Icon name="close" size={13}/></button>
-      </div>
+      <BlockHeaderClose label="关闭文件窗口" onClose={() => props.onRequestClose(props.blockId)}/>
     </header>
     <FileBrowserPane key={`files:${props.profileId ?? "local"}`} initialPath={props.profileId !== null && props.path === "~" ? "." : props.path} runtime={runtime} onPathChange={updatePath}/>
     {runtime.notice && <BlockNotice message={runtime.notice}/>}
@@ -464,7 +463,7 @@ function NetworkBlock(props: BlockRenderProps & { blockId: string; profileId: st
     <header className="terminal-block-header" onPointerDown={(event) => props.beginDrag(event, props.blockId)}>
       <TerminalTargetPicker profiles={profiles} groups={profileGroups} recentProfileIds={document?.recentProfileIds ?? []} selectedProfileId={props.profileId} status={status} detail={detail} hideDetail={Boolean(runtime?.connectionProgress)} onSelect={(profileId) => void chooseTarget(profileId)} onManageConnections={props.onOpenConnectionManager} icon="network" localName="选择连接" localDetail="Network Block 需要远程 SSH 连接" ariaContext="网络连接" allowLocal={false} onRequestDisconnect={status === "connected" && profile ? requestDisconnect : undefined} statusAction={statusAction}/>
       <ConnectionRouteProgress progress={runtime?.connectionProgress} endpoint={endpoint} profile={profile} onRequestDisconnect={status === "connected" && profile ? requestDisconnect : undefined} statusAction={runtime?.connectionProgress ? statusAction : undefined}/>
-      <div className="block-actions"><button aria-label="关闭网络窗口" title="关闭" onClick={() => props.onRequestClose(props.blockId)}><Icon name="close" size={13}/></button></div>
+      <BlockHeaderClose label="关闭网络窗口" onClose={() => props.onRequestClose(props.blockId)}/>
     </header>
     <NetworkPane profileId={props.profileId} profileHost={profile?.host} runtimeStates={runtime?.ruleStates} lockedRuleIds={lockedRuleIds} onStart={(rule) => void startRule(rule.id)} onStop={(rule) => void stopNetworkBlockRule(props.blockId, rule.id)}/>
     {runtime?.notice && <BlockNotice message={runtime.notice}/>}
@@ -577,7 +576,7 @@ function GitBlock(props: BlockRenderProps & { blockId: string; target: GitTarget
     <header className="terminal-block-header" onPointerDown={(event) => props.beginDrag(event, props.blockId)}>
       <TerminalTargetPicker profiles={profiles} groups={profileGroups} recentProfileIds={document?.recentProfileIds ?? []} selectedProfileId={pendingRemote?.profileId ?? profileId} status={status} detail={detail} hideDetail={Boolean(runtime?.connectionProgress)} onSelect={(nextProfileId) => void chooseTarget(nextProfileId)} onManageConnections={props.onOpenConnectionManager} icon="git" localName="本机仓库" localDetail="管理本机 Git 工作区" ariaContext="Git 连接" onRequestDisconnect={status === "connected" && profile ? requestDisconnect : undefined} statusAction={statusAction}/>
       <ConnectionRouteProgress progress={runtime?.connectionProgress} endpoint={endpoint} profile={profile} onRequestDisconnect={status === "connected" && profile ? requestDisconnect : undefined} statusAction={runtime?.connectionProgress ? statusAction : undefined}/>
-      <div className="block-actions">
+      <BlockHeaderClose label="关闭 Git 窗口" onClose={() => props.onRequestClose(props.blockId)}>
         <GitRepositoryHistoryPopover
           repositories={visibleRepositoryHistory}
           currentRepository={currentRepository}
@@ -589,8 +588,7 @@ function GitBlock(props: BlockRenderProps & { blockId: string; target: GitTarget
           }}
           onBrowse={() => void requestRepositoryChange()}
         />
-        <button aria-label="关闭 Git 窗口" title="关闭" onClick={() => props.onRequestClose(props.blockId)}><Icon name="close" size={13}/></button>
-      </div>
+      </BlockHeaderClose>
     </header>
     {pendingRemote ? <GitRemoteTargetConfig
       blockId={props.blockId} profileId={pendingRemote.profileId}
