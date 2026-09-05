@@ -57,6 +57,6 @@ windows = { version = "=0.61.3", features = ["Win32_Storage_FileSystem", "Win32_
 [target.'cfg(target_os = "macos")'.dependencies]
 block2 = "0.6.2"
 objc2 = "0.6.2"
-objc2-app-kit = { version = "0.3.2", default-features = false, features = ["NSButton", "NSControl", "NSRunningApplication", "NSView", "NSWindow", "NSWorkspace", "block2"] }
-objc2-foundation = { version = "0.3.2", default-features = false, features = ["NSArray", "NSNotification", "NSOperation", "NSString", "NSURL", "block2"] }
+objc2-app-kit = { version = "0.3.2", default-features = false, features = ["NSRunningApplication", "NSWorkspace", "block2"] }
+objc2-foundation = { version = "0.3.2", default-features = false, features = ["NSArray", "NSOperation", "NSString", "NSURL", "block2"] }
 objc2-user-notifications = "0.3.2"

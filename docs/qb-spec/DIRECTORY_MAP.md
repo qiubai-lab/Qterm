@@ -72,7 +72,7 @@
 - `scripts/tauri.mjs`、`tauri-dev-runner.mjs`：package `tauri` script 的跨平台 ESM 入口，以及只在 macOS `dev` 使用的 app-bundle runner；前者注入开发 config/runner 并原样转发其他命令，后者用参数数组执行 Cargo build、原子更新 `target/tauri-dev/.../Qterm Dev.app` 并运行，不承载业务或发布行为。
 - `scripts/check-source-size.mjs`、`source-size-baseline.json`：源码尺寸的确定性类型上限和历史热点不增长 ratchet，由 `pnpm check` 在本地与 CI 共用；baseline 只记录待拆热点，不豁免新增文件或生成新的架构规则。
 - `src-tauri/tauri.dev.conf.json`、`Info.dev.plist`：声明 `Qterm Dev` / `com.qiubai.qterm.dev` 开发身份和 macOS dev bundle 元数据，不声明窗口数组或业务配置；plist 使用非保留文件名，正式身份继续以 `tauri.conf.json` 为事实源。
-- `src-tauri/src/lib.rs`：Tauri 组合根，注册 commands、装配 adapters，把主窗口标题同步为最终 productName，按 Rust debug/release 模式选择互不 fallback 的 home locator/default-root，再派生并初始化 root/data/device/cache 后构造全部 repositories；不写程序目录、不读取另一模式或旧 AppData 位置，也不在 repository 内重复计算全局路径。
+- `src-tauri/src/lib.rs`：Tauri 组合根，注册 commands、装配 adapters，在 Windows/Linux 把主窗口标题同步为最终 productName、在 macOS 保留 Overlay 窗口创建时的静态隐藏标题，按 Rust debug/release 模式选择互不 fallback 的 home locator/default-root，再派生并初始化 root/data/device/cache 后构造全部 repositories；不写程序目录、不读取另一模式或旧 AppData 位置，也不在 repository 内重复计算全局路径。
 - `src-tauri/src/domain/profile.rs`：连接配置、最多 4 个显式有序跃点、候选资格与引用完整性规则；不包含 IPC、凭证明文或 JSON 序列化模型。
 - `src-tauri/src/domain/auth.rs`：短期凭据包装、可执行认证请求与稳定认证失败；不表达 profile 的 `manual` 策略，也不依赖 `russh` 或 Tauri。
 - `src-tauri/src/domain/credential.rs`、`ports/credential_vault.rs`、`application/credential_service.rs`：vault 领域语义、外部存储端口与用例边界；不依赖具体密码学文件格式或 UI。
@@ -97,7 +97,6 @@
 - `src-tauri/src/commands/clipboard.rs`：接收当前 SSH session ID/opaque task ID 或无参数本地准备请求，调用本地路径准备或远端暂存/取消用例，并桥接一次性最终本地粘贴文本及无敏感远端事件；不接收本机路径、文件字节、远端路径策略或权限参数。
 - `src-tauri/src/commands/browser.rs`：Chrome/Edge 白名单 DTO、SOCKS5 规则类型复核与浏览器 adapter 调用；不接受可执行路径、命令参数或实现平台探测。
 - `src-tauri/src/infrastructure/browser/`：共享 SOCKS5 greeting、固定 Chromium 参数和机器本地隔离 Profile，并以 Windows、macOS、Linux adapter 受限探测和无 Shell 启动 Chrome/Edge；不修改系统代理、支持沙箱化 Linux 浏览器、复用日常 Profile 或管理浏览器退出。
-- `src-tauri/src/infrastructure/window_chrome.rs`：macOS 原生标题栏几何 adapter；按 AppKit 实际按钮尺寸把系统交通灯对齐到 40px 应用顶栏，并在原生窗口 relayout 后恢复位置；不拥有前端样式、Workspace 状态或跨平台窗口策略。
 - `src-tauri/src/infrastructure/persistence/json_network_repository.rs`：`network-forwards.json` schema v1 的严格、无敏感字段、原子持久化适配器。
 - `src-tauri/src/infrastructure/persistence/json_workspace_repository.rs`：`workspaces.json` schema v10 的严格、无敏感字段、原子持久化与受支持旧版本显式迁移适配器；不保存 session、Git snapshot、仓库内容或连接凭据。
 - `src-tauri/src/ports/settings_repository.rs`、`src-tauri/src/infrastructure/persistence/json_{appearance,update,terminal}_settings_repository.rs`：设备外观/更新/终端集成偏好 ports 与独立 schema v1 适配器；只保存封闭预设或布尔偏好，不覆盖损坏/未来文件，也不修改 security settings。
@@ -109,7 +108,7 @@
 - `src-tauri/src/infrastructure/ssh/client.rs`、`client/manager_{core,control,files,ports}.rs`：稳定 `SshSessionManager` façade 与按核心会话、控制、文件/传输和端口转发分组的 manager 实现；不向 commands/application 泄漏 russh 或 SFTP 类型。
 - `src-tauri/src/infrastructure/ssh/client/session.rs`、`session/{terminal,files,git}.rs`：route 建连 façade 与 Terminal、Files、Git purpose-specific runner；Git runner 通过同一 profile-owned session 执行固定 conflict detail/side/delete/stage，并仅为有界结果写回复用内部 SFTP 原子写语义，各用途对外能力仍独立，取消、task drop 和关闭语义仍由共享 manager/session ownership 约束。
 - `src-tauri/src/infrastructure/ssh/client/transfer.rs`、`transfer/{files,staging,upload}.rs`：传输 dispatch façade、远端文件操作、Terminal staging/download 与 upload/流式复制实现；路径边界、取消与失败清理不进入 command 或 application。
-- `src-tauri/tauri.conf.json`、`tauri.macos.conf.json`：正式应用身份、通用无边框桌面窗口与 macOS 原生 Overlay 标题栏的分层配置，以及构建和打包入口；不承载 Workspace 或 SSH 规则。
+- `src-tauri/tauri.conf.json`、`tauri.macos.conf.json`：正式应用身份、通用无边框桌面窗口与 macOS 原生 Overlay 标题栏的分层配置，以及构建和打包入口；macOS 交通灯以逻辑坐标交由 Tauri/Tao/Wry 原生绘制生命周期唯一维护，不另设 AppKit 事件观察器或 frame 修正 adapter；不承载 Workspace 或 SSH 规则。
 - `src-tauri/capabilities/default.json`：主窗口最小 Tauri 权限清单。
 - `package.json`、`src-tauri/Cargo.toml`：前端与 Rust 的直接依赖及质量命令入口。
 - `.github/workflows/build-desktop.yml`：macOS ARM64、Windows x64 与 Linux x64 的版本标签/手动构建和 workflow artifact 上传入口；不发布 Release 或执行部署。

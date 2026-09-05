@@ -208,21 +208,16 @@ pub fn run() {
 
     builder
         .on_window_event(|window, event| {
-            #[cfg(target_os = "macos")]
-            infrastructure::window_chrome::schedule_after_window_event(window, event);
             if let tauri::WindowEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) = event {
                 window.state::<TransferState>().approve_drop_paths(paths);
             }
         })
         .setup(|app| {
-            if let Some(window) = app.get_webview_window("main") {
-                if let Some(product_name) = app.config().product_name.as_deref() {
-                    window.set_title(product_name)?;
-                }
-                #[cfg(target_os = "macos")]
-                infrastructure::window_chrome::install_traffic_light_alignment(
-                    &window.as_ref().window(),
-                )?;
+            #[cfg(not(target_os = "macos"))]
+            if let Some(window) = app.get_webview_window("main")
+                && let Some(product_name) = app.config().product_name.as_deref()
+            {
+                window.set_title(product_name)?;
             }
             let home = app.path().home_dir()?;
             let configuration_storage =

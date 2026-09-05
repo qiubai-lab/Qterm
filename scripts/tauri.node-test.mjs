@@ -172,6 +172,26 @@ test("macOS development bundle uses a non-reserved plist input", async () => {
   assert.match(development, /<string>com\.qiubai\.qterm\.dev<\/string>/);
 });
 
+test("macOS traffic-light placement has one native runtime owner", async () => {
+  const macos = await readJson("src-tauri/tauri.macos.conf.json");
+  const applicationRoot = await readFile("src-tauri/src/lib.rs", "utf8");
+  const infrastructureRoot = await readFile(
+    "src-tauri/src/infrastructure/mod.rs",
+    "utf8",
+  );
+  const [window] = macos.app.windows;
+
+  assert.equal(window.titleBarStyle, "Overlay");
+  assert.equal(window.decorations, true);
+  assert.deepEqual(window.trafficLightPosition, { x: 14, y: 18 });
+  assert.doesNotMatch(applicationRoot, /window_chrome/);
+  assert.doesNotMatch(infrastructureRoot, /window_chrome/);
+  assert.match(
+    applicationRoot,
+    /#\[cfg\(not\(target_os = "macos"\)\)\]\s+if let Some\(window\)[\s\S]*?window\.set_title\(product_name\)\?/,
+  );
+});
+
 test("package scripts route Tauri and repository checks through the wrapper tests", async () => {
   const packageJson = await readJson("package.json");
 
