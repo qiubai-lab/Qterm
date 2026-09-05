@@ -5,8 +5,8 @@
 .app-brand { display:flex; height:40px; flex:none; gap:7px; align-items:center; padding:0 13px; color:var(--text-strong); }
 .app-brand svg { color:var(--signature); }
 .app-brand span { -webkit-user-select:none; user-select:none; font-size:12px; font-weight:600; letter-spacing:-.01em; }
-.app-shell[data-platform="macos"] .app-brand { position:relative; z-index:1; height:30px; gap:6px; margin:0 7px 0 9px; padding:0 8px 0 3px; }
-.app-shell[data-platform="macos"] .app-brand::before { position:absolute; z-index:0; inset:0 0 0 -80px; border:1px solid var(--brand-plate-border); border-radius:7px; background:var(--brand-plate-background); box-shadow:var(--brand-plate-shadow); backdrop-filter:blur(8px) saturate(115%); -webkit-backdrop-filter:blur(8px) saturate(115%); content:""; pointer-events:none; }
+.app-shell[data-platform="macos"] .app-brand { position:relative; z-index:1; height:30px; gap:6px; margin:0 7px 0 5px; padding:0 8px 0 0; }
+.app-shell[data-platform="macos"] .app-brand::before { position:absolute; z-index:0; inset:0 0 0 -76px; border:1px solid var(--brand-plate-border); border-radius:7px; background:var(--brand-plate-background); box-shadow:var(--brand-plate-shadow); backdrop-filter:blur(8px) saturate(115%); -webkit-backdrop-filter:blur(8px) saturate(115%); content:""; pointer-events:none; }
 .app-shell[data-platform="macos"] .app-brand svg { position:relative; z-index:1; width:14px; height:14px; color:color-mix(in srgb,var(--signature) 72%,var(--muted)); }
 .app-shell[data-platform="macos"] .app-brand span { position:relative; z-index:1; color:var(--muted); font-size:12px; font-weight:600; letter-spacing:-.005em; }
 .workspace-tab-strip { position:relative; display:flex; min-width:0; flex:1; height:100%; gap:3px; align-items:center; overflow-x:auto; scrollbar-width:none; }

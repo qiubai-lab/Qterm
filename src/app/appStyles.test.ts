@@ -344,9 +344,9 @@ describe("application layout styles", () => {
       state: "followsWindowActiveState",
       radius: 12,
     });
-    expect(brand).toMatch(/height:30px;[^}]*padding:0 8px 0 3px/);
+    expect(brand).toMatch(/height:30px;[^}]*margin:0 7px 0 5px;[^}]*padding:0 8px 0 0/);
     expect(brand).not.toContain("transition:");
-    expect(brandPlate).toContain("inset:0 0 0 -80px");
+    expect(brandPlate).toContain("inset:0 0 0 -76px");
     expect(brandPlate).toContain("border-radius:7px");
     expect(brandPlate).toContain("border:1px solid var(--brand-plate-border)");
     expect(brandPlate).toContain("background:var(--brand-plate-background)");
