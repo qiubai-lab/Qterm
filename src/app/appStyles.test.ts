@@ -344,7 +344,7 @@ describe("application layout styles", () => {
       state: "followsWindowActiveState",
       radius: 12,
     });
-    expect(brand).toContain("height:30px");
+    expect(brand).toMatch(/height:30px;[^}]*padding:0 8px 0 3px/);
     expect(brand).not.toContain("transition:");
     expect(brandPlate).toContain("inset:0 0 0 -80px");
     expect(brandPlate).toContain("border-radius:7px");
