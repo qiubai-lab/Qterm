@@ -732,8 +732,8 @@
 }
 
 .git-change-path {
-  justify-self: start;
   min-width: 0;
+  justify-self: stretch;
   overflow: hidden;
   color: var(--text);
   font: 9.5px/1.2 SFMono-Regular, Consolas, monospace;

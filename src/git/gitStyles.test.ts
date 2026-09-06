@@ -605,7 +605,11 @@ describe("Git pane style contracts", () => {
     const path = declarations(".git-change-path");
     expect(path).toContain("color: var(--text)");
     expect(path).toContain("font-weight: 600");
-    expect(path).toContain("justify-self: start");
+    expect(path).toContain("min-width: 0");
+    expect(path).toContain("justify-self: stretch");
+    expect(path).toContain("overflow: hidden");
+    expect(path).toContain("text-overflow: ellipsis");
+    expect(path).toContain("white-space: nowrap");
     expect(declarations(".git-change-row.previewable")).toContain("grid-template-columns: minmax(0, 1fr) auto");
     const previewTrigger = declarations(".git-change-row > .git-change-preview-trigger");
     expect(previewTrigger).toContain("width: 100%");
