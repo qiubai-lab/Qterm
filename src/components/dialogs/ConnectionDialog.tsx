@@ -580,7 +580,7 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
                     <label id={`jump-profile-label-${index}`}>跃点 {index + 1}</label>
                     <div className={`jump-route-row-control${profileId || jumpRows.length > 1 ? " has-remove" : ""}`}>
                       <button type="button" className="jump-profile-trigger" aria-labelledby={`jump-profile-label-${index}`} aria-haspopup="dialog" onClick={() => void openJumpPicker(index)}>
-                        <span><strong>{profile?.name ?? "直接连接"}</strong><small>{profile ? `${profile.username}@${profile.host}:${profile.port}` : "不经过其他 SSH 节点"}</small></span><Icon name="connections" size={14}/>
+                        <span><strong>{profile?.name ?? "直接连接"}</strong><small>{profile ? `${profile.username}@${profile.host}:${profile.port}` : "不经过其他 SSH 节点"}</small></span><Icon name="computer" size={14}/>
                       </button>
                       {(profileId || jumpRows.length > 1) && <button type="button" className="jump-route-remove" aria-label={`删除跃点 ${index + 1}`} onClick={() => removeJumpRow(index)}><Icon name="trash" size={13}/></button>}
                     </div>

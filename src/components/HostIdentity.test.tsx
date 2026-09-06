@@ -24,6 +24,7 @@ describe("HostIdentity", () => {
     await user.click(trigger);
     const dialog = screen.getByRole("dialog", { name: "Production" });
     expect(trigger).toHaveAttribute("aria-expanded", "true");
+    expect(dialog.querySelector('[data-icon="computer"]')).toHaveAttribute("width", "13");
     expect(dialog).toHaveTextContent("deploy");
     expect(dialog).toHaveTextContent("prod.example");
     expect(dialog).toHaveTextContent("2222");

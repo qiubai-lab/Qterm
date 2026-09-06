@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-export type IconName = "workspace" | "plus" | "terminal" | "git" | "submodule" | "mergeConflict" | "browser" | "computer" | "server" | "network" | "connections" | "files" | "file" | "filePlus" | "folderPlus" | "edit" | "save" | "check" | "checkCircle" | "copy" | "upload" | "download" | "key" | "lock" | "trash" | "clear" | "back" | "forward" | "chevronDown" | "refresh" | "sync" | "search" | "disconnect" | "settings" | "help" | "splitHorizontal" | "splitVertical" | "menu" | "pin" | "windowMinimize" | "windowMaximize" | "close" | "more" | "eye" | "eyeOff";
+export type IconName = "workspace" | "plus" | "terminal" | "git" | "submodule" | "mergeConflict" | "browser" | "computer" | "server" | "network" | "files" | "file" | "filePlus" | "folderPlus" | "edit" | "save" | "check" | "checkCircle" | "copy" | "upload" | "download" | "key" | "lock" | "trash" | "clear" | "back" | "forward" | "chevronDown" | "refresh" | "sync" | "search" | "disconnect" | "settings" | "help" | "splitHorizontal" | "splitVertical" | "menu" | "pin" | "windowMinimize" | "windowMaximize" | "close" | "more" | "eye" | "eyeOff";
 
 export function Icon({ name, size = 16 }: { name: IconName; size?: number }) {
   const paths: Record<IconName, ReactNode> = {
@@ -14,7 +14,6 @@ export function Icon({ name, size = 16 }: { name: IconName; size?: number }) {
     computer: <><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></>,
     server: <><rect x="4" y="3" width="16" height="7" rx="2"/><rect x="4" y="14" width="16" height="7" rx="2"/><path d="M8 6.5h.01M8 17.5h.01M12 6.5h5M12 17.5h5"/></>,
     network: <><rect x="9" y="2" width="6" height="6" rx="1.2"/><rect x="3" y="16" width="6" height="6" rx="1.2"/><rect x="15" y="16" width="6" height="6" rx="1.2"/><path d="M12 8v4M6 16v-4h12v4"/></>,
-    connections: <><rect x="1.5" y="5" width="7" height="8" rx="1.3"/><rect x="15.5" y="5" width="7" height="8" rx="1.3"/><path d="M5 13v3M3 16h4M19 13v3M17 16h4M10 8h4m-2-2 2 2-2 2M14 12h-4m2-2-2 2 2 2"/></>,
     files: <><path d="M4 5a2 2 0 0 1 2-2h4l2 3h6a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z"/></>,
     file: <><path d="M6 3h8l4 4v14H6Z"/><path d="M14 3v5h5"/></>,
     filePlus: <><path d="M4 4h9l4 4v12H4Z"/><path d="M13 4v4h4"/><path d="M17.5 12.5v7M14 16h7"/></>,

@@ -128,7 +128,7 @@ export function SshConfigImportDialog({ onClose, onImported }: { onClose: () => 
 
         {preview && activeTab === "connections" && <section className="ssh-config-import-panel" role="tabpanel" aria-label="连接信息">
           <div className="ssh-config-import-list">
-            {preview.candidates.length === 0 && <div className="ssh-config-import-empty"><Icon name="connections" size={24}/><strong>没有可导入的 Host</strong><p>通配与否定 Host 只作为默认规则，不会生成连接。</p></div>}
+            {preview.candidates.length === 0 && <div className="ssh-config-import-empty"><Icon name="computer" size={24}/><strong>没有可导入的 Host</strong><p>通配与否定 Host 只作为默认规则，不会生成连接。</p></div>}
             {preview.warnings.map((warning) => <p className="ssh-config-import-global-warning" key={warning}>{warning}</p>)}
             {preview.candidates.map((candidate) => {
               const checked = selected.has(candidate.alias);

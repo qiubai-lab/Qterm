@@ -109,7 +109,7 @@ export function HostIdentity({ profile, label = `${profile.username}@${profile.h
     onPointerDown={(event) => event.stopPropagation()}
   >
     <div className="host-summary-heading">
-      <span className="host-summary-icon" aria-hidden="true"><Icon name="connections" size={13}/></span>
+      <span className="host-summary-icon" aria-hidden="true"><Icon name="computer" size={13}/></span>
       <span><strong id={titleId}>{profile.name}</strong><small>目标主机概要</small></span>
     </div>
     <dl className="host-summary-details">

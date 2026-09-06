@@ -169,6 +169,9 @@ describe("application theme contract", () => {
     expect(connectionDialog).toContain("background:var(--selection-marker)");
     expect(connectionDialog).toMatch(/\.connection-item\.selected \.connection-item-name[^}]+color:var\(--selection-marker\)/);
     expect(fileBrowser).toContain("background:var(--selection-marker)");
+    expect(terminalChrome).toContain('.terminal-target-trigger:hover,.terminal-target-trigger:focus-visible { color:var(--selection-marker); background:color-mix(in srgb,var(--selection-marker) 11%,transparent); }');
+    expect(terminalChrome).toContain('.terminal-target-trigger[aria-expanded="true"] { color:var(--selection-marker); background:color-mix(in srgb,var(--selection-marker) 17%,transparent); }');
+    expect(terminalChrome).toContain(".terminal-target-trigger:focus-visible { outline:2px solid var(--focus); outline-offset:1px; }");
     expect(terminalChrome).toContain('.terminal-target-option[aria-pressed="true"]{color:var(--selection-marker);background:var(--selection-surface)');
     expect(terminalChrome).toMatch(/\.terminal-target-option\[aria-pressed="true"\]::after[^}]+color:var\(--selection-marker\)/);
     expect(credentialDialog).toMatch(/\.credential-selection-indicator[^}]+background:var\(--selection-surface\)[^}]+var\(--selection-marker\)/);
