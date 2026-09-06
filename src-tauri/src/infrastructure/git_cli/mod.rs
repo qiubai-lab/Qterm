@@ -4,6 +4,7 @@ use std::{
     io::{Read, Write},
     path::{Path, PathBuf},
     process::{Command, Stdio},
+    sync::mpsc as std_mpsc,
     thread,
     time::{Duration, Instant},
 };
@@ -24,12 +25,12 @@ use crate::{
         validate_remote_branch_ref, validate_remote_name, validate_stage_all,
         validate_submodule_stage_paths,
     },
+    infrastructure::git_execution::{
+        GIT_MUTATION_BUDGET, GIT_NETWORK_BUDGET, GIT_READ_BUDGET, GitExecutionBudget,
+    },
     ports::git_executor::GitExecutor,
 };
 
-const READ_TIMEOUT: Duration = Duration::from_secs(10);
-const MUTATION_TIMEOUT: Duration = Duration::from_secs(60);
-const FETCH_TIMEOUT: Duration = Duration::from_secs(120);
 const OUTPUT_LIMIT: usize = 8 * 1024 * 1024;
 
 pub struct SystemGitExecutor {
@@ -43,7 +44,12 @@ struct ProcessOutput {
 impl SystemGitExecutor {
     pub fn discover() -> Self {
         let executable = candidates().into_iter().find(|candidate| {
-            run_process(candidate, [OsStr::new("--version")], Duration::from_secs(2)).is_ok()
+            run_process(
+                candidate,
+                [OsStr::new("--version")],
+                GitExecutionBudget::fixed(Duration::from_secs(2)),
+            )
+            .is_ok()
         });
         Self { executable }
     }
@@ -55,13 +61,13 @@ impl SystemGitExecutor {
         }
     }
 
-    fn git<I, S>(&self, args: I, timeout: Duration) -> Result<ProcessOutput, GitError>
+    fn git<I, S>(&self, args: I, budget: GitExecutionBudget) -> Result<ProcessOutput, GitError>
     where
         I: IntoIterator<Item = S>,
         S: AsRef<OsStr>,
     {
         let executable = self.executable.as_ref().ok_or(GitError::Missing)?;
-        run_process(executable, args, timeout)
+        run_process(executable, args, budget)
     }
 
     fn repository_root(&self, path: &Path) -> Result<PathBuf, GitError> {
@@ -75,7 +81,7 @@ impl SystemGitExecutor {
                 OsString::from("rev-parse"),
                 OsString::from("--show-toplevel"),
             ],
-            READ_TIMEOUT,
+            GIT_READ_BUDGET,
         )?;
         let root = String::from_utf8_lossy(&output.stdout).trim().to_owned();
         if root.is_empty() {
@@ -91,7 +97,7 @@ impl SystemGitExecutor {
     {
         let mut command = vec![OsString::from("-C"), repository.as_os_str().to_owned()];
         command.extend(args.into_iter().map(|value| value.as_ref().to_owned()));
-        self.git(command, MUTATION_TIMEOUT)?;
+        self.git(command, GIT_MUTATION_BUDGET)?;
         self.snapshot(repository)
     }
 
@@ -103,7 +109,7 @@ impl SystemGitExecutor {
         let repository = self.repository_root(repository)?;
         let mut command = vec![OsString::from("-C"), repository.as_os_str().to_owned()];
         command.extend(args.into_iter().map(|value| value.as_ref().to_owned()));
-        self.git(command, FETCH_TIMEOUT)?;
+        self.git(command, GIT_NETWORK_BUDGET)?;
         self.snapshot(&repository)
     }
 
@@ -116,7 +122,7 @@ impl SystemGitExecutor {
                 OsString::from("--verify"),
                 OsString::from("HEAD"),
             ],
-            READ_TIMEOUT,
+            GIT_READ_BUDGET,
         )
         .is_ok()
     }
@@ -131,7 +137,7 @@ impl SystemGitExecutor {
                 OsString::from("-q"),
                 OsString::from("MERGE_HEAD"),
             ],
-            READ_TIMEOUT,
+            GIT_READ_BUDGET,
         ) {
             Ok(output) => {
                 let oids = String::from_utf8_lossy(&output.stdout)
@@ -167,7 +173,7 @@ impl SystemGitExecutor {
                 OsString::from("--"),
                 OsString::from(path),
             ],
-            MUTATION_TIMEOUT,
+            GIT_MUTATION_BUDGET,
         )?;
         Ok(())
     }

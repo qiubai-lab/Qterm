@@ -43,7 +43,7 @@ pub(super) fn tree_version(
             OsString::from("--"),
             OsString::from(path),
         ],
-        READ_TIMEOUT,
+        GIT_READ_BUDGET,
     )?;
     let entry = parse_tree_entry(&output.stdout, path)?;
     entry.map_or_else(
@@ -67,7 +67,7 @@ pub(super) fn commit_parent_oid(
             OsString::from("1"),
             OsString::from(oid),
         ],
-        READ_TIMEOUT,
+        GIT_READ_BUDGET,
     )?;
     let line = String::from_utf8_lossy(&output.stdout);
     let mut fields = line.split_whitespace();
@@ -94,7 +94,7 @@ pub(super) fn index_version(
             OsString::from("--"),
             OsString::from(path),
         ],
-        READ_TIMEOUT,
+        GIT_READ_BUDGET,
     )?;
     let entry = parse_index_entry(&output.stdout, path)?;
     entry.map_or_else(
@@ -173,7 +173,7 @@ fn blob_version(
             OsString::from("-s"),
             OsString::from(&entry.oid),
         ],
-        READ_TIMEOUT,
+        GIT_READ_BUDGET,
     )?;
     let size = String::from_utf8_lossy(&size_output.stdout)
         .trim()
@@ -195,7 +195,7 @@ fn blob_version(
             OsString::from("blob"),
             OsString::from(&entry.oid),
         ],
-        READ_TIMEOUT,
+        GIT_READ_BUDGET,
     )?;
     let content = std::str::from_utf8(&output.stdout)
         .ok()
@@ -358,7 +358,7 @@ fn conflict_stages(
             OsString::from("--"),
             OsString::from(path),
         ],
-        READ_TIMEOUT,
+        GIT_READ_BUDGET,
     )?;
     let mut stages = Vec::new();
     for record in output
@@ -422,7 +422,7 @@ fn conflict_stage_version(
             OsString::from("-s"),
             OsString::from(&object),
         ],
-        READ_TIMEOUT,
+        GIT_READ_BUDGET,
     )?;
     let size = String::from_utf8_lossy(&size_output.stdout)
         .trim()
@@ -444,7 +444,7 @@ fn conflict_stage_version(
             OsString::from("blob"),
             OsString::from(object),
         ],
-        READ_TIMEOUT,
+        GIT_READ_BUDGET,
     )?;
     let content = std::str::from_utf8(&output.stdout)
         .ok()

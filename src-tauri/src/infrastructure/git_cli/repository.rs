@@ -13,7 +13,7 @@ pub(super) fn snapshot(executor: &SystemGitExecutor, path: &Path) -> Result<GitS
             OsString::from("--branch"),
             OsString::from("--untracked-files=all"),
         ],
-        READ_TIMEOUT,
+        GIT_READ_BUDGET,
     )?;
     let branches = executor.git(
         [
@@ -26,7 +26,7 @@ pub(super) fn snapshot(executor: &SystemGitExecutor, path: &Path) -> Result<GitS
             OsString::from("refs/heads/"),
             OsString::from("refs/remotes/"),
         ],
-        READ_TIMEOUT,
+        GIT_READ_BUDGET,
     )?;
     let remotes = executor.git(
         [
@@ -34,7 +34,7 @@ pub(super) fn snapshot(executor: &SystemGitExecutor, path: &Path) -> Result<GitS
             repository.as_os_str().to_owned(),
             OsString::from("remote"),
         ],
-        READ_TIMEOUT,
+        GIT_READ_BUDGET,
     )?;
     let log = executor.git(
         [
@@ -48,7 +48,7 @@ pub(super) fn snapshot(executor: &SystemGitExecutor, path: &Path) -> Result<GitS
             OsString::from("100"),
             OsString::from("--format=%H%x1f%P%x1f%D%x1f%s%x1f%an%x1f%at%x1f%b%x1e"),
         ],
-        READ_TIMEOUT,
+        GIT_READ_BUDGET,
     );
     let (head, changes) = parse_status(&status.stdout)?;
     let index = executor.git(
@@ -59,7 +59,7 @@ pub(super) fn snapshot(executor: &SystemGitExecutor, path: &Path) -> Result<GitS
             OsString::from("--stage"),
             OsString::from("-z"),
         ],
-        READ_TIMEOUT,
+        GIT_READ_BUDGET,
     )?;
     let config = executor
         .git(
@@ -73,7 +73,7 @@ pub(super) fn snapshot(executor: &SystemGitExecutor, path: &Path) -> Result<GitS
                 OsString::from("--get-regexp"),
                 OsString::from("^submodule\\..*\\.path$"),
             ],
-            READ_TIMEOUT,
+            GIT_READ_BUDGET,
         )
         .ok();
     let needs_submodule_status = index.stdout.windows(6).any(|value| value == b"160000")
@@ -89,7 +89,7 @@ pub(super) fn snapshot(executor: &SystemGitExecutor, path: &Path) -> Result<GitS
                     OsString::from("submodule"),
                     OsString::from("status"),
                 ],
-                READ_TIMEOUT,
+                GIT_READ_BUDGET,
             )
         })
         .transpose()
@@ -141,7 +141,7 @@ pub(super) fn initialize(
             path.as_os_str().to_owned(),
             OsString::from("init"),
         ],
-        MUTATION_TIMEOUT,
+        GIT_MUTATION_BUDGET,
     )?;
     executor.snapshot(path)
 }

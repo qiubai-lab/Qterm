@@ -1,6 +1,6 @@
-use std::time::Duration;
+mod command;
 
-use russh::{ChannelMsg, client};
+use russh::client;
 
 use crate::{
     domain::git::{
@@ -15,18 +15,20 @@ use crate::{
         validate_remote_repository_path, validate_stage_all, validate_submodule_stage_paths,
     },
     infrastructure::git_cli::{
-        build_conflict_detail, classify_failure, parse_branches, parse_commit_files, parse_commits,
-        parse_status, parse_submodules, sanitize_submodule_operation_error,
+        build_conflict_detail, parse_branches, parse_commit_files, parse_commits, parse_status,
+        parse_submodules, sanitize_submodule_operation_error,
     },
+    infrastructure::git_execution::{GIT_MUTATION_BUDGET, GIT_NETWORK_BUDGET, GIT_READ_BUDGET},
 };
 
 use super::ClientHandler;
+use command::{run_command, run_git};
 
-const READ_TIMEOUT: Duration = Duration::from_secs(10);
-const MUTATION_TIMEOUT: Duration = Duration::from_secs(60);
-const FETCH_TIMEOUT: Duration = Duration::from_secs(120);
-const OUTPUT_LIMIT: usize = 8 * 1024 * 1024;
-const ENVIRONMENT: &str = "GIT_TERMINAL_PROMPT=0 GIT_EDITOR=true GIT_PAGER=cat LC_ALL=C";
+const READ_TIMEOUT: crate::infrastructure::git_execution::GitExecutionBudget = GIT_READ_BUDGET;
+const MUTATION_TIMEOUT: crate::infrastructure::git_execution::GitExecutionBudget =
+    GIT_MUTATION_BUDGET;
+const FETCH_TIMEOUT: crate::infrastructure::git_execution::GitExecutionBudget = GIT_NETWORK_BUDGET;
+
 const STAGE_PATHS_ARGS: &str = "--literal-pathspecs add --pathspec-from-file=- --pathspec-file-nul";
 const UNSTAGE_PATHS_WITH_HEAD_ARGS: &str =
     "--literal-pathspecs reset -q HEAD --pathspec-from-file=- --pathspec-file-nul";
@@ -34,10 +36,6 @@ const UNSTAGE_PATHS_WITHOUT_HEAD_ARGS: &str =
     "--literal-pathspecs update-index --force-remove -z --stdin";
 const DISCARD_TRACKED_PATHS_ARGS: &str =
     "--literal-pathspecs checkout --pathspec-from-file=- --pathspec-file-nul";
-
-struct RemoteOutput {
-    stdout: Vec<u8>,
-}
 
 pub(super) async fn run_remote_git_action(
     handle: &client::Handle<ClientHandler>,
@@ -174,7 +172,7 @@ pub(super) async fn run_remote_git_action(
             run_git(
                 handle,
                 &repository,
-                "fetch --all --prune --no-recurse-submodules",
+                "fetch --progress --all --prune --no-recurse-submodules",
                 Vec::new(),
                 FETCH_TIMEOUT,
             )
@@ -218,7 +216,7 @@ pub(super) async fn run_remote_git_action(
 
 fn submodule_update_args(path: &str, initialize: bool) -> String {
     format!(
-        "--literal-pathspecs submodule update {}--checkout -- {}",
+        "--literal-pathspecs submodule update --progress {}--checkout -- {}",
         if initialize { "--init " } else { "" },
         posix_literal(path)
     )
@@ -950,7 +948,7 @@ async fn pull(
     let current = snapshot(handle, repository).await?;
     let (_, remote, target_ref) = current_tracking(&current)?;
     let args = format!(
-        "pull --ff-only --no-rebase --no-recurse-submodules {} {}",
+        "pull --progress --ff-only --no-rebase --no-recurse-submodules {} {}",
         posix_literal(&remote),
         posix_literal(&target_ref)
     );
@@ -979,13 +977,13 @@ async fn push(
     let refspec = format!("{local_ref}:{target_ref}");
     let args = if publish {
         format!(
-            "push --set-upstream {} {}",
+            "push --progress --set-upstream {} {}",
             posix_literal(&remote),
             posix_literal(&refspec)
         )
     } else {
         format!(
-            "push {} {}",
+            "push --progress {} {}",
             posix_literal(&remote),
             posix_literal(&refspec)
         )
@@ -1164,89 +1162,6 @@ async fn has_head(handle: &client::Handle<ClientHandler>, repository: &str) -> b
     .is_ok()
 }
 
-async fn run_git(
-    handle: &client::Handle<ClientHandler>,
-    repository: &str,
-    args: &str,
-    stdin: Vec<u8>,
-    timeout: Duration,
-) -> Result<RemoteOutput, GitError> {
-    let command = format!("{ENVIRONMENT} git -C {} {args}", posix_literal(repository));
-    run_command(handle, &command, stdin, timeout).await
-}
-
-async fn run_command(
-    handle: &client::Handle<ClientHandler>,
-    command: &str,
-    stdin: Vec<u8>,
-    timeout: Duration,
-) -> Result<RemoteOutput, GitError> {
-    tokio::time::timeout(timeout, run_command_inner(handle, command, stdin))
-        .await
-        .map_err(|_| GitError::Timeout)?
-}
-
-async fn run_command_inner(
-    handle: &client::Handle<ClientHandler>,
-    command: &str,
-    stdin: Vec<u8>,
-) -> Result<RemoteOutput, GitError> {
-    let mut channel = handle
-        .channel_open_session()
-        .await
-        .map_err(|_| GitError::SessionUnavailable)?;
-    channel
-        .exec(true, command)
-        .await
-        .map_err(|_| GitError::SessionUnavailable)?;
-    if !stdin.is_empty() {
-        channel
-            .data(&stdin[..])
-            .await
-            .map_err(|_| GitError::SessionUnavailable)?;
-    }
-    channel
-        .eof()
-        .await
-        .map_err(|_| GitError::SessionUnavailable)?;
-    let mut stdout = Vec::new();
-    let mut stderr = Vec::new();
-    let mut exit_status = None;
-    while let Some(message) = channel.wait().await {
-        match message {
-            ChannelMsg::Data { data } => append_bounded(&mut stdout, &data)?,
-            ChannelMsg::ExtendedData { data, .. } => append_bounded(&mut stderr, &data)?,
-            ChannelMsg::ExitStatus {
-                exit_status: status,
-            } => exit_status = Some(status),
-            _ => {}
-        }
-    }
-    match exit_status {
-        Some(0) => Ok(RemoteOutput { stdout }),
-        Some(127) => Err(GitError::Missing),
-        Some(_) => Err(classify_remote_failure(&stderr)),
-        None => Err(GitError::SessionUnavailable),
-    }
-}
-
-fn append_bounded(target: &mut Vec<u8>, data: &[u8]) -> Result<(), GitError> {
-    if target.len().saturating_add(data.len()) > OUTPUT_LIMIT {
-        return Err(GitError::OutputTooLarge);
-    }
-    target.extend_from_slice(data);
-    Ok(())
-}
-
-fn classify_remote_failure(stderr: &[u8]) -> GitError {
-    let lower = String::from_utf8_lossy(stderr).to_ascii_lowercase();
-    if lower.contains("permission denied") || lower.contains("operation not permitted") {
-        GitError::PermissionDenied
-    } else {
-        classify_failure(stderr)
-    }
-}
-
 fn nul_payload(paths: &[String]) -> Vec<u8> {
     let mut payload = Vec::new();
     for path in paths {
@@ -1306,11 +1221,11 @@ mod tests {
 
         assert_eq!(
             initialize,
-            "--literal-pathspecs submodule update --init --checkout -- 'modules/it'\\''s\n-child'"
+            "--literal-pathspecs submodule update --progress --init --checkout -- 'modules/it'\\''s\n-child'"
         );
         assert_eq!(
             checkout,
-            "--literal-pathspecs submodule update --checkout -- 'modules/it'\\''s\n-child'"
+            "--literal-pathspecs submodule update --progress --checkout -- 'modules/it'\\''s\n-child'"
         );
         for command in [initialize, checkout] {
             assert!(!command.contains("--recursive"));

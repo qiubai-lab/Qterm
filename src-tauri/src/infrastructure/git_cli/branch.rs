@@ -171,11 +171,12 @@ pub(super) fn fetch(
             OsString::from("-C"),
             repository.as_os_str().to_owned(),
             OsString::from("fetch"),
+            OsString::from("--progress"),
             OsString::from("--all"),
             OsString::from("--prune"),
             OsString::from("--no-recurse-submodules"),
         ],
-        FETCH_TIMEOUT,
+        GIT_NETWORK_BUDGET,
     )?;
     executor.snapshot(&repository)
 }
@@ -190,6 +191,7 @@ pub(super) fn pull(
         repository,
         [
             OsStr::new("pull"),
+            OsStr::new("--progress"),
             OsStr::new("--ff-only"),
             OsStr::new("--no-rebase"),
             OsStr::new("--no-recurse-submodules"),
@@ -223,6 +225,7 @@ pub(super) fn push(
             repository,
             [
                 OsStr::new("push"),
+                OsStr::new("--progress"),
                 OsStr::new("--set-upstream"),
                 OsStr::new(&remote),
                 OsStr::new(&refspec),
@@ -233,6 +236,7 @@ pub(super) fn push(
             repository,
             [
                 OsStr::new("push"),
+                OsStr::new("--progress"),
                 OsStr::new(&remote),
                 OsStr::new(&refspec),
             ],
@@ -283,7 +287,7 @@ pub(super) fn merge_branch(
             OsString::from("--"),
             OsString::from(source_ref),
         ],
-        MUTATION_TIMEOUT,
+        GIT_MUTATION_BUDGET,
     );
     match result {
         Ok(_) => executor.snapshot(&repository),

@@ -1,4 +1,5 @@
 use super::*;
+use crate::infrastructure::git_execution::GitExecutionBudget;
 
 #[test]
 fn bounds_process_output_and_classifies_recoverable_failures() {
@@ -30,13 +31,13 @@ fn timed_out_process_is_terminated() {
         run_process(
             std::path::Path::new("cmd.exe"),
             ["/C", "ping -n 10 127.0.0.1 > nul"],
-            std::time::Duration::from_millis(50),
+            GitExecutionBudget::fixed(std::time::Duration::from_millis(50)),
         )
     } else {
         run_process(
             std::path::Path::new("sh"),
             ["-c", "sleep 5"],
-            std::time::Duration::from_millis(50),
+            GitExecutionBudget::fixed(std::time::Duration::from_millis(50)),
         )
     };
     assert!(matches!(result, Err(GitError::Timeout)));

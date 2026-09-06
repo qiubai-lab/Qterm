@@ -38,7 +38,7 @@ pub(super) fn candidates() -> Vec<PathBuf> {
 pub(super) fn run_process<I, S>(
     executable: &Path,
     args: I,
-    timeout: Duration,
+    budget: GitExecutionBudget,
 ) -> Result<ProcessOutput, GitError>
 where
     I: IntoIterator<Item = S>,
@@ -63,13 +63,27 @@ where
         })?;
     let stdout = child.stdout.take().ok_or(GitError::Io)?;
     let stderr = child.stderr.take().ok_or(GitError::Io)?;
-    let stdout_reader = thread::spawn(move || read_bounded(stdout));
-    let stderr_reader = thread::spawn(move || read_bounded(stderr));
-    let deadline = Instant::now() + timeout;
+    let (activity, activity_receiver) = std_mpsc::sync_channel(1);
+    let stderr_activity = activity.clone();
+    let stdout_reader = thread::spawn(move || {
+        read_bounded_with_activity(stdout, || {
+            let _ = activity.try_send(());
+        })
+    });
+    let stderr_reader = thread::spawn(move || {
+        read_bounded_with_activity(stderr, || {
+            let _ = stderr_activity.try_send(());
+        })
+    });
+    let started = Instant::now();
+    let mut last_activity = started;
     let status = loop {
+        while activity_receiver.try_recv().is_ok() {
+            last_activity = Instant::now();
+        }
         match child.try_wait().map_err(|_| GitError::Io)? {
             Some(status) => break status,
-            None if Instant::now() >= deadline => {
+            None if budget.expired(started, last_activity, Instant::now()) => {
                 let _ = child.kill();
                 let _ = child.wait();
                 let _ = stdout_reader.join();
@@ -87,7 +101,15 @@ where
     Ok(ProcessOutput { stdout })
 }
 
+#[cfg(test)]
 pub(super) fn read_bounded(mut reader: impl Read) -> Result<Vec<u8>, GitError> {
+    read_bounded_with_activity(&mut reader, || {})
+}
+
+fn read_bounded_with_activity(
+    mut reader: impl Read,
+    mut report_activity: impl FnMut(),
+) -> Result<Vec<u8>, GitError> {
     let mut result = Vec::new();
     let mut buffer = [0_u8; 8192];
     let mut exceeded = false;
@@ -96,6 +118,7 @@ pub(super) fn read_bounded(mut reader: impl Read) -> Result<Vec<u8>, GitError> {
         if read == 0 {
             break;
         }
+        report_activity();
         if result.len() + read <= OUTPUT_LIMIT {
             result.extend_from_slice(&buffer[..read]);
         } else {
@@ -178,4 +201,36 @@ pub(crate) fn redact_url_userinfo(value: &str) -> String {
         }
     }
     result
+}
+
+#[cfg(test)]
+mod activity_tests {
+    use super::*;
+
+    struct ChunkedReader {
+        chunks: Vec<Vec<u8>>,
+    }
+
+    impl Read for ChunkedReader {
+        fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
+            let Some(chunk) = self.chunks.pop() else {
+                return Ok(0);
+            };
+            buffer[..chunk.len()].copy_from_slice(&chunk);
+            Ok(chunk.len())
+        }
+    }
+
+    #[test]
+    fn reports_activity_for_every_output_chunk() {
+        let reader = ChunkedReader {
+            chunks: vec![b"three".to_vec(), b"two".to_vec(), b"one".to_vec()],
+        };
+        let mut activities = 0;
+
+        let output = read_bounded_with_activity(reader, || activities += 1).expect("read output");
+
+        assert_eq!(output, b"onetwothree");
+        assert_eq!(activities, 3);
+    }
 }

@@ -122,7 +122,7 @@ pub(super) fn commit_files(
             OsString::from("-C"),
             OsString::from(oid),
         ],
-        READ_TIMEOUT,
+        GIT_READ_BUDGET,
     )?;
     Ok(parse_commit_files(&output.stdout))
 }

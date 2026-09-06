@@ -3,6 +3,7 @@
 pub mod browser;
 pub mod clipboard;
 pub mod git_cli;
+pub(crate) mod git_execution;
 pub mod local;
 pub mod persistence;
 pub mod ssh;
