@@ -1,5 +1,3 @@
-use crate::domain::session::InitialDirectory;
-
 pub const MAX_SHELL_PROBE_OUTPUT_BYTES: usize = 4 * 1024;
 pub const POSIX_SHELL_PROBE_COMMAND: &str = "printf '__QTERM_SHELL__'; basename \"$SHELL\"";
 pub const POWERSHELL_PROBE_COMMAND: &str = "Write-Output ('__QTERM_SHELL__powershell')";
@@ -31,105 +29,6 @@ impl RemoteShell {
             _ => None,
         }
     }
-
-    pub fn hook_command(self) -> &'static str {
-        match self {
-            Self::Bash => concat!(
-                r#"stty echo 2>/dev/null; __qterm_osc7(){ printf '\033]7;file://%s%s\007' "${HOSTNAME:-localhost}" "$PWD"; }; case ";${PROMPT_COMMAND:-};" in *";__qterm_osc7;"*) ;; *) PROMPT_COMMAND="__qterm_osc7${PROMPT_COMMAND:+;$PROMPT_COMMAND}";; esac; __qterm_osc7"#,
-                "\r"
-            ),
-            Self::Zsh => concat!(
-                r#"stty echo 2>/dev/null; autoload -Uz add-zsh-hook; __qterm_osc7(){ printf '\033]7;file://%s%s\007' "${HOST:-localhost}" "$PWD"; }; add-zsh-hook -d precmd __qterm_osc7 2>/dev/null; add-zsh-hook precmd __qterm_osc7; __qterm_osc7"#,
-                "\r"
-            ),
-            Self::Fish => concat!(
-                r#"stty echo 2>/dev/null; function __qterm_osc7 --on-event fish_prompt; printf '\e]7;file://%s%s\a' (hostname) $PWD; end; __qterm_osc7"#,
-                "\r"
-            ),
-            Self::PowerShell => concat!(
-                r#"$global:__QtermOriginalPrompt=$function:prompt; function global:prompt { $h=[System.Net.Dns]::GetHostName(); $p=(Get-Location).Path.Replace('\','/'); $u=if($p.StartsWith('/')){$p}else{'/'+$p}; Write-Host "`e]7;file://$h$u`a" -NoNewline; & $global:__QtermOriginalPrompt }; prompt"#,
-                "\r"
-            ),
-        }
-    }
-
-    pub fn initialization_command(self, initial_directory: Option<&InitialDirectory>) -> String {
-        let Some(directory) = initial_directory else {
-            return self.hook_command().to_owned();
-        };
-        let change_directory = match self {
-            Self::Bash | Self::Zsh => format!(
-                "builtin cd -- {} 2>/dev/null || true; ",
-                encode_posix_literal(directory.as_str())
-            ),
-            Self::Fish => format!(
-                "cd -- {} 2>/dev/null; or true; ",
-                encode_fish_literal(directory.as_str())
-            ),
-            Self::PowerShell => format!(
-                "Set-Location -LiteralPath {} -ErrorAction SilentlyContinue; ",
-                encode_powershell_literal(directory.as_str())
-            ),
-        };
-        format!("{change_directory}{}", self.hook_command())
-    }
-
-    pub fn suppress_pty_echo(self) -> bool {
-        !matches!(self, Self::PowerShell)
-    }
-}
-
-fn encode_posix_literal(value: &str) -> String {
-    format!("$'{}'", encode_hex_bytes(value))
-}
-
-fn encode_fish_literal(value: &str) -> String {
-    value
-        .chars()
-        .map(|character| match character as u32 {
-            code @ 0..=0x7f => format!("\\x{code:02x}"),
-            code @ 0x80..=0xffff => format!("\\u{code:04x}"),
-            code => format!("\\U{code:08x}"),
-        })
-        .collect()
-}
-
-fn encode_powershell_literal(value: &str) -> String {
-    format!(
-        "([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('{}')))",
-        encode_base64(value.as_bytes())
-    )
-}
-
-fn encode_hex_bytes(value: &str) -> String {
-    value
-        .as_bytes()
-        .iter()
-        .map(|byte| format!("\\x{byte:02x}"))
-        .collect()
-}
-
-fn encode_base64(bytes: &[u8]) -> String {
-    const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut encoded = String::with_capacity(bytes.len().div_ceil(3) * 4);
-    for chunk in bytes.chunks(3) {
-        let first = chunk[0];
-        let second = chunk.get(1).copied().unwrap_or(0);
-        let third = chunk.get(2).copied().unwrap_or(0);
-        encoded.push(TABLE[(first >> 2) as usize] as char);
-        encoded.push(TABLE[(((first & 0x03) << 4) | (second >> 4)) as usize] as char);
-        encoded.push(if chunk.len() > 1 {
-            TABLE[(((second & 0x0f) << 2) | (third >> 6)) as usize] as char
-        } else {
-            '='
-        });
-        encoded.push(if chunk.len() > 2 {
-            TABLE[(third & 0x3f) as usize] as char
-        } else {
-            '='
-        });
-    }
-    encoded
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -188,8 +87,6 @@ pub fn parse_shell_probe_output(output: &[u8]) -> Option<RemoteShell> {
 #[cfg(test)]
 mod tests {
     use super::{MAX_SHELL_PROBE_OUTPUT_BYTES, RemoteShell, parse_shell_probe_output};
-    use crate::domain::session::InitialDirectory;
-
     #[test]
     fn parses_only_exact_supported_probe_markers() {
         for (output, expected) in [
@@ -216,73 +113,5 @@ mod tests {
             parse_shell_probe_output(&vec![b'x'; MAX_SHELL_PROBE_OUTPUT_BYTES + 1]),
             None
         );
-    }
-
-    #[test]
-    fn hooks_are_current_session_only_and_posix_variants_restore_echo() {
-        for shell in [RemoteShell::Bash, RemoteShell::Zsh, RemoteShell::Fish] {
-            let command = shell.hook_command();
-            assert!(command.starts_with("stty echo 2>/dev/null;"));
-            assert!(command.contains("]7;file://"));
-            assert!(!command.contains(".bashrc"));
-            assert!(!command.contains(".zshrc"));
-            assert!(!command.contains("config.fish"));
-            assert!(command.ends_with('\r'));
-            assert!(shell.suppress_pty_echo());
-        }
-        let powershell = RemoteShell::PowerShell.hook_command();
-        assert!(powershell.contains("function global:prompt"));
-        assert!(powershell.contains("]7;file://"));
-        assert!(!powershell.contains("$PROFILE"));
-        assert!(!RemoteShell::PowerShell.suppress_pty_echo());
-    }
-
-    #[test]
-    fn inherited_directories_are_literal_and_run_before_the_first_osc7_report() {
-        let path = InitialDirectory::new(
-            "/srv/目录/a' b;$(touch /tmp/pwn)\nnext\r\\leaf\u{1b}\u{3}".into(),
-        )
-        .expect("bounded path");
-
-        for shell in [
-            RemoteShell::Bash,
-            RemoteShell::Zsh,
-            RemoteShell::Fish,
-            RemoteShell::PowerShell,
-        ] {
-            let command = shell.initialization_command(Some(&path));
-            let change_index = command
-                .find("cd --")
-                .or_else(|| command.find("Set-Location"))
-                .expect("directory command");
-            let osc7_index = command.find("]7;file://").expect("OSC 7 hook");
-            assert!(change_index < osc7_index);
-            assert_eq!(command.matches('\r').count(), 1);
-            assert!(!command.contains('\n'));
-            assert!(!command.contains("touch /tmp/pwn"));
-            assert!(!command.contains('\u{1b}'));
-            assert!(!command.contains('\u{3}'));
-            assert!(command.ends_with('\r'));
-        }
-
-        let bash = RemoteShell::Bash.initialization_command(Some(&path));
-        assert!(bash.contains("$'\\x2f\\x73\\x72\\x76\\x2f"));
-        let fish = RemoteShell::Fish.initialization_command(Some(&path));
-        assert!(fish.contains("cd -- \\x2f\\x73\\x72\\x76\\x2f"));
-        assert!(fish.contains("\\u76ee\\u5f55"));
-        let powershell = RemoteShell::PowerShell.initialization_command(Some(&path));
-        assert!(powershell.contains("[Convert]::FromBase64String('"));
-    }
-
-    #[test]
-    fn absent_inherited_directory_preserves_the_existing_hook_payload() {
-        for shell in [
-            RemoteShell::Bash,
-            RemoteShell::Zsh,
-            RemoteShell::Fish,
-            RemoteShell::PowerShell,
-        ] {
-            assert_eq!(shell.initialization_command(None), shell.hook_command());
-        }
     }
 }

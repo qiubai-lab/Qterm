@@ -101,11 +101,11 @@ export function SettingsDialog({ onClose, onSecuritySettingsChanged, onTerminalS
     previewTheme(theme);
   }
 
-  async function persistRemoteShellIntegration(enabled: boolean) {
+  async function persistRemoteShellIntegration(enabled: boolean, passive = terminal?.remoteShellIntegrationPassive) {
     if (!terminal || busy) return;
     setBusy(true); setSaved(false); setError("");
     try {
-      const snapshot = await updateTerminalSettings({ remoteShellIntegrationEnabled: enabled });
+      const snapshot = await updateTerminalSettings({ remoteShellIntegrationEnabled: enabled, ...(passive !== undefined ? { remoteShellIntegrationPassive: passive } : {}) });
       applySnapshot(snapshot, true, true);
       onTerminalSettingsChanged?.(snapshot.terminal);
       setSaved(true);
@@ -178,8 +178,12 @@ export function SettingsDialog({ onClose, onSecuritySettingsChanged, onTerminalS
             <div className="settings-section-heading"><h3 id="advanced-settings-title">高级</h3><p>管理远程终端集成等进阶功能。</p></div>
             {terminal ? <div className="settings-rows">
               <div className="settings-row">
-                <span><strong>OSC 7 终端目录跟踪</strong><small>开启后显示并验证终端目录状态；远程登录会识别 Shell，并仅向当前会话注入 OSC 7 Hook。关闭后不再解析或显示 OSC 7 状态。</small></span>
+                <span><strong>OSC 7 终端目录跟踪</strong><small>跟踪终端上报的当前目录。关闭后不再解析或显示目录状态。</small></span>
                 <SettingsSwitch label="OSC 7 终端目录跟踪" checked={terminal.remoteShellIntegrationEnabled} disabled={busy} onChange={changeRemoteShellIntegration}/>
+              </div>
+              <div className="settings-row">
+                <span><strong>自动配置远程目录跟踪</strong><small>在新会话首次输入前加载集成，不写入命令历史。关闭后仅接收远端自行上报的 OSC 7；下次连接生效。</small></span>
+                <SettingsSwitch label="自动配置远程目录跟踪" checked={!terminal.remoteShellIntegrationPassive} disabled={busy || !terminal.remoteShellIntegrationEnabled} onChange={(enabled) => void persistRemoteShellIntegration(terminal.remoteShellIntegrationEnabled, !enabled)}/>
               </div>
               <TerminalNotificationSetting/>
             </div> : <p className="dialog-note">正在读取设置…</p>}
@@ -199,9 +203,9 @@ export function SettingsDialog({ onClose, onSecuritySettingsChanged, onTerminalS
   </DialogFrame>
     {confirmRemoteIntegration && <DialogFrame compact className="settings-integration-confirmation" title="开启 OSC 7 终端目录跟踪" subtitle="本地与远程终端" onClose={() => setConfirmRemoteIntegration(false)}>
       <div className="settings-integration-confirmation-body">
-        <div className="settings-integration-confirmation-intro"><span aria-hidden="true"><Icon name="terminal" size={17}/></span><p>Qterm 将跟踪终端上报的 OSC 7 目录；连接远程终端时，会先执行固定、限时的 Shell 探测命令，再向当前登录会话注入临时 Hook。</p></div>
+        <div className="settings-integration-confirmation-intro"><span aria-hidden="true"><Icon name="terminal" size={17}/></span><p>Qterm 将跟踪终端上报的 OSC 7 目录。自动配置开启时，会识别远程 Shell，并在首次输入前加载当前会话的目录集成。</p></div>
         <ul>
-          <li>不会修改远程 <code>.bashrc</code>、Profile 或其他文件</li>
+          <li>不会修改远程 <code>.bashrc</code>、Profile 或命令历史；部分 Shell 使用私有临时文件，加载时清理</li>
           <li>只缓存目标标识与 Shell 类型，不保存命令输出或凭据</li>
           <li>瞬态探测失败会自动重试一次，仍失败则继续普通终端连接</li>
         </ul>

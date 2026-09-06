@@ -49,6 +49,7 @@ impl TerminalSettingsRepository for JsonTerminalSettingsRepository {
     fn load(&self) -> Result<Option<TerminalSettings>, SettingsError> {
         Ok(self.document()?.map(|document| TerminalSettings {
             remote_shell_integration_enabled: document.remote_shell_integration_enabled,
+            remote_shell_integration_passive: document.remote_shell_integration_passive,
         }))
     }
 
@@ -62,6 +63,7 @@ impl TerminalSettingsRepository for JsonTerminalSettingsRepository {
         let document = Document {
             schema_version: TERMINAL_SETTINGS_VERSION,
             remote_shell_integration_enabled: settings.remote_shell_integration_enabled,
+            remote_shell_integration_passive: settings.remote_shell_integration_passive,
         };
         let mut bytes =
             serde_json::to_vec_pretty(&document).map_err(|_| SettingsError::StorageUnavailable)?;
@@ -79,6 +81,8 @@ impl TerminalSettingsRepository for JsonTerminalSettingsRepository {
 struct Document {
     schema_version: u64,
     remote_shell_integration_enabled: bool,
+    #[serde(default)]
+    remote_shell_integration_passive: bool,
 }
 
 #[cfg(test)]
@@ -98,9 +102,33 @@ mod tests {
         assert_eq!(repository.load().expect("load"), None);
         let settings = TerminalSettings {
             remote_shell_integration_enabled: false,
+            remote_shell_integration_passive: true,
         };
         repository.save(settings).expect("save");
         assert_eq!(repository.load().expect("load"), Some(settings));
+    }
+
+    #[test]
+    fn legacy_settings_enable_automatic_integration_and_passive_mode_round_trips() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("terminal.json");
+        fs::write(
+            &path,
+            br#"{"schemaVersion":1,"remoteShellIntegrationEnabled":true}"#,
+        )
+        .unwrap();
+        let repository = JsonTerminalSettingsRepository::new(path);
+        let mut settings = repository.load().unwrap().unwrap();
+        assert!(settings.automatic_shell_integration());
+        settings.remote_shell_integration_passive = true;
+        repository.save(settings).unwrap();
+        let restored = repository.load().unwrap().unwrap();
+        assert!(restored.remote_shell_integration_enabled);
+        assert!(!restored.automatic_shell_integration());
+        assert_eq!(settings, restored);
+        settings.remote_shell_integration_enabled = false;
+        settings.remote_shell_integration_passive = false;
+        assert!(!settings.automatic_shell_integration());
     }
 
     #[test]

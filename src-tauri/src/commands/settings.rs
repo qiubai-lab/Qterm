@@ -84,6 +84,8 @@ pub struct UpdateSettingsDto {
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct TerminalSettingsDto {
     remote_shell_integration_enabled: bool,
+    #[serde(default)]
+    remote_shell_integration_passive: bool,
 }
 
 #[derive(Clone, Copy, Deserialize, Serialize)]
@@ -146,6 +148,7 @@ struct UpdateSettingsOutputDto {
 #[serde(rename_all = "camelCase")]
 struct TerminalSettingsOutputDto {
     remote_shell_integration_enabled: bool,
+    remote_shell_integration_passive: bool,
 }
 
 #[tauri::command]
@@ -242,6 +245,7 @@ pub fn settings_update_terminal(
         .service
         .update_terminal(TerminalSettings {
             remote_shell_integration_enabled: input.remote_shell_integration_enabled,
+            remote_shell_integration_passive: input.remote_shell_integration_passive,
         })
         .map_err(IpcError::from)?;
     Ok(SettingsSnapshotDto::new(snapshot))
@@ -275,6 +279,7 @@ impl SettingsSnapshotDto {
             },
             terminal: TerminalSettingsOutputDto {
                 remote_shell_integration_enabled: value.terminal.remote_shell_integration_enabled,
+                remote_shell_integration_passive: value.terminal.remote_shell_integration_passive,
             },
             warning: value.warning.map(|warning| match warning {
                 SettingsWarning::Corrupt => "corrupt",

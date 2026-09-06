@@ -17,6 +17,7 @@ export interface UpdateSettings {
 
 export interface TerminalSettings {
   remoteShellIntegrationEnabled: boolean;
+  remoteShellIntegrationPassive?: boolean;
 }
 
 export interface GeneralSettings {

@@ -25,12 +25,20 @@ pub struct UpdateSettings {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TerminalSettings {
     pub remote_shell_integration_enabled: bool,
+    pub remote_shell_integration_passive: bool,
+}
+
+impl TerminalSettings {
+    pub fn automatic_shell_integration(self) -> bool {
+        self.remote_shell_integration_enabled && !self.remote_shell_integration_passive
+    }
 }
 
 impl Default for TerminalSettings {
     fn default() -> Self {
         Self {
             remote_shell_integration_enabled: true,
+            remote_shell_integration_passive: false,
         }
     }
 }

@@ -14,57 +14,27 @@ pub(super) async fn run_terminal_session(
         None => None,
     };
 
-    let terminal = match handle.channel_open_session().await {
-        Ok(channel) => channel,
-        Err(_) => {
-            entry.fail(SessionFailure::ConnectionFailed);
-            let _ = handle
-                .disconnect(Disconnect::ByApplication, "session failed", "en")
-                .await;
-            return false;
+    let startup = super::super::terminal_startup::open(
+        handle,
+        initial_terminal_size(&request),
+        remote_shell,
+        request.initial_directory.as_ref(),
+        &request.terminal_output,
+    );
+    let terminal = tokio::select! {
+        _ = &mut *cancel => {
+            entry.transition(SessionState::Closing);
+            return true;
+        }
+        result = startup => match result {
+            Ok(channel) => channel,
+            Err(()) => {
+                entry.fail(SessionFailure::ConnectionFailed);
+                let _ = handle.disconnect(Disconnect::ByApplication, "session failed", "en").await;
+                return false;
+            }
         }
     };
-    let terminal_size = initial_terminal_size(&request);
-    let terminal_modes = remote_shell
-        .filter(|shell| shell.suppress_pty_echo())
-        .map(|_| vec![(russh::Pty::ECHO, 0)])
-        .unwrap_or_default();
-    if terminal
-        .request_pty(
-            false,
-            "xterm-256color",
-            terminal_size.columns,
-            terminal_size.rows,
-            0,
-            0,
-            &terminal_modes,
-        )
-        .await
-        .is_err()
-        || terminal.request_shell(false).await.is_err()
-    {
-        entry.fail(SessionFailure::ConnectionFailed);
-        let _ = handle
-            .disconnect(Disconnect::ByApplication, "session failed", "en")
-            .await;
-        return false;
-    }
-    if let Some(shell) = remote_shell
-        && terminal
-            .data(
-                shell
-                    .initialization_command(request.initial_directory.as_ref())
-                    .as_bytes(),
-            )
-            .await
-            .is_err()
-    {
-        entry.fail(SessionFailure::ConnectionFailed);
-        let _ = handle
-            .disconnect(Disconnect::ByApplication, "session failed", "en")
-            .await;
-        return false;
-    }
     let (mut terminal_read, terminal_write) = terminal.split();
     entry.transition(SessionState::Connected);
     while entry.state() == SessionState::Connected {

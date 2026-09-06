@@ -62,6 +62,33 @@ function renderSettings(onClose = vi.fn(), onTerminalSettingsChanged = vi.fn()) 
 }
 
 describe("SettingsDialog", () => {
+  it("switches to passive OSC 7 reception without disabling tracking and preserves the preference", async () => {
+    const user = userEvent.setup();
+    renderSettings();
+    await screen.findByRole("region", { name: "通用" });
+    await user.click(screen.getByRole("button", { name: /高级/ }));
+    const automatic = await screen.findByRole("switch", { name: "自动配置远程目录跟踪" });
+    expect(automatic).toBeChecked();
+    await user.click(automatic);
+    expect(mocks.updateTerminalSettings).toHaveBeenLastCalledWith({ remoteShellIntegrationEnabled: true, remoteShellIntegrationPassive: true });
+    expect(screen.getByRole("switch", { name: "OSC 7 终端目录跟踪" })).toBeChecked();
+    expect(automatic).not.toBeChecked();
+    await user.click(screen.getByRole("switch", { name: "OSC 7 终端目录跟踪" }));
+    expect(mocks.updateTerminalSettings).toHaveBeenLastCalledWith({ remoteShellIntegrationEnabled: false, remoteShellIntegrationPassive: true });
+    expect(automatic).toBeDisabled();
+  });
+
+  it("keeps automatic integration selected when saving passive mode fails", async () => {
+    const user = userEvent.setup();
+    renderSettings();
+    await screen.findByRole("region", { name: "通用" });
+    await user.click(screen.getByRole("button", { name: /高级/ }));
+    mocks.updateTerminalSettings.mockRejectedValueOnce(new Error("save failed"));
+    await user.click(await screen.findByRole("switch", { name: "自动配置远程目录跟踪" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("save failed");
+    expect(screen.getByRole("switch", { name: "自动配置远程目录跟踪" })).toBeChecked();
+  });
+
   it("keeps navigation separate from the independently scrolling settings panel", async () => {
     renderSettings();
     const navigation = screen.getByRole("navigation", { name: "设置分类" });

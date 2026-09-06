@@ -138,7 +138,7 @@ pub fn session_connect(
         &profile_state,
         SessionPurpose::Terminal,
         terminal_output,
-        settings_state.terminal().remote_shell_integration_enabled,
+        settings_state.terminal().automatic_shell_integration(),
     )?;
     let sink = Arc::new(move |event| {
         let _ = on_event.send(SessionEventDto::from(event));

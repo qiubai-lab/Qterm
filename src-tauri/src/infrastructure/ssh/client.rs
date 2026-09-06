@@ -9,6 +9,8 @@ mod session;
 #[cfg(test)]
 mod session_lifecycle_tests;
 mod shell_integration;
+mod shell_startup;
+mod terminal_startup;
 mod transfer;
 
 use handler::ClientHandler;
