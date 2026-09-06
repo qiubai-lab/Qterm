@@ -143,7 +143,8 @@ describe("GitPane merge, operations, and remote routing", () => {
     fireEvent.click(within(screen.getByRole("dialog", { name: "抛弃 1 个文件的更改？" })).getByRole("button", { name: "确认抛弃 1 个更改" }));
     await waitFor(() => expect(api.snapshot).toHaveBeenCalledTimes(2));
     expect(screen.queryByRole("dialog", { name: "抛弃 1 个文件的更改？" })).not.toBeInTheDocument();
-    expect(screen.getByRole("alert")).toHaveTextContent("只完成了部分操作，请检查最新状态");
+    expect(screen.getByRole("status")).toHaveTextContent("只完成了部分操作，请检查最新状态");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(screen.getByText("工作区干净")).toBeInTheDocument();
   });
 

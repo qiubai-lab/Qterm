@@ -544,28 +544,6 @@
   outline: none;
 }
 
-.git-feedback {
-  display: flex; flex: 0 0 26px;
-  align-items: center; margin: 0 8px 3px;
-  padding: 0 7px;
-  overflow: hidden;
-  border-radius: 5px;
-  color: var(--danger);
-  background: color-mix(in srgb, var(--danger) 9%, transparent);
-  font-size: 10px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.git-feedback.stale {
-  color: var(--muted);
-  background: color-mix(in srgb, var(--hover) 70%, transparent);
-}
-
-.git-repository-card .git-feedback {
-  margin: 0 7px 6px;
-}
-
 .git-change-scroll,
 .git-graph-scroll,
 .git-branch-list {

@@ -139,7 +139,8 @@ describe("GitPane submodules", () => {
     fireEvent.click(await screen.findByRole("button", { name: "初始化 modules/missing" }));
     await waitFor(() => expect(api.initializeSubmodule).toHaveBeenCalledWith("D:/work/project", "modules/missing"));
     await waitFor(() => expect(api.snapshot.mock.calls.filter(([path]) => path === "D:/work/project").length).toBeGreaterThan(1));
-    expect(screen.getByText("初始化失败")).toBeInTheDocument();
+    expect(await screen.findByRole("status")).toHaveTextContent("初始化失败");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("uses the same scoped action over a connected SSH Git session", async () => {

@@ -943,7 +943,6 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
       mergeInProgress={mergeInProgress}
       root={root}
       message={message}
-      error={error}
       staged={staged}
       unstaged={unstaged}
       conflicts={conflicts}

@@ -194,7 +194,8 @@ describe("GitPane basics and lifecycle", () => {
     const message = screen.getByRole("textbox", { name: "提交消息" });
     fireEvent.change(message, { target: { value: "feat: keep me" } });
     fireEvent.click(screen.getByRole("button", { name: "提交 1 项已暂存更改" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("缺少 user.email");
+    expect(await screen.findByRole("status")).toHaveTextContent("缺少 user.email");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(message).toHaveValue("feat: keep me");
     fireEvent.click(screen.getByRole("button", { name: "提交 1 项已暂存更改" }));
     await waitFor(() => expect(screen.queryByRole("textbox", { name: "提交消息" })).not.toBeInTheDocument());

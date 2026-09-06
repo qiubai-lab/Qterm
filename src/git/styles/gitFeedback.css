@@ -1,0 +1,80 @@
+.git-feedback {
+  --git-feedback-color: var(--danger);
+  --git-feedback-surface: var(--danger-bg);
+  display: grid;
+  flex: 0 0 auto;
+  min-width: 0;
+  min-height: 38px;
+  grid-template-columns: 22px minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+  margin: 0 8px 5px;
+  padding: 5px 7px;
+  overflow: hidden;
+  border: 2px solid color-mix(in srgb, var(--danger) 42%, var(--border));
+  border-radius: 6px;
+  color: var(--text);
+  background: color-mix(in srgb, var(--danger-bg) 88%, var(--raised));
+  box-shadow: none;
+  animation: git-feedback-enter 160ms cubic-bezier(.22, 1, .36, 1);
+}
+
+.git-feedback[data-tone="warning"] {
+  --git-feedback-color: var(--warning);
+  --git-feedback-surface: var(--warning-bg);
+  border-color: color-mix(in srgb, var(--warning) 38%, var(--border));
+  background: color-mix(in srgb, var(--warning-bg) 84%, var(--raised));
+}
+
+.git-feedback-icon {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--git-feedback-color) 34%, transparent);
+  border-radius: 50%;
+  color: var(--git-feedback-color);
+  background: color-mix(in srgb, var(--git-feedback-surface) 84%, var(--raised));
+}
+
+.git-feedback-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 1px;
+  line-height: 1.25;
+}
+
+.git-feedback-copy strong,
+.git-feedback-copy span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.git-feedback-copy strong {
+  color: var(--git-feedback-color);
+  font-size: 9.5px;
+  font-weight: 700;
+}
+
+.git-feedback-copy span {
+  color: var(--muted);
+  font-size: 8.5px;
+}
+
+.git-repository-card .git-feedback {
+  margin: 0 3px 3px;
+}
+
+@keyframes git-feedback-enter {
+  from { opacity: 0; transform: translateY(-3px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .git-feedback { animation: none; }
+}
+
+@media (prefers-contrast: more) {
+  .git-feedback { border-color: var(--git-feedback-color); background: var(--git-feedback-surface); }
+}

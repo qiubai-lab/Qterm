@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 const gitStyleFiles = [
   "gitShell.css",
+  "gitFeedback.css",
   "gitRepositoryTree.css",
   "gitChangeSelection.css",
   "gitChangeList.css",

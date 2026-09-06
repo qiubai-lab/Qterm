@@ -1,4 +1,5 @@
 @import "./styles/gitShell.css";
+@import "./styles/gitFeedback.css";
 @import "./styles/gitRepositoryTree.css";
 @import "./styles/gitChangeSelection.css";
 @import "./styles/gitChangeList.css";

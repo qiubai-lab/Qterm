@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-export type IconName = "workspace" | "plus" | "terminal" | "git" | "submodule" | "mergeConflict" | "browser" | "computer" | "server" | "network" | "files" | "file" | "filePlus" | "folderPlus" | "edit" | "save" | "check" | "checkCircle" | "copy" | "upload" | "download" | "key" | "lock" | "trash" | "clear" | "back" | "forward" | "chevronDown" | "refresh" | "sync" | "search" | "disconnect" | "settings" | "help" | "splitHorizontal" | "splitVertical" | "menu" | "pin" | "windowMinimize" | "windowMaximize" | "close" | "more" | "eye" | "eyeOff";
+export type IconName = "workspace" | "plus" | "terminal" | "git" | "submodule" | "mergeConflict" | "browser" | "computer" | "server" | "network" | "files" | "file" | "filePlus" | "folderPlus" | "edit" | "save" | "check" | "checkCircle" | "alertCircle" | "copy" | "upload" | "download" | "key" | "lock" | "trash" | "clear" | "back" | "forward" | "chevronDown" | "refresh" | "sync" | "search" | "disconnect" | "settings" | "help" | "splitHorizontal" | "splitVertical" | "menu" | "pin" | "windowMinimize" | "windowMaximize" | "close" | "more" | "eye" | "eyeOff";
 
 export function Icon({ name, size = 16 }: { name: IconName; size?: number }) {
   const paths: Record<IconName, ReactNode> = {
@@ -22,6 +22,7 @@ export function Icon({ name, size = 16 }: { name: IconName; size?: number }) {
     save: <><path d="M5 4h12l2 2v14H5Z"/><path d="M8 4v6h8V4M8 20v-6h8v6"/></>,
     check: <path d="m5 12 4 4L19 6"/>,
     checkCircle: <><circle cx="12" cy="12" r="8.5"/><path d="m8.3 12.1 2.5 2.5 5-5.2"/></>,
+    alertCircle: <><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v6M12 17h.01"/></>,
     copy: <><rect x="8" y="8" width="11" height="11" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></>,
     upload: <><path d="M12 16V4M7 9l5-5 5 5"/><path d="M5 14v5h14v-5"/></>,
     download: <><path d="M12 4v12M7 11l5 5 5-5"/><path d="M5 19h14"/></>,

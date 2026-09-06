@@ -153,22 +153,24 @@ describe("GitPane branches and repository actions", () => {
 
     fireEvent.focus(window);
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("后台读取失败");
+    expect(await screen.findByRole("status")).toHaveTextContent("后台读取失败");
     expect(screen.getByText("project")).toBeInTheDocument();
     expect(screen.getByText("src/staged.ts")).toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveTextContent("上次 Git 操作失败");
+    expect(screen.getAllByRole("status")).toHaveLength(1);
+    expect(screen.getByRole("status")).toHaveTextContent("Git 操作失败后台读取失败 · 已重新读取可用状态");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
 
     fireEvent.focus(window);
     await waitFor(() => expect(api.snapshot).toHaveBeenCalledTimes(3));
-    expect(screen.getByRole("alert")).toHaveTextContent("后台读取失败");
+    expect(screen.getByRole("status")).toHaveTextContent("后台读取失败");
 
     const retry = deferred<GitSnapshot>();
     api.fetch.mockReturnValueOnce(retry.promise);
     fireEvent.click(screen.getByRole("button", { name: "刷新 Git 状态" }));
     await waitFor(() => expect(api.fetch).toHaveBeenCalledOnce());
-    expect(screen.getByRole("alert")).toHaveTextContent("后台读取失败");
+    expect(screen.getByRole("status")).toHaveTextContent("后台读取失败");
     await act(async () => retry.resolve(snapshot));
-    await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByRole("status")).not.toBeInTheDocument());
   });
 
   it("does not reload an open preview after an equivalent background snapshot", async () => {
@@ -292,7 +294,7 @@ describe("GitPane branches and repository actions", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "刷新 Git 状态" }));
     await waitFor(() => expect(api.fetch).toHaveBeenCalledWith("D:/work/project"));
-    expect(await screen.findByRole("alert")).toHaveTextContent("origin authentication failed");
+    expect(await screen.findByRole("status")).toHaveTextContent("origin authentication failed");
     expect(screen.getByText("project")).toBeInTheDocument();
     expect(screen.getByText("src/staged.ts")).toBeInTheDocument();
   });
