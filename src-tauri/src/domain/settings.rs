@@ -38,7 +38,7 @@ impl Default for TerminalSettings {
     fn default() -> Self {
         Self {
             remote_shell_integration_enabled: true,
-            remote_shell_integration_passive: false,
+            remote_shell_integration_passive: true,
         }
     }
 }
@@ -135,6 +135,8 @@ mod tests {
         assert_eq!(AppearanceSettings::default().theme, AppTheme::Dark);
         assert!(!UpdateSettings::default().auto_check_on_startup);
         assert!(TerminalSettings::default().remote_shell_integration_enabled);
+        assert!(TerminalSettings::default().remote_shell_integration_passive);
+        assert!(!TerminalSettings::default().automatic_shell_integration());
         assert_eq!(
             SecuritySettings::default(),
             SecuritySettings {

@@ -8,7 +8,7 @@ use crate::{
     ports::settings_repository::TerminalSettingsRepository,
 };
 
-const TERMINAL_SETTINGS_VERSION: u64 = 1;
+const TERMINAL_SETTINGS_VERSION: u64 = 2;
 const MAX_BYTES: u64 = 4 * 1024;
 
 pub struct JsonTerminalSettingsRepository {
@@ -32,16 +32,24 @@ impl JsonTerminalSettingsRepository {
         let bytes = fs::read(&self.path).map_err(|_| SettingsError::StorageUnavailable)?;
         let value: serde_json::Value =
             serde_json::from_slice(&bytes).map_err(|_| SettingsError::Corrupt)?;
-        if value
+        match value
             .get("schemaVersion")
             .and_then(serde_json::Value::as_u64)
-            != Some(TERMINAL_SETTINGS_VERSION)
         {
-            return Err(SettingsError::UnsupportedVersion);
+            Some(1) => serde_json::from_value::<VersionOneDocument>(value)
+                .map(|legacy| {
+                    Some(Document {
+                        schema_version: TERMINAL_SETTINGS_VERSION,
+                        remote_shell_integration_enabled: legacy.remote_shell_integration_enabled,
+                        remote_shell_integration_passive: true,
+                    })
+                })
+                .map_err(|_| SettingsError::Corrupt),
+            Some(TERMINAL_SETTINGS_VERSION) => serde_json::from_value(value)
+                .map(Some)
+                .map_err(|_| SettingsError::Corrupt),
+            _ => Err(SettingsError::UnsupportedVersion),
         }
-        serde_json::from_value(value)
-            .map(Some)
-            .map_err(|_| SettingsError::Corrupt)
     }
 }
 
@@ -81,8 +89,17 @@ impl TerminalSettingsRepository for JsonTerminalSettingsRepository {
 struct Document {
     schema_version: u64,
     remote_shell_integration_enabled: bool,
-    #[serde(default)]
     remote_shell_integration_passive: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct VersionOneDocument {
+    #[serde(rename = "schemaVersion")]
+    _schema_version: u64,
+    remote_shell_integration_enabled: bool,
+    #[serde(default, rename = "remoteShellIntegrationPassive")]
+    _remote_shell_integration_passive: Option<bool>,
 }
 
 #[cfg(test)]
@@ -109,26 +126,29 @@ mod tests {
     }
 
     #[test]
-    fn legacy_settings_enable_automatic_integration_and_passive_mode_round_trips() {
+    fn version_one_settings_migrate_to_passive_and_version_two_preserves_explicit_automatic_mode() {
         let dir = tempdir().unwrap();
         let path = dir.path().join("terminal.json");
         fs::write(
             &path,
-            br#"{"schemaVersion":1,"remoteShellIntegrationEnabled":true}"#,
+            br#"{"schemaVersion":1,"remoteShellIntegrationEnabled":true,"remoteShellIntegrationPassive":false}"#,
         )
         .unwrap();
-        let repository = JsonTerminalSettingsRepository::new(path);
-        let mut settings = repository.load().unwrap().unwrap();
-        assert!(settings.automatic_shell_integration());
-        settings.remote_shell_integration_passive = true;
-        repository.save(settings).unwrap();
-        let restored = repository.load().unwrap().unwrap();
-        assert!(restored.remote_shell_integration_enabled);
-        assert!(!restored.automatic_shell_integration());
-        assert_eq!(settings, restored);
-        settings.remote_shell_integration_enabled = false;
-        settings.remote_shell_integration_passive = false;
+        let repository = JsonTerminalSettingsRepository::new(path.clone());
+        let settings = repository.load().unwrap().unwrap();
+        assert!(settings.remote_shell_integration_enabled);
+        assert!(settings.remote_shell_integration_passive);
         assert!(!settings.automatic_shell_integration());
+        repository.save(settings).unwrap();
+        let saved: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        assert_eq!(saved["schemaVersion"], 2);
+
+        let automatic = TerminalSettings {
+            remote_shell_integration_enabled: true,
+            remote_shell_integration_passive: false,
+        };
+        repository.save(automatic).unwrap();
+        assert_eq!(repository.load().unwrap(), Some(automatic));
     }
 
     #[test]
@@ -136,17 +156,22 @@ mod tests {
         for (name, bytes, error) in [
             (
                 "unknown",
-                br#"{"schemaVersion":1,"remoteShellIntegrationEnabled":true,"command":"forbidden"}"#.as_slice(),
+                br#"{"schemaVersion":2,"remoteShellIntegrationEnabled":true,"remoteShellIntegrationPassive":true,"command":"forbidden"}"#.as_slice(),
                 SettingsError::Corrupt,
             ),
             (
                 "invalid",
-                br#"{"schemaVersion":1,"remoteShellIntegrationEnabled":"yes"}"#.as_slice(),
+                br#"{"schemaVersion":2,"remoteShellIntegrationEnabled":"yes","remoteShellIntegrationPassive":true}"#.as_slice(),
+                SettingsError::Corrupt,
+            ),
+            (
+                "missing",
+                br#"{"schemaVersion":2,"remoteShellIntegrationEnabled":true}"#.as_slice(),
                 SettingsError::Corrupt,
             ),
             (
                 "future",
-                br#"{"schemaVersion":2,"remoteShellIntegrationEnabled":true}"#.as_slice(),
+                br#"{"schemaVersion":3,"remoteShellIntegrationEnabled":true,"remoteShellIntegrationPassive":true}"#.as_slice(),
                 SettingsError::UnsupportedVersion,
             ),
         ] {

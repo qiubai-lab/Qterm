@@ -35,7 +35,7 @@ export function SettingsDialog({ onClose, onSecuritySettingsChanged, onTerminalS
   const [security, setSecurity] = useState<SecuritySettings | null>(null);
   const [appearance, setAppearance] = useState<AppearanceSettings | null>(null);
   const [terminal, setTerminal] = useState<TerminalSettings | null>(null);
-  const [confirmRemoteIntegration, setConfirmRemoteIntegration] = useState(false);
+  const [confirmAutomaticIntegration, setConfirmAutomaticIntegration] = useState(false);
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
@@ -101,11 +101,11 @@ export function SettingsDialog({ onClose, onSecuritySettingsChanged, onTerminalS
     previewTheme(theme);
   }
 
-  async function persistRemoteShellIntegration(enabled: boolean, passive = terminal?.remoteShellIntegrationPassive) {
+  async function persistRemoteShellIntegration(enabled: boolean, passive = terminal?.remoteShellIntegrationPassive ?? true) {
     if (!terminal || busy) return;
     setBusy(true); setSaved(false); setError("");
     try {
-      const snapshot = await updateTerminalSettings({ remoteShellIntegrationEnabled: enabled, ...(passive !== undefined ? { remoteShellIntegrationPassive: passive } : {}) });
+      const snapshot = await updateTerminalSettings({ remoteShellIntegrationEnabled: enabled, remoteShellIntegrationPassive: passive });
       applySnapshot(snapshot, true, true);
       onTerminalSettingsChanged?.(snapshot.terminal);
       setSaved(true);
@@ -118,11 +118,15 @@ export function SettingsDialog({ onClose, onSecuritySettingsChanged, onTerminalS
   }
 
   function changeRemoteShellIntegration(enabled: boolean) {
+    void persistRemoteShellIntegration(enabled, true);
+  }
+
+  function changeAutomaticIntegration(enabled: boolean) {
     if (enabled) {
-      setConfirmRemoteIntegration(true);
+      setConfirmAutomaticIntegration(true);
       return;
     }
-    void persistRemoteShellIntegration(false);
+    void persistRemoteShellIntegration(terminal?.remoteShellIntegrationEnabled ?? true, true);
   }
 
   function selectCategory(nextCategory: SettingsCategory) {
@@ -178,12 +182,12 @@ export function SettingsDialog({ onClose, onSecuritySettingsChanged, onTerminalS
             <div className="settings-section-heading"><h3 id="advanced-settings-title">高级</h3><p>管理远程终端集成等进阶功能。</p></div>
             {terminal ? <div className="settings-rows">
               <div className="settings-row">
-                <span><strong>OSC 7 终端目录跟踪</strong><small>跟踪终端上报的当前目录。关闭后不再解析或显示目录状态。</small></span>
+                <span><strong>OSC 7 终端目录跟踪</strong><small>默认使用原生 SSH 登录并接收远端上报的目录，保留 MOTD 和 Last login。关闭后不再解析或显示目录状态。</small></span>
                 <SettingsSwitch label="OSC 7 终端目录跟踪" checked={terminal.remoteShellIntegrationEnabled} disabled={busy} onChange={changeRemoteShellIntegration}/>
               </div>
               <div className="settings-row">
-                <span><strong>自动配置远程目录跟踪</strong><small>在新会话首次输入前加载集成，不写入命令历史。关闭后仅接收远端自行上报的 OSC 7；下次连接生效。</small></span>
-                <SettingsSwitch label="自动配置远程目录跟踪" checked={!terminal.remoteShellIntegrationPassive} disabled={busy || !terminal.remoteShellIntegrationEnabled} onChange={(enabled) => void persistRemoteShellIntegration(terminal.remoteShellIntegrationEnabled, !enabled)}/>
+                <span><strong>自动配置远程目录跟踪</strong><small>通过 PTY + exec 在首次输入前加载集成，不写入命令历史，但服务器可能不显示 MOTD 和 Last login。下次连接生效。</small></span>
+                <SettingsSwitch label="自动配置远程目录跟踪" checked={!terminal.remoteShellIntegrationPassive} disabled={busy || !terminal.remoteShellIntegrationEnabled} onChange={changeAutomaticIntegration}/>
               </div>
               <TerminalNotificationSetting/>
             </div> : <p className="dialog-note">正在读取设置…</p>}
@@ -201,18 +205,18 @@ export function SettingsDialog({ onClose, onSecuritySettingsChanged, onTerminalS
       </section>
     </div>
   </DialogFrame>
-    {confirmRemoteIntegration && <DialogFrame compact className="settings-integration-confirmation" title="开启 OSC 7 终端目录跟踪" subtitle="本地与远程终端" onClose={() => setConfirmRemoteIntegration(false)}>
+    {confirmAutomaticIntegration && <DialogFrame compact className="settings-integration-confirmation" title="开启自动远程目录集成" subtitle="新 SSH 会话" onClose={() => setConfirmAutomaticIntegration(false)}>
       <div className="settings-integration-confirmation-body">
-        <div className="settings-integration-confirmation-intro"><span aria-hidden="true"><Icon name="terminal" size={17}/></span><p>Qterm 将跟踪终端上报的 OSC 7 目录。自动配置开启时，会识别远程 Shell，并在首次输入前加载当前会话的目录集成。</p></div>
+        <div className="settings-integration-confirmation-intro"><span aria-hidden="true"><Icon name="terminal" size={17}/></span><p>Qterm 将使用 PTY + exec 识别远程 Shell，并在首次输入前加载当前会话的 OSC 7 集成。</p></div>
         <ul>
           <li>不会修改远程 <code>.bashrc</code>、Profile 或命令历史；部分 Shell 使用私有临时文件，加载时清理</li>
-          <li>只缓存目标标识与 Shell 类型，不保存命令输出或凭据</li>
-          <li>瞬态探测失败会自动重试一次，仍失败则继续普通终端连接</li>
+          <li>OpenSSH 可能跳过 MOTD 和 Last login；需要这些登录信息时请保持自动配置关闭</li>
+          <li>探测或启动失败时回退到普通 shell，继续建立终端连接</li>
         </ul>
       </div>
       <footer className="dialog-actions">
-        <Button onClick={() => setConfirmRemoteIntegration(false)}>取消</Button>
-        <Button variant="primary" data-dialog-autofocus onClick={() => { setConfirmRemoteIntegration(false); void persistRemoteShellIntegration(true); }}>确认开启</Button>
+        <Button onClick={() => setConfirmAutomaticIntegration(false)}>取消</Button>
+        <Button variant="primary" data-dialog-autofocus onClick={() => { setConfirmAutomaticIntegration(false); void persistRemoteShellIntegration(true, false); }}>确认开启</Button>
       </footer>
     </DialogFrame>}
   </>;

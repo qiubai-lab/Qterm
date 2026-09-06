@@ -89,7 +89,7 @@ beforeEach(() => {
   mocks.getSettings.mockResolvedValue({
     general: { rootDirectory: "", defaultRootDirectory: "", activeRootDirectory: "", dataDirectory: "", deviceDirectory: "", cacheDirectory: "", restartRequired: false },
     security: { credentialAutoLockAfterSeconds: 3600, terminalAutoLockAfterSeconds: null },
-    terminal: { remoteShellIntegrationEnabled: true },
+    terminal: { remoteShellIntegrationEnabled: true, remoteShellIntegrationPassive: true },
     updates: { autoCheckOnStartup: false },
     warning: null,
   });

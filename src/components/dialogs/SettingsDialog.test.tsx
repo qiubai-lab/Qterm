@@ -18,21 +18,21 @@ vi.mock("../../lib/tauri/settings", () => mocks);
 beforeEach(() => {
   mocks.getSettings.mockResolvedValue({
     general: storageLayout(),
-    security: { credentialAutoLockAfterSeconds: 3600, terminalAutoLockAfterSeconds: null }, appearance: { theme: "dark" }, terminal: { remoteShellIntegrationEnabled: true }, warning: null,
+    security: { credentialAutoLockAfterSeconds: 3600, terminalAutoLockAfterSeconds: null }, appearance: { theme: "dark" }, terminal: { remoteShellIntegrationEnabled: true, remoteShellIntegrationPassive: true }, warning: null,
   });
   mocks.updateConfigurationDirectory.mockImplementation(async ({ path }: { path: string }) => ({
     general: { ...storageLayout(), rootDirectory: path, dataDirectory: `${path}\\data`, deviceDirectory: `${path}\\device`, cacheDirectory: `${path}\\cache`, restartRequired: true },
-    security: { credentialAutoLockAfterSeconds: 3600, terminalAutoLockAfterSeconds: null }, appearance: { theme: "dark" }, terminal: { remoteShellIntegrationEnabled: true }, warning: null,
+    security: { credentialAutoLockAfterSeconds: 3600, terminalAutoLockAfterSeconds: null }, appearance: { theme: "dark" }, terminal: { remoteShellIntegrationEnabled: true, remoteShellIntegrationPassive: true }, warning: null,
   }));
   mocks.updateSecuritySettings.mockImplementation(async (security) => ({
     general: storageLayout(),
-    security, appearance: { theme: "dark" }, terminal: { remoteShellIntegrationEnabled: true }, warning: null,
+    security, appearance: { theme: "dark" }, terminal: { remoteShellIntegrationEnabled: true, remoteShellIntegrationPassive: true }, warning: null,
   }));
   mocks.updateAppearanceSettings.mockImplementation(async (appearance) => ({
     general: storageLayout(),
     security: { credentialAutoLockAfterSeconds: 3600, terminalAutoLockAfterSeconds: null },
     appearance,
-    terminal: { remoteShellIntegrationEnabled: true },
+    terminal: { remoteShellIntegrationEnabled: true, remoteShellIntegrationPassive: true },
     warning: null,
   }));
   mocks.updateTerminalSettings.mockImplementation(async (terminal) => ({
@@ -62,24 +62,32 @@ function renderSettings(onClose = vi.fn(), onTerminalSettingsChanged = vi.fn()) 
 }
 
 describe("SettingsDialog", () => {
-  it("switches to passive OSC 7 reception without disabling tracking and preserves the preference", async () => {
+  it("defaults to native login and enables automatic integration only after confirmation", async () => {
     const user = userEvent.setup();
     renderSettings();
     await screen.findByRole("region", { name: "通用" });
     await user.click(screen.getByRole("button", { name: /高级/ }));
     const automatic = await screen.findByRole("switch", { name: "自动配置远程目录跟踪" });
-    expect(automatic).toBeChecked();
-    await user.click(automatic);
-    expect(mocks.updateTerminalSettings).toHaveBeenLastCalledWith({ remoteShellIntegrationEnabled: true, remoteShellIntegrationPassive: true });
-    expect(screen.getByRole("switch", { name: "OSC 7 终端目录跟踪" })).toBeChecked();
     expect(automatic).not.toBeChecked();
-    await user.click(screen.getByRole("switch", { name: "OSC 7 终端目录跟踪" }));
-    expect(mocks.updateTerminalSettings).toHaveBeenLastCalledWith({ remoteShellIntegrationEnabled: false, remoteShellIntegrationPassive: true });
-    expect(automatic).toBeDisabled();
+    expect(screen.getByText(/保留 MOTD 和 Last login/)).toBeInTheDocument();
+    await user.click(automatic);
+    const confirmation = screen.getByRole("dialog", { name: "开启自动远程目录集成" });
+    expect(within(confirmation).getByText(/OpenSSH 可能跳过 MOTD 和 Last login/)).toBeInTheDocument();
+    await user.click(within(confirmation).getByRole("button", { name: "确认开启" }));
+    expect(mocks.updateTerminalSettings).toHaveBeenLastCalledWith({ remoteShellIntegrationEnabled: true, remoteShellIntegrationPassive: false });
+    expect(screen.getByRole("switch", { name: "OSC 7 终端目录跟踪" })).toBeChecked();
+    expect(automatic).toBeChecked();
   });
 
-  it("keeps automatic integration selected when saving passive mode fails", async () => {
+  it("keeps automatic integration selected when switching to native login fails", async () => {
     const user = userEvent.setup();
+    mocks.getSettings.mockResolvedValueOnce({
+      general: storageLayout(),
+      security: { credentialAutoLockAfterSeconds: 3600, terminalAutoLockAfterSeconds: null },
+      appearance: { theme: "dark" },
+      terminal: { remoteShellIntegrationEnabled: true, remoteShellIntegrationPassive: false },
+      warning: null,
+    });
     renderSettings();
     await screen.findByRole("region", { name: "通用" });
     await user.click(screen.getByRole("button", { name: /高级/ }));
@@ -143,7 +151,7 @@ describe("SettingsDialog", () => {
     expect(status.closest("footer")).not.toBeNull();
   });
 
-  it("defaults remote directory integration on and confirms only when re-enabling it", async () => {
+  it("re-enables OSC 7 tracking in native login mode", async () => {
     const user = userEvent.setup();
     const onTerminalSettingsChanged = vi.fn();
     renderSettings(vi.fn(), onTerminalSettingsChanged);
@@ -159,25 +167,18 @@ describe("SettingsDialog", () => {
     expect(screen.queryByRole("dialog", { name: "开启 OSC 7 终端目录跟踪" })).not.toBeInTheDocument();
 
     await user.click(toggle);
-    await waitFor(() => expect(mocks.updateTerminalSettings).toHaveBeenCalledWith({ remoteShellIntegrationEnabled: false }));
-    expect(onTerminalSettingsChanged).toHaveBeenLastCalledWith({ remoteShellIntegrationEnabled: false });
+    await waitFor(() => expect(mocks.updateTerminalSettings).toHaveBeenCalledWith({ remoteShellIntegrationEnabled: false, remoteShellIntegrationPassive: true }));
+    expect(onTerminalSettingsChanged).toHaveBeenLastCalledWith({ remoteShellIntegrationEnabled: false, remoteShellIntegrationPassive: true });
     expect(toggle).not.toBeChecked();
+    expect(within(advancedPanel).getByRole("switch", { name: "自动配置远程目录跟踪" })).toBeDisabled();
     expect(screen.getByRole("status")).toHaveTextContent("高级设置已保存。");
 
     await user.click(toggle);
-    const confirmation = screen.getByRole("dialog", { name: "开启 OSC 7 终端目录跟踪" });
-    expect(within(confirmation).getByText(/不会修改远程/)).toBeInTheDocument();
-    expect(within(confirmation).getByText(/不保存命令输出或凭据/)).toBeInTheDocument();
-    expect(within(confirmation).getByText(/自动重试一次.*普通终端连接/)).toBeInTheDocument();
-    await user.click(within(confirmation).getByRole("button", { name: "取消" }));
-    expect(toggle).not.toBeChecked();
-    expect(mocks.updateTerminalSettings).toHaveBeenCalledTimes(1);
-
-    await user.click(toggle);
-    await user.click(within(screen.getByRole("dialog", { name: "开启 OSC 7 终端目录跟踪" })).getByRole("button", { name: "确认开启" }));
-    await waitFor(() => expect(mocks.updateTerminalSettings).toHaveBeenLastCalledWith({ remoteShellIntegrationEnabled: true }));
-    expect(onTerminalSettingsChanged).toHaveBeenLastCalledWith({ remoteShellIntegrationEnabled: true });
+    expect(screen.queryByRole("dialog", { name: "开启自动远程目录集成" })).not.toBeInTheDocument();
+    await waitFor(() => expect(mocks.updateTerminalSettings).toHaveBeenLastCalledWith({ remoteShellIntegrationEnabled: true, remoteShellIntegrationPassive: true }));
+    expect(onTerminalSettingsChanged).toHaveBeenLastCalledWith({ remoteShellIntegrationEnabled: true, remoteShellIntegrationPassive: true });
     expect(toggle).toBeChecked();
+    expect(within(advancedPanel).getByRole("switch", { name: "自动配置远程目录跟踪" })).not.toBeChecked();
   });
 
   it("restores the default root while derived paths remain read-only", async () => {
@@ -210,7 +211,7 @@ describe("SettingsDialog", () => {
       },
       security: { credentialAutoLockAfterSeconds: 3600, terminalAutoLockAfterSeconds: null },
       appearance: { theme: "dark" },
-      terminal: { remoteShellIntegrationEnabled: true },
+      terminal: { remoteShellIntegrationEnabled: true, remoteShellIntegrationPassive: true },
       warning: null,
     });
     renderSettings();
@@ -297,7 +298,7 @@ describe("SettingsDialog", () => {
   it("surfaces safe-default fallback warnings", async () => {
     mocks.getSettings.mockResolvedValue({
       general: storageLayout(),
-      security: { credentialAutoLockAfterSeconds: 3600, terminalAutoLockAfterSeconds: null }, appearance: { theme: "dark" }, terminal: { remoteShellIntegrationEnabled: true }, warning: "corrupt",
+      security: { credentialAutoLockAfterSeconds: 3600, terminalAutoLockAfterSeconds: null }, appearance: { theme: "dark" }, terminal: { remoteShellIntegrationEnabled: true, remoteShellIntegrationPassive: true }, warning: "corrupt",
     });
     renderSettings();
     expect(await screen.findByRole("alert")).toHaveTextContent("不会覆盖原文件");

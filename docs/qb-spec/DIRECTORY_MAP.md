@@ -106,7 +106,7 @@
 - `src-tauri/src/infrastructure/local/pty.rs`：本地 PTY 创建与进程 I/O owner；在 spawn 时解析一次性工作目录并对无效/失效路径回退到规范化 home，不解释远程 Shell 语法。
 - `src-tauri/src/infrastructure/clipboard.rs`：在阻塞工作线程读取原生 file list/text/RGBA；现有文件路径只生成 Rust 内部一次性来源，RGBA 校验后流式编码到 Qterm cache root 下私有 clipboard 目录的 UUID PNG，并仅清理过期受管图片；不向 WebView 返回图片资源或字节。
 - `src-tauri/src/infrastructure/ssh/client.rs`、`client/manager_{core,control,files,ports}.rs`：稳定 `SshSessionManager` façade 与按核心会话、控制、文件/传输和端口转发分组的 manager 实现；不向 commands/application 泄漏 russh 或 SFTP 类型。
-- `src-tauri/src/infrastructure/ssh/client/shell_startup.rs`、`shell_startup/`、`terminal_startup.rs`：Shell 专属启动脚本、目录字面量编码及 PTY/exec 协商与明确拒绝回退；不写交互输入或 history，不改用户启动文件，不拥有连接认证或设置持久化。
+- `src-tauri/src/infrastructure/ssh/client/shell_startup.rs`、`shell_startup/`、`terminal_startup.rs`：默认普通 PTY/shell 启动，以及可选 Shell 专属 PTY/exec 启动脚本、目录字面量编码与明确拒绝回退；不写交互输入或 history，不改用户启动文件，不拥有连接认证或设置持久化。
 - `src-tauri/src/infrastructure/ssh/client/session.rs`、`session/{terminal,files,git}.rs`：route 建连 façade 与 Terminal、Files、Git purpose-specific runner；Git runner 通过同一 profile-owned session 执行固定 conflict detail/side/delete/stage，并仅为有界结果写回复用内部 SFTP 原子写语义，各用途对外能力仍独立，取消、task drop 和关闭语义仍由共享 manager/session ownership 约束。
 - `src-tauri/src/infrastructure/ssh/client/git.rs`、`client/git/command.rs`：受限远端 Git action façade 与 SSH exec command runner；runner 按共享预算用 channel 活动刷新 idle deadline，保留总时长上限和输出边界，超时后发送 TERM/KILL 并关闭 channel，不向上层泄漏 russh 类型或接受任意命令。
 - `src-tauri/src/infrastructure/ssh/client/transfer.rs`、`transfer/{files,staging,upload}.rs`：传输 dispatch façade、远端文件操作、Terminal staging/download 与 upload/流式复制实现；路径边界、取消与失败清理不进入 command 或 application。

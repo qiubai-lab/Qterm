@@ -84,8 +84,12 @@ pub struct UpdateSettingsDto {
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct TerminalSettingsDto {
     remote_shell_integration_enabled: bool,
-    #[serde(default)]
+    #[serde(default = "default_true")]
     remote_shell_integration_passive: bool,
+}
+
+const fn default_true() -> bool {
+    true
 }
 
 #[derive(Clone, Copy, Deserialize, Serialize)]
@@ -344,12 +348,11 @@ mod tests {
             }))
             .is_ok()
         );
-        assert!(
-            serde_json::from_value::<TerminalSettingsDto>(json!({
-                "remoteShellIntegrationEnabled": true
-            }))
-            .is_ok()
-        );
+        let terminal = serde_json::from_value::<TerminalSettingsDto>(json!({
+            "remoteShellIntegrationEnabled": true
+        }))
+        .expect("terminal defaults");
+        assert!(terminal.remote_shell_integration_passive);
         assert!(
             serde_json::from_value::<TerminalSettingsDto>(json!({
                 "remoteShellIntegrationEnabled": true,
@@ -462,6 +465,7 @@ mod tests {
         assert_eq!(updated["appearance"]["theme"], "dark");
         assert_eq!(updated["updates"]["autoCheckOnStartup"], false);
         assert_eq!(updated["terminal"]["remoteShellIntegrationEnabled"], true);
+        assert_eq!(updated["terminal"]["remoteShellIntegrationPassive"], true);
 
         let reset = service
             .update_configuration_directory_from_input("~", directory.path())

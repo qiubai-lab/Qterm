@@ -28,8 +28,8 @@ describe("settings IPC client", () => {
     expect(invoke).toHaveBeenLastCalledWith("settings_update_appearance", { input: { theme: "light" } });
     await updateUpdateSettings({ autoCheckOnStartup: true });
     expect(invoke).toHaveBeenLastCalledWith("settings_update_updates", { input: { autoCheckOnStartup: true } });
-    await updateTerminalSettings({ remoteShellIntegrationEnabled: false });
-    expect(invoke).toHaveBeenLastCalledWith("settings_update_terminal", { input: { remoteShellIntegrationEnabled: false } });
+    await updateTerminalSettings({ remoteShellIntegrationEnabled: false, remoteShellIntegrationPassive: true });
+    expect(invoke).toHaveBeenLastCalledWith("settings_update_terminal", { input: { remoteShellIntegrationEnabled: false, remoteShellIntegrationPassive: true } });
     expect(invoke).toHaveBeenCalledTimes(7);
   });
 });
