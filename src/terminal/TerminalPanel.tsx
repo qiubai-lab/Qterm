@@ -21,6 +21,7 @@ import { useWorkspace } from "../workspace/WorkspaceProvider";
 import { parseOsc7Cwd } from "./osc7";
 import { createTerminalLayout, type TerminalLayout } from "./terminalLayout";
 import { createTerminalInputScheduler, type TerminalInputScheduler } from "./terminalInputScheduler";
+import { resetTerminalSession } from "./terminalSessionReset";
 import { ensureTerminalSearch, type TerminalSearchHost } from "./terminalSearch";
 import { bindTerminalTheme, readTerminalSearchColors, readTerminalTheme } from "./terminalTheme";
 import { registerTerminalController } from "./terminalViewRegistry";
@@ -28,7 +29,6 @@ import {
   TerminalStagingStatus,
   type TerminalStagingStatusState,
 } from "./TerminalStagingStatus";
-
 interface TerminalView extends TerminalSearchHost {
   decoder: TextDecoder;
   element: HTMLElement;
@@ -345,7 +345,7 @@ export function TerminalPanel({ blockId, sessionKey, visible, local, osc7Enabled
       (reset) => {
         if (reset) {
           view.decoder = new TextDecoder();
-          view.terminal.reset();
+          resetTerminalSession(view.terminal);
         } else if (local && windowsPty?.backend === "conpty") {
           void view.inputScheduler.send(CLEAR_SCREEN_INPUT);
         } else {

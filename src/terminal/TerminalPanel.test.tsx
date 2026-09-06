@@ -269,9 +269,9 @@ describe("TerminalPanel view lifetime", () => {
     clear?.(false);
 
     expect(terminal.clear).toHaveBeenCalledOnce();
-    expect(terminal.reset).not.toHaveBeenCalled();
     clear?.(true);
-    expect(terminal.reset).toHaveBeenCalledOnce();
+    expect(terminal.write).toHaveBeenCalledWith("\x1bc");
+    expect(terminal.reset).not.toHaveBeenCalled();
     view.unmount();
   });
 
