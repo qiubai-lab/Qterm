@@ -121,7 +121,7 @@ describe("application layout styles", () => {
     expect(styles).toContain(".connection-context-menu,.file-context-menu,.network-context-menu,.terminal-context-menu,.terminal-target-menu,.terminal-target-submenu,.dialog-frame{background:var(--raised)}");
   });
 
-  it("collapses the connected endpoint before persistent route status", () => {
+  it("lets the connected endpoint use the actual header space before truncating", () => {
     expect(declarations(".terminal-block")).toContain("container-type:inline-size");
     expect(declarations(".connection-route-progress")).not.toContain("position:absolute");
     expect(declarations(".connection-route-progress")).toContain("display:flex");
@@ -135,7 +135,7 @@ describe("application layout styles", () => {
     expect(declarations(".terminal-block.active .connection-route-progress.connected .connection-route-endpoint")).toContain("color:var(--block-active-endpoint-text)");
     expect(declarations(".connection-route-endpoint")).toContain("text-overflow:ellipsis");
     expect(declarations(".connection-route-endpoint")).toContain("flex:0 1 auto");
-    expect(styles).toMatch(/@container terminal-block \(max-width:390px\)\{\.terminal-target>small,\.terminal-target-endpoint,\.connection-route-endpoint,\.terminal-osc7-tag\{display:none\}\}/);
+    expect(styles).toMatch(/@container terminal-block \(max-width:390px\)\{\.terminal-osc7-tag\{display:none\}\}/); expect(styles).not.toMatch(/@container terminal-block[^}]+(?:terminal-target-endpoint|connection-route-endpoint)[^}]+display:none/);
     expect(styles).not.toContain(".connection-route-progress{display:none}");
     expect(declarations(".block-actions")).toContain("flex:none");
     expect(declarations(".terminal-header-secondary-actions")).toContain("display:flex");
