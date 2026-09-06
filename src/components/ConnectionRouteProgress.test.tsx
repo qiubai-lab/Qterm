@@ -29,7 +29,7 @@ describe("ConnectionRouteProgress", () => {
     expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
   });
 
-  it("shows exactly one node detail on hover or keyboard focus without pinning it", async () => {
+  it("shows exactly one node detail only while hovered and does not pin it after clicking", async () => {
     const user = userEvent.setup();
     const { container } = render(<ConnectionRouteProgress progress={connectingProgress}/>);
     const gateway = screen.getByRole("img", { name: /Gateway：连接中/ });
@@ -45,11 +45,12 @@ describe("ConnectionRouteProgress", () => {
     await user.unhover(gateway);
     expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
 
+    await user.hover(target);
     await user.click(target);
     expect(screen.getByRole("tooltip")).toHaveTextContent("Server等待连接server.test:22");
     await user.unhover(target);
-    target.blur();
     await waitFor(() => expect(screen.queryByRole("tooltip")).not.toBeInTheDocument());
+    expect(target).not.toHaveAttribute("tabindex");
   });
 
   it("keeps the tooltip inside both horizontal viewport edges", () => {

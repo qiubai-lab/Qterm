@@ -16,15 +16,13 @@ interface ConnectionRouteAction {
 
 export function ConnectionRouteProgress({ progress, endpoint, profile, onRequestDisconnect, statusAction }: { progress: ConnectionRouteProgressState | null | undefined; endpoint?: string | null; profile?: HostIdentitySummary | null; onRequestDisconnect?: () => void; statusAction?: ConnectionRouteAction }) {
   const [hoveredNode, setHoveredNode] = useState<number | null>(null);
-  const [focusedNode, setFocusedNode] = useState<number | null>(null);
   const anchorRefs = useRef(new Map<number, HTMLSpanElement>());
   const tooltipRef = useRef<HTMLDivElement>(null);
   const tooltipId = useId();
 
   const nodeCount = progress?.nodes.length ?? 0;
   const validHoveredNode = hoveredNode !== null && hoveredNode < nodeCount ? hoveredNode : null;
-  const validFocusedNode = focusedNode !== null && focusedNode < nodeCount ? focusedNode : null;
-  const inspectedNode = validFocusedNode ?? validHoveredNode;
+  const inspectedNode = validHoveredNode;
 
   useLayoutEffect(() => {
     if (inspectedNode === null) return;
@@ -84,13 +82,10 @@ export function ConnectionRouteProgress({ progress, endpoint, profile, onRequest
       >
         <span
           role="img"
-          tabIndex={0}
           className="connection-route-node"
           data-state={node.state}
           aria-label={nodeAccessibleLabel(node)}
           aria-describedby={inspectedNode === node.index ? tooltipId : undefined}
-          onFocus={() => setFocusedNode(node.index)}
-          onBlur={() => setFocusedNode(null)}
         ><span className="connection-route-node-mark" aria-hidden="true"/></span>
       </span>)}
     </div>

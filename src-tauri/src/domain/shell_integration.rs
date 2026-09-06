@@ -35,15 +35,15 @@ impl RemoteShell {
     pub fn hook_command(self) -> &'static str {
         match self {
             Self::Bash => concat!(
-                r#"stty echo 2>/dev/null; __qterm_osc7(){ printf '\033]7;file://%s%s\007' "${HOSTNAME:-localhost}" "$PWD"; }; case ";${PROMPT_COMMAND:-};" in *";__qterm_osc7;"*) ;; *) PROMPT_COMMAND="__qterm_osc7${PROMPT_COMMAND:+;$PROMPT_COMMAND}";; esac; __qterm_osc7"#,
+                r#" stty echo 2>/dev/null; __qterm_osc7(){ printf '\033]7;file://%s%s\007' "${HOSTNAME:-localhost}" "$PWD"; }; case ";${PROMPT_COMMAND:-};" in *";__qterm_osc7;"*) ;; *) PROMPT_COMMAND="__qterm_osc7${PROMPT_COMMAND:+;$PROMPT_COMMAND}";; esac; __qterm_osc7; history -d "$((HISTCMD-1))" 2>/dev/null || true; printf '\033[1F\033[2K[Qterm] OSC 7 enabled: syncs the remote working directory with Qterm (current session only)\r\n'"#,
                 "\r"
             ),
             Self::Zsh => concat!(
-                r#"stty echo 2>/dev/null; autoload -Uz add-zsh-hook; __qterm_osc7(){ printf '\033]7;file://%s%s\007' "${HOST:-localhost}" "$PWD"; }; add-zsh-hook -d precmd __qterm_osc7 2>/dev/null; add-zsh-hook precmd __qterm_osc7; __qterm_osc7"#,
+                r#" stty echo 2>/dev/null; autoload -Uz add-zsh-hook; __qterm_osc7(){ printf '\033]7;file://%s%s\007' "${HOST:-localhost}" "$PWD"; }; add-zsh-hook -d precmd __qterm_osc7 2>/dev/null; add-zsh-hook precmd __qterm_osc7; __qterm_osc7; printf '\033[1F\033[2K[Qterm] OSC 7 enabled: syncs the remote working directory with Qterm (current session only)\r\n'"#,
                 "\r"
             ),
             Self::Fish => concat!(
-                r#"stty echo 2>/dev/null; function __qterm_osc7 --on-event fish_prompt; printf '\e]7;file://%s%s\a' (hostname) $PWD; end; __qterm_osc7"#,
+                r#" stty echo 2>/dev/null; function __qterm_osc7 --on-event fish_prompt; printf '\e]7;file://%s%s\a' (hostname) $PWD; end; __qterm_osc7; printf '\033[1F\033[2K[Qterm] OSC 7 enabled: syncs the remote working directory with Qterm (current session only)\r\n'"#,
                 "\r"
             ),
             Self::PowerShell => concat!(
@@ -71,7 +71,14 @@ impl RemoteShell {
                 encode_powershell_literal(directory.as_str())
             ),
         };
-        format!("{change_directory}{}", self.hook_command())
+        let hook_command = self.hook_command();
+        match self {
+            Self::Bash | Self::Zsh | Self::Fish => format!(
+                " {change_directory}{}",
+                hook_command.strip_prefix(' ').unwrap_or(hook_command)
+            ),
+            Self::PowerShell => format!("{change_directory}{hook_command}"),
+        }
     }
 
     pub fn suppress_pty_echo(self) -> bool {
@@ -222,7 +229,7 @@ mod tests {
     fn hooks_are_current_session_only_and_posix_variants_restore_echo() {
         for shell in [RemoteShell::Bash, RemoteShell::Zsh, RemoteShell::Fish] {
             let command = shell.hook_command();
-            assert!(command.starts_with("stty echo 2>/dev/null;"));
+            assert!(command.starts_with(" stty echo 2>/dev/null;"));
             assert!(command.contains("]7;file://"));
             assert!(!command.contains(".bashrc"));
             assert!(!command.contains(".zshrc"));
@@ -235,6 +242,39 @@ mod tests {
         assert!(powershell.contains("]7;file://"));
         assert!(!powershell.contains("$PROFILE"));
         assert!(!RemoteShell::PowerShell.suppress_pty_echo());
+    }
+
+    #[test]
+    fn posix_hooks_replace_the_previous_prompt_line_with_a_plain_english_notice() {
+        let notice = r#"printf '\033[1F\033[2K[Qterm] OSC 7 enabled: syncs the remote working directory with Qterm (current session only)\r\n'"#;
+
+        for shell in [RemoteShell::Bash, RemoteShell::Zsh, RemoteShell::Fish] {
+            let command = shell.hook_command();
+            let report_index = command.find("]7;file://").expect("OSC 7 report");
+            let notice_index = command.find(notice).expect("startup notice");
+            assert!(report_index < notice_index);
+            assert_eq!(command.matches("[Qterm]").count(), 1);
+            assert!(!command.contains(r#"\033[2m"#));
+        }
+
+        assert!(
+            !RemoteShell::PowerShell
+                .hook_command()
+                .contains("[Qterm] OSC 7 enabled")
+        );
+    }
+
+    #[test]
+    fn bash_hook_removes_its_own_history_event_before_the_notice() {
+        let command = RemoteShell::Bash.hook_command();
+        let cleanup = r#"history -d "$((HISTCMD-1))" 2>/dev/null || true"#;
+        let cleanup_index = command.find(cleanup).expect("Bash history cleanup");
+        let notice_index = command.find("[Qterm]").expect("startup notice");
+
+        assert!(cleanup_index < notice_index);
+        for shell in [RemoteShell::Zsh, RemoteShell::Fish, RemoteShell::PowerShell] {
+            assert!(!shell.hook_command().contains("history -d"));
+        }
     }
 
     #[test]
@@ -263,6 +303,9 @@ mod tests {
             assert!(!command.contains('\u{1b}'));
             assert!(!command.contains('\u{3}'));
             assert!(command.ends_with('\r'));
+            if !matches!(shell, RemoteShell::PowerShell) {
+                assert!(command.starts_with(' '));
+            }
         }
 
         let bash = RemoteShell::Bash.initialization_command(Some(&path));

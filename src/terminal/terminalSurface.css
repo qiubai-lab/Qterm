@@ -23,9 +23,8 @@
 .connection-route-node-anchor:not(:last-child)::after{position:absolute;top:11px;left:12px;width:12px;height:1px;background:#6e613d;content:""}
 .connection-route-node-anchor:has(.connection-route-node[data-state="complete"]):not(:last-child)::after{background:#4e8f82}
 .connection-route-node-anchor:has(.connection-route-node[data-state="failed"]):not(:last-child)::after{background:#8b4947}
-.connection-route-node{position:relative;z-index:1;display:grid;width:18px;height:23px;place-items:center;padding:0;border:0;border-radius:4px;color:#74683f;background:transparent;cursor:default}
-.connection-route-node:hover{background:var(--hover)}
-.connection-route-node:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
+.connection-route-node{position:relative;z-index:1;display:grid;width:18px;height:23px;place-items:center;padding:0;border:0;border-radius:4px;color:#74683f;background:transparent;cursor:default;transition:color 120ms ease,background-color 120ms ease}
+.connection-route-node:hover{color:var(--selection-marker);background:color-mix(in srgb,var(--selection-marker) 11%,transparent)}
 .connection-route-node-mark{display:block;width:7px;height:7px;border:1px solid #9d874c;border-radius:50%;background:#51482f;box-shadow:0 0 0 2px #d5aa410d}
 .connection-route-node[data-state="complete"] .connection-route-node-mark{border-color:#86dbc9;background:#57bca7;box-shadow:0 0 0 2px #75d4c021}
 .connection-route-node[data-state="active"] .connection-route-node-mark{border-color:#e0b957;background:#ba8d2d;animation:connection-route-pulse 1.15s ease-in-out infinite}
