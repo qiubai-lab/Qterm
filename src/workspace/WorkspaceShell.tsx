@@ -22,8 +22,6 @@ import { TERMINAL_ATTENTION_MS } from "../terminal/terminalAttention";
 import { openTerminalSearch } from "../terminal/terminalViewRegistry";
 import { WorkspaceCanvas, type ConnectionOwner } from "./LayoutView";
 import { resolveConfiguredAuth } from "./configuredAuth";
-import { adjacentBlockId } from "./blockNavigation";
-import { blockIds } from "./layout";
 import { openFileWindowAction } from "./fileWindow";
 import { openGitWindowAction } from "./gitWindow";
 import type { LayoutNode } from "./model";
@@ -386,34 +384,15 @@ export function WorkspaceShell() {
       if (!command) return;
       const modalOpen = Boolean(tool || authRequest || vaultUnlockRequest || lockChoiceOpen || closeRequest || disconnectRequest || hostPromptOpen);
       if (modalOpen || globalThis.document.querySelector('.workspace-batch-close-dialog, [role="menu"]')) return;
-      const allowedWhileLocked = command.type === "newWorkspace" || command.type === "selectWorkspace" || command.type === "cycleWorkspace";
+      const allowedWhileLocked = command.type === "selectWorkspace";
       if (terminalLocked && !allowedWhileLocked) return;
 
       let handled = true;
-      if (command.type === "newWorkspace") dispatch({ type: "addWorkspace" });
-      else if (command.type === "openConnections") setTool("connections");
-      else if (command.type === "splitBlock") splitTerminalBlock(activeWorkspace.id, activeWorkspace.activeBlockId, command.direction, remoteShellIntegrationEnabled);
-      else if (command.type === "focusBlock") {
-        const blockId = adjacentBlockId(activeWorkspace.layout, activeWorkspace.activeBlockId, command.direction);
-        if (blockId) dispatch({ type: "selectBlock", workspaceId: activeWorkspace.id, blockId });
-        else handled = false;
-      }
-      else if (command.type === "cycleBlock") {
-        const ids = blockIds(activeWorkspace.layout);
-        const index = ids.indexOf(activeWorkspace.activeBlockId);
-        const blockId = ids[(index + command.offset + ids.length) % ids.length];
-        if (blockId && blockId !== activeWorkspace.activeBlockId) dispatch({ type: "selectBlock", workspaceId: activeWorkspace.id, blockId });
-        else handled = false;
-      }
-      else if (command.type === "searchTerminal") handled = openTerminalSearch(activeWorkspace.activeBlockId);
-      else if (command.type === "selectWorkspace") {
+      if (command.type === "searchTerminal") handled = openTerminalSearch(activeWorkspace.activeBlockId);
+      else {
         const workspace = document.workspaces[command.index];
         if (workspace) dispatch({ type: "selectWorkspace", workspaceId: workspace.id });
         else handled = false;
-      } else {
-        const index = document.workspaces.findIndex((workspace) => workspace.id === activeWorkspace.id);
-        const workspace = document.workspaces[(index + command.offset + document.workspaces.length) % document.workspaces.length];
-        dispatch({ type: "selectWorkspace", workspaceId: workspace.id });
       }
       if (handled) {
         event.preventDefault();
@@ -422,7 +401,7 @@ export function WorkspaceShell() {
     };
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [activeWorkspace.activeBlockId, activeWorkspace.id, activeWorkspace.layout, authRequest, closeRequest, desktopPlatform, disconnectRequest, dispatch, document.workspaces, hostPromptOpen, lockChoiceOpen, remoteShellIntegrationEnabled, splitTerminalBlock, terminalLocked, tool, vaultUnlockRequest]);
+  }, [activeWorkspace.activeBlockId, authRequest, closeRequest, desktopPlatform, disconnectRequest, dispatch, document.workspaces, hostPromptOpen, lockChoiceOpen, terminalLocked, tool, vaultUnlockRequest]);
 
   useEffect(() => {
     if (terminalLocked || globalThis.document.querySelector('[role="dialog"]')) return;

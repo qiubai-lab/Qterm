@@ -16,11 +16,12 @@ it("closes other workspaces with one confirmation through the real shell and red
   fireEvent.click(screen.getByRole("button", { name: "新建工作区" }));
   const anchor = within(nav).getByRole("button", { name: "工作区-2" });
   fireEvent.contextMenu(anchor, { clientX: 100, clientY: 20 });
-  expect(within(nav).getByRole("button", { name: "工作区-3" }).closest(".workspace-tab")).toHaveClass("selected");
+  const selected = within(nav).getByRole("button", { name: "工作区-3" });
+  expect(selected.closest(".workspace-tab")).toHaveClass("selected");
   fireEvent.click(screen.getByRole("menuitem", { name: "关闭其他工作区" }));
   expect(screen.getAllByRole("dialog")).toHaveLength(1);
-  fireEvent.keyDown(window, { key: "t", ctrlKey: true, shiftKey: true });
-  expect(within(nav).queryByRole("button", { name: "工作区-4" })).not.toBeInTheDocument();
+  fireEvent.keyDown(window, { key: "1", ctrlKey: true, shiftKey: true });
+  expect(selected.closest(".workspace-tab")).toHaveClass("selected");
   fireEvent.click(screen.getByRole("button", { name: "关闭 2 个工作区" }));
   await waitFor(() => expect(within(nav).queryByRole("button", { name: "工作区-1" })).not.toBeInTheDocument());
   expect(within(nav).queryByRole("button", { name: "工作区-3" })).not.toBeInTheDocument();

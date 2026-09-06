@@ -108,19 +108,12 @@ xattr -cr /Applications/Qterm.app
 
 ## ⌨️ 常用操作
 
-为避免覆盖 Shell、vim 和 tmux 的控制键，macOS 使用 `Command`，Windows/Linux 的工作台快捷键使用 `Ctrl+Shift`。
+Qterm 只提供搜索当前终端和切换到指定 Workspace 两类工作台快捷键。为避免覆盖 Shell、vim 和 tmux 的控制键，macOS 使用 `Command`，Windows/Linux 使用 `Ctrl+Shift`。
 
 | 操作 | 快捷键或手势 |
 | --- | --- |
-| 新建 Workspace | macOS `⌘T`；Windows/Linux `Ctrl+Shift+T` |
 | 搜索当前终端输出 | macOS `⌘F`；Windows/Linux `Ctrl+Shift+F` |
-| 左右分割当前 Block | macOS `⌘D`；Windows/Linux `Ctrl+Shift+D` |
-| 上下分割当前 Block | macOS `⇧⌘D`；Windows/Linux `Ctrl+Alt+Shift+D` |
 | 切换到第 1–9 个 Workspace | macOS `⌘1` … `⌘9`；Windows/Linux `Ctrl+Shift+1` … `Ctrl+Shift+9` |
-| 循环切换 Workspace | macOS `⇧⌘[` / `⇧⌘]`；Windows/Linux `Ctrl+Shift+[` / `Ctrl+Shift+]` |
-| 聚焦相邻 Block | macOS `⌘⌥方向键`；Windows/Linux `Ctrl+Shift+方向键` |
-| 聚焦上一个/下一个 Block | macOS `⌘⌥PageUp` / `⌘⌥PageDown`；Windows/Linux `Ctrl+Shift+PageUp` / `Ctrl+Shift+PageDown` |
-| 打开连接管理 | macOS `⌘K`；Windows/Linux `Ctrl+Shift+K` |
 | 重命名 Workspace | 双击标签 |
 | 重排 Workspace / Block | 拖动标签或 Block 标题栏 |
 

@@ -452,7 +452,7 @@ describe("WorkspaceShell utility rail", () => {
 
     mocks.dispatch.mockClear();
     fireEvent.keyDown(window, { key: "t", ctrlKey: true, shiftKey: true });
-    expect(mocks.dispatch).toHaveBeenCalledWith({ type: "addWorkspace" });
+    expect(mocks.dispatch).not.toHaveBeenCalled();
     fireEvent.keyDown(window, { key: "1", ctrlKey: true, shiftKey: true });
     expect(mocks.dispatch).toHaveBeenCalledWith({ type: "selectWorkspace", workspaceId: "workspace-1" });
     fireEvent.keyDown(window, { key: "d", ctrlKey: true, shiftKey: true });
@@ -544,7 +544,7 @@ describe("WorkspaceShell utility rail", () => {
     });
   });
 
-  it("handles terminal-safe shortcuts while xterm has focus and preserves control keys", async () => {
+  it("handles only retained application shortcuts while xterm has focus", async () => {
     render(<WorkspaceShell/>);
     await waitFor(() => expect(screen.getByTestId("workspace-canvas-workspace-1")).toHaveAttribute("data-terminal-settings-ready", "true"));
     const terminalInput = screen.getByRole("textbox", { name: "终端输入" });
@@ -553,7 +553,7 @@ describe("WorkspaceShell utility rail", () => {
     fireEvent.keyDown(terminalInput, { key: "d", ctrlKey: true });
     expect(mocks.splitTerminalBlock).not.toHaveBeenCalled();
     fireEvent.keyDown(terminalInput, { key: "d", ctrlKey: true, shiftKey: true });
-    expect(mocks.splitTerminalBlock).toHaveBeenCalledWith("workspace-1", "block-1", "horizontal", true);
+    expect(mocks.splitTerminalBlock).not.toHaveBeenCalled();
     fireEvent.keyDown(terminalInput, { key: "f", ctrlKey: true, shiftKey: true });
     expect(mocks.openTerminalSearch).toHaveBeenCalledWith("block-1");
   });
@@ -580,7 +580,7 @@ describe("WorkspaceShell utility rail", () => {
 
     mocks.dispatch.mockClear();
     fireEvent.keyDown(screen.getByRole("textbox", { name: "终端输入" }), { key: "ArrowLeft", ctrlKey: true, shiftKey: true });
-    expect(mocks.dispatch).toHaveBeenCalledWith({ type: "selectBlock", workspaceId: "workspace-1", blockId: "block-1" });
+    expect(mocks.dispatch).not.toHaveBeenCalled();
   });
 
   it("confirms before disconnecting an active terminal session", async () => {

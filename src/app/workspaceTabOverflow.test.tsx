@@ -29,7 +29,6 @@ it("disables creation at ten workspaces and explains the limit below the action"
   for (let i = 1; i < 10; i++) fireEvent.click(add);
   expect(add).toBeDisabled();
   fireEvent.click(add);
-  fireEvent.keyDown(window, { key: "T", code: "KeyT", ctrlKey: true, shiftKey: true });
   expect(nav.querySelectorAll(".workspace-tab")).toHaveLength(10);
   const anchor = add.parentElement!;
   vi.spyOn(anchor, "getBoundingClientRect").mockReturnValue({ left: 250, right: 280, top: 10, bottom: 40, width: 30, height: 30, x: 250, y: 10, toJSON: () => ({}) });

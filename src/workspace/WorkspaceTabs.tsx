@@ -10,8 +10,6 @@ import { createWorkspaceCloseRequest, type CloseRequest } from "./workspaceClose
 import { WorkspaceNotificationLabel } from "../terminal/notifications/WorkspaceNotificationLabel";
 import { IconButton } from "../components/Button";
 import { Icon } from "../components/Icon";
-import { currentDesktopPlatform } from "../lib/tauri/window";
-import { shortcutLabel } from "../app/shortcuts";
 
 interface Props { disabled: boolean; requestClose: (request: CloseRequest) => void; onReorderSelection: (order: string[]) => void }
 export function WorkspaceTabs({ disabled: terminalLocked, requestClose, onReorderSelection }: Props) {
@@ -19,7 +17,6 @@ export function WorkspaceTabs({ disabled: terminalLocked, requestClose, onReorde
   const limitReached = document.workspaces.length >= MAX_WORKSPACES;
   const [limitHintAnchor, setLimitHintAnchor] = useState<HTMLElement | null>(null);
   const limitHintId = useId();
-  const desktopPlatform = currentDesktopPlatform();
   const workspaceOrder = document.workspaces.map(workspace => workspace.id).join("\u0000");
   const [renaming, setRenaming] = useState<{ id: string; value: string } | null>(null);
   const [workspaceTabIndicator, setWorkspaceTabIndicator] = useState({ x: 0, width: 0, ready: false });
@@ -104,7 +101,7 @@ export function WorkspaceTabs({ disabled: terminalLocked, requestClose, onReorde
         </div>})}
       </div>
       {deck.overflowing && <IconButton className="workspace-tab-scroll" size="compact" label="显示右侧工作区" disabled={!scroll.right || terminalLocked} onClick={() => scroll.move(1)}><Icon name="forward" size={13}/></IconButton>}
-        <div className="new-workspace-slot" tabIndex={limitReached ? 0 : undefined} aria-label={limitReached ? "新建工作区：已达到数量上限" : undefined} aria-describedby={limitReached ? limitHintId : undefined} onPointerEnter={event => setLimitHintAnchor(event.currentTarget)} onPointerMove={event => { if (limitReached) setLimitHintAnchor(event.currentTarget); }} onPointerLeave={() => setLimitHintAnchor(null)} onFocus={event => setLimitHintAnchor(event.currentTarget)} onBlur={() => setLimitHintAnchor(null)}><IconButton disabled={limitReached} aria-describedby={limitReached ? limitHintId : undefined} className="new-workspace-tab" size="compact" label="新建工作区" title={limitReached ? undefined : `新建工作区 (${shortcutLabel("newWorkspace", desktopPlatform)})`} onClick={() => dispatch({ type: "addWorkspace" })}><Icon name="plus" size={14}/></IconButton></div>
+        <div className="new-workspace-slot" tabIndex={limitReached ? 0 : undefined} aria-label={limitReached ? "新建工作区：已达到数量上限" : undefined} aria-describedby={limitReached ? limitHintId : undefined} onPointerEnter={event => setLimitHintAnchor(event.currentTarget)} onPointerMove={event => { if (limitReached) setLimitHintAnchor(event.currentTarget); }} onPointerLeave={() => setLimitHintAnchor(null)} onFocus={event => setLimitHintAnchor(event.currentTarget)} onBlur={() => setLimitHintAnchor(null)}><IconButton disabled={limitReached} aria-describedby={limitReached ? limitHintId : undefined} className="new-workspace-tab" size="compact" label="新建工作区" onClick={() => dispatch({ type: "addWorkspace" })}><Icon name="plus" size={14}/></IconButton></div>
       {limitReached && <WorkspaceLimitHint anchor={limitHintAnchor} id={limitHintId}/> }
       </WorkspaceTabStrip>;
 }
