@@ -487,6 +487,10 @@ fn state_name(state: DomainSessionState) -> &'static str {
 fn failure_message(failure: SessionFailure) -> (&'static str, &'static str) {
     match failure {
         SessionFailure::ConnectionFailed => ("connectionFailed", "无法建立 SSH 连接"),
+        SessionFailure::TransportLost => {
+            ("transportLost", "SSH 连接已中断，请检查网络或服务器状态")
+        }
+        SessionFailure::RemoteDisconnected => ("remoteDisconnected", "服务器已关闭 SSH 连接"),
         SessionFailure::HostKeyChanged => ("hostKeyChanged", "主机密钥已变化，连接已阻断"),
         SessionFailure::HostKeyRejected => ("hostKeyRejected", "已拒绝未知主机密钥"),
         SessionFailure::HostKeyDecisionTimeout => {
@@ -533,7 +537,7 @@ fn failure_message(failure: SessionFailure) -> (&'static str, &'static str) {
 mod tests {
     use serde_json::json;
 
-    use super::{SessionConnectDto, SessionEventDto, terminal_size};
+    use super::{SessionConnectDto, SessionEventDto, failure_message, terminal_size};
     use crate::domain::session::{
         HostEndpoint, RouteNodeMetadata, RouteNodeRole, RouteStage, SessionEvent, SessionFailure,
     };
@@ -657,5 +661,17 @@ mod tests {
         }))
         .expect("serialize failure");
         assert_eq!(failure["code"], "hostKeyChanged");
+    }
+
+    #[test]
+    fn runtime_disconnects_have_stable_user_facing_failures() {
+        assert_eq!(
+            failure_message(SessionFailure::TransportLost),
+            ("transportLost", "SSH 连接已中断，请检查网络或服务器状态")
+        );
+        assert_eq!(
+            failure_message(SessionFailure::RemoteDisconnected),
+            ("remoteDisconnected", "服务器已关闭 SSH 连接")
+        );
     }
 }

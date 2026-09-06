@@ -128,6 +128,8 @@ pub enum SessionState {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SessionFailure {
     ConnectionFailed,
+    TransportLost,
+    RemoteDisconnected,
     HostKeyChanged,
     HostKeyRejected,
     HostKeyDecisionTimeout,

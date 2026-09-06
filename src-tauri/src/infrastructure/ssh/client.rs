@@ -6,6 +6,8 @@ mod manager_files;
 mod manager_ports;
 mod network;
 mod session;
+#[cfg(test)]
+mod session_lifecycle_tests;
 mod shell_integration;
 mod transfer;
 
@@ -248,13 +250,52 @@ impl SessionEntry {
         }
     }
 
+    fn fail_connected(
+        &self,
+        failure: SessionFailure,
+        node: RouteNodeMetadata,
+        stage: RouteStage,
+    ) -> bool {
+        let transitioned = {
+            let mut state = self
+                .state
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            state.state() == SessionState::Connected
+                && state.transition(SessionState::Failed).is_ok()
+        };
+        if !transitioned {
+            return false;
+        }
+        self.emit(SessionEvent::StateChanged(SessionState::Failed));
+        self.emit(SessionEvent::Failed {
+            failure,
+            node: Some(node),
+            stage: Some(stage),
+        });
+        self.cancel_owned_work();
+        true
+    }
+
     fn begin_close(&self) {
-        if !matches!(self.state(), SessionState::Closed | SessionState::Failed) {
-            self.transition(SessionState::Closing);
+        let transitioned = {
+            let mut state = self
+                .state
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            !matches!(state.state(), SessionState::Closed | SessionState::Failed)
+                && state.transition(SessionState::Closing).is_ok()
+        };
+        if transitioned {
+            self.emit(SessionEvent::StateChanged(SessionState::Closing));
         }
         if let Some(pending) = self.take_pending() {
             let _ = pending.decision.send(HostKeyDecision::Cancel);
         }
+        self.cancel_owned_work();
+    }
+
+    fn cancel_owned_work(&self) {
         if let Some(cancel) = self
             .cancel
             .lock()

@@ -7,7 +7,7 @@ import { completeConnectionProgress, connectionProgressFromRouteEvent, failConne
 import type { GitTarget } from "./model";
 import type { WorkspaceAction } from "./reducer";
 import type { WorkspaceRuntimeState } from "./useWorkspaceRuntimeState";
-import { connectionIntentAllows, connectionIntentKey, consumeFailureHandler, defaultGitRuntime, nodeLabel, routeFailureNotice, workspaceErrorMessage, type GitRuntime } from "./workspaceRuntime";
+import { connectionIntentAllows, connectionIntentKey, consumeFailureHandler, defaultGitRuntime, epochKey, nodeLabel, routeFailureNotice, workspaceErrorMessage, type GitRuntime } from "./workspaceRuntime";
 
 export function canReuseGitRemoteSession(currentTarget: GitTarget | undefined, target: GitTarget, runtime: GitRuntime | undefined, preparedProfileId: string | null = null): boolean {
   return target.type === "remote"
@@ -29,11 +29,12 @@ export function restoreGitTargetIntent(intents: Map<string, string | null>, bloc
 }
 
 export function useGitWorkspaceController(state: WorkspaceRuntimeState, dispatch: Dispatch<WorkspaceAction>) {
-  const { gitRuntimes, gitRuntimesRef, connectionTargetIntents, connectionFailureHandlers, updateGitRuntime, nextEpoch, isCurrentEpoch } = state;
+  const { gitRuntimes, gitRuntimesRef, connectionTargetIntents, finishedEpochs, connectionFailureHandlers, updateGitRuntime, nextEpoch, isCurrentEpoch } = state;
 
   const onGitSessionEvent = useCallback((blockId: string, epoch: number, event: SessionEvent) => {
     if (!isCurrentEpoch(blockId, epoch)) return;
     if (event.type === "stateChanged") {
+      if (event.state === "closed" || event.state === "failed") finishedEpochs.current.add(epochKey(blockId, epoch));
       updateGitRuntime(blockId, (runtime) => ({
         ...runtime,
         status: event.state,
@@ -56,7 +57,7 @@ export function useGitWorkspaceController(state: WorkspaceRuntimeState, dispatch
       updateGitRuntime(blockId, (runtime) => ({ ...runtime, stale: true, connectionProgress: failConnectionProgress(runtime.connectionProgress, event.node, event.message), notice: routeFailureNotice(event) }));
       if (event.node?.role === "target" && event.stage === "authenticate") consumeFailureHandler(connectionFailureHandlers.current, `git:${blockId}`);
     }
-  }, [connectionFailureHandlers, isCurrentEpoch, updateGitRuntime]);
+  }, [connectionFailureHandlers, finishedEpochs, isCurrentEpoch, updateGitRuntime]);
 
   const closeCurrentGitSession = useCallback(async (blockId: string) => {
     const runtime = gitRuntimesRef.current[blockId];
@@ -95,16 +96,18 @@ export function useGitWorkspaceController(state: WorkspaceRuntimeState, dispatch
     if (!connectionIntentAllows(connectionTargetIntents.current, "git", blockId, profile.id)) return;
     if (onFailure) connectionFailureHandlers.current.set(`git:${blockId}`, onFailure);
     const epoch = nextEpoch(blockId);
+    const key = epochKey(blockId, epoch);
+    finishedEpochs.current.delete(key);
     updateGitRuntime(blockId, () => ({ ...defaultGitRuntime, status: "connecting", connectionProgress: initialConnectionProgress(profile.jumpProfileIds?.length ?? 0) }));
     try {
       const sessionId = await connectGitSession({ profileId: profile.id, auth }, (event) => onGitSessionEvent(blockId, epoch, event));
       if (!isCurrentEpoch(blockId, epoch)) await closeSession(sessionId).catch(() => undefined);
-      else updateGitRuntime(blockId, (runtime) => ({ ...runtime, sessionId }));
+      else if (!finishedEpochs.current.has(key)) updateGitRuntime(blockId, (runtime) => ({ ...runtime, sessionId }));
     } catch (error) {
       if (isCurrentEpoch(blockId, epoch)) updateGitRuntime(blockId, () => ({ ...defaultGitRuntime, status: "failed", stale: true, notice: workspaceErrorMessage(error) }));
       consumeFailureHandler(connectionFailureHandlers.current, `git:${blockId}`);
     }
-  }, [closeCurrentGitSession, connectionFailureHandlers, connectionTargetIntents, isCurrentEpoch, nextEpoch, onGitSessionEvent, updateGitRuntime]);
+  }, [closeCurrentGitSession, connectionFailureHandlers, connectionTargetIntents, finishedEpochs, isCurrentEpoch, nextEpoch, onGitSessionEvent, updateGitRuntime]);
   const acceptGitHostKey = useCallback(async (blockId: string) => {
     const sessionId = gitRuntimes[blockId]?.sessionId;
     if (sessionId) await acceptHostKey(sessionId);

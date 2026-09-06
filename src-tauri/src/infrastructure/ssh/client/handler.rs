@@ -13,6 +13,26 @@ pub(super) struct ClientHandler {
 impl Handler for ClientHandler {
     type Error = russh::Error;
 
+    fn disconnected(
+        &mut self,
+        reason: client::DisconnectReason<Self::Error>,
+    ) -> impl Future<Output = Result<(), Self::Error>> + Send {
+        let (failure, error) = match reason {
+            client::DisconnectReason::ReceivedDisconnect(_) => {
+                (SessionFailure::RemoteDisconnected, None)
+            }
+            client::DisconnectReason::Error(error) => (SessionFailure::TransportLost, Some(error)),
+        };
+        self.entry
+            .fail_connected(failure, self.node.clone(), RouteStage::StartSession);
+        async move {
+            match error {
+                Some(error) => Err(error),
+                None => Ok(()),
+            }
+        }
+    }
+
     async fn check_server_key(&mut self, public_key: &PublicKey) -> Result<bool, Self::Error> {
         let presented = PresentedHostKey::new(
             public_key.algorithm().to_string(),

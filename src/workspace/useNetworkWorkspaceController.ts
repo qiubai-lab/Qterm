@@ -6,14 +6,15 @@ import { acceptHostKey, closeSession, rejectHostKey, type SessionAuth, type Sess
 import { completeConnectionProgress, connectionProgressFromRouteEvent, failConnectionProgress, initialConnectionProgress } from "./connectionProgress";
 import type { WorkspaceAction } from "./reducer";
 import type { WorkspaceRuntimeState } from "./useWorkspaceRuntimeState";
-import { connectionIntentAllows, connectionIntentKey, consumeFailureHandler, defaultNetworkRuntime, nodeLabel, routeFailureNotice, workspaceErrorMessage } from "./workspaceRuntime";
+import { connectionIntentAllows, connectionIntentKey, consumeFailureHandler, defaultNetworkRuntime, epochKey, nodeLabel, routeFailureNotice, workspaceErrorMessage } from "./workspaceRuntime";
 
 export function useNetworkWorkspaceController(state: WorkspaceRuntimeState, dispatch: Dispatch<WorkspaceAction>) {
-  const { networkRuntimes, networkRuntimesRef, connectionTargetIntents, connectionFailureHandlers, updateNetworkRuntime, nextEpoch, isCurrentEpoch } = state;
+  const { networkRuntimes, networkRuntimesRef, connectionTargetIntents, finishedEpochs, connectionFailureHandlers, updateNetworkRuntime, nextEpoch, isCurrentEpoch } = state;
 
   const onNetworkSessionEvent = useCallback((blockId: string, epoch: number, event: SessionEvent) => {
     if (!isCurrentEpoch(blockId, epoch)) return;
     if (event.type === "stateChanged") {
+      if (event.state === "closed" || event.state === "failed") finishedEpochs.current.add(epochKey(blockId, epoch));
       updateNetworkRuntime(blockId, (runtime) => ({
         ...runtime,
         status: event.state,
@@ -36,7 +37,7 @@ export function useNetworkWorkspaceController(state: WorkspaceRuntimeState, disp
       updateNetworkRuntime(blockId, (runtime) => ({ ...runtime, connectionProgress: failConnectionProgress(runtime.connectionProgress, event.node, event.message), notice: routeFailureNotice(event), ruleStates: {} }));
       if (event.node?.role === "target" && event.stage === "authenticate") consumeFailureHandler(connectionFailureHandlers.current, `network:${blockId}`);
     }
-  }, [connectionFailureHandlers, isCurrentEpoch, updateNetworkRuntime]);
+  }, [connectionFailureHandlers, finishedEpochs, isCurrentEpoch, updateNetworkRuntime]);
 
   const closeCurrentNetworkSession = useCallback(async (blockId: string) => {
     const runtime = networkRuntimesRef.current[blockId];
@@ -59,16 +60,18 @@ export function useNetworkWorkspaceController(state: WorkspaceRuntimeState, disp
     if (!connectionIntentAllows(connectionTargetIntents.current, "network", blockId, profile.id)) return;
     if (onFailure) connectionFailureHandlers.current.set(`network:${blockId}`, onFailure);
     const epoch = nextEpoch(blockId);
+    const key = epochKey(blockId, epoch);
+    finishedEpochs.current.delete(key);
     updateNetworkRuntime(blockId, () => ({ ...defaultNetworkRuntime, status: "connecting", connectionProgress: initialConnectionProgress(profile.jumpProfileIds?.length ?? 0) }));
     try {
       const sessionId = await connectNetworkSession({ profileId: profile.id, auth }, (event) => onNetworkSessionEvent(blockId, epoch, event));
       if (!isCurrentEpoch(blockId, epoch)) await closeSession(sessionId).catch(() => undefined);
-      else updateNetworkRuntime(blockId, (runtime) => ({ ...runtime, sessionId }));
+      else if (!finishedEpochs.current.has(key)) updateNetworkRuntime(blockId, (runtime) => ({ ...runtime, sessionId }));
     } catch (error) {
       if (isCurrentEpoch(blockId, epoch)) updateNetworkRuntime(blockId, () => ({ ...defaultNetworkRuntime, status: "failed", notice: workspaceErrorMessage(error) }));
       consumeFailureHandler(connectionFailureHandlers.current, `network:${blockId}`);
     }
-  }, [closeCurrentNetworkSession, connectionFailureHandlers, connectionTargetIntents, isCurrentEpoch, nextEpoch, onNetworkSessionEvent, updateNetworkRuntime]);
+  }, [closeCurrentNetworkSession, connectionFailureHandlers, connectionTargetIntents, finishedEpochs, isCurrentEpoch, nextEpoch, onNetworkSessionEvent, updateNetworkRuntime]);
   const startNetworkBlockRule = useCallback(async (blockId: string, ruleId: string) => {
     const runtime = networkRuntimesRef.current[blockId];
     if (!runtime?.sessionId || runtime.status !== "connected") throw new Error("网络 SSH 会话尚未连接");
