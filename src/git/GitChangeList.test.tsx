@@ -80,4 +80,12 @@ describe("GitChangeList", () => {
     renderList(items);
     expect(within(screen.getByRole("list", { name: "更改文件" })).getAllByRole("listitem")).toHaveLength(items.length);
   });
+
+  it("marks deleted paths and statuses with their destructive tone", () => {
+    renderList([{ ...changes(1)[0], path: "removed.ts", status: "D" }]);
+
+    const status = screen.getByText("删除");
+    expect(status).toHaveAttribute("data-tone", "deleted");
+    expect(status.closest("[role='listitem']")).toHaveAttribute("data-status-tone", "deleted");
+  });
 });

@@ -159,7 +159,7 @@ function GitChangeRow({ change, index, count, virtualized, selected, actionLabel
     : null;
   const actionDisabled = Boolean(!change.staged && change.submodule && !change.submodule.commitChanged);
   const style = virtualized ? { transform: `translateY(${index * GIT_CHANGE_ROW_HEIGHT}px)` } : undefined;
-  return <div className={`git-change-row${previewable ? " previewable" : ""}`} role="listitem" aria-posinset={virtualized ? index + 1 : undefined} aria-setsize={virtualized ? count : undefined} data-selected={selected || undefined} style={style} title={change.originalPath ? `${change.originalPath} → ${change.path}` : change.path} onContextMenu={onOpenContextMenu ? (event) => onOpenContextMenu(change, index, event) : undefined}>
+  return <div className={`git-change-row${previewable ? " previewable" : ""}`} role="listitem" aria-posinset={virtualized ? index + 1 : undefined} aria-setsize={virtualized ? count : undefined} data-selected={selected || undefined} data-status-tone={status.tone} style={style} title={change.originalPath ? `${change.originalPath} → ${change.path}` : change.path} onContextMenu={onOpenContextMenu ? (event) => onOpenContextMenu(change, index, event) : undefined}>
     {previewable ? <button type="button" className="git-change-preview-trigger" aria-label={`预览${change.staged ? "已暂存" : "工作区"}更改 ${change.path}`} aria-pressed={selected} aria-describedby={selectionHintId} onClick={(event) => {
       const modifiedSelection = event.ctrlKey || event.metaKey || event.shiftKey;
       onSelect?.(change, index, event);
@@ -167,7 +167,7 @@ function GitChangeRow({ change, index, count, virtualized, selected, actionLabel
       if (modifiedSelection) onClearSelectionHint();
       else if (selected) { onClearSelectionHint(); onPreview?.(change); }
       else onShowSelectionHint(change.path, event.currentTarget);
-    }} onKeyDown={onOpenContextMenu ? (event) => { if (event.key === "ContextMenu" || event.shiftKey && event.key === "F10") onOpenContextMenu(change, index, event); } : undefined}><Icon name="file" size={13}/><span className="git-change-path">{change.path}</span><span className="git-change-status" title={`Git 状态：${status.label}`}>{status.label}</span></button> : <><Icon name={change.conflict ? "mergeConflict" : "git"} size={13}/><span className="git-change-path">{change.path}</span><span className={`git-change-status${change.conflict ? " conflict" : ""}`} title={submoduleStatus ?? `Git 状态：${status.label}`}>{submoduleStatus ?? status.label}</span></>}
+    }} onKeyDown={onOpenContextMenu ? (event) => { if (event.key === "ContextMenu" || event.shiftKey && event.key === "F10") onOpenContextMenu(change, index, event); } : undefined}><Icon name="file" size={13}/><span className="git-change-path">{change.path}</span><span className="git-change-status" data-tone={status.tone} title={`Git 状态：${status.label}`}>{status.label}</span></button> : <><Icon name={change.conflict ? "mergeConflict" : "git"} size={13}/><span className="git-change-path">{change.path}</span><span className={`git-change-status${change.conflict ? " conflict" : ""}`} data-tone={status.tone} title={submoduleStatus ?? `Git 状态：${status.label}`}>{submoduleStatus ?? status.label}</span></>}
     <button type="button" className={showActionText ? "git-conflict-action" : undefined} aria-label={`${actionLabel} ${change.path}`} title={actionDisabled ? "子仓库内部修改不会改变父仓库 gitlink" : actionLabel} disabled={actionDisabled} onClick={() => onAction(change)}><Icon name={actionIcon} size={11}/>{showActionText && <span>解决</span>}</button>
   </div>;
 }

@@ -7,3 +7,14 @@
   position: absolute;
   inset: 0 0 auto;
 }
+
+.git-change-row[data-status-tone="deleted"] .git-change-path {
+  text-decoration-line: line-through;
+  text-decoration-color: currentColor;
+  text-decoration-thickness: 1px;
+}
+
+.git-change-status[data-tone="deleted"],
+.git-change-row.previewable[data-selected="true"] .git-change-status[data-tone="deleted"] {
+  color: var(--danger);
+}
