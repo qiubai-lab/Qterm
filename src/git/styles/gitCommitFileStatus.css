@@ -1,0 +1,22 @@
+.git-commit-file-status[data-tone="added"],
+.git-commit-file-status[data-tone="untracked"] {
+  color: var(--accent);
+}
+
+.git-commit-file-status[data-tone="modified"],
+.git-commit-file-status[data-tone="renamed"],
+.git-commit-file-status[data-tone="copied"],
+.git-commit-file-status[data-tone="default"] {
+  color: var(--warning);
+}
+
+.git-commit-file-status[data-tone="deleted"],
+.git-commit-file-status[data-tone="conflict"] {
+  color: var(--danger);
+}
+
+.git-commit-file-row[data-status-tone="deleted"] .git-commit-file-path > span:first-child {
+  text-decoration-line: line-through;
+  text-decoration-color: currentColor;
+  text-decoration-thickness: 1px;
+}

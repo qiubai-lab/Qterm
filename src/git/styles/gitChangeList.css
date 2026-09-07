@@ -14,7 +14,19 @@
   text-decoration-thickness: 1px;
 }
 
+.git-change-status[data-tone="added"],
+.git-change-status[data-tone="untracked"] {
+  --git-change-status-color: var(--accent);
+}
+
+.git-change-status[data-tone="modified"],
+.git-change-status[data-tone="renamed"],
+.git-change-status[data-tone="copied"],
+.git-change-status[data-tone="default"] {
+  --git-change-status-color: var(--warning);
+}
+
 .git-change-status[data-tone="deleted"],
-.git-change-row.previewable[data-selected="true"] .git-change-status[data-tone="deleted"] {
-  color: var(--danger);
+.git-change-status[data-tone="conflict"] {
+  --git-change-status-color: var(--danger);
 }

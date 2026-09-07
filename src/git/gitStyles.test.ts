@@ -9,6 +9,7 @@ const gitStyleFiles = [
   "gitChangeSelection.css",
   "gitChangeList.css",
   "gitGraph.css",
+  "gitCommitFileStatus.css",
   "gitTargetConfig.css",
   "gitBranchOverlays.css",
   "gitMergeOverlays.css",
@@ -592,7 +593,6 @@ describe("Git pane style contracts", () => {
     expect(declarations(".git-commit-file-row")).toContain("width: 100%");
     expect(declarations(".git-commit-file-row > svg")).toContain("color: var(--accent)");
     expect(declarations(".git-commit-file-path > span:first-child")).toContain("color: var(--text)");
-    expect(declarations('.git-commit-file-status[data-tone="deleted"],\n.git-commit-file-status[data-tone="conflict"]')).toContain("var(--danger)");
     expect(declarations('.git-commit-row[aria-expanded="true"] .git-commit-expander svg')).toContain("rotate(0)");
     const reducedMotion = styles.slice(styles.indexOf("@media (prefers-reduced-motion: reduce)"));
     expect(reducedMotion).toContain(".git-commit-details-shell");
@@ -632,7 +632,7 @@ describe("Git pane style contracts", () => {
     expect(selectionHint).toContain("pointer-events: none");
     expect(declarations('.git-change-row.previewable[data-selected="true"] .git-change-path')).toContain("color: var(--file-selection-foreground)");
     expect(declarations('.git-change-row.previewable[data-selected="true"] .git-change-preview-trigger > svg')).toContain("color: var(--file-selection-marker)");
-    expect(declarations('.git-change-row.previewable[data-selected="true"] .git-change-status')).toContain("color: var(--file-selection-secondary-foreground)");
+    expect(declarations('.git-change-row.previewable[data-selected="true"] .git-change-status')).toContain("color: var(--git-change-status-color, var(--file-selection-secondary-foreground))");
   });
 
   it("uses the shared themed popover surface for change context actions", () => {

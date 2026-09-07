@@ -4,6 +4,7 @@
 @import "./styles/gitChangeSelection.css";
 @import "./styles/gitChangeList.css";
 @import "./styles/gitGraph.css";
+@import "./styles/gitCommitFileStatus.css";
 @import "./styles/gitTargetConfig.css";
 @import "./styles/gitBranchOverlays.css";
 @import "./styles/gitMergeOverlays.css";

@@ -581,16 +581,6 @@
   white-space: nowrap;
 }
 
-.git-commit-file-status[data-tone="deleted"],
-.git-commit-file-status[data-tone="conflict"] {
-  color: var(--danger);
-}
-
-.git-commit-file-status[data-tone="renamed"],
-.git-commit-file-status[data-tone="copied"] {
-  color: var(--warning);
-}
-
 .git-commit-files-state {
   display: flex;
   align-items: center;

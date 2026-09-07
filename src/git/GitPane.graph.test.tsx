@@ -191,7 +191,17 @@ describe("GitPane commit graph", () => {
     }
   });
 
-  it("loads commit files lazily, shows rename context, and reuses the cached result", async () => {
+  it("loads commit files lazily, presents status semantics, and reuses the cached result", async () => {
+    api.commitFiles.mockResolvedValueOnce([
+      { path: "src/new-file.ts", originalPath: null, status: "A" },
+      { path: "src/modified.ts", originalPath: null, status: "M" },
+      { path: "src/type-changed.ts", originalPath: null, status: "T" },
+      { path: "src/removed.ts", originalPath: null, status: "D" },
+      { path: "src/renamed.ts", originalPath: "src/old.ts", status: "R100" },
+      { path: "src/copied.ts", originalPath: "src/source.ts", status: "C100" },
+      { path: "src/conflicted.ts", originalPath: null, status: "U" },
+      { path: "src/unknown.ts", originalPath: null, status: "X" },
+    ]);
     render(<GitPane blockId="git-1" target={{ type: "local", path: "D:/work/project" }} visible onTargetChange={vi.fn()}/>);
     await screen.findByText("project");
     fireEvent.click(screen.getByRole("button", { name: "图表" }));
@@ -214,10 +224,18 @@ describe("GitPane commit graph", () => {
     expect(files).toHaveTextContent("src");
     expect(files).toHaveTextContent("来自 src/old.ts");
     expect(files.querySelector('[data-tone="added"]')).toHaveTextContent("新增");
+    expect(files.querySelectorAll('[data-tone="modified"]')).toHaveLength(2);
     expect(files.querySelector('[data-tone="renamed"]')).toHaveTextContent("重命名");
+    expect(files.querySelector('[data-tone="copied"]')).toHaveTextContent("复制");
+    expect(files.querySelector('[data-tone="deleted"]')).toHaveTextContent("删除");
+    expect(files.querySelector('[data-status-tone="deleted"] .git-commit-file-path > span:first-child')).toHaveTextContent("removed.ts");
+    expect(files.querySelector('[data-tone="default"]')).toHaveTextContent("未知状态");
+    const conflict = files.querySelector('[data-tone="conflict"]');
+    expect(conflict).toHaveTextContent("冲突");
+    expect(conflict?.closest("button")?.querySelector('[data-icon="mergeConflict"]')).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /diff|比较|查看改动/i })).not.toBeInTheDocument();
     fireEvent.pointerEnter(commit);
-    expect(screen.getByRole("tooltip")).toHaveTextContent("2 个文件");
+    expect(screen.getByRole("tooltip")).toHaveTextContent("8 个文件");
     fireEvent.pointerLeave(commit);
 
     fireEvent.click(commit);

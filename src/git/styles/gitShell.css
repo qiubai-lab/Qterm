@@ -816,7 +816,7 @@
 }
 
 .git-change-status {
-  color: var(--accent);
+  color: var(--git-change-status-color, var(--accent));
   font-size: 9px;
   font-weight: 750;
   white-space: nowrap;
@@ -831,7 +831,7 @@
 }
 
 .git-change-row.previewable[data-selected="true"] .git-change-status {
-  color: var(--file-selection-secondary-foreground);
+  color: var(--git-change-status-color, var(--file-selection-secondary-foreground));
 }
 
 .git-change-status.conflict {

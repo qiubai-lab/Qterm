@@ -166,8 +166,8 @@ function GitCommitFiles({ commit, state, onRetry, onPreview }: { commit: GitComm
       const path = splitGitFilePath(file.path);
       const status = presentGitFileStatus(file.status, { context: "commit" });
       return <div className="git-commit-file-item" role="listitem" key={`${file.status}:${file.originalPath ?? ""}:${file.path}`}>
-        <button type="button" className="git-commit-file-row" aria-label={`预览提交 ${commit.oid.slice(0, 7)} 的文件更改 ${file.path}`} title={file.originalPath ? `${file.originalPath} → ${file.path}` : file.path} onClick={() => onPreview(file, state.files)}>
-          <Icon name="file" size={12}/>
+        <button type="button" className="git-commit-file-row" data-status-tone={status.tone} aria-label={`预览提交 ${commit.oid.slice(0, 7)} 的文件更改 ${file.path}`} title={file.originalPath ? `${file.originalPath} → ${file.path}` : file.path} onClick={() => onPreview(file, state.files)}>
+          <Icon name={status.tone === "conflict" ? "mergeConflict" : "file"} size={12}/>
           <span className="git-commit-file-path"><span>{path.name}</span>{path.directory && <span className="git-commit-file-directory">{path.directory}</span>}{file.originalPath && <span className="git-commit-file-original">来自 {file.originalPath}</span>}</span>
           <span className="git-commit-file-status" data-tone={status.tone} title={`Git 状态：${status.label}`}>{status.label}</span>
         </button>

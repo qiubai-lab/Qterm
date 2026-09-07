@@ -81,11 +81,27 @@ describe("GitChangeList", () => {
     expect(within(screen.getByRole("list", { name: "更改文件" })).getAllByRole("listitem")).toHaveLength(items.length);
   });
 
-  it("marks deleted paths and statuses with their destructive tone", () => {
-    renderList([{ ...changes(1)[0], path: "removed.ts", status: "D" }]);
+  it.each([
+    ["A", "新增", "added"],
+    ["M", "修改", "modified"],
+    ["U", "未跟踪", "untracked"],
+    ["D", "删除", "deleted"],
+    ["R100", "重命名", "renamed"],
+    ["C100", "复制", "copied"],
+    ["X", "未知状态", "default"],
+  ])("exposes the %s status tone to the change row", (rawStatus, label, tone) => {
+    renderList([{ ...changes(1)[0], path: "status.ts", status: rawStatus }]);
 
-    const status = screen.getByText("删除");
-    expect(status).toHaveAttribute("data-tone", "deleted");
-    expect(status.closest("[role='listitem']")).toHaveAttribute("data-status-tone", "deleted");
+    const status = screen.getByText(label);
+    expect(status).toHaveAttribute("data-tone", tone);
+    expect(status.closest("[role='listitem']")).toHaveAttribute("data-status-tone", tone);
+  });
+
+  it("uses the conflict icon and danger tone for a conflicted file", () => {
+    renderList([{ ...changes(1)[0], path: "conflicted.ts", conflict: true }], vi.fn(), vi.fn());
+
+    const status = screen.getByText("冲突");
+    expect(status).toHaveAttribute("data-tone", "conflict");
+    expect(status.closest("button")?.querySelector('[data-icon="mergeConflict"]')).toBeInTheDocument();
   });
 });
