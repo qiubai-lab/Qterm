@@ -63,12 +63,21 @@ const themeTokens = {
   scrollbarSliderActiveBackground: "--terminal-scrollbar-active",
 } as const satisfies Record<keyof typeof fallbackTheme, string>;
 
+const optionalThemeTokens = {
+  selectionForeground: "--terminal-selection-foreground",
+} as const satisfies Partial<Record<keyof ITheme, string>>;
+
 export function readTerminalTheme(root: Element = document.documentElement): ITheme {
   const style = getComputedStyle(root);
-  return Object.fromEntries(Object.entries(themeTokens).map(([key, token]) => [
+  const requiredTheme = Object.fromEntries(Object.entries(themeTokens).map(([key, token]) => [
     key,
     style.getPropertyValue(token).trim() || fallbackTheme[key as keyof typeof fallbackTheme],
   ])) as ITheme;
+  const optionalTheme = Object.fromEntries(Object.entries(optionalThemeTokens).flatMap(([key, token]) => {
+    const value = style.getPropertyValue(token).trim();
+    return value ? [[key, value]] : [];
+  })) as Partial<ITheme>;
+  return { ...requiredTheme, ...optionalTheme };
 }
 
 export function readTerminalSearchColors(root: Element = document.documentElement): typeof fallbackSearchColors {

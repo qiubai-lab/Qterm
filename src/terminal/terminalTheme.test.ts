@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { bindTerminalTheme, readTerminalSearchColors, readTerminalTheme, refreshTerminalThemes } from "./terminalTheme";
 
-const tokens = ["--terminal-foreground", "--terminal-cursor", "--terminal-scrollbar", "--terminal-ansi-blue", "--terminal-ansi-bright-white"];
+const tokens = ["--terminal-foreground", "--terminal-cursor", "--terminal-selection-foreground", "--terminal-scrollbar", "--terminal-ansi-blue", "--terminal-ansi-bright-white"];
 
 describe("terminal theme adapter", () => {
   afterEach(() => tokens.forEach((token) => document.documentElement.style.removeProperty(token)));
@@ -12,13 +12,15 @@ describe("terminal theme adapter", () => {
       foreground: "#f1f3f5",
       cursor: "#74e6d1",
     });
+    expect(readTerminalTheme()).not.toHaveProperty("selectionForeground");
 
     document.documentElement.style.setProperty("--terminal-foreground", "#abcdef");
     document.documentElement.style.setProperty("--terminal-cursor", "#123456");
+    document.documentElement.style.setProperty("--terminal-selection-foreground", "#00ddeb");
     document.documentElement.style.setProperty("--terminal-ansi-blue", "#2468ac");
     document.documentElement.style.setProperty("--terminal-ansi-bright-white", "#fedcba");
 
-    expect(readTerminalTheme()).toMatchObject({ foreground: "#abcdef", cursor: "#123456", blue: "#2468ac", brightWhite: "#fedcba" });
+    expect(readTerminalTheme()).toMatchObject({ foreground: "#abcdef", cursor: "#123456", selectionForeground: "#00ddeb", blue: "#2468ac", brightWhite: "#fedcba" });
   });
 
   it("refreshes every live terminal consumer and releases disposed views", () => {

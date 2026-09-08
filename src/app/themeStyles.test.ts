@@ -132,6 +132,12 @@ describe("application theme contract", () => {
     expect(tokenValue(theme, "--editor-selection")).toBe("var(--file-selection-surface)");
     expect(tokenValue(lightTheme, "--editor-selection")).toBe("var(--file-selection-surface)");
     expect(tokenValue(cyberpunkTheme, "--editor-selection")).toBe("rgba(252,238,10,.24)");
+    expect(tokenValue(cyberpunkTheme, "--terminal-selection")).toBe("#07383f");
+    expect(tokenValue(cyberpunkTheme, "--terminal-selection-foreground")).toBe("#00ddeb");
+    expect(contrastRatio(
+      tokenHex(cyberpunkTheme, "--terminal-selection-foreground"),
+      tokenHex(cyberpunkTheme, "--terminal-selection"),
+    ), "terminal selection contrast").toBeGreaterThanOrEqual(4.5);
     expect(contrastRatio(
       tokenHex(cyberpunkTheme, "--editor-selection-foreground"),
       compositeRgbaOverHex(

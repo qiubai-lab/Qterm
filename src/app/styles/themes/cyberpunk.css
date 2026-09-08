@@ -82,7 +82,8 @@
   --terminal-background:#00000000;
   --terminal-foreground:#dde4e6;
   --terminal-cursor:#fcee0a;
-  --terminal-selection:#164b55;
+  --terminal-selection:#07383f;
+  --terminal-selection-foreground:#00ddeb;
   --terminal-ansi-black:#10141a;
   --terminal-ansi-bright-black:#64717a;
   --terminal-ansi-red:#ff5a66;
