@@ -54,12 +54,13 @@
 - `src/components/dialogs/ConnectionDialog.tsx`：连接、分组、凭证引用、显式跃点编辑和不兼容配置清除确认入口；展示后端候选与原因，不拥有 route 校验、列表动效测量或文件删除授权。
 - `src/components/dialogs/connection/`、`credential/`：Connection jump/反馈展示、纯 profile 模型、分组内容过渡存在期，以及连接与凭证列表主选择、详情 stage 的局部动效测量和 Credential 浮层/安全提示模块；分组展示组件与 motion hook 不拥有展开意图、draft、业务选择或 persistence，父 dialog 继续拥有这些状态和 nested dialog 生命周期。
 - `src/components/dialogs/SshConfigImportDialog.tsx`：SSH Config 文件选择、连接信息/凭证双 Tab 与批量导入界面；负责默认未分组、连接选择和逐项私钥授权，不接收设备路径或私钥正文。
-- `src/terminal/TerminalPanel.tsx`、`terminalSessionReset.ts`、`TerminalStagingStatus.tsx`、`terminalTheme.ts`：每个 Block 的 xterm 生命周期、与已排队输出有序执行的会话重置、直接输出 writer、本地剪贴板路径准备与远端暂存任务的有序粘贴、按动作挂载的右下角悬浮状态卡片、OSC 工作目录、PTY 尺寸适配与 semantic token palette registry；悬浮卡片不占用 xterm 布局高度；该层只消费一次性最终粘贴文本，不读取本机文件内容/图片像素、选择缓存/远端临时目录、管理连接配置、布局树或 theme selection。
+- `src/terminal/TerminalPanel.tsx`、`terminalSessionReset.ts`、`TerminalStagingStatus.tsx`、`terminalTheme.ts`、`terminalOsc8Link.ts`、`terminalWebLinks.ts`、`terminalExternalLinkRequests.ts`、`TerminalExternalLinkConfirmation.tsx`：每个 Block 的 xterm 生命周期、与已排队输出有序执行的会话重置、直接输出 writer、本地剪贴板路径准备与远端暂存任务的有序粘贴、按动作挂载的右下角悬浮状态卡片、OSC 工作目录、OSC 8 激活及普通 HTTP/HTTPS 文本识别适配、终端外链请求边界与风险确认、PTY 尺寸适配与 semantic token palette registry；OSC 8 与 Web Links 继续由 xterm 解析和展示，实际 HTTP/HTTPS 目标经统一确认后才委托给共享外链边界；悬浮卡片不占用 xterm 布局高度；该层只消费一次性最终粘贴文本，不读取本机文件内容/图片像素、选择缓存/远端临时目录、管理连接配置、布局树或 theme selection。
 - `src/files/FileBrowserPane.tsx`、`FileList.tsx`、`fileBrowserModel.ts`、`CodeEditor.tsx`、`MarkdownPreview.tsx`：内部文件窗口的目录导航、虚拟列表/排序纯规则、下载、瞬时预览编辑状态与按需编辑/渲染组件；不依赖 TerminalRuntime，不直接读取本地文件或实现 SFTP。
 - `src/lib/tauri/profiles.ts`：连接配置、有序跃点候选/route 要求、不兼容存储清除与 SSH Config 导入 IPC 客户端契约；不包含配置路径、私钥路径、强制删除参数或领域校验。
 - `src/lib/tauri/credentials.ts`：密码/私钥凭证库的窄 IPC 契约；不实现 KDF、加密或 JSON 访问。
 - `src/lib/tauri/settings.ts`：配置根选择、当前构建模式默认根与派生存储布局快照，以及设备安全、外观、更新和远程终端集成偏好的窄 IPC 契约；不开放 locator 路径、构建模式、分区路径写入、Shell cache 或执行锁定/探测策略。
 - `src/lib/updateCheck.ts`：固定 GitHub Latest Release 的超时请求、稳定 SemVer 比较、进程内启动单次去重与固定 Releases opener；不持久化偏好、自动安装或接受任意 URL。
+- `src/lib/externalUrl.ts`：文件预览与终端 OSC 8 共用的绝对 HTTP/HTTPS URL 校验及 Tauri/浏览器外部打开适配；拒绝相对路径、文件、Shell、SSH、脚本和其他协议，不拥有链接展示、终端解析或页面导航。
 - `src/lib/tauri/sessions.ts`、`localSessions.ts`：远程/本地终端建连、可选一次性初始目录、远程剪贴板暂存 opaque task/progress/cancel，以及本地剪贴板一次性最终路径文本的窄 IPC 契约；不传输文件字节、解析 route、验证文件系统路径、执行 Shell 命令或持久化启动上下文。
 - `src/lib/tauri/transfers.ts`：单文件 SFTP 选择、启动、进度和取消 IPC 契约；不直接访问本地或远程文件系统。
 - `src/lib/tauri/files.ts`：本地/远程目录、受限文件读取、带修订保存与 Files-only SSH connect IPC 契约；不执行文件系统或 SFTP 操作。

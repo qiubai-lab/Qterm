@@ -12,6 +12,7 @@
 @import "../files/fileBrowser.css";
 @import "../git/git.css";
 @import "../terminal/terminalSurface.css";
+@import "../terminal/terminalExternalLinkConfirmation.css";
 @import "../workspace/workspaceInteractions.css";
 @import "../components/dialogs/dialogFrame.css";
 @import "../components/dialogs/connectionDialog.css";

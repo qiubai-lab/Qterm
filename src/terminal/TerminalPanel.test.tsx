@@ -151,7 +151,6 @@ vi.mock("../workspace/WorkspaceProvider", () => ({
 import { TerminalPanel } from "./TerminalPanel";
 import { parseOsc7Cwd } from "./osc7";
 import { ensureTerminalSearch } from "./terminalSearch";
-
 class ResizeObserverMock {
   observe() {}
   disconnect() {}
@@ -195,13 +194,14 @@ describe("TerminalPanel view lifetime", () => {
     const view = render(<Layout split={false}/>);
     expect(mocks.terminals).toHaveLength(1);
     const terminal = mocks.terminals[0];
+    expect(terminal.options.linkHandler).toBeDefined();
 
     view.rerender(<Layout split/>);
 
     expect(mocks.terminals).toHaveLength(1);
     expect(terminal.dispose).not.toHaveBeenCalled();
+    expect(terminal.loadAddon).toHaveBeenCalledTimes(3);
     expect(view.container.querySelector("[data-xterm-view=preserved]")).toBe(terminal.element);
-
     view.unmount();
     act(() => vi.runAllTimers());
     expect(terminal.dispose).toHaveBeenCalledOnce();

@@ -5,7 +5,6 @@ import type { ISearchOptions } from "@xterm/addon-search";
 import { Terminal } from "@xterm/xterm";
 import { writeText as writeClipboardText } from "@tauri-apps/plugin-clipboard-manager";
 import "@xterm/xterm/css/xterm.css";
-
 import { resolveAppShortcut, shortcutLabel } from "../app/shortcuts";
 import { DialogFrame } from "../components/dialogs/DialogFrame";
 import { ExactTextInput } from "../components/ExactTextInput";
@@ -22,6 +21,8 @@ import { parseOsc7Cwd } from "./osc7";
 import { createTerminalLayout, type TerminalLayout } from "./terminalLayout";
 import { createTerminalInputScheduler, type TerminalInputScheduler } from "./terminalInputScheduler";
 import { resetTerminalSession } from "./terminalSessionReset";
+import { terminalOsc8LinkHandler } from "./terminalOsc8Link";
+import { createTerminalWebLinksAddon } from "./terminalWebLinks";
 import { ensureTerminalSearch, type TerminalSearchHost } from "./terminalSearch";
 import { bindTerminalTheme, readTerminalSearchColors, readTerminalTheme } from "./terminalTheme";
 import { registerTerminalController } from "./terminalViewRegistry";
@@ -44,14 +45,12 @@ interface TerminalView extends TerminalSearchHost {
   themeBinding: { dispose: () => void };
   disposeTimer: number | null;
 }
-
 type ClipboardPlatform = "mac" | "windows" | "linux";
 type ContextMenuState = { anchorX: number; anchorY: number; x: number; y: number; placement: "above" | "below"; hasSelection: boolean };
 type PendingPaste = { text: string; lines: number; characters: number };
 type SearchResults = { resultIndex: number; resultCount: number };
 type ActiveStagingTask = { sessionId: string; taskId: string };
 type StagingCompletion = { kind: "completed"; remotePaths: string[] } | { kind: "cancelled" } | { kind: "failed" };
-
 const terminalViews = new Map<string, TerminalView>();
 const CLEAR_SCREEN_INPUT = "\x1bcls\r";
 const FALLBACK_TERMINAL_FONT_FAMILY = "SFMono-Regular, Menlo, Monaco, Consolas, monospace";
@@ -675,10 +674,12 @@ function acquireTerminalView(sessionKey: string, container: HTMLElement, windows
     ...(windowsPty ? { windowsPty } : {}),
     allowTransparency: true,
     overviewRuler: { width: 3 },
+    linkHandler: terminalOsc8LinkHandler,
     theme: readTerminalTheme(),
   });
   const fit = new FitAddon();
   terminal.loadAddon(fit);
+  terminal.loadAddon(createTerminalWebLinksAddon());
   terminal.open(container);
   const element = terminal.element;
   if (!element) {
@@ -721,7 +722,6 @@ function acquireTerminalView(sessionKey: string, container: HTMLElement, windows
   terminalViews.set(sessionKey, view);
   return view;
 }
-
 function terminalSearchOptions(): ISearchOptions {
   const { matchBackground, activeMatchBackground } = readTerminalSearchColors();
   return {

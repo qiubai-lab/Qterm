@@ -20,7 +20,10 @@
       "identifier": "opener:allow-open-url",
       "allow": [
         {
-          "url": "https://github.com/qiubai-lab/Qterm/releases/latest"
+          "url": "https://*"
+        },
+        {
+          "url": "http://*"
         }
       ]
     }
