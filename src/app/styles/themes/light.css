@@ -128,8 +128,8 @@
   --file-selection-secondary-foreground:var(--dim);
   --file-selection-marker:#126fbb;
   --editor-active-line:var(--file-active-surface);
-  --editor-selection:var(--file-selection-surface);
-  --editor-selection-foreground:var(--editor-foreground);
+  --editor-selection:var(--terminal-selection);
+  --editor-selection-foreground:var(--terminal-foreground);
   --editor-selection-marker:var(--file-selection-marker);
   --editor-preview-background:#f7f9f8;
   --workspace-tab-active-border:#b7c2bd;

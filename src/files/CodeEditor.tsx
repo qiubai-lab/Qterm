@@ -1,19 +1,20 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
-import { createPortal } from "react-dom";
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { basicSetup } from "codemirror";
+import { redo, redoDepth, undo, undoDepth } from "@codemirror/commands";
 import { jsonParseLinter } from "@codemirror/lang-json";
 import { linter } from "@codemirror/lint";
 import { Compartment, EditorState, type Extension } from "@codemirror/state";
-import { EditorView } from "@codemirror/view";
+import { EditorView, type Command } from "@codemirror/view";
 import { readText as readClipboardText, writeText as writeClipboardText } from "@tauri-apps/plugin-clipboard-manager";
 import { parseDocument } from "yaml";
 
 import { plainTextLanguageSupport, type EditorLanguage } from "../editor/editorLanguage";
 import { useEditorLanguage } from "../editor/useEditorLanguage";
-import { fitContextMenu } from "./fileBrowserModel";
+import { FileTextContextMenu } from "./FileTextContextMenu";
+import { fileTextShortcutLabels } from "./fileTextContextMenuModel";
 
 export type { EditorLanguage } from "../editor/editorLanguage";
-type EditorContextMenuState = { anchorX: number; anchorY: number; x: number; y: number; placement: "above" | "below"; hasSelection: boolean; hasContent: boolean };
+type EditorContextMenuState = { x: number; y: number; hasSelection: boolean; hasContent: boolean; canUndo: boolean; canRedo: boolean; focusOnOpen: boolean };
 type EditorOperationMessage = { text: string; tone: "success" | "error" };
 
 const SUCCESS_OPERATION_MESSAGE_MS = 1_800;
@@ -32,7 +33,6 @@ export function CodeEditor({ value, language, readOnly = false, ariaLabel, exten
 }) {
   const host = useRef<HTMLDivElement>(null);
   const editor = useRef<EditorView>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
   const initialValue = useRef(value);
   const onChangeRef = useRef(onChange);
   const onSaveRef = useRef(onSave);
@@ -89,14 +89,6 @@ export function CodeEditor({ value, language, readOnly = false, ariaLabel, exten
             if (!readOnly && update.docChanged) onChangeRef.current(update.state.doc.toString());
           }),
           EditorView.domEventHandlers({
-            contextmenu(event, editorView) {
-              event.preventDefault();
-              editorView.focus();
-              const anchorX = event.clientX;
-              const anchorY = event.clientY;
-              setContextMenu({ anchorX, anchorY, x: anchorX, y: anchorY, placement: "below", hasSelection: editorView.state.selection.ranges.some((range) => !range.empty), hasContent: editorView.state.doc.length > 0 });
-              return true;
-            },
             keydown(event, editorView) {
               if (!readOnly && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
                 event.preventDefault();
@@ -106,9 +98,7 @@ export function CodeEditor({ value, language, readOnly = false, ariaLabel, exten
               if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) {
                 event.preventDefault();
                 const rect = editorView.dom.getBoundingClientRect();
-                const anchorX = rect.left + 38;
-                const anchorY = rect.top + 24;
-                setContextMenu({ anchorX, anchorY, x: anchorX, y: anchorY, placement: "below", hasSelection: editorView.state.selection.ranges.some((range) => !range.empty), hasContent: editorView.state.doc.length > 0 });
+                setContextMenu(readEditorContextMenuState(editorView, rect.left + 38, rect.top + 24, true));
                 return true;
               }
               return false;
@@ -134,38 +124,7 @@ export function CodeEditor({ value, language, readOnly = false, ariaLabel, exten
     editor.current?.dispatch({ effects: featureExtensions.current.reconfigure(extensions) });
   }, [extensions]);
 
-  useEffect(() => {
-    if (!contextMenu) return;
-    const closeOnPointerDown = (event: PointerEvent) => {
-      if (!(event.target instanceof Element) || !event.target.closest(".file-editor-context-menu")) setContextMenu(null);
-    };
-    const closeOnKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      setContextMenu(null);
-      editor.current?.focus();
-    };
-    const closeWithoutFocus = () => setContextMenu(null);
-    document.addEventListener("pointerdown", closeOnPointerDown);
-    window.addEventListener("keydown", closeOnKeyDown);
-    window.addEventListener("resize", closeWithoutFocus);
-    window.addEventListener("scroll", closeWithoutFocus, true);
-    window.setTimeout(() => menuRef.current?.querySelector<HTMLButtonElement>("[role='menuitem']:not(:disabled)")?.focus(), 0);
-    return () => {
-      document.removeEventListener("pointerdown", closeOnPointerDown);
-      window.removeEventListener("keydown", closeOnKeyDown);
-      window.removeEventListener("resize", closeWithoutFocus);
-      window.removeEventListener("scroll", closeWithoutFocus, true);
-    };
-  }, [contextMenu]);
-
-  useLayoutEffect(() => {
-    if (!contextMenu || !menuRef.current) return;
-    const fitted = fitContextMenu(contextMenu.anchorX, contextMenu.anchorY, menuRef.current.offsetWidth, menuRef.current.offsetHeight, window.innerWidth, window.innerHeight);
-    if (fitted.x === contextMenu.x && fitted.y === contextMenu.y && fitted.placement === contextMenu.placement) return;
-    setContextMenu((current) => current ? { ...current, ...fitted } : null);
-  }, [contextMenu]);
-
-  function closeMenu(restoreFocus = true) {
+  function closeMenu(restoreFocus: boolean) {
     setContextMenu(null);
     if (restoreFocus) requestAnimationFrame(() => editor.current?.focus());
   }
@@ -181,7 +140,6 @@ export function CodeEditor({ value, language, readOnly = false, ariaLabel, exten
     const view = editor.current;
     if (!view) return;
     const text = selectedText(view);
-    closeMenu(false);
     if (!text) { view.focus(); return; }
     try {
       await writeClipboardText(text);
@@ -201,7 +159,6 @@ export function CodeEditor({ value, language, readOnly = false, ariaLabel, exten
   async function pasteSelection() {
     const view = editor.current;
     if (!view || readOnly) return;
-    closeMenu(false);
     try {
       const text = await readClipboardText();
       if (editor.current !== view) return;
@@ -219,36 +176,50 @@ export function CodeEditor({ value, language, readOnly = false, ariaLabel, exten
     const view = editor.current;
     if (!view) return;
     view.dispatch({ selection: { anchor: 0, head: view.state.doc.length }, scrollIntoView: true });
-    closeMenu();
+    view.focus();
   }
 
-  function handleMenuKeyDown(event: KeyboardEvent<HTMLDivElement>) {
-    const items = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>("[role='menuitem']:not(:disabled)"));
-    if (items.length === 0) return;
-    const index = items.indexOf(document.activeElement as HTMLButtonElement);
-    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-      event.preventDefault();
-      const offset = event.key === "ArrowDown" ? 1 : -1;
-      items[(index + offset + items.length) % items.length]?.focus();
-    } else if (event.key === "Home" || event.key === "End") {
-      event.preventDefault();
-      items[event.key === "Home" ? 0 : items.length - 1]?.focus();
-    } else if (event.key === "Tab") {
-      closeMenu();
-    }
+  function runHistory(command: Command) {
+    const view = editor.current;
+    if (!view) return;
+    command(view);
+    view.focus();
   }
 
-  const shortcuts = editorShortcutLabels();
-  return <div className="file-code-editor" data-read-only={readOnly || undefined}>
+  function handleContextMenu(event: MouseEvent<HTMLDivElement>) {
+    event.preventDefault();
+    const view = editor.current;
+    if (!view) return;
+    view.focus();
+    setContextMenu(readEditorContextMenuState(view, event.clientX, event.clientY, false));
+  }
+
+  const shortcuts = fileTextShortcutLabels();
+  return <div className="file-code-editor" data-read-only={readOnly || undefined} onContextMenu={handleContextMenu}>
     <div className="file-code-editor-host" ref={host}/>
     {operationMessage && <div className="file-editor-operation" data-tone={operationMessage.tone} role="status" aria-label="编辑器操作状态" aria-live="polite">{operationMessage.text}</div>}
-    {contextMenu && createPortal(<div ref={menuRef} className="file-context-menu file-editor-context-menu" data-placement={contextMenu.placement} role="menu" aria-label={readOnly ? "文件预览菜单" : "文件编辑菜单"} style={{ left: contextMenu.x, top: contextMenu.y }} onContextMenu={(event) => event.preventDefault()} onKeyDown={handleMenuKeyDown}>
-      {!readOnly && <button role="menuitem" disabled={!contextMenu.hasSelection} onClick={() => void copySelection(true)}><span>剪切</span><kbd>{shortcuts.cut}</kbd></button>}
-      <button role="menuitem" disabled={!contextMenu.hasSelection} onClick={() => void copySelection(false)}><span>复制</span><kbd>{shortcuts.copy}</kbd></button>
-      {!readOnly && <button role="menuitem" onClick={() => void pasteSelection()}><span>粘贴</span><kbd>{shortcuts.paste}</kbd></button>}
-      <div className="file-context-menu-separator" role="separator"/>
-      <button role="menuitem" disabled={!contextMenu.hasContent} onClick={selectAll}><span>全选</span><kbd>{shortcuts.selectAll}</kbd></button>
-    </div>, document.body)}
+    {contextMenu && <FileTextContextMenu
+      anchor={contextMenu}
+      label={readOnly ? "文件预览菜单" : "文件编辑菜单"}
+      className="file-editor-context-menu"
+      focusOnOpen={contextMenu.focusOnOpen}
+      onDismiss={closeMenu}
+      groups={readOnly ? [
+        [{ label: "复制", shortcut: shortcuts.copy, disabled: !contextMenu.hasSelection, onSelect: () => void copySelection(false) }],
+        [{ label: "全选", shortcut: shortcuts.selectAll, disabled: !contextMenu.hasContent, onSelect: selectAll }],
+      ] : [
+        [
+          { label: "撤销", shortcut: shortcuts.undo, disabled: !contextMenu.canUndo, onSelect: () => runHistory(undo) },
+          { label: "重做", shortcut: shortcuts.redo, disabled: !contextMenu.canRedo, onSelect: () => runHistory(redo) },
+        ],
+        [
+          { label: "剪切", shortcut: shortcuts.cut, disabled: !contextMenu.hasSelection, onSelect: () => void copySelection(true) },
+          { label: "复制", shortcut: shortcuts.copy, disabled: !contextMenu.hasSelection, onSelect: () => void copySelection(false) },
+          { label: "粘贴", shortcut: shortcuts.paste, onSelect: () => void pasteSelection() },
+        ],
+        [{ label: "全选", shortcut: shortcuts.selectAll, disabled: !contextMenu.hasContent, onSelect: selectAll }],
+      ]}
+    />}
   </div>;
 }
 
@@ -256,8 +227,14 @@ function clipboardErrorMessage(reason: unknown) {
   return reason instanceof Error && reason.message.trim() ? reason.message : "剪贴板不可用";
 }
 
-function editorShortcutLabels() {
-  const platform = `${navigator.platform ?? ""} ${navigator.userAgent ?? ""}`.toLowerCase();
-  const modifier = platform.includes("mac") ? "⌘" : "Ctrl+";
-  return { cut: `${modifier}X`, copy: `${modifier}C`, paste: `${modifier}V`, selectAll: `${modifier}A` };
+function readEditorContextMenuState(view: EditorView, x: number, y: number, focusOnOpen: boolean): EditorContextMenuState {
+  return {
+    x,
+    y,
+    hasSelection: view.state.selection.ranges.some((range) => !range.empty),
+    hasContent: view.state.doc.length > 0,
+    canUndo: undoDepth(view.state) > 0,
+    canRedo: redoDepth(view.state) > 0,
+    focusOnOpen,
+  };
 }

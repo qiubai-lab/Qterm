@@ -129,8 +129,8 @@
   --file-selection-secondary-foreground:var(--danger);
   --file-selection-marker:var(--block-border-active);
   --editor-active-line:var(--file-active-surface);
-  --editor-selection:rgba(252,238,10,.24);
-  --editor-selection-foreground:#f99197;
+  --editor-selection:var(--terminal-selection);
+  --editor-selection-foreground:var(--terminal-selection-foreground);
   --editor-selection-marker:var(--file-selection-marker);
   --editor-preview-background:#0b1016;
   --workspace-tab-active-border:#00ddeb;

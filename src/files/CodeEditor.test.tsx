@@ -13,6 +13,12 @@ vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({
 }));
 
 import { CodeEditor } from "./CodeEditor";
+import { useBrowserContextMenuGuard } from "../app/useBrowserContextMenuGuard";
+
+function GuardedEditor() {
+  useBrowserContextMenuGuard();
+  return <CodeEditor value="guarded editor" language="text" onChange={vi.fn()} onSave={vi.fn()}/>;
+}
 
 describe("CodeEditor context menu", () => {
   beforeAll(() => {
@@ -79,6 +85,47 @@ describe("CodeEditor context menu", () => {
     expect(view.container.querySelector(".cm-editor")).not.toHaveClass("cm-has-selection");
   });
 
+  it("opens from the editor surface while the application-wide browser context-menu guard is active", async () => {
+    const view = render(<GuardedEditor/>);
+    await editorContent(view.container);
+    const scroller = view.container.querySelector<HTMLElement>(".cm-scroller")!;
+    const gutter = view.container.querySelector<HTMLElement>(".cm-gutters")!;
+
+    expect(fireEvent.contextMenu(scroller, { clientX: 80, clientY: 90 })).toBe(false);
+    expect(screen.getByRole("menu", { name: "文件编辑菜单" })).toBeInTheDocument();
+    fireEvent.pointerDown(document.body);
+
+    expect(fireEvent.contextMenu(gutter, { clientX: 20, clientY: 90 })).toBe(false);
+    expect(screen.getByRole("menu", { name: "文件编辑菜单" })).toBeInTheDocument();
+  });
+
+  it("enables undo and redo from the current CodeMirror history", async () => {
+    readClipboardText.mockResolvedValue("updated");
+    const onChange = vi.fn();
+    const view = render(<CodeEditor value="original" language="text" onChange={onChange} onSave={vi.fn()}/>);
+    const content = await editorContent(view.container);
+
+    fireEvent.contextMenu(content);
+    let menu = screen.getByRole("menu", { name: "文件编辑菜单" });
+    expect(within(menu).getByRole("menuitem", { name: /撤销/ })).toBeDisabled();
+    expect(within(menu).getByRole("menuitem", { name: /重做/ })).toBeDisabled();
+    fireEvent.click(within(menu).getByRole("menuitem", { name: /粘贴/ }));
+    await waitFor(() => expect(onChange).toHaveBeenLastCalledWith("updatedoriginal"));
+
+    fireEvent.contextMenu(content);
+    menu = screen.getByRole("menu", { name: "文件编辑菜单" });
+    expect(within(menu).getByRole("menuitem", { name: /撤销/ })).toBeEnabled();
+    expect(within(menu).getByRole("menuitem", { name: /重做/ })).toBeDisabled();
+    fireEvent.click(within(menu).getByRole("menuitem", { name: /撤销/ }));
+    await waitFor(() => expect(onChange).toHaveBeenLastCalledWith("original"));
+
+    fireEvent.contextMenu(content);
+    menu = screen.getByRole("menu", { name: "文件编辑菜单" });
+    expect(within(menu).getByRole("menuitem", { name: /重做/ })).toBeEnabled();
+    fireEvent.click(within(menu).getByRole("menuitem", { name: /重做/ }));
+    await waitFor(() => expect(onChange).toHaveBeenLastCalledWith("updatedoriginal"));
+  });
+
   it("keeps read-only previews non-mutating while allowing copy and select all", async () => {
     writeClipboardText.mockResolvedValue(undefined);
     const view = render(<CodeEditor value="preview text" language="text" readOnly onChange={vi.fn()} onSave={vi.fn()}/>);
@@ -88,6 +135,8 @@ describe("CodeEditor context menu", () => {
     let menu = screen.getByRole("menu", { name: "文件预览菜单" });
     expect(within(menu).queryByRole("menuitem", { name: /剪切/ })).not.toBeInTheDocument();
     expect(within(menu).queryByRole("menuitem", { name: /粘贴/ })).not.toBeInTheDocument();
+    expect(within(menu).queryByRole("menuitem", { name: /撤销/ })).not.toBeInTheDocument();
+    expect(within(menu).queryByRole("menuitem", { name: /重做/ })).not.toBeInTheDocument();
     fireEvent.click(within(menu).getByRole("menuitem", { name: /全选/ }));
     fireEvent.contextMenu(content);
     menu = screen.getByRole("menu", { name: "文件预览菜单" });

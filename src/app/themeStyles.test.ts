@@ -125,26 +125,17 @@ describe("application theme contract", () => {
     for (const preset of [theme, lightTheme, cyberpunkTheme]) {
       expect(tokenValue(preset, "--editor-active-line")).toBe("var(--file-active-surface)");
       expect(tokenValue(preset, "--editor-selection-marker")).toBe("var(--file-selection-marker)");
+      expect(tokenValue(preset, "--editor-selection")).toBe("var(--terminal-selection)");
     }
-    expect(tokenValue(theme, "--editor-selection-foreground")).toBe("var(--editor-foreground)");
-    expect(tokenValue(lightTheme, "--editor-selection-foreground")).toBe("var(--editor-foreground)");
-    expect(tokenValue(cyberpunkTheme, "--editor-selection-foreground")).toBe("#f99197");
-    expect(tokenValue(theme, "--editor-selection")).toBe("var(--file-selection-surface)");
-    expect(tokenValue(lightTheme, "--editor-selection")).toBe("var(--file-selection-surface)");
-    expect(tokenValue(cyberpunkTheme, "--editor-selection")).toBe("rgba(252,238,10,.24)");
+    expect(tokenValue(theme, "--editor-selection-foreground")).toBe("var(--terminal-foreground)");
+    expect(tokenValue(lightTheme, "--editor-selection-foreground")).toBe("var(--terminal-foreground)");
+    expect(tokenValue(cyberpunkTheme, "--editor-selection-foreground")).toBe("var(--terminal-selection-foreground)");
     expect(tokenValue(cyberpunkTheme, "--terminal-selection")).toBe("#07383f");
     expect(tokenValue(cyberpunkTheme, "--terminal-selection-foreground")).toBe("#00ddeb");
     expect(contrastRatio(
       tokenHex(cyberpunkTheme, "--terminal-selection-foreground"),
       tokenHex(cyberpunkTheme, "--terminal-selection"),
     ), "terminal selection contrast").toBeGreaterThanOrEqual(4.5);
-    expect(contrastRatio(
-      tokenHex(cyberpunkTheme, "--editor-selection-foreground"),
-      compositeRgbaOverHex(
-        tokenValue(cyberpunkTheme, "--editor-selection"),
-        tokenHex(cyberpunkTheme, "--editor-background"),
-      ),
-    ), "editor selection contrast").toBeGreaterThanOrEqual(4.5);
     expect(tokenValue(cyberpunkTheme, "--workspace-tab-active-text")).toBe("var(--text-strong)");
     expect(tokenValue(cyberpunkTheme, "--brand-plate-background")).toBe(tokenValue(theme, "--brand-plate-background"));
     expect(tokenValue(cyberpunkTheme, "--brand-plate-border")).toBe(tokenValue(theme, "--brand-plate-border"));
@@ -469,17 +460,6 @@ function tokenValue(css: string, token: string): string {
 function contrastRatio(first: string, second: string): number {
   const [lighter, darker] = [relativeLuminance(first), relativeLuminance(second)].sort((a, b) => b - a);
   return (lighter + 0.05) / (darker + 0.05);
-}
-
-function compositeRgbaOverHex(foreground: string, background: string): string {
-  const match = foreground.match(/^rgba\((\d+),(\d+),(\d+),(\.?\d+)\)$/);
-  if (!match) throw new Error(`Invalid RGBA color: ${foreground}`);
-  const alpha = Number.parseFloat(match[4]);
-  const backgroundChannels = [1, 3, 5].map((offset) => Number.parseInt(background.slice(offset, offset + 2), 16));
-  const channels = match.slice(1, 4).map((channel, index) => (
-    Math.round(Number.parseInt(channel, 10) * alpha + backgroundChannels[index] * (1 - alpha))
-  ));
-  return `#${channels.map((channel) => channel.toString(16).padStart(2, "0")).join("")}`;
 }
 
 function relativeLuminance(hex: string): number {
