@@ -152,4 +152,14 @@ describe("MarkdownPreview", () => {
 
     expect(onSearchTextChange).toHaveBeenCalledWith("Before  after");
   });
+
+  it("contains wide Markdown tables in a dedicated responsive scroller", () => {
+    render(<MarkdownPreview content={'| 插件 | 官方来源 | 安装命令 | 额外组件 |\n| --- | --- | --- | --- |\n| BetterWright | [betterwright.com](https://betterwright.com) | `pi install npm:betterwright` | BetterChrome MCP SDK |'}/>);
+
+    const table = screen.getByRole("table");
+    expect(table.parentElement).toHaveClass("file-markdown-table");
+    expect(table.parentElement).toHaveAttribute("role", "region");
+    expect(table.parentElement).toHaveAttribute("aria-label", "Markdown 表格");
+    expect(table.parentElement).toHaveAttribute("tabindex", "0");
+  });
 });

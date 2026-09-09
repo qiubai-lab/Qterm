@@ -66,6 +66,7 @@ export function MarkdownPreview({ content, searchMatches = [], activeSearchIndex
 
   return <article ref={previewRef} className="file-markdown-preview" tabIndex={0} aria-label="Markdown 文件预览" onContextMenu={handleContextMenu} onKeyDown={handleKeyDown}>
     <Markdown remarkPlugins={[remarkGfm]} rehypePlugins={[searchPlugin]} components={{
+      table: ({ children }) => <div className="file-markdown-table" role="region" aria-label="Markdown 表格" tabIndex={0}><table>{children}</table></div>,
       a: ({ children, href, title }) => isExternalHttpUrl(href)
         ? <a href={href} title={title} target="_blank" rel="noreferrer" onClick={(event) => {
           event.preventDefault();

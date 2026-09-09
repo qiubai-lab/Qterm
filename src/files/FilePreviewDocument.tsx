@@ -77,10 +77,10 @@ export function FilePreviewDocument({ preview, displayPath, dirty, saving, opera
   }
 
   return <div ref={documentRef} className="file-preview-document" onKeyDownCapture={handleKeyDownCapture}>
-    <header className="file-preview-toolbar">
+    <header className="file-preview-toolbar" data-mode={preview.mode}>
       <button aria-label="返回文件夹" title="返回文件夹" onClick={onLeave}><Icon name="back" size={14}/></button>
       <div className="file-preview-identity"><strong>{preview.entry.name}{dirty && <span className="file-dirty-indicator" aria-label="有未保存的修改">*</span>}</strong><small title={displayPath}>{displayPath}</small></div>
-      {preview.mode === "edit" && <StatusBadge tone="warning" presentation="tag" size="compact">实验功能</StatusBadge>}
+      {preview.mode === "edit" && <StatusBadge className="file-experimental-badge" tone="warning" presentation="tag" size="compact">实验功能</StatusBadge>}
       {preview.kind !== "image" && <button className="file-search-button" aria-label="搜索当前文件" aria-expanded={search.open} title="搜索当前文件（Ctrl/⌘+F）" disabled={!searchAvailable} onClick={openSearch}><Icon name="search" size={11}/></button>}
       <span className="file-view-mode">{preview.mode === "preview" ? "预览" : "编辑"}</span>
       {preview.mode === "preview" && <button className="file-edit-button" disabled={preview.kind === "image"} title={preview.kind === "image" ? "此文件类型不支持编辑" : "编辑文件（实验功能）"} onClick={onEdit}><Icon name="edit" size={11}/><span>编辑</span></button>}

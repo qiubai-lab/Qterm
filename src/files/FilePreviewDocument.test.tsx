@@ -52,6 +52,16 @@ describe("FilePreviewDocument search", () => {
     await waitFor(() => expect(screen.queryByRole("search", { name: "搜索当前文件" })).not.toBeInTheDocument());
     expect(view.container.querySelector(".cm-file-search-match")).not.toBeInTheDocument();
   });
+
+  it("marks experimental editor context separately from practical toolbar actions", () => {
+    renderDocument({ ...basePreview, mode: "edit" });
+
+    expect(screen.getByText("实验功能")).toHaveClass("file-experimental-badge");
+    expect(screen.getByText("实验功能").closest(".file-preview-toolbar")).toHaveAttribute("data-mode", "edit");
+    expect(screen.getByRole("button", { name: "搜索当前文件" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "取消" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "已保存" })).toBeInTheDocument();
+  });
 });
 
 function renderDocument(preview: FilePreviewState) {
