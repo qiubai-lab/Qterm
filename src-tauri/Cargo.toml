@@ -35,7 +35,7 @@ dunce = "1.0.5"
 glob = "0.3.3"
 getrandom = "0.4.3"
 uuid = { version = "1.24.1", features = ["v4"] }
-russh = { version = "=0.62.6", default-features = false, features = ["ring", "rsa"] }
+russh = { version = "=0.63.1", default-features = false, features = ["ring", "rsa"] }
 russh-sftp = "=2.4.0"
 ssh2-config-rs = { version = "=0.7.2", features = ["nolog"] }
 tokio = { version = "1.53.1", features = ["fs", "io-util", "net", "sync", "time"] }
