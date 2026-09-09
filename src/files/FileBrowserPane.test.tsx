@@ -491,7 +491,7 @@ describe("FileBrowserPane", () => {
     fireEvent.click(fileRow, { metaKey: true });
     expect(readTextFile).not.toHaveBeenCalled();
     fireEvent.contextMenu(fileRow);
-    const menu = ui.getByRole("menu", { name: "2 个已选项目菜单" });
+    const menu = screen.getByRole("menu", { name: "2 个已选项目菜单" });
     expect(within(menu).queryByRole("separator")).not.toBeInTheDocument();
     expect(within(menu).queryByRole("menuitem", { name: "预览" })).not.toBeInTheDocument();
     expect(readTextFile).not.toHaveBeenCalled();
@@ -525,8 +525,8 @@ describe("FileBrowserPane", () => {
     expect(first).toHaveAttribute("aria-selected", "false");
     expect(second).toHaveAttribute("aria-selected", "false");
     expect(third).toHaveAttribute("aria-selected", "true");
-    expect(ui.getByRole("menu", { name: "gamma.txt 文件菜单" })).toBeInTheDocument();
-    expect(ui.getByRole("menuitem", { name: "预览" })).toBeInTheDocument();
+    expect(screen.getByRole("menu", { name: "gamma.txt 文件菜单" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "预览" })).toBeInTheDocument();
   });
 
   it("keeps only failed entries selected when part of a batch deletion fails", async () => {
@@ -542,7 +542,7 @@ describe("FileBrowserPane", () => {
     fireEvent.click(firstRow);
     fireEvent.click(secondRow, { metaKey: true });
     fireEvent.contextMenu(secondRow);
-    fireEvent.click(ui.getByRole("menuitem", { name: "删除 2 个项目" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "删除 2 个项目" }));
     fireEvent.click(within(screen.getByRole("dialog", { name: "删除 2 个项目？" })).getByRole("button", { name: "确认删除" }));
 
     const retryDialog = await screen.findByRole("dialog", { name: "删除文件？" });
@@ -560,8 +560,8 @@ describe("FileBrowserPane", () => {
     const ui = within(view.container);
     const file = await ui.findByRole("listitem", { name: /README.md/ });
     fireEvent.contextMenu(file, { clientX: 20, clientY: 20 });
-    expect(ui.getByRole("menuitem", { name: "预览" })).toBeInTheDocument();
-    fireEvent.click(ui.getByRole("menuitem", { name: /编辑.*实验/ }));
+    expect(screen.getByRole("menuitem", { name: "预览" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("menuitem", { name: /编辑.*实验/ }));
     const experimental = await ui.findByText("实验功能");
     const toolbar = experimental.closest(".file-preview-toolbar")!;
     expect(toolbar.textContent?.indexOf("实验功能")).toBeLessThan(toolbar.textContent?.indexOf("编辑") ?? 0);
@@ -598,7 +598,7 @@ describe("FileBrowserPane", () => {
     const ui = within(view.container);
     const file = await ui.findByRole("listitem", { name: /README.md/ });
     fireEvent.contextMenu(file);
-    fireEvent.click(ui.getByRole("menuitem", { name: /编辑.*实验/ }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /编辑.*实验/ }));
     const editor = await ui.findByRole("textbox", { name: "文件编辑器" });
     fireEvent.change(editor, { target: { value: "# Keep me" } });
 
@@ -621,7 +621,7 @@ describe("FileBrowserPane", () => {
     const ui = within(view.container);
     const file = await ui.findByRole("listitem", { name: /README.md/ });
     fireEvent.contextMenu(file);
-    fireEvent.click(ui.getByRole("menuitem", { name: /编辑.*实验/ }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /编辑.*实验/ }));
     const editor = await ui.findByRole("textbox", { name: "文件编辑器" });
     fireEvent.change(editor, { target: { value: "# Conflicted" } });
     fireEvent.click(ui.getByRole("button", { name: "保存" }));
@@ -649,7 +649,7 @@ describe("FileBrowserPane", () => {
     const ui = within(view.container);
     const file = await ui.findByRole("listitem", { name: /README.md/ });
     fireEvent.contextMenu(file);
-    fireEvent.click(ui.getByRole("menuitem", { name: /编辑.*实验/ }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /编辑.*实验/ }));
     const editor = await ui.findByRole("textbox", { name: "文件编辑器" });
     fireEvent.change(editor, { target: { value: "# Keep editing" } });
 
@@ -684,7 +684,7 @@ describe("FileBrowserPane", () => {
     const ui = within(view.container);
     const file = await ui.findByRole("listitem", { name: /README.md/ });
     fireEvent.contextMenu(file);
-    fireEvent.click(ui.getByRole("menuitem", { name: /编辑.*实验/ }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /编辑.*实验/ }));
     await ui.findByRole("textbox", { name: "文件编辑器" });
 
     fireEvent.click(ui.getByRole("button", { name: "取消" }));
@@ -698,9 +698,9 @@ describe("FileBrowserPane", () => {
     const view = render(<FileBrowserPane initialPath="C:/work" runtime={localRuntime} onPathChange={vi.fn()}/>);
     const ui = within(view.container);
     fireEvent.contextMenu(await ui.findByRole("listitem", { name: /photo.jpg/ }));
-    expect(ui.getByRole("menuitem", { name: "预览" })).toBeInTheDocument();
-    expect(ui.queryByRole("menuitem", { name: /编辑/ })).not.toBeInTheDocument();
-    fireEvent.click(ui.getByRole("menuitem", { name: "预览" }));
+    expect(screen.getByRole("menuitem", { name: "预览" })).toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: /编辑/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("menuitem", { name: "预览" }));
     expect(await ui.findByRole("button", { name: "编辑" })).toBeDisabled();
   });
 
@@ -713,7 +713,7 @@ describe("FileBrowserPane", () => {
     const ui = within(view.container);
 
     fireEvent.contextMenu(await ui.findByRole("listitem", { name: /assets/ }));
-    const menu = ui.getByRole("menu", { name: /assets/ });
+    const menu = screen.getByRole("menu", { name: /assets/ });
     const open = within(menu).getByRole("menuitem", { name: "打开" });
     expect(open.querySelector('[data-icon="files"]')).toBeInTheDocument();
     await waitFor(() => expect(open).toHaveFocus());
@@ -739,7 +739,7 @@ describe("FileBrowserPane", () => {
       const view = render(<FileBrowserPane initialPath="C:/work" runtime={localRuntime} onPathChange={vi.fn()}/>);
       const ui = within(view.container);
       fireEvent.contextMenu(await ui.findByRole("listitem", { name: /photo\.png/ }));
-      fireEvent.click(ui.getByRole("menuitem", { name: "复制图片" }));
+      fireEvent.click(screen.getByRole("menuitem", { name: "复制图片" }));
 
       await waitFor(() => expect(copyImageUrlToClipboard).toHaveBeenCalledWith("blob:photo-context-menu"));
       expect(readBinaryFile).toHaveBeenCalledWith(null, entry.path);
@@ -762,11 +762,11 @@ describe("FileBrowserPane", () => {
       const view = render(<FileBrowserPane initialPath="C:/work" runtime={localRuntime} onPathChange={vi.fn()}/>);
       const ui = within(view.container);
       fireEvent.contextMenu(await ui.findByRole("listitem", { name: /photo\.png/ }));
-      fireEvent.click(ui.getByRole("menuitem", { name: "预览" }));
+      fireEvent.click(screen.getByRole("menuitem", { name: "预览" }));
       const image = await ui.findByRole("img", { name: "photo.png" });
 
       fireEvent.contextMenu(image, { clientX: 80, clientY: 90 });
-      const menu = ui.getByRole("menu", { name: "photo.png 图片菜单" });
+      const menu = screen.getByRole("menu", { name: "photo.png 图片菜单" });
       const copyImage = within(menu).getByRole("menuitem", { name: "复制图片" });
       expect(copyImage.querySelector('[data-icon="copy"]')).toBeInTheDocument();
       fireEvent.click(copyImage);
@@ -775,7 +775,7 @@ describe("FileBrowserPane", () => {
       expect(ui.getByRole("status", { name: "图片操作状态" })).toHaveTextContent("图片已复制");
 
       fireEvent.contextMenu(image, { clientX: 80, clientY: 90 });
-      fireEvent.click(ui.getByRole("menuitem", { name: "复制路径" }));
+      fireEvent.click(screen.getByRole("menuitem", { name: "复制路径" }));
       await waitFor(() => expect(writeClipboardText).toHaveBeenCalledWith("C:/work/photo.png"));
       expect(ui.getByRole("status", { name: "图片操作状态" })).toHaveTextContent("路径已复制");
     } finally {
@@ -795,12 +795,12 @@ describe("FileBrowserPane", () => {
       const view = render(<FileBrowserPane initialPath="C:/work" runtime={localRuntime} onPathChange={vi.fn()}/>);
       const ui = within(view.container);
       fireEvent.contextMenu(await ui.findByRole("listitem", { name: /photo\.png/ }));
-      fireEvent.click(ui.getByRole("menuitem", { name: "预览" }));
+      fireEvent.click(screen.getByRole("menuitem", { name: "预览" }));
       fireEvent.contextMenu(await ui.findByRole("img", { name: "photo.png" }));
-      fireEvent.click(ui.getByRole("menuitem", { name: "复制图片" }));
+      fireEvent.click(screen.getByRole("menuitem", { name: "复制图片" }));
 
       expect(await ui.findByRole("status", { name: "图片操作状态" })).toHaveTextContent("复制图片失败：剪贴板不可用");
-      expect(ui.queryByRole("menu", { name: "photo.png 图片菜单" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("menu", { name: "photo.png 图片菜单" })).not.toBeInTheDocument();
     } finally {
       createObjectUrl.mockRestore();
       revokeObjectUrl.mockRestore();
@@ -827,7 +827,7 @@ describe("FileBrowserPane", () => {
     const ui = within(view.container);
     const folder = await ui.findByRole("listitem", { name: /release/ });
     fireEvent.keyDown(folder, { key: "F10", shiftKey: true });
-    fireEvent.click(ui.getByRole("menuitem", { name: "下载到本地…" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "下载到本地…" }));
 
     await waitFor(() => expect(downloadDirectory).toHaveBeenCalledWith("session-1", "/srv/release", "C:/Downloads/release", expect.any(Function)));
     const update = downloadDirectory.mock.calls[0][3] as (event: TransferEvent) => void;
@@ -852,30 +852,31 @@ describe("FileBrowserPane", () => {
     const ui = within(view.container);
 
     fireEvent.contextMenu(await ui.findByRole("listitem", { name: /assets/ }), { clientX: 40, clientY: 80 });
-    fireEvent.click(ui.getByRole("menuitem", { name: "复制路径" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "复制路径" }));
 
     await waitFor(() => expect(writeClipboardText).toHaveBeenCalledWith("C:/work/assets"));
-    expect(ui.queryByRole("menu", { name: /assets/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("menu", { name: /assets/ })).not.toBeInTheDocument();
     expect(ui.getByRole("status", { name: "文件状态" })).toHaveTextContent("路径已复制");
   });
 
-  it("measures and flips a context menu near the bottom-right viewport edge", async () => {
+  it("positions a context menu below its selected row", async () => {
     const entry = { name: "notes.txt", path: "C:/work/notes.txt", isDirectory: false, isSymlink: false, size: 5, modifiedAt: null };
     listLocalDirectory.mockResolvedValue({ path: "C:/work", entries: [entry] });
     const width = vi.spyOn(window, "innerWidth", "get").mockReturnValue(400);
     const height = vi.spyOn(window, "innerHeight", "get").mockReturnValue(400);
     const rect = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
       if (this.classList.contains("file-context-menu")) return { x: 0, y: 0, left: 0, top: 0, right: 180, bottom: 120, width: 180, height: 120, toJSON: () => ({}) };
+      if (this.classList.contains("file-row")) return { x: 0, y: 20, left: 0, top: 20, right: 300, bottom: 47, width: 300, height: 27, toJSON: () => ({}) };
       return { x: 0, y: 0, left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0, toJSON: () => ({}) };
     });
     try {
       const view = render(<FileBrowserPane initialPath="C:/work" runtime={localRuntime} onPathChange={vi.fn()}/>);
       const ui = within(view.container);
-
-      fireEvent.contextMenu(await ui.findByRole("listitem", { name: /notes\.txt/ }), { clientX: 390, clientY: 390 });
-      const menu = ui.getByRole("menu", { name: /notes\.txt/ });
-      await waitFor(() => expect(menu).toHaveStyle({ left: "214px", top: "270px" }));
-      expect(menu).toHaveAttribute("data-placement", "above");
+      fireEvent.contextMenu(await ui.findByRole("listitem", { name: /notes\.txt/ }), { clientX: 390, clientY: 30 });
+      const menu = screen.getByRole("menu", { name: /notes\.txt/ });
+      await waitFor(() => expect(menu).toHaveStyle({ left: "214px", top: "51px" }));
+      expect(menu).toHaveAttribute("data-placement", "below");
+      expect(menu.parentElement).toBe(document.body);
     } finally {
       rect.mockRestore(); width.mockRestore(); height.mockRestore();
     }
@@ -891,7 +892,7 @@ describe("FileBrowserPane", () => {
     const file = await ui.findByRole("listitem", { name: /notes.txt/ });
 
     fireEvent.contextMenu(file);
-    fireEvent.click(ui.getByRole("menuitem", { name: "复制文件…" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "复制文件…" }));
     const copyInput = screen.getByRole("textbox", { name: "副本名称" });
     expect(copyInput).toHaveValue("notes - 副本.txt");
     fireEvent.change(copyInput, { target: { value: "notes-copy.txt" } });
@@ -899,12 +900,11 @@ describe("FileBrowserPane", () => {
     await waitFor(() => expect(copyFile).toHaveBeenCalledWith(null, entry.path, "notes-copy.txt"));
 
     fireEvent.contextMenu(await ui.findByRole("listitem", { name: /notes.txt/ }));
-    fireEvent.click(ui.getByRole("menuitem", { name: "改名…" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "改名…" }));
     fireEvent.change(screen.getByRole("textbox", { name: "新名称" }), { target: { value: "renamed.txt" } });
     fireEvent.click(screen.getByRole("button", { name: "保存名称" }));
     await waitFor(() => expect(renameEntry).toHaveBeenCalledWith(null, entry.path, "renamed.txt"));
   });
-
   it("creates files and folders from icon-only controls immediately before refresh", async () => {
     listLocalDirectory.mockResolvedValue({ path: "C:/work", entries: [] });
     createEntry.mockResolvedValue(undefined);
@@ -937,14 +937,14 @@ describe("FileBrowserPane", () => {
     const view = render(<FileBrowserPane initialPath="C:/work" runtime={localRuntime} onPathChange={vi.fn()}/>);
     const ui = within(view.container);
     fireEvent.contextMenu(await ui.findByRole("listitem", { name: /archive/ }));
-    fireEvent.click(ui.getByRole("menuitem", { name: "删除" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "删除" }));
     const firstConfirmation = screen.getByRole("dialog", { name: "删除文件夹？" });
     expect(firstConfirmation).toHaveTextContent("全部内容将被永久删除");
     fireEvent.click(within(firstConfirmation).getByRole("button", { name: "取消" }));
     expect(deleteEntry).not.toHaveBeenCalled();
 
     fireEvent.contextMenu(ui.getByRole("listitem", { name: /archive/ }));
-    fireEvent.click(ui.getByRole("menuitem", { name: "删除" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "删除" }));
     fireEvent.click(within(screen.getByRole("dialog", { name: "删除文件夹？" })).getByRole("button", { name: "确认删除" }));
     await waitFor(() => expect(deleteEntry).toHaveBeenCalledWith(null, entry.path));
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "删除文件夹？" })).not.toBeInTheDocument());

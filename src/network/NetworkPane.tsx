@@ -3,6 +3,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type Keyboar
 import { Icon } from "../components/Icon";
 import { Button } from "../components/Button";
 import { DialogFrame } from "../components/dialogs/DialogFrame";
+import { OverlayScrollArea } from "../components/scrollbars/OverlayScrollArea";
 import { createNetworkRule, deleteNetworkRule, listNetworkRules, updateNetworkRule, type NetworkRule, type NetworkRuleInput, type NetworkRuleRuntimeState } from "../lib/tauri/network";
 import { NetworkAccessDialog } from "./NetworkAccessDialog";
 import { NetworkRuleDialog } from "./NetworkRuleDialog";
@@ -129,7 +130,7 @@ export function NetworkPane({ profileId, profileHost = "", runtimeStates = {}, l
   return <div className="network-pane">
     <div className="network-toolbar"><div className="network-toolbar-summary"><strong>网络实例</strong><span>{rules.length} 条配置 · 默认停止</span></div><button className="network-create-button" aria-label="创建网络实例" title="创建网络实例" onClick={() => setChoosingType(true)}><Icon name="plus" size={12}/></button></div>
     {message && <div className="network-inline-error" role="alert">{message}</div>}
-    <div className={`network-rule-list${!loading && rules.length === 0 ? " empty" : ""}`} role="list" aria-busy={loading}>
+    <OverlayScrollArea className="network-rule-list-scroll-area" viewportClassName={`network-rule-list${!loading && rules.length === 0 ? " empty" : ""}`} viewportProps={{ role: "list", "aria-busy": loading }} trackInsets={{ right: 3, bottom: 3 }}>
       {loading ? <div className="network-empty"><span>正在读取网络规则…</span></div> : rules.length === 0 ? <div className="network-empty"><Icon name="network" size={25}/><strong>暂无网络实例</strong><p>创建本地、远程端口转发或 SOCKS5 动态代理。</p></div> : rules.map((rule) => {
         const state = runtimeStates[rule.id] ?? "stopped";
         const switchOn = state === "running" || state === "starting";
@@ -146,7 +147,7 @@ export function NetworkPane({ profileId, profileHost = "", runtimeStates = {}, l
           </label>
         </article>;
       })}
-    </div>
+    </OverlayScrollArea>
     {contextMenu && (() => {
       const state = runtimeStates[contextMenu.rule.id] ?? "stopped";
       const mutationLocked = state === "running" || state === "starting" || state === "stopping" || lockedRuleIds.has(contextMenu.rule.id);

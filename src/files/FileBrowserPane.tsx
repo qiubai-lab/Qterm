@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FocusEvent, type FormEvent, type KeyboardEvent, type MouseEvent } from "react";
+import { createPortal } from "react-dom";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { writeText as writeClipboardText } from "@tauri-apps/plugin-clipboard-manager";
 import { Icon } from "../components/Icon";
@@ -20,7 +21,7 @@ type FileViewMode = "preview" | "edit";
 type TransferState = { transferId: string; status: "starting" | "running" | "completed" | "cancelled" | "failed"; transferred: number; total: number; message: string; direction: "download" | "upload" };
 type NameOperation = { kind: "copy" | "rename" | "createFile" | "createDirectory"; entry: FileEntry | null; value: string; error: string; busy: boolean };
 type DeleteOperation = { entries: FileEntry[]; error: string; busy: boolean };
-type ContextMenuState = { entry: FileEntry; anchorX: number; anchorY: number; x: number; y: number; placement: "above" | "below" };
+type ContextMenuState = { entry: FileEntry; anchorX: number; anchorY: number; aboveAnchorY: number; x: number; y: number; placement: "above" | "below" };
 type UploadMenuState = { anchorRight: number; anchorY: number; x: number; y: number; placement: "above" | "below" };
 type DirectoryLocation = { scrollTop: number; selectedPath: string | null; anchorPath: string | null; anchorOffset: number };
 type PendingDirectoryLocation = { key: string; location: DirectoryLocation };
@@ -271,7 +272,7 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
   useLayoutEffect(() => {
     if (!contextMenu || !menuRef.current) return;
     const rect = menuRef.current.getBoundingClientRect();
-    const fitted = fitContextMenu(contextMenu.anchorX, contextMenu.anchorY, rect.width, rect.height, window.innerWidth, window.innerHeight);
+    const fitted = fitContextMenu(contextMenu.anchorX, contextMenu.anchorY, rect.width, rect.height, window.innerWidth, window.innerHeight, contextMenu.aboveAnchorY);
     if (contextMenu.x === fitted.x && contextMenu.y === fitted.y && contextMenu.placement === fitted.placement) return;
     setContextMenu((current) => current ? { ...current, ...fitted } : current);
   }, [contextMenu]);
@@ -388,21 +389,20 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
   function openContextMenu(event: MouseEvent<HTMLElement>, entry: FileEntry) {
     event.preventDefault();
     if (!selectedPaths.has(entry.path)) selectEntry(entry, false);
-    showContextMenu(entry, event.clientX, event.clientY);
+    const rect = event.currentTarget.getBoundingClientRect(); showContextMenu(entry, event.clientX, rect.bottom + 4, rect.top - 4);
   }
 
   function openContextMenuFromKeyboard(event: KeyboardEvent<HTMLElement>, entry: FileEntry) {
     if (event.key !== "ContextMenu" && !(event.shiftKey && event.key === "F10")) return;
     event.preventDefault();
     if (!selectedPaths.has(entry.path)) selectEntry(entry, false);
-    const rect = event.currentTarget.getBoundingClientRect(); showContextMenu(entry, rect.left + 18, rect.top + 18);
+    const rect = event.currentTarget.getBoundingClientRect(); showContextMenu(entry, rect.left + 18, rect.bottom + 4, rect.top - 4);
   }
 
-  function showContextMenu(entry: FileEntry, anchorX: number, anchorY: number) {
+  function showContextMenu(entry: FileEntry, anchorX: number, anchorY: number, aboveAnchorY = anchorY) {
     setUploadMenu(null);
-    setContextMenu({ entry, anchorX, anchorY, x: anchorX, y: anchorY, placement: "below" });
+    setContextMenu({ entry, anchorX, anchorY, aboveAnchorY, x: anchorX, y: anchorY, placement: "below" });
   }
-
   function handleContextMenuKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     if (!(["ArrowDown", "ArrowUp", "Home", "End"] as string[]).includes(event.key)) return;
     const items = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>("[role='menuitem']:not(:disabled)"));
@@ -628,10 +628,10 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
         onContentChange={(content) => setPreview((current) => current ? { ...current, content } : current)}
         onImageContextMenu={(event) => { event.preventDefault(); showContextMenu(preview.entry, event.clientX, event.clientY); }}
       />
-      {contextMenu && preview.kind === "image" && preview.imageUrl && <div ref={menuRef} className="file-context-menu" data-placement={contextMenu.placement} role="menu" aria-label={`${preview.entry.name} 图片菜单`} style={{ left: contextMenu.x, top: contextMenu.y }} onKeyDown={handleContextMenuKeyDown} onContextMenu={(event) => event.preventDefault()}>
+      {contextMenu && preview.kind === "image" && preview.imageUrl && createPortal(<div ref={menuRef} className="file-context-menu" data-placement={contextMenu.placement} role="menu" aria-label={`${preview.entry.name} 图片菜单`} style={{ left: contextMenu.x, top: contextMenu.y }} onKeyDown={handleContextMenuKeyDown} onContextMenu={(event) => event.preventDefault()}>
         <button role="menuitem" onClick={() => void copyImage(preview.entry, preview.imageUrl)}><Icon name="copy" size={13}/><span>复制图片</span></button>
         <button role="menuitem" onClick={() => void copyPath(preview.entry)}><Icon name="copy" size={13}/><span>复制路径</span></button>
-      </div>}
+      </div>, document.body)}
       {saveConfirmation && <DialogFrame title="覆盖保存文件？" subtitle={preview.entry.name} compact dismissible={!saving} onClose={() => { if (!saving) setSaveConfirmation(null); }}>
         <div className="file-preview-confirmation">
           <p className="confirm-copy">保存后，当前文件的现有内容将被替换。若没有其他备份，此操作无法撤销。</p>
@@ -687,7 +687,7 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
       {!showLocalRoots && dropActive && <div className="file-upload-drop-overlay" role="status"><Icon name="upload" size={24}/><strong>上传到当前目录</strong><span>{visiblePath}</span><small>释放鼠标以上传文件或文件夹</small></div>}
     </OverlayScrollArea>
     {uploadMenu && <FileUploadMenu menuRef={uploadMenuRef} position={uploadMenu} onPointerDownCapture={() => { uploadMenuPointerActive.current = true; }} onBlur={handleUploadMenuBlur} onKeyDown={handleContextMenuKeyDown} onSelect={(selection) => void startSelectedUpload(selection)}/>}
-    {contextMenu && <div ref={menuRef} className="file-context-menu" data-placement={contextMenu.placement} role="menu" aria-label={contextEntries.length > 1 ? `${contextEntries.length} 个已选项目菜单` : `${contextMenu.entry.name} 文件菜单`} style={{ left: contextMenu.x, top: contextMenu.y }} onKeyDown={handleContextMenuKeyDown} onContextMenu={(event) => event.preventDefault()}>
+    {contextMenu && createPortal(<div ref={menuRef} className="file-context-menu" data-placement={contextMenu.placement} role="menu" aria-label={contextEntries.length > 1 ? `${contextEntries.length} 个已选项目菜单` : `${contextMenu.entry.name} 文件菜单`} style={{ left: contextMenu.x, top: contextMenu.y }} onKeyDown={handleContextMenuKeyDown} onContextMenu={(event) => event.preventDefault()}>
       {contextEntries.length === 1 && contextMenu.entry.isDirectory && <button role="menuitem" onClick={() => { setContextMenu(null); void navigateTo(contextMenu.entry.path); }}><Icon name="files" size={13}/><span>打开</span></button>}
       {contextEntries.length === 1 && !contextMenu.entry.isDirectory && !contextMenu.entry.isSymlink && <button role="menuitem" onClick={() => { setContextMenu(null); void openFile(contextMenu.entry, "preview"); }}><Icon name="eye" size={13}/><span>预览</span></button>}
       {contextEntries.length === 1 && !contextMenu.entry.isDirectory && !contextMenu.entry.isSymlink && previewKindFor(contextMenu.entry.name) !== "image" && <button role="menuitem" className="file-context-edit" onClick={() => { setContextMenu(null); void openFile(contextMenu.entry, "edit"); }}><Icon name="edit" size={13}/><span>编辑</span><StatusBadge tone="warning" presentation="tag" size="compact">实验</StatusBadge></button>}
@@ -698,7 +698,7 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
       {contextEntries.length === 1 && !contextMenu.entry.isDirectory && !contextMenu.entry.isSymlink && <button role="menuitem" onClick={() => requestNameOperation("copy", contextMenu.entry)}><Icon name="copy" size={13}/><span>复制文件…</span></button>}
       {contextEntries.length === 1 && <button role="menuitem" onClick={() => requestNameOperation("rename", contextMenu.entry)}><Icon name="edit" size={13}/><span>改名…</span></button>}
       <button role="menuitem" className="danger" onClick={() => { setContextMenu(null); setDeleteOperation({ entries: contextEntries, error: "", busy: false }); }}><Icon name="trash" size={13}/><span>{contextEntries.length > 1 ? `删除 ${contextEntries.length} 个项目` : "删除"}</span></button>
-    </div>}
+    </div>, document.body)}
     <footer className={`file-browser-statusbar${transfer ? ` ${transfer.status}` : ""}`} role="status" aria-label="文件状态">
       {transferActive && transfer ? <>
         <span className="file-browser-transfer-label">{transfer.message}</span>

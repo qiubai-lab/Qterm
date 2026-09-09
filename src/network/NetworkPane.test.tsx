@@ -71,7 +71,9 @@ describe("NetworkPane", () => {
     const view = render(<NetworkPane profileId="profile-1" onStart={vi.fn()}/>);
 
     expect(await screen.findByText("暂无网络实例")).toBeInTheDocument();
-    expect(view.container.querySelector(".network-rule-list")).toHaveClass("empty");
+    const list = view.container.querySelector(".network-rule-list");
+    expect(list).toHaveClass("overlay-scroll-viewport", "empty");
+    expect(list?.parentElement).toHaveClass("overlay-scroll-area", "network-rule-list-scroll-area");
   });
 
   it("opens a selectable access dialog from the persistent copy action", async () => {

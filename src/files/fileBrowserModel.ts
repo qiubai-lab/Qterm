@@ -74,12 +74,12 @@ export function formatPermissions(mode: number | null | undefined): string {
   ].join("");
 }
 
-export function fitContextMenu(anchorX: number, anchorY: number, menuWidth: number, menuHeight: number, viewportWidth: number, viewportHeight: number) {
+export function fitContextMenu(anchorX: number, anchorY: number, menuWidth: number, menuHeight: number, viewportWidth: number, viewportHeight: number, aboveAnchorY = anchorY) {
   const gap = 6;
   const maxLeft = Math.max(gap, viewportWidth - menuWidth - gap);
   const maxTop = Math.max(gap, viewportHeight - menuHeight - gap);
   const placement = anchorY + menuHeight + gap > viewportHeight ? "above" : "below";
-  const preferredTop = placement === "above" ? anchorY - menuHeight : anchorY;
+  const preferredTop = placement === "above" ? aboveAnchorY - menuHeight : anchorY;
   return {
     x: Math.min(Math.max(anchorX, gap), maxLeft),
     y: Math.min(Math.max(preferredTop, gap), maxTop),
