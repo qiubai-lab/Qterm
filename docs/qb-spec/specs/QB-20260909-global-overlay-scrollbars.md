@@ -48,7 +48,7 @@ supersedes: []
 - REQ-006: reduced-motion 下禁用显隐和缩放过渡；高对比度模式保持可辨识边界。隐藏滚动条不得进入辅助技术树。
 - REQ-007: 首轮 Files 迁移必须保持 sticky 表头连续、横向窄窗滚动、虚拟范围、目录切换滚动恢复与拖放覆盖层行为。
 - REQ-008: Git、连接和凭证的后续迁移复用同一 owner，不复制指标、显隐或拖拽状态机；专用编辑器/终端滚动表面保持原实现。
-- REQ-009: 共享组件必须支持参与 thumb 尺寸、位置和拖拽换算的轨道安全区；Files 的纵向轨道避开 sticky 表头，连接选中面不得越过列表选项边界，Git 分支浮层不得为原生滚动条保留额外右侧空白。
+- REQ-009: 共享组件必须支持参与 thumb 尺寸、位置和拖拽换算的轨道安全区；Files 的纵向轨道避开 sticky 表头，连接选中面不得越过列表选项边界，Git 分支浮层不得保留原生滚动条空白；远程 target 最近仓库列表必须在 viewport 内提供窄安全区，避免 thumb 遮盖行的选中边框，但不得扩大卡片或恢复原生 gutter。
 - REQ-010: 内容自适应的 Git 分支浮层必须由真实 viewport 持有高度上限和 `overflow`；共享 wrapper 只负责可收缩布局与 overlay，不得形成百分比高度循环。分支名称 tooltip 只锚定可能截断的名称节点，不得锚定包含整行元数据的 option。
 
 ## Behavior Delta
@@ -62,7 +62,7 @@ supersedes: []
 
 - REQ-007: Files 主列表从 WebView 原生细滚动条迁移到共享 overlay，原 viewport 和列表行为保持不变。
 - REQ-008: Git 与管理器普通列表按阶段从各自的原生 scrollbar 声明迁移到共享组件；专用表面不变。
-- REQ-009: Files、连接列表和 Git 分支浮层分别获得表头安全区、选中框宽度约束和紧凑对称边距。
+- REQ-009: Files、连接列表、Git 分支浮层和远程 target 最近仓库列表分别获得表头安全区、选中框宽度约束、紧凑 overlay 边距和行边框避让区。
 - REQ-010: 修正分支列表迁移后的不可滚动回归，并消除行级 `title` 导致的 tooltip 锚点漂移。
 
 ## Acceptance
@@ -75,7 +75,7 @@ supersedes: []
 | AC-004 | REQ-006 | 样式检查证明 reduced-motion 禁用 transition，高对比度提供明确 thumb；overlay 设为 `aria-hidden`。 |
 | AC-005 | REQ-007 | Files 现有虚拟化、锚点恢复、目录切换和列表交互测试通过，并增加共享 wrapper 接线回归。 |
 | AC-006 | REQ-008 | 每个迁移表面只组合共享组件；仓库检索没有新增 feature-local thumb 指标/拖拽实现，xterm/CodeMirror/Git diff 未被改写。 |
-| AC-007 | REQ-003, REQ-009 | Files thumb 不进入表头；连接选中面左右边界与选项一致且不和滚动条重叠；Git 分支列表使用对称 4px padding 和 2px 紧凑 overlay。 |
+| AC-007 | REQ-003, REQ-009 | Files thumb 不进入表头；连接选中面左右边界与选项一致且不和滚动条重叠；Git 分支列表与远程 target 最近仓库列表使用 2px 紧凑 overlay；最近仓库行通过 7px viewport 内安全区与 thumb 分离，不扩大外层卡片。 |
 | AC-008 | REQ-010 | 长分支列表在 280px/可用视口上限内由 listbox 自身滚动；wrapper 不持有 `max-height`；普通分支名称不产生整行 tooltip，截断名称仍可从名称节点读取完整值。 |
 
 ## Recommended Design
@@ -88,7 +88,7 @@ supersedes: []
 
 - [x] 建立共享 `OverlayScrollArea`、样式和相邻行为测试，覆盖双轴指标、自动隐藏、边缘唤醒、拖拽与外部 ref/scroll handler。
 - [x] 将 Files 主列表接入共享组件，迁移原 flex/overflow 所在位置并保护既有虚拟滚动行为。
-- [ ] 将 Git 更改列表和普通仓库/分支/历史列表分批接入；Git 更改列表与分支浮层已完成，仓库/历史列表待后续批次；排除 diff overview 与 CodeMirror。
+- [ ] 将 Git 更改列表和普通仓库/分支/历史列表分批接入；Git 更改列表、分支浮层与远程 target 最近仓库列表已完成，仓库树及顶部最近仓库浮层待后续批次；排除 diff overview 与 CodeMirror。
 - [x] 将连接与凭证管理主列表接入，并确认 selection indicator 的定位/测量仍以 viewport 为基准。
 - [x] 更新 Directory Map 与 source-size baseline，运行 focused tests、lint、typecheck、source-size 和 production build。
 
@@ -115,10 +115,10 @@ supersedes: []
 
 - AC-002/AC-003/AC-004: `OverlayScrollArea.test.tsx` 与样式契约共 7 项通过，覆盖双轴指标、外部 ref/scroll handler、1 秒显隐、无溢出、边缘唤醒、pointer-capture 拖拽、aria-hidden、hover/drag 尺寸和 reduced-motion。
 - AC-005/AC-006: Files、Git、Connection、Credential focused suite 与样式契约通过；Files 既有目录恢复/虚拟列表用例继续使用 `.file-browser-content` 真实 viewport，三个管理表面接线测试确认共享 shell。
-- AC-007: 共享组件测试证明 Files 的 28/3/3 轨道安全区参与 thumb 几何与拖拽映射；连接样式测试锁定选中面与选项共用 7px 左右 inset；Git 分支测试锁定 compact density、对称 4px padding 和无原生 scrollbar 声明。
+- AC-007: 共享组件测试证明 Files 的 28/3/3 轨道安全区参与 thumb 几何与拖拽映射；连接样式测试锁定选中面与选项共用 7px 左右 inset；Git 分支与远程 target 最近仓库测试锁定 compact density、真实 viewport 高度/overflow 所有权和无原生 scrollbar 声明，远程 target 额外锁定 7px viewport 内安全区。
 - AC-008: `gitBranchOverlayStyles.test.ts` 锁定真实 listbox 的 `height: auto`、280px 上限和 `overflow-y: auto`，以及 wrapper 的可收缩无上限契约；`GitPane.branches.test.tsx` 锁定 option 不再持有行级 `title`、完整名称只挂在可截断的名称节点。
-- 仓库完整 `pnpm check` 通过：152 个 Vitest 文件 / 1016 项测试、17 项 Node 脚本测试、ESLint、TypeScript、source-size（0 reminders）及 Vite production build。
-- AC-001 的桌面像素级截图确认，以及 AC-006 中 Git 仓库/分支/历史次级列表迁移，保留到下一批次；本 active change 暂不归档。
+- 仓库完整 `pnpm check` 通过：153 个 Vitest 文件 / 1018 项测试、17 项 Node 脚本测试、ESLint、TypeScript、source-size（0 reminders）及 Vite production build。
+- AC-001 的桌面像素级截图确认，以及 AC-006 中 Git 仓库树与顶部最近仓库浮层迁移，保留到下一批次；本 active change 暂不归档。
 
 ## Quality Check
 

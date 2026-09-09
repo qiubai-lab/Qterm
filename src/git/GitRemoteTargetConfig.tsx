@@ -3,6 +3,7 @@ import { useState, type FormEvent } from "react";
 import { ExactTextInput } from "../components/ExactTextInput";
 import { Icon } from "../components/Icon";
 import { RequiredFieldLabel } from "../components/RequiredFieldLabel";
+import { OverlayScrollArea } from "../components/scrollbars/OverlayScrollArea";
 import type { GitRepositoryHistoryEntry } from "../workspace/model";
 import type { GitRuntime } from "../workspace/WorkspaceProvider";
 import { GitRepositoryHistoryList } from "./GitRepositoryHistoryPopover";
@@ -42,14 +43,19 @@ export function GitRemoteTargetConfig(props: GitRemoteTargetConfigProps) {
       <span>路径位于“{props.profileName}”上，不会复用终端会话。</span>
       {props.recentRepositories.length > 0 && <section className="git-target-history" aria-label="该连接的最近仓库">
         <span>最近仓库</span>
-        <div className="git-target-history-scroll">
+        <OverlayScrollArea
+          className="git-target-history-scroll-area"
+          viewportClassName="git-target-history-scroll"
+          density="compact"
+          trackInsets={{ top: 2, right: 2, bottom: 2 }}
+        >
           <GitRepositoryHistoryList
             repositories={props.recentRepositories}
             currentRepository={null}
             ariaLabel="该连接的最近仓库"
             onSelect={(repository) => props.onOpen(repository.path, false)}
           />
-        </div>
+        </OverlayScrollArea>
       </section>}
       <label id={labelId} htmlFor={inputId}><RequiredFieldLabel>远程工作目录</RequiredFieldLabel></label>
       <div className="git-target-path-group" role="group" aria-labelledby={labelId}>

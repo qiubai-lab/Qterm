@@ -107,5 +107,11 @@ describe("GitRemoteTargetConfig", () => {
 
     await user.click(screen.getByRole("button", { name: /recent/ }));
     expect(onOpen).toHaveBeenCalledWith("/srv/recent", false);
+
+    const list = screen.getByRole("list", { name: "该连接的最近仓库" });
+    const viewport = list.parentElement;
+    expect(viewport).toHaveClass("overlay-scroll-viewport", "git-target-history-scroll");
+    expect(viewport?.parentElement).toHaveClass("overlay-scroll-area", "git-target-history-scroll-area");
+    expect(viewport?.parentElement).toHaveAttribute("data-density", "compact");
   });
 });

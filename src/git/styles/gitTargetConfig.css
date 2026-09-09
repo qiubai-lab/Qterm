@@ -178,12 +178,20 @@
   letter-spacing: .04em;
 }
 
+.git-target-history-scroll-area {
+  width: 100%;
+  min-height: 0;
+  flex: 0 1 auto;
+}
+
 .git-target-history-scroll {
   min-height: 0;
+  height: auto;
   max-height: 168px;
+  padding-right: 7px;
+  overflow-x: hidden;
   overflow-y: auto;
-  scrollbar-color: var(--scrollbar-thumb) transparent;
-  scrollbar-width: thin;
+  overscroll-behavior: contain;
 }
 
 .git-target-history .git-repository-history-item {
