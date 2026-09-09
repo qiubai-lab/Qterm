@@ -56,24 +56,7 @@
   overflow-y: auto;
   padding: 4px 3px 4px 4px;
   scrollbar-color: var(--scrollbar-thumb) transparent;
-  scrollbar-gutter: stable;
   scrollbar-width: thin;
-}
-
-.git-repository-history-scroll::-webkit-scrollbar {
-  width: 5px;
-}
-
-.git-repository-history-scroll::-webkit-scrollbar-track,
-.git-repository-history-scroll::-webkit-scrollbar-corner {
-  background: transparent;
-}
-
-.git-repository-history-scroll::-webkit-scrollbar-thumb {
-  border: 1px solid transparent;
-  border-radius: 999px;
-  background: var(--scrollbar-thumb);
-  background-clip: padding-box;
 }
 
 .git-repository-history-list {

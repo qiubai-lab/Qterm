@@ -2,6 +2,7 @@
 @import "./styles/themes/light.css";
 @import "./styles/themes/cyberpunk.css";
 @import "../components/button.css";
+@import "../components/scrollbars/overlayScrollbar.css";
 @import "../components/dialogs/credentialDialog.css";
 @import "./styles/foundations.css";
 @import "./styles/shell.css";

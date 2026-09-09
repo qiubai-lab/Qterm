@@ -14,6 +14,8 @@ describe("connection manager selection motion", () => {
   });
 
   it("moves one primary selection surface without animating layout", () => {
+    expect(styles).toMatch(/\.connection-list\{[^}]*--connection-list-inline-inset:7px/);
+    expect(styles).toMatch(/\.connection-selection-indicator\{[^}]*right:var\(--connection-list-inline-inset\);left:var\(--connection-list-inline-inset\)/);
     expect(styles).toMatch(/\.connection-selection-indicator\.ready\{[^}]*transition:transform280mscubic-bezier\(\.22,1,\.36,1\),opacity120msease/);
     expect(styles).not.toMatch(/\.connection-selection-indicator\.ready\{[^}]*transition:[^}]*(?:top|height|width)/);
     expect(styles).toMatch(/\.connection-item\.selected:not\(\[data-primary-selected\]\)\{[^}]*background:var\(--selection-surface\)/);

@@ -116,6 +116,7 @@ describe("ConnectionDialog", () => {
   it("orders the vault status, import action, and close action in the header", async () => {
     render(<ConnectionDialog onClose={vi.fn()}/>);
 
+    expect(document.querySelector(".connection-list")?.parentElement).toHaveClass("overlay-scroll-area", "connection-list-scroll-area");
     const header = (await screen.findByRole("button", { name: "导入" })).closest(".dialog-header")!;
     const actions = header.querySelector(".dialog-header-actions")!;
     expect(Array.from(actions.children).map((element) => element.textContent || element.getAttribute("aria-label"))).toEqual([

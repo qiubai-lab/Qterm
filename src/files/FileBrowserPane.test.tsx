@@ -986,15 +986,15 @@ describe("FileBrowserPane", () => {
     view.rerender(<FileBrowserPane initialPath="/srv" runtime={{ ...localRuntime, kind: "sftp", sessionId: "session-1" }} onPathChange={vi.fn()}/>);
     const ui = within(view.container);
     const upload = await ui.findByRole("button", { name: "上传到当前目录" });
-    expect(upload).toHaveAttribute("title", "上传到当前目录");
     fireEvent.click(upload);
-    const menu = ui.getByRole("menu", { name: "选择上传内容" });
+    const menu = screen.getByRole("menu", { name: "选择上传内容" });
+    expect(menu.parentElement).toBe(document.body);
     expect(within(menu).getAllByRole("menuitem").map((item) => item.textContent)).toEqual(["上传文件…", "上传文件夹…"]);
     await waitFor(() => expect(within(menu).getByRole("menuitem", { name: "上传文件…" })).toHaveFocus());
     fireEvent.keyDown(menu, { key: "ArrowDown" });
     expect(within(menu).getByRole("menuitem", { name: "上传文件夹…" })).toHaveFocus();
     fireEvent.keyDown(window, { key: "Escape" });
-    expect(ui.queryByRole("menu", { name: "选择上传内容" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("menu", { name: "选择上传内容" })).not.toBeInTheDocument();
     await waitFor(() => expect(upload).toHaveFocus());
   });
 
@@ -1007,7 +1007,7 @@ describe("FileBrowserPane", () => {
     const upload = await ui.findByRole("button", { name: "上传到当前目录" });
 
     fireEvent.click(upload);
-    let files = ui.getByRole("menuitem", { name: "上传文件…" });
+    let files = screen.getByRole("menuitem", { name: "上传文件…" });
     await waitFor(() => expect(files).toHaveFocus());
     fireEvent.pointerDown(files);
     act(() => upload.focus());
@@ -1020,8 +1020,8 @@ describe("FileBrowserPane", () => {
     await waitFor(() => expect(upload).toHaveFocus());
 
     fireEvent.click(upload);
-    files = ui.getByRole("menuitem", { name: "上传文件…" });
-    const folder = ui.getByRole("menuitem", { name: "上传文件夹…" });
+    files = screen.getByRole("menuitem", { name: "上传文件…" });
+    const folder = screen.getByRole("menuitem", { name: "上传文件夹…" });
     await waitFor(() => expect(files).toHaveFocus());
     fireEvent.pointerDown(folder);
     act(() => upload.focus());
@@ -1044,7 +1044,7 @@ describe("FileBrowserPane", () => {
     const ui = within(view.container);
 
     fireEvent.click(await ui.findByRole("button", { name: "上传到当前目录" }));
-    fireEvent.click(ui.getByRole("menuitem", { name: "上传文件…" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "上传文件…" }));
     expect(ui.getByRole("button", { name: "上传到当前目录" })).toBeDisabled();
     fireEvent.doubleClick(await ui.findByRole("listitem", { name: /child/ }));
     await waitFor(() => expect(listRemoteDirectory).toHaveBeenLastCalledWith("session-1", "/srv/child"));
@@ -1066,13 +1066,13 @@ describe("FileBrowserPane", () => {
     const upload = await ui.findByRole("button", { name: "上传到当前目录" });
 
     fireEvent.click(upload);
-    fireEvent.click(ui.getByRole("menuitem", { name: "上传文件…" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "上传文件…" }));
     await waitFor(() => expect(selectUploadFiles).toHaveBeenCalled());
     expect(uploadSelectedEntries).not.toHaveBeenCalled();
     expect(ui.queryByText("上传失败")).not.toBeInTheDocument();
 
     fireEvent.click(upload);
-    fireEvent.click(ui.getByRole("menuitem", { name: "上传文件夹…" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "上传文件夹…" }));
     await waitFor(() => expect(uploadSelectedEntries).toHaveBeenCalledWith("session-1", ["C:/upload/folder"], "/srv", expect.any(Function)));
   });
 });

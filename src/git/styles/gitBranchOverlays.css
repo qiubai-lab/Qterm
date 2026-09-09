@@ -169,18 +169,16 @@
   text-align: center;
 }
 
+.git-branch-list-scroll-area { width: 100%; min-height: 0; flex: 0 1 auto; }
 .git-branch-list {
   display: flex;
   width: 100%;
-  min-height: 0;
-  max-height: min(280px, calc(100vh - 120px));
-  flex: 1 1 auto;
+  height: auto; max-height: min(280px, calc(100vh - 120px));
   flex-direction: column;
   gap: 3px;
-  padding: 4px 9px 4px 4px;
+  padding: 4px;
   overflow-y: auto;
   overscroll-behavior: contain;
-  scrollbar-gutter: stable;
 }
 
 .git-branch-list-group {

@@ -13,7 +13,7 @@
 
 - `native/conpty/`：G0 隔离原型的上游版本锁、MIT 许可与原生输出边界补丁；`scripts/build-conpty-prototype.ps1` 构建未发布的测试 host，`scripts/conpty-ordered-probe-consumer.mjs` 只供真实 PTY 探针消费 QTR0 帧。尚未作为生产 runtime 或应用 IPC 协议接线。
 
-- `src/components/ThemedTooltipButton.tsx`、`useThemedTooltip.tsx`、`themedTooltip.css`：跨终端、Git、文件和网络窗口共享的主题提示触发、视口定位、退出生命周期与浮层样式；按钮和被截断的操作标识复用同一实现，该层不拥有操作业务逻辑。`src/workspace/BlockHeaderClose.tsx` 组合窗口头部关闭入口。
+- `src/components/ThemedTooltipButton.tsx`、`useThemedTooltip.tsx`、`ThemedTitleTooltipProvider.tsx`、`themedTooltip.css`：跨终端、Git、文件和网络窗口共享的主题提示触发、原生 DOM `title` 代理、溢出过滤、视口定位、退出生命周期与浮层样式；按钮和被截断的操作标识复用同一视觉契约，该层不拥有操作业务逻辑。`src/workspace/BlockHeaderClose.tsx` 组合窗口头部关闭入口。
 
 - `src/terminal/terminalLayout.ts`：终端尺寸测量与布局同步 owner；Windows ConPTY 在拖动停稳并处理已接收输出后提交尺寸，其余终端即时适配；`resizeScheduler.ts` 继续负责有序 IPC 与去重。`scripts/conpty-resize-probe.mjs` 和 `src-tauri/examples/conpty_resize_probe.rs` 提供真实 Windows PTY 回归检查。
 
@@ -38,6 +38,7 @@
 - `src/workspace/workspaceRuntime.ts`：Workspace runtime 类型、默认值、epoch/failure key、connection intent 与 route notice 纯规则；不持有 React state 或可变全局单例。
 - `src/workspace/connectionProgress.ts`、`src/components/ConnectionRouteProgress.tsx`：Terminal/Files/Network/Git SSH Block 共用的 route 事件展示状态映射与悬浮进度组件；`src/components/HostIdentity.tsx` 统一直连/route 完成态的主机概要、视口浮层和地址复制；这些组件不管理 session、认证、凭证或持久化。
 - `src/components/Button.tsx`、`button.css`：共享文本按钮、图标按钮与非交互状态标签的语义、尺寸、主题和可访问契约；不拥有 feature 事件、tabs、菜单项、列表行或选择卡片行为。
+- `src/components/scrollbars/OverlayScrollArea.tsx`、`overlayScrollbar.css`：普通 DOM viewport 共用的双轴悬浮滚动条、指标同步、短暂显隐、边缘唤醒与 pointer-capture 拖拽 owner；feature 保留 viewport ref、scroll handler、语义、虚拟化与业务状态，xterm、CodeMirror 和 Git diff overview 继续使用专用实现。
 - `src/components/dialogs/DialogFrame.tsx`、`dialogFrame.css`、`useDialogCloseTransition.ts`：共享 modal 的结构、焦点栈、进入/退出展示状态与 reduced-motion 生命周期；feature 继续拥有关闭后的业务动作和父级挂载状态，该层不执行保存、删除、连接或持久化。
 - `src/workspace/fileWindow.ts`：终端快捷方式和右侧工具轨共用的文件窗口打开策略；不创建 session 或读取文件系统。
 - `src/workspace/networkWindow.ts`：远程终端快捷方式和右侧工具轨共用的 Network Block 打开策略；不创建 session 或启动规则。
@@ -55,7 +56,7 @@
 - `src/components/dialogs/connection/`、`credential/`：Connection jump/反馈展示、纯 profile 模型、分组内容过渡存在期，以及连接与凭证列表主选择、详情 stage 的局部动效测量和 Credential 浮层/安全提示模块；分组展示组件与 motion hook 不拥有展开意图、draft、业务选择或 persistence，父 dialog 继续拥有这些状态和 nested dialog 生命周期。
 - `src/components/dialogs/SshConfigImportDialog.tsx`：SSH Config 文件选择、连接信息/凭证双 Tab 与批量导入界面；负责默认未分组、连接选择和逐项私钥授权，不接收设备路径或私钥正文。
 - `src/terminal/TerminalPanel.tsx`、`terminalSessionReset.ts`、`TerminalStagingStatus.tsx`、`terminalTheme.ts`、`terminalOsc8Link.ts`、`terminalWebLinks.ts`、`terminalExternalLinkRequests.ts`、`TerminalExternalLinkConfirmation.tsx`：每个 Block 的 xterm 生命周期、与已排队输出有序执行的会话重置、直接输出 writer、本地剪贴板路径准备与远端暂存任务的有序粘贴、按动作挂载的右下角悬浮状态卡片、OSC 工作目录、OSC 8 激活及普通 HTTP/HTTPS 文本识别适配、终端外链请求边界与风险确认、PTY 尺寸适配与 semantic token palette registry；OSC 8 与 Web Links 继续由 xterm 解析和展示，实际 HTTP/HTTPS 目标经统一确认后才委托给共享外链边界；悬浮卡片不占用 xterm 布局高度；该层只消费一次性最终粘贴文本，不读取本机文件内容/图片像素、选择缓存/远端临时目录、管理连接配置、布局树或 theme selection。
-- `src/files/FileBrowserPane.tsx`、`FileList.tsx`、`fileBrowserModel.ts`、`FilePreviewDocument.tsx`、`FileSearchBar.tsx`、`useFileSearchSession.ts`、`fileSearchModel.ts`、`codeEditorSearch.ts`、`markdownPreviewSearch.ts`、`CodeEditor.tsx`、`MarkdownPreview.tsx`、`FileTextContextMenu.tsx`、`fileTextContextMenuModel.ts`：内部文件窗口的目录导航、虚拟列表/排序纯规则、下载、瞬时预览编辑状态与按需编辑/渲染组件；文件预览组合层拥有单文件搜索会话，纯模型负责文字匹配，CodeMirror 与 Markdown adapter 只负责各自表面的高亮和定位；文本预览与编辑共用 Files-owned 菜单生命周期，CodeMirror 独立拥有编辑历史/选区命令，Markdown 独立拥有受预览范围约束的 DOM 选区与链接目标；不依赖 TerminalRuntime，不直接读取本地文件或实现 SFTP。
+- `src/files/FileBrowserPane.tsx`、`FileList.tsx`、`FileUploadMenu.tsx`、`fileBrowserModel.ts`、`FilePreviewDocument.tsx`、`FileSearchBar.tsx`、`useFileSearchSession.ts`、`fileSearchModel.ts`、`codeEditorSearch.ts`、`markdownPreviewSearch.ts`、`CodeEditor.tsx`、`MarkdownPreview.tsx`、`FileTextContextMenu.tsx`、`fileTextContextMenuModel.ts`：内部文件窗口的目录导航、虚拟列表/排序纯规则、下载、viewport 级上传菜单、瞬时预览编辑状态与按需编辑/渲染组件；文件预览组合层拥有单文件搜索会话，纯模型负责文字匹配，CodeMirror 与 Markdown adapter 只负责各自表面的高亮和定位；文本预览与编辑共用 Files-owned 菜单生命周期，CodeMirror 独立拥有编辑历史/选区命令，Markdown 独立拥有受预览范围约束的 DOM 选区与链接目标；不依赖 TerminalRuntime，不直接读取本地文件或实现 SFTP。
 - `src/lib/tauri/profiles.ts`：连接配置、有序跃点候选/route 要求、不兼容存储清除与 SSH Config 导入 IPC 客户端契约；不包含配置路径、私钥路径、强制删除参数或领域校验。
 - `src/lib/tauri/credentials.ts`：密码/私钥凭证库的窄 IPC 契约；不实现 KDF、加密或 JSON 访问。
 - `src/lib/tauri/settings.ts`：配置根选择、当前构建模式默认根与派生存储布局快照，以及设备安全、外观、更新和远程终端集成偏好的窄 IPC 契约；不开放 locator 路径、构建模式、分区路径写入、Shell cache 或执行锁定/探测策略。

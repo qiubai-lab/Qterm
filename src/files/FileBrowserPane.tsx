@@ -1,16 +1,17 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FocusEvent, type FormEvent, type KeyboardEvent, type MouseEvent } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { writeText as writeClipboardText } from "@tauri-apps/plugin-clipboard-manager";
-
 import { Icon } from "../components/Icon";
 import { Button, StatusBadge } from "../components/Button";
 import { DialogActionStatus, DialogFrame } from "../components/dialogs/DialogFrame";
 import { ExactTextInput } from "../components/ExactTextInput";
+import { OverlayScrollArea } from "../components/scrollbars/OverlayScrollArea";
 import { copyImageUrlToClipboard } from "../lib/tauri/clipboard";
 import { copyFile, createEntry, deleteEntry, listLocalDirectory, listLocalRoots, listRemoteDirectory, readBinaryFile, readTextFile, renameEntry, writeTextFile, type DirectoryListing, type FileEntry, type LocalRoot } from "../lib/tauri/files";
 import { cancelTransfer, downloadDirectory, downloadFile, selectDownloadDirectory, selectDownloadPath, selectUploadFiles, selectUploadFolder, uploadDroppedEntries, uploadSelectedEntries, type TransferEvent } from "../lib/tauri/transfers";
 import type { FileRuntime } from "../workspace/WorkspaceProvider";
 import { FileList, FileSortHeader } from "./FileList";
+import { FileUploadMenu } from "./FileUploadMenu";
 import { FILE_LIST_PADDING, FILE_ROW_HEIGHT, FILE_VIRTUAL_FALLBACK_ROWS, FILE_VIRTUAL_OVERSCAN, copyName, fileErrorMessage, fileListAnchor, fileVirtualRange, fitContextMenu, formatSize, imageMime, previewKindFor, sortEntries, type SortKey, type SortState, type VirtualRange } from "./fileBrowserModel";
 import { FilePreviewDocument, type FilePreviewState } from "./FilePreviewDocument";
 import { displayLocalPath, isWindowsDriveRoot, parentPath } from "./path";
@@ -668,7 +669,7 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
       <button aria-label={showLocalRoots ? "刷新本机位置" : "刷新文件夹"} aria-busy={loading || undefined} title="刷新" disabled={loading} onClick={() => showLocalRoots ? void openLocalRoots() : void load(path)}><Icon name="refresh" size={14}/></button>
     </nav>
     {!connectionError && error && (listing || (showLocalRoots && localRoots.length > 0)) && <div className="file-browser-inline-error" role="alert">{error}</div>}
-    <div className="file-browser-content" ref={listScroll} onPointerEnter={() => setEditingPath(false)} onScroll={(event) => { setEditingPath(false); updateVirtualRange(event.currentTarget, activeEntries.length); }}>
+    <OverlayScrollArea className="file-browser-scroll-area" viewportClassName="file-browser-content" ref={listScroll} trackInsets={{ top: 28, right: 3, bottom: 3 }} viewportProps={{ onPointerEnter: () => setEditingPath(false) }} onScroll={(event) => { setEditingPath(false); updateVirtualRange(event.currentTarget, activeEntries.length); }}>
       <div className="file-browser-columns" aria-label="文件排序">
         <FileSortHeader label="名称" sortKey="name" sort={sort} onChange={cycleSort}/>
         <FileSortHeader className="file-size-column" label="大小" sortKey="size" sort={sort} onChange={cycleSort}/>
@@ -684,11 +685,8 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
       {!showLocalRoots && !error && listing?.entries.length === 0 && <div className="file-browser-state">此文件夹为空</div>}
       {!showLocalRoots && listing && <FileList entries={displayedEntries} range={virtualRange} ariaLabel={`文件夹 ${listing.path}`} selectedPaths={selectedPaths} onSelect={selectEntry} onOpen={(entry) => entry.isDirectory ? void navigateTo(entry.path) : void openFile(entry, "preview")} onContextMenu={openContextMenu} onContextMenuKey={openContextMenuFromKeyboard}/>}
       {!showLocalRoots && dropActive && <div className="file-upload-drop-overlay" role="status"><Icon name="upload" size={24}/><strong>上传到当前目录</strong><span>{visiblePath}</span><small>释放鼠标以上传文件或文件夹</small></div>}
-    </div>
-    {uploadMenu && <div ref={uploadMenuRef} className="file-context-menu file-upload-menu" data-placement={uploadMenu.placement} role="menu" aria-label="选择上传内容" style={{ left: uploadMenu.x, top: uploadMenu.y }} onPointerDownCapture={() => { uploadMenuPointerActive.current = true; }} onBlur={handleUploadMenuBlur} onKeyDown={handleContextMenuKeyDown} onContextMenu={(event) => event.preventDefault()}>
-      <button role="menuitem" onClick={() => void startSelectedUpload("files")}><Icon name="file" size={13}/><span>上传文件…</span></button>
-      <button role="menuitem" onClick={() => void startSelectedUpload("folder")}><Icon name="files" size={13}/><span>上传文件夹…</span></button>
-    </div>}
+    </OverlayScrollArea>
+    {uploadMenu && <FileUploadMenu menuRef={uploadMenuRef} position={uploadMenu} onPointerDownCapture={() => { uploadMenuPointerActive.current = true; }} onBlur={handleUploadMenuBlur} onKeyDown={handleContextMenuKeyDown} onSelect={(selection) => void startSelectedUpload(selection)}/>}
     {contextMenu && <div ref={menuRef} className="file-context-menu" data-placement={contextMenu.placement} role="menu" aria-label={contextEntries.length > 1 ? `${contextEntries.length} 个已选项目菜单` : `${contextMenu.entry.name} 文件菜单`} style={{ left: contextMenu.x, top: contextMenu.y }} onKeyDown={handleContextMenuKeyDown} onContextMenu={(event) => event.preventDefault()}>
       {contextEntries.length === 1 && contextMenu.entry.isDirectory && <button role="menuitem" onClick={() => { setContextMenu(null); void navigateTo(contextMenu.entry.path); }}><Icon name="files" size={13}/><span>打开</span></button>}
       {contextEntries.length === 1 && !contextMenu.entry.isDirectory && !contextMenu.entry.isSymlink && <button role="menuitem" onClick={() => { setContextMenu(null); void openFile(contextMenu.entry, "preview"); }}><Icon name="eye" size={13}/><span>预览</span></button>}

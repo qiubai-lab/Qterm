@@ -191,28 +191,6 @@
   scrollbar-width: thin;
 }
 
-.git-repository-picker-list-scroll::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
-}
-
-.git-repository-picker-list-scroll::-webkit-scrollbar-track,
-.git-repository-picker-list-scroll::-webkit-scrollbar-corner {
-  background: transparent;
-}
-
-.git-repository-picker-list-scroll::-webkit-scrollbar-thumb {
-  border: 1px solid transparent;
-  border-radius: 999px;
-  background: var(--scrollbar-thumb);
-  background-clip: padding-box;
-}
-
-.git-repository-picker-list-scroll::-webkit-scrollbar-thumb:hover {
-  background: color-mix(in srgb, var(--scrollbar-thumb) 82%, var(--accent));
-  background-clip: padding-box;
-}
-
 .git-repository-picker-list {
   position: relative;
   min-width: 0;

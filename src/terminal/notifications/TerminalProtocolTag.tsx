@@ -67,11 +67,14 @@ export function TerminalProtocolTag({ blockId, connected, directoryState, direct
       onClick={() => { if (unread) focusTerminalBlock(blockId); }}><span aria-hidden="true">osc</span></button>
     {position && createPortal(<div ref={bubble} id={id} role="tooltip" aria-hidden={!open} data-open={open} className="themed-tooltip terminal-protocol-tooltip" style={position}>
       {directoryState && <p className="terminal-protocol-directory"><strong>OSC 7</strong><span>同步当前目录 · <small data-state={directoryState}>{directoryStatus}</small></span></p>}
-      {notifications.enabled && <div className="terminal-protocol-notifications">
-        <p><strong>BEL</strong><span>响铃信号，提醒关注终端</span></p>
-        <p><strong>OSC 9</strong><span>发送通知正文</span></p>
-        <p><strong>OSC 777</strong><span>发送通知标题和正文</span></p>
-      </div>}
+      <div className="terminal-protocol-notifications">
+        <p><strong>OSC 8</strong><span>HTTP(S) 超链接，确认后打开</span></p>
+        {notifications.enabled && <>
+          <p><strong>BEL</strong><span>响铃信号，提醒关注终端</span></p>
+          <p><strong>OSC 9</strong><span>发送通知正文</span></p>
+          <p><strong>OSC 777</strong><span>发送通知标题和正文</span></p>
+        </>}
+      </div>
     </div>, document.body)}
   </>;
 }

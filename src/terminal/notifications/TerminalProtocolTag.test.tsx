@@ -33,14 +33,16 @@ it("combines enabled protocols in one compact hover tooltip and hides disabled o
   expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
   fireEvent.mouseEnter(screen.getByRole("button"));
   const tooltip = screen.getByRole("tooltip");
-  for (const name of ["OSC 7", "BEL", "OSC 9", "OSC 777"]) expect(tooltip).toHaveTextContent(name);
+  for (const name of ["OSC 7", "OSC 8", "BEL", "OSC 9", "OSC 777"]) expect(tooltip).toHaveTextContent(name);
   expect(tooltip).toHaveTextContent("同步当前目录");
+  expect(tooltip).toHaveTextContent("HTTP(S) 超链接，确认后打开");
   fireEvent.mouseLeave(screen.getByRole("button"));
   expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
   state.enabled = false;
   view.rerender(<TerminalProtocolTag blockId="b" connected directoryState="waiting"/>);
   fireEvent.focus(screen.getByRole("button"));
   expect(screen.getByRole("tooltip")).toHaveTextContent("等待目录上报");
+  expect(screen.getByRole("tooltip")).toHaveTextContent("OSC 8");
   expect(screen.getByRole("tooltip")).not.toHaveTextContent("BEL");
   fireEvent.keyDown(screen.getByRole("button"), { key: "Escape" });
   expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();

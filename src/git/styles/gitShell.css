@@ -544,55 +544,23 @@
   outline: none;
 }
 
-.git-change-scroll,
-.git-graph-scroll,
-.git-branch-list {
+.git-graph-scroll {
   flex: 1;
   min-height: 0;
   scrollbar-color: var(--scrollbar-thumb) transparent;
   scrollbar-width: thin;
 }
 
-.git-change-scroll::-webkit-scrollbar,
-.git-graph-scroll::-webkit-scrollbar,
-.git-branch-list::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
-}
-
-.git-change-scroll::-webkit-scrollbar-track,
-.git-graph-scroll::-webkit-scrollbar-track,
-.git-branch-list::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.git-change-scroll::-webkit-scrollbar-thumb,
-.git-graph-scroll::-webkit-scrollbar-thumb,
-.git-branch-list::-webkit-scrollbar-thumb {
-  border: 1px solid transparent;
-  border-radius: 999px;
-  background: var(--scrollbar-thumb);
-  background-clip: padding-box;
-}
-
-.git-change-scroll::-webkit-scrollbar-thumb:hover,
-.git-graph-scroll::-webkit-scrollbar-thumb:hover,
-.git-branch-list::-webkit-scrollbar-thumb:hover {
-  background: color-mix(in srgb, var(--scrollbar-thumb) 82%, var(--accent));
-  background-clip: padding-box;
-}
-
-.git-change-scroll::-webkit-scrollbar-corner,
-.git-graph-scroll::-webkit-scrollbar-corner,
-.git-branch-list::-webkit-scrollbar-corner {
-  background: transparent;
+.git-change-scroll-area {
+  flex: 1;
+  min-height: 0;
+  margin: 0 8px 7px;
 }
 
 .git-change-scroll {
   display: flex;
   flex-direction: column;
   gap: 5px;
-  margin: 0 8px 7px;
   padding: 0;
   overflow: auto;
   background: transparent;

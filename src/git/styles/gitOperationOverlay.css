@@ -27,23 +27,7 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-color: var(--scrollbar-thumb) transparent;
-  scrollbar-gutter: stable;
   scrollbar-width: thin;
-}
-
-.git-operation-list::-webkit-scrollbar {
-  width: 5px;
-}
-
-.git-operation-list::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.git-operation-list::-webkit-scrollbar-thumb {
-  border: 1px solid transparent;
-  border-radius: 999px;
-  background: var(--scrollbar-thumb);
-  background-clip: padding-box;
 }
 
 .git-operation-row {
@@ -123,4 +107,3 @@
   from { opacity: 0; transform: translateY(var(--git-commit-tooltip-enter-y)) scale(.985); }
   to { opacity: 1; transform: none; }
 }
-

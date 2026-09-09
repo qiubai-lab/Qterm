@@ -5,6 +5,7 @@ import { Button } from "../components/Button";
 import { ExactTextInput } from "../components/ExactTextInput";
 import { Icon } from "../components/Icon";
 import { RequiredFieldLabel } from "../components/RequiredFieldLabel";
+import { OverlayScrollArea } from "../components/scrollbars/OverlayScrollArea";
 import { DialogActionStatus, DialogFrame } from "../components/dialogs/DialogFrame";
 import type { GitBranch, GitCommit, GitSnapshot } from "../lib/tauri/git";
 import { GitRemoteConfigurationHint, gitRemoteConfigurationHint } from "./GitRemoteConfigurationHint";
@@ -140,8 +141,8 @@ function GitRepositoryOverlayContent(props: GitRepositoryOverlaysProps) {
     const commit = snapshot?.commits.find((item) => item.oid === branch.oid);
     const branchName = `${branch.name}${snapshot?.head.unborn && branch.kind === "local" && branch.name === snapshot.head.name ? "（未提交）" : ""}`;
     const kindLabel = current ? "当前" : branch.kind === "remote" ? "远程" : "本地";
-    return <button type="button" role="option" aria-selected={current} data-kind={branch.kind} key={branch.refName} title={branch.name} onClick={() => onSelectBranch(branch, current)}>
-      <span className="git-branch-option-primary"><Icon name={branch.kind === "remote" ? "network" : "git"} size={12}/><strong>{branchName}</strong>{commit && <span className="git-branch-time">{formatRelativeCommitTime(commit.timestamp)}</span>}<span className="git-branch-kind">{kindLabel}</span></span>
+    return <button type="button" role="option" aria-selected={current} data-kind={branch.kind} key={branch.refName} onClick={() => onSelectBranch(branch, current)}>
+      <span className="git-branch-option-primary"><Icon name={branch.kind === "remote" ? "network" : "git"} size={12}/><strong title={branch.name}>{branchName}</strong>{commit && <span className="git-branch-time">{formatRelativeCommitTime(commit.timestamp)}</span>}<span className="git-branch-kind">{kindLabel}</span></span>
       <span className="git-branch-option-meta">{commit?.author && <span className="git-branch-author" title={commit.author}>{commit.author}</span>}<span className="git-branch-oid" title={branch.oid}>{branch.oid.slice(0, 7)}</span>{commit?.subject && <span className="git-branch-subject" title={commit.subject}>{commit.subject}</span>}</span>
     </button>;
   };
@@ -150,11 +151,11 @@ function GitRepositoryOverlayContent(props: GitRepositoryOverlaysProps) {
     return <div ref={overlayRef} className="git-repository-popover git-branch-popover" role="dialog" aria-label="切换分支" onKeyDown={onNavigateMenu} {...common}>
       <div className="git-branch-search-shell"><Icon name="search" size={12}/><ExactTextInput className="git-branch-search" type="search" role="searchbox" aria-label="筛选分支" value={branchQuery} placeholder="筛选要签出的分支" onChange={(event) => onBranchQueryChange(event.target.value)}/></div>
       <div className="git-branch-actions"><button type="button" onClick={() => onOpenOverlay("createBranch")}><Icon name="plus" size={12}/><span>创建新分支…</span></button></div>
-      <div className="git-branch-list" role="listbox" aria-label="选择分支">
+      <OverlayScrollArea className="git-branch-list-scroll-area" viewportClassName="git-branch-list" density="compact" trackInsets={{ top: 3, right: 2, bottom: 3 }} viewportProps={{ role: "listbox", "aria-label": "选择分支" }}>
         <div className="git-branch-list-group" role="group" aria-label="本地分支"><div className="git-branch-list-header" role="presentation"><span>本地分支</span><span>{visibleLocalBranches.length}</span></div>{visibleLocalBranches.map(renderBranchOption)}</div>
         <div className="git-branch-list-group" role="group" aria-label="远程分支"><div className="git-branch-list-header" role="presentation"><span>远程分支</span><span>{visibleRemoteBranches.length}</span></div>{visibleRemoteBranches.map(renderBranchOption)}</div>
         {visibleBranches.length === 0 && <div className="git-branch-empty">没有匹配“{branchQuery.trim()}”的分支</div>}
-      </div>
+      </OverlayScrollArea>
     </div>;
   }
 

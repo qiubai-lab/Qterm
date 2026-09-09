@@ -4,7 +4,7 @@ type: bugfix
 tier: standard
 status: active
 created: 2026-09-05
-updated: 2026-09-05
+updated: 2026-09-09
 supersedes:
   - QB-20260905-macos-traffic-light-alignment
 ---
@@ -29,7 +29,7 @@ Implement REQ-001 through REQ-008 from the matching change spec while retaining 
 
 ## Design
 
-The macOS platform config provides the pinned runtime's calibrated `{x: 14, y: 18}` traffic-light inset to Tauri. Tao/Wry applies that position from the native view drawing lifecycle, including live resize, rather than Qterm reacting after AppKit events. Remove the duplicate infrastructure adapter and composition hooks so there is exactly one frame owner, and exclude post-construction title synchronization on macOS to avoid Tao 0.35.3's reset path. Retain `Overlay`, native decorations, the hidden static title, and non-macOS title synchronization.
+The macOS platform config provides the pinned runtime's close-crop-calibrated `{x: 14, y: 22}` traffic-light inset to Tauri. Tao/Wry applies that position from the native view drawing lifecycle, including live resize, rather than Qterm reacting after AppKit events. Remove the duplicate infrastructure adapter and composition hooks so there is exactly one frame owner, and exclude post-construction title synchronization on macOS to avoid Tao 0.35.3's reset path. Retain `Overlay`, native decorations, the hidden static title, and non-macOS title synchronization.
 
 ## Implementation Tasks
 
@@ -48,7 +48,10 @@ The macOS platform config provides the pinned runtime's calibrated `{x: 14, y: 1
 - [x] Add failing regression expectations for the calibrated `y: 18` inset and macOS exclusion from post-construction title synchronization.
 - [x] Replace the incorrect `y: 13` derivation with the observed `y: 18` calibration and conditionally retain title synchronization only outside macOS.
 - [x] Re-run focused checks, repository gates, the macOS package build, and the exact development-bundle launch smoke test; refresh automated evidence.
-- [ ] Confirm centered traffic lights, full-screen reveal/click behavior, and rapid live-resize stability in the user's visible desktop session; archive only after that visual acceptance passes.
+- [x] Measure the 2026-09-09 user capture, add a failing `{x: 14, y: 23}` regression, and apply the 5pt downward calibration without reintroducing an AppKit observer.
+- [x] Measure the tighter post-`y: 23` crop, add a failing `{x: 14, y: 22}` regression, and correct the residual 1px downward offset.
+- [ ] Confirm the final `y: 22` close-crop alignment in the restarted `Qterm Dev` visible desktop window.
+- [ ] Confirm full-screen reveal/click behavior and rapid live-resize stability in the user's visible desktop session; archive only after that interaction acceptance passes.
 
 ## Acceptance To Verification
 

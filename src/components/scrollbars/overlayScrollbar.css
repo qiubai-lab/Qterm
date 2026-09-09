@@ -1,0 +1,22 @@
+.overlay-scroll-area { --overlay-scrollbar-thickness:3px; --overlay-scrollbar-hit-size:9px; --overlay-scrollbar-active-scale:1.6; position:relative; min-width:0; min-height:0; overflow:hidden; }
+.overlay-scroll-area[data-density="compact"] { --overlay-scrollbar-thickness:2px; --overlay-scrollbar-hit-size:8px; --overlay-scrollbar-active-scale:1.8; }
+.overlay-scroll-viewport { width:100%; height:100%; min-width:0; min-height:0; scrollbar-width:none; -ms-overflow-style:none; }
+.overlay-scroll-viewport::-webkit-scrollbar { display:none; width:0; height:0; }
+.overlay-scrollbars { position:absolute; z-index:12; inset:0; overflow:hidden; pointer-events:none; }
+.overlay-scrollbar { position:absolute; opacity:0; pointer-events:none; transition:opacity 120ms ease; }
+.overlay-scrollbar-y { top:0; right:var(--overlay-scrollbar-y-edge); width:var(--overlay-scrollbar-hit-size); height:100%; }
+.overlay-scrollbar-x { right:0; bottom:var(--overlay-scrollbar-x-edge); left:0; height:var(--overlay-scrollbar-hit-size); }
+.overlay-scrollbar-thumb { position:absolute; display:block; border-radius:999px; background:var(--scrollbar-thumb); box-shadow:0 0 0 1px color-mix(in srgb,var(--scrollbar-thumb) 20%,transparent); transition:background-color 120ms ease,transform 120ms cubic-bezier(.2,.8,.2,1); }
+.overlay-scrollbar-y .overlay-scrollbar-thumb { top:var(--overlay-scrollbar-y-position); right:0; width:var(--overlay-scrollbar-thickness); height:var(--overlay-scrollbar-y-size); transform-origin:right center; }
+.overlay-scrollbar-x .overlay-scrollbar-thumb { bottom:0; left:var(--overlay-scrollbar-x-position); width:var(--overlay-scrollbar-x-size); height:var(--overlay-scrollbar-thickness); transform-origin:center bottom; }
+.overlay-scroll-area[data-scrolling] .overlay-scrollbar,
+.overlay-scroll-area[data-edge-y="true"] .overlay-scrollbar-y,
+.overlay-scroll-area[data-edge-x="true"] .overlay-scrollbar-x,
+.overlay-scroll-area[data-dragging] .overlay-scrollbar { opacity:1; pointer-events:auto; }
+.overlay-scrollbar:hover .overlay-scrollbar-thumb { background:var(--accent); }
+.overlay-scroll-area[data-dragging="y"] .overlay-scrollbar-y .overlay-scrollbar-thumb { background:var(--accent); transform:scaleX(var(--overlay-scrollbar-active-scale)); }
+.overlay-scroll-area[data-dragging="x"] .overlay-scrollbar-x .overlay-scrollbar-thumb { background:var(--accent); transform:scaleY(var(--overlay-scrollbar-active-scale)); }
+.overlay-scrollbar-y:hover .overlay-scrollbar-thumb { transform:scaleX(var(--overlay-scrollbar-active-scale)); }
+.overlay-scrollbar-x:hover .overlay-scrollbar-thumb { transform:scaleY(var(--overlay-scrollbar-active-scale)); }
+@media (prefers-reduced-motion: reduce) { .overlay-scrollbar,.overlay-scrollbar-thumb { transition:none; } }
+@media (prefers-contrast: more) { .overlay-scrollbar-thumb { background:var(--text); box-shadow:0 0 0 1px var(--panel-bg); } }

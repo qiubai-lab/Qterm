@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { writeText as writeClipboardText } from "@tauri-apps/plugin-clipboard-manager";
-
 import { cancelPrivateKeyCredential, clearVault, commitPrivateKeyCredential, createPasswordCredential, deleteCredential, getCredentialPublicKey, getVaultStatus, listCredentials, onVaultStatusChanged, prepareDroppedPrivateKeyCredential, prepareGeneratedPrivateKeyCredential, preparePrivateKeyCredential, renameCredential, revealCredentialPassword, type CredentialKind, type CredentialSummary, type GeneratedPrivateKeyAlgorithm, type PrivateKeyDraft, type VaultStatus } from "../../lib/tauri/credentials";
 import { Button, IconButton, StatusBadge } from "../Button";
 import { Icon } from "../Icon";
 import { RequiredFieldLabel } from "../RequiredFieldLabel";
+import { OverlayScrollArea } from "../scrollbars/OverlayScrollArea";
 import { ChangeMasterPasswordDialog } from "./ChangeMasterPasswordDialog";
 import { DialogFrame } from "./DialogFrame";
 import { MasterPasswordDialog, type MasterPasswordMode } from "./MasterPasswordDialog";
@@ -383,7 +383,7 @@ export function CredentialDialog({ onClose }: { onClose: () => void }) {
               <Button size="compact" disabled={!unlocked} onClick={() => start("privateKey")}><Icon name="file" size={13}/>导入私钥</Button>
             </div>
           </div>
-          <div className="credential-list" aria-label="凭证列表" ref={listRef}><CredentialSelectionIndicator state={indicator}/>
+          <OverlayScrollArea className="credential-list-scroll-area" viewportClassName="credential-list" viewportProps={{ "aria-label": "凭证列表" }} ref={listRef}><CredentialSelectionIndicator state={indicator}/>
             {items.map((item) => {
               const unsafeRsa = isUnsafeRsa(item);
               const securityKey = `list-${item.id}`;
@@ -412,7 +412,7 @@ export function CredentialDialog({ onClose }: { onClose: () => void }) {
               </button>;
             })}
             {items.length === 0 && <div className="credential-list-empty"><Icon name={unlocked ? "key" : "lock"} size={18}/><span>{unlocked ? "暂无凭证" : "凭证库已锁定"}</span></div>}
-          </div>
+          </OverlayScrollArea>
         </aside>
 
         <section className="credential-editor-pane">

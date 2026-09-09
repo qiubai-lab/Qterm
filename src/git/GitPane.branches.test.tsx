@@ -260,6 +260,11 @@ describe("GitPane branches and repository actions", () => {
     fireEvent.click(screen.getByRole("button", { name: "切换分支，当前 main" }));
 
     const branchList = screen.getByRole("listbox", { name: "选择分支" });
+    expect(branchList.parentElement).toHaveClass("overlay-scroll-area", "git-branch-list-scroll-area");
+    expect(branchList.parentElement).toHaveAttribute("data-density", "compact");
+    const currentBranch = within(branchList).getByRole("option", { name: /main/ });
+    expect(currentBranch).not.toHaveAttribute("title");
+    expect(within(currentBranch).getByText("main")).toHaveAttribute("title", "main");
     fireEvent.scroll(branchList);
     expect(screen.getByRole("dialog", { name: "切换分支" })).toBeInTheDocument();
 

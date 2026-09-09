@@ -63,6 +63,7 @@ describe("CredentialDialog", () => {
     const user = userEvent.setup();
     const { unmount } = render(<CredentialDialog onClose={vi.fn()}/>);
 
+    expect(document.querySelector(".credential-list")?.parentElement).toHaveClass("overlay-scroll-area", "credential-list-scroll-area");
     expect(await screen.findByRole("button", { name: /生产密码密码/ })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByText("生产密码", { selector: ".credential-editor-heading strong" })).toBeInTheDocument();
     expect(screen.getByLabelText("凭证密码")).toHaveValue("••••••••••••");

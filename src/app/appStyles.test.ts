@@ -96,7 +96,7 @@ describe("application layout styles", () => {
     expect(declarations(".terminal-target-local")).toContain("flex:none");
     expect(declarations(".terminal-target-list")).toContain("min-height:0");
     expect(declarations(".terminal-target-list")).toContain("overflow:auto");
-    expect(declarations(".terminal-target-list")).toContain("scrollbar-gutter:stable");
+    expect(declarations(".terminal-target-list")).not.toContain("scrollbar-gutter");
     expect(declarations(".terminal-target-manage")).toContain("flex:none");
     expect(declarations(".terminal-target-submenu")).toContain("position:fixed");
     expect(declarations(".terminal-target-submenu")).toContain("overflow:hidden");
@@ -338,7 +338,7 @@ describe("application layout styles", () => {
 
     expect(macosWindow.decorations).toBe(true);
     expect(macosWindow.titleBarStyle).toBe("Overlay");
-    expect(macosWindow.trafficLightPosition).toEqual({ x: 14, y: 18 });
+    expect(macosWindow.trafficLightPosition).toEqual({ x: 14, y: 22 });
     expect(macosWindow.windowEffects).toEqual({
       effects: ["hudWindow", "mica", "acrylic", "blur"],
       state: "followsWindowActiveState",
@@ -892,17 +892,13 @@ describe("application layout styles", () => {
     expect(styles).toMatch(/prefers-reduced-transparency:reduce[\s\S]*\.file-loading-popover\{background:var\(--raised\);backdrop-filter:none/);
   });
 
-  it("shares the file browser scrollbar treatment with every preview scroller", () => {
-    const owners = ".file-browser-content,.file-code-editor .cm-scroller,.file-image-preview,.file-markdown-preview,.file-markdown-preview pre";
+  it("uses the shared overlay for the file list while preserving native treatment on specialized previews", () => {
+    const owners = ".file-code-editor .cm-scroller,.file-image-preview,.file-markdown-preview,.file-markdown-preview pre";
     expect(declarations(owners)).toContain("scrollbar-color:var(--scrollbar-thumb) transparent");
     expect(declarations(owners)).toContain("scrollbar-width:thin");
-    const webkitOwners = ".file-browser-content::-webkit-scrollbar,.file-code-editor .cm-scroller::-webkit-scrollbar,.file-image-preview::-webkit-scrollbar,.file-markdown-preview::-webkit-scrollbar,.file-markdown-preview pre::-webkit-scrollbar";
-    expect(declarations(webkitOwners)).toContain("width:5px");
-    expect(declarations(webkitOwners)).toContain("height:5px");
-    const thumbs = ".file-browser-content::-webkit-scrollbar-thumb,.file-code-editor .cm-scroller::-webkit-scrollbar-thumb,.file-image-preview::-webkit-scrollbar-thumb,.file-markdown-preview::-webkit-scrollbar-thumb,.file-markdown-preview pre::-webkit-scrollbar-thumb";
-    expect(declarations(thumbs)).toContain("background:var(--scrollbar-thumb)");
-    expect(declarations(thumbs)).toContain("border-radius:999px");
-    expect(declarations(thumbs)).toContain("background-clip:padding-box");
+    expect(styles).not.toContain(".file-browser-content::-webkit-scrollbar"); expect(declarations(".file-browser-scroll-area")).toContain("flex:1"); expect(declarations(".overlay-scroll-viewport")).toContain("scrollbar-width:none");
+    expect(styles).not.toContain(".file-code-editor .cm-scroller::-webkit-scrollbar");
+    expect(styles).not.toContain(".file-markdown-table::-webkit-scrollbar");
   });
 
   it("keeps overwrite confirmation path and feedback on shared theme roles", () => {

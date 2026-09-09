@@ -65,6 +65,17 @@ describe("application shell", () => {
     expect(toggleMaximizeCurrentWindow).toHaveBeenCalledOnce();
   });
 
+  it("routes native control titles through the application-themed tooltip", () => {
+    render(<App/>);
+    const close = screen.getByRole("button", { name: "关闭窗口" });
+
+    fireEvent.pointerOver(close);
+    expect(close).not.toHaveAttribute("title");
+    expect(screen.getByRole("tooltip")).toHaveTextContent("关闭");
+    fireEvent.pointerOut(close);
+    expect(close).toHaveAttribute("title", "关闭");
+  });
+
   it("uses the macOS native titlebar controls with only the shared pin action on the right", () => {
     vi.mocked(currentDesktopPlatform).mockReturnValue("macos");
     render(<App/>);

@@ -150,6 +150,7 @@ describe("GitPane basics and lifecycle", () => {
   it("shows the repository path beside the section title without repeating it in the content", async () => {
     render(<GitPane blockId="git-1" target={{ type: "local", path: "D:/work/project" }} visible onTargetChange={vi.fn()}/>);
     await screen.findByText("project");
+    expect(document.querySelector(".git-change-scroll")?.parentElement).toHaveClass("overlay-scroll-area", "git-change-scroll-area");
     const path = screen.getByTitle("D:/work/project");
     expect(path).toHaveClass("git-section-meta");
     expect(path.closest("header")).toHaveClass("git-section-header");

@@ -240,9 +240,10 @@ describe("Git pane style contracts", () => {
     expect(commit).toContain("border: 1px solid");
     expect(commit).toContain("border-radius: 6px");
     expect(commit).toContain("background: color-mix(in srgb, var(--raised) 42%, var(--surface))");
-    const scrollers = declarations(".git-change-scroll,\n.git-graph-scroll,\n.git-branch-list");
-    expect(scrollers).toContain("flex: 1");
-    expect(scrollers).toContain("min-height: 0");
+    expect(declarations(".git-graph-scroll")).toContain("flex: 1");
+    expect(declarations(".git-graph-scroll")).toContain("min-height: 0");
+    expect(declarations(".git-change-scroll-area")).toContain("flex: 1");
+    expect(declarations(".git-change-scroll-area")).toContain("min-height: 0");
     expect(declarations(".git-graph-section .git-section-content")).toContain("flex: 1");
     expect(declarations(".git-graph-section .git-section-content")).toContain("min-height: 0");
     expect(declarations(".git-graph-section .git-section-content")).toContain("height: 100%");
@@ -261,29 +262,24 @@ describe("Git pane style contracts", () => {
     expect(reducedMotion).toMatch(/\.git-repository-name\[data-updating="true"\] \{[\s\S]*?animation: none;[\s\S]*?text-shadow: none;/);
   });
 
-  it("matches the file manager scrollbar and reserves the graph card lane", () => {
-    const scrollers = declarations(".git-change-scroll,\n.git-graph-scroll,\n.git-branch-list");
-    expect(scrollers).toContain("scrollbar-color: var(--scrollbar-thumb) transparent");
-    expect(scrollers).toContain("scrollbar-width: thin");
+  it("migrates changes and branches to shared overlays while leaving the graph scroller intact", () => {
+    expect(declarations(".git-graph-scroll")).toContain("scrollbar-color: var(--scrollbar-thumb) transparent");
+    expect(declarations(".git-graph-scroll")).toContain("scrollbar-width: thin");
+    expect(declarations(".git-change-scroll")).not.toContain("scrollbar-width");
+    expect(declarations(".git-branch-list")).not.toContain("scrollbar-width");
     expect(fileBrowserStyles).toContain("scrollbar-color:var(--scrollbar-thumb) transparent");
-    const scrollbar = declarations(".git-change-scroll::-webkit-scrollbar,\n.git-graph-scroll::-webkit-scrollbar,\n.git-branch-list::-webkit-scrollbar");
-    expect(scrollbar).toContain("width: 5px");
-    expect(scrollbar).toContain("height: 5px");
-    expect(declarations(".git-change-scroll::-webkit-scrollbar-track,\n.git-graph-scroll::-webkit-scrollbar-track,\n.git-branch-list::-webkit-scrollbar-track")).toContain("background: transparent");
-    const thumb = declarations(".git-change-scroll::-webkit-scrollbar-thumb,\n.git-graph-scroll::-webkit-scrollbar-thumb,\n.git-branch-list::-webkit-scrollbar-thumb");
-    expect(thumb).toContain("border: 1px solid transparent");
-    expect(thumb).toContain("border-radius: 999px");
-    expect(thumb).toContain("background: var(--scrollbar-thumb)");
-    expect(thumb).toContain("background-clip: padding-box");
-    expect(declarations(".git-change-scroll::-webkit-scrollbar-thumb:hover,\n.git-graph-scroll::-webkit-scrollbar-thumb:hover,\n.git-branch-list::-webkit-scrollbar-thumb:hover")).toContain("color-mix(in srgb, var(--scrollbar-thumb) 82%, var(--accent))");
+    expect(styles).not.toContain(".git-change-scroll::-webkit-scrollbar");
+    expect(styles).not.toContain(".git-graph-scroll::-webkit-scrollbar");
+    expect(styles).not.toContain(".git-branch-list::-webkit-scrollbar");
     expect(cyberTheme).toContain("--scrollbar-thumb:#168996");
     expect(cyberTheme).toContain("--accent:#00ddeb");
   });
 
   it("aligns independent change cards with the commit card without a reserved scrollbar gutter", () => {
     const changes = declarations(".git-change-scroll");
+    const shell = declarations(".git-change-scroll-area");
     expect(declarations(".git-commit-box")).toContain("margin: 7px 8px 5px");
-    expect(changes).toContain("margin: 0 8px 7px");
+    expect(shell).toContain("margin: 0 8px 7px");
     expect(changes).toContain("padding: 0");
     expect(changes).toContain("background: transparent");
     expect(changes).not.toContain("scrollbar-gutter: stable");
@@ -364,9 +360,11 @@ describe("Git pane style contracts", () => {
     expect(branchSearchFocus).toContain("box-shadow: none");
     const branchList = lastDeclarations(".git-branch-list");
     expect(branchList).toContain("width: 100%");
+    expect(branchList).toContain("height: auto; max-height: min(280px, calc(100vh - 120px))");
     expect(branchList).toContain("gap: 3px");
-    expect(branchList).toContain("padding: 4px 9px 4px 4px");
-    expect(branchList).toContain("scrollbar-gutter: stable");
+    expect(branchList).toContain("padding: 4px");
+    expect(branchList).not.toContain("scrollbar-width");
+    expect(branchList).not.toContain("scrollbar-gutter");
     expect(branchList).toContain("overscroll-behavior: contain");
     expect(declarations(".git-branch-list-group")).toContain("display: flex");
     expect(declarations(".git-branch-list-group")).toContain("flex-direction: column");

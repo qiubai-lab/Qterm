@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent as ReactPointerEvent } from "react";
-
 import { getVaultStatus, listCredentials, type CredentialSummary, type VaultStatus } from "../../lib/tauri/credentials";
 import { clearUnsupportedProfileStorage, createProfile, createProfileGroup, deleteProfile, deleteProfileGroup, listJumpCandidates, listProfileGroups, updateProfile, updateProfileGroup, type ConnectionProfile, type JumpCandidate, type ProfileGroup, type ProfileInput } from "../../lib/tauri/profiles";
 import { findLeaf, terminalBlockIds } from "../../workspace/layout";
@@ -8,6 +7,7 @@ import { Button, StatusBadge } from "../Button";
 import { ExactTextInput } from "../ExactTextInput";
 import { Icon } from "../Icon";
 import { RequiredFieldLabel } from "../RequiredFieldLabel";
+import { OverlayScrollArea } from "../scrollbars/OverlayScrollArea";
 import { DialogActionStatus, DialogFrame } from "./DialogFrame";
 import { CredentialDialog } from "./CredentialDialog";
 import { MasterPasswordDialog } from "./MasterPasswordDialog";
@@ -519,7 +519,7 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
           <div className="connection-sidebar-toolbar">
             <div className="connection-list-actions"><Button size="compact" data-dialog-autofocus onClick={() => startNewProfile()}><Icon name="plus" size={11}/>新建连接</Button><Button size="compact" onClick={openNewGroup}><Icon name="plus" size={11}/>新建分组</Button></div>
           </div>
-          <div className="connection-list" ref={managerMotion.listRef}><ConnectionSelectionIndicator state={managerMotion.indicator}/>
+          <OverlayScrollArea className="connection-list-scroll-area" viewportClassName="connection-list" ref={managerMotion.listRef}><ConnectionSelectionIndicator state={managerMotion.indicator}/>
             <section className="connection-group-section" data-profile-drop-group="">
               <header
                 className={`connection-group-heading${dropTarget === "ungrouped" ? " drop-target" : ""}`}
@@ -545,7 +545,7 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
                 <ConnectionGroupContent expanded={expanded}>{groupProfiles.map(profileItem)}{groupProfiles.length === 0 && <p>暂无连接</p>}</ConnectionGroupContent>
               </section>;
             })}
-          </div>
+          </OverlayScrollArea>
         </aside>
         <div className="connection-editor"><div className="connection-editor-tabs" role="tablist" aria-label="连接配置" data-active={editorTab}>
             <span className="connection-editor-tab-indicator" aria-hidden="true"/>

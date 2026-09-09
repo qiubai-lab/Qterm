@@ -4,7 +4,7 @@ type: bugfix
 tier: standard
 status: active
 created: 2026-09-05
-updated: 2026-09-05
+updated: 2026-09-09
 supersedes:
   - QB-20260905-macos-traffic-light-alignment
 ---
@@ -23,6 +23,10 @@ After the post-update observer was added, native full-screen mode exposed a seco
 
 After ownership moved back to Tauri with `{x: 14, y: 13}`, the supplied 144-DPI Retina capture still places the traffic-light center about 5pt above the 40pt application-chrome center.
 
+After the interim `{x: 14, y: 18}` calibration, the 2026-09-09 user capture still measures the close-button center at `29.5px`, about `5px` above the shared center of the 30px brand plaque and Workspace tabs. Horizontal placement remains aligned.
+
+After changing to `{x: 14, y: 23}`, the user's close crop measures all three colored centers at `y=27.5px`, about `1px` below the 30px brand plaque's visual center. The wider desktop capture used for the prior inspection was not precise enough to expose this residual offset.
+
 ## Root Cause
 
 The adapter queues two Tauri main-thread tasks during `RunEvent::Ready`, but Tauri delivers those tasks as ordinary user events. Both can run before AppKit's first native update and title-bar layout, so the later AppKit pass restores the default button frames. Moving the already-visible window emits a later event, after the hierarchy is stable, and the same geometry then succeeds. The prior change therefore confused "runs on the main thread" with "runs after the first native window update." Display resolution and aspect ratio are not direct inputs to the calculation.
@@ -33,7 +37,7 @@ In native full-screen mode, AppKit temporarily moves and animates the title-bar 
 
 Fast user resizing exposes the same ownership defect at a higher frequency. AppKit performs a live-resize sequence and repeatedly lays out its private title-bar hierarchy, while Qterm reacts to every Tauri resize event and every `NSWindowDidUpdateNotification` by scheduling or immediately applying competing frame writes. AppKit briefly restores its layout and Qterm then restores its own, producing the visible upper-left jump. Tauri 2.11 already provides `trafficLightPosition` and applies it from the Tao/Wry native view drawing lifecycle; the custom adapter duplicated that runtime capability at a less stable lifecycle boundary.
 
-The pinned Wry 0.55.1 implementation does not use `trafficLightPosition.y` as the close button's literal top coordinate. It makes the native title-bar container `closeButtonHeight + y` high and retains AppKit's existing button Y origin. Calculating `13` as `(40 - 14) / 2` therefore applied the wrong semantic model. The measured 5pt visual error matches the difference between `13` and the previously validated MacBook calibration of `18`.
+The pinned Wry 0.55.1 implementation does not use `trafficLightPosition.y` as the close button's literal top coordinate. It makes the native title-bar container `closeButtonHeight + y` high, anchors that container to the window top, and retains AppKit's existing button Y origin inside it. Increasing `y` therefore moves the native buttons downward. The first capture justified moving down from `18`; the tighter post-change crop shows `23` overshot by about 1px, so the final capture-calibrated value is `22`.
 
 The composition root also calls `set_title` after window construction. Tao 0.35.3 can reset a configured traffic-light inset when the title changes until another redraw re-applies it, so the hidden macOS title should remain the static configuration value instead of being mutated during setup.
 
@@ -41,7 +45,7 @@ The composition root also calls `set_title` after window construction. Tao 0.35.
 
 - Ensure the macOS development runner replaces stale instances of the exact development bundle so an old window cannot mask a newly built fix.
 - Replace the custom post-layout observer and scheduler with Tauri's platform `trafficLightPosition` configuration so one native runtime owns traffic-light placement during creation, drawing, resize, and full-screen transitions.
-- Calibrate the pinned runtime to `{x: 14, y: 18}` for the established 40pt application chrome.
+- Calibrate the pinned runtime to `{x: 14, y: 22}` for the established 40pt application chrome.
 - Avoid changing the hidden macOS window title after construction while preserving title synchronization on Windows and Linux.
 - Keep the macOS overlay title bar, native decorations, hidden title, 14pt leading inset, and 40pt application-chrome visual center.
 
@@ -73,7 +77,7 @@ The composition root also calls `set_title` after window construction. Tao 0.35.
 - REQ-002: The duplicate observer/task queue is removed, leaving one native placement owner.
 - REQ-006: Qterm no longer observes window updates or writes title-bar frames during native full-screen reveal/hide animation.
 - REQ-007: The hand-written AppKit geometry adapter is removed in favor of the Tauri/Tao/Wry traffic-light lifecycle already present in the pinned runtime.
-- REQ-001: The runtime-owned inset is calibrated from the observed native result (`y: 18`) rather than from the incorrect assumption that Wry treats `y` as the button's literal top coordinate (`y: 13`).
+- REQ-001: The runtime-owned inset is calibrated from the observed native result (`y: 22`) rather than treating Wry's `y` as the button's literal top coordinate.
 - REQ-008: macOS keeps its hidden static window title during setup; Windows and Linux continue synchronizing the title to the configured product name.
 
 ## Acceptance
@@ -84,13 +88,13 @@ The composition root also calls `set_title` after window construction. Tao 0.35.
 - AC-004 (REQ-001, REQ-004): `pnpm tauri dev` launches the updated development bundle; visual inspection confirms the traffic-light center on the current MacBook when screen capture is available.
 - AC-005 (REQ-005): Runner unit tests prove process matching accepts only the exact development executable path and excludes production/helper/unrelated processes.
 - AC-006 (REQ-006): Repository inspection proves the custom AppKit observer and frame writer are absent; manual full-screen inspection confirms the top-edge controls remain expanded and clickable.
-- AC-007 (REQ-001, REQ-003, REQ-007): Repository regression tests prove the macOS overlay window has the calibrated `{x: 14, y: 18}` runtime positioning and that application composition contains no custom window-chrome lifecycle hook; rapid live resize shows no upper-left correction flash.
+- AC-007 (REQ-001, REQ-003, REQ-007): Repository regression tests prove the macOS overlay window has the calibrated `{x: 14, y: 22}` runtime positioning and that application composition contains no custom window-chrome lifecycle hook; rapid live resize shows no upper-left correction flash.
 - AC-008 (REQ-008): Repository inspection proves post-construction product-name synchronization is excluded on macOS and remains compiled for Windows and Linux.
 
 ## Assumptions And Residual Uncertainty
 
 - The pinned Tauri 2.11 / Tao / Wry implementation continues to apply configured traffic-light placement from native view drawing; an upstream runtime behavior change would require retesting this contract.
-- The accepted `y: 18` value is a pinned-runtime calibration for Qterm's 40pt chrome, not a claim that Wry exposes literal top-left semantics. Moving to a runtime with different inset behavior requires visual recalibration.
+- The accepted `y: 22` value is a pinned-runtime calibration for Qterm's 40pt chrome, not a claim that Wry exposes literal top-left semantics. Moving to a runtime with different inset behavior requires visual recalibration.
 - Pixel-level confirmation may still require the user's desktop session because the automation environment lacks Screen Recording/Accessibility access.
 
 ## Recommended Approach
@@ -110,3 +114,7 @@ The reproduced launch path, supplied Retina pixel geometry, AppKit live-resize l
 - AC-005: The runner regression test continues to prove exact development executable matching while excluding production, helper, and unrelated processes.
 - AC-006/AC-007: Automated ownership checks pass; interactive full-screen reveal/click and rapid live-resize confirmation require the user's desktop session.
 - AC-008: The source regression proves the product-name `set_title` call is guarded by `cfg(not(target_os = "macos"))`; the native macOS build passes, while Windows/Linux compilation remains covered by their platform CI jobs.
+- AC-001/AC-004/AC-007 follow-up (2026-09-09): The supplied capture measures the close-button colored-pixel bounds at `y=23…36` with center `29.5px`, about `5px` above the brand/tab center. The configuration regression first failed while the runtime still declared `{x: 14, y: 18}`; calibration was updated to `{x: 14, y: 23}` while retaining Tauri/Tao/Wry as the only native layout owner.
+- AC-003/AC-004 follow-up (2026-09-09): `pnpm check` passes 148 frontend test files / 1005 tests, 17 Node checks, lint, typecheck, source-size and production frontend build. `pnpm tauri build --bundles app` builds and ad-hoc signs the macOS application. The existing development watcher rebuilt `Qterm Dev.app` after the config change; the subsequent close crop supersedes the wider visual inspection and exposes a residual 1px downward offset at `y: 23`. Full-screen reveal and rapid live-resize interaction remain pending separately.
+- AC-001/AC-004/AC-007 final calibration (2026-09-09): The close crop measures the red, yellow, and green colored-pixel bounds at `y=21…34`, each centered at `27.5px`, about `1px` below the brand plaque's visual center. The placement regression first fails against the prior `{x: 14, y: 23}` value; the runtime-owned inset is corrected upward to `{x: 14, y: 22}` without adding another native layout owner.
+- AC-003/AC-004 final calibration (2026-09-09): The focused placement assertion and all 11 Tauri wrapper tests pass. `pnpm check` passes 149 frontend test files / 1007 tests, all 17 Node checks, lint, typecheck, source-size, and the production frontend build. `pnpm tauri build --bundles app` rebuilds and ad-hoc signs `Qterm.app`; the development watcher also rebuilt and restarted `Qterm Dev.app` with `y: 22`. Final close-crop inspection remains pending because the Mac locked before automation could capture the restarted window.

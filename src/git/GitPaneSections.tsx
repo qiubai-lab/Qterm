@@ -3,6 +3,7 @@ import type { KeyboardEvent, MouseEvent, ReactNode, RefObject } from "react";
 
 import { ExactTextArea } from "../components/ExactTextInput";
 import { Icon } from "../components/Icon";
+import { OverlayScrollArea } from "../components/scrollbars/OverlayScrollArea";
 import { isElementOverflowing, useThemedTooltip } from "../components/useThemedTooltip";
 import type { GitChange, GitSnapshot } from "../lib/tauri/git";
 import type { GitRuntime } from "../workspace/WorkspaceProvider";
@@ -163,13 +164,13 @@ export function GitChangesSection({
       {primaryAction.showMessage && <ExactTextArea ref={messageRef} aria-label="提交消息" rows={1} data-max-rows="5" value={message} maxLength={10_000} placeholder="提交消息" onChange={(event) => onMessageChange(event.target.value)}/>}
       <GitPrimaryActionButton key={`${primaryAction.kind}:${primaryAction.label}`} action={primaryAction} onAction={onPrimaryAction}/>
     </div>
-    <div ref={changeScrollRef} className="git-change-scroll" role="group" aria-label="Git 更改">
+    <OverlayScrollArea ref={changeScrollRef} className="git-change-scroll-area" viewportClassName="git-change-scroll" viewportProps={{ role: "group", "aria-label": "Git 更改" }}>
       {conflicts.length > 0 && <GitChangeList scrollContainerRef={changeScrollRef} title="冲突" changes={conflicts} actionLabel="解决冲突" actionIcon="mergeConflict" showActionText onAction={onResolveConflict}/>}
       {staged.length > 0 && <GitChangeList scrollContainerRef={changeScrollRef} title="暂存的更改" changes={staged} actionLabel="取消暂存" actionIcon="clear" onAction={onUnstage} onPreview={onPreviewChange} selectedPaths={selectedStagedPaths} onSelect={onSelectStaged} onOpenContextMenu={onOpenStagedMenu}/>}
       {unstaged.length > 0 && <GitChangeList scrollContainerRef={changeScrollRef} title="更改" changes={unstaged} actionLabel="暂存" actionIcon="plus" onAction={onStage} onPreview={onPreviewChange} selectedPaths={selectedUnstagedPaths} onSelect={onSelectUnstaged} onOpenContextMenu={onOpenUnstagedMenu}/>}
       {snapshot && snapshot.changes.length === 0 && <div className="git-clean-state"><Icon name="checkCircle" size={16}/>工作区干净</div>}
       {!snapshot && <div className="git-clean-state">正在读取仓库…</div>}
-    </div>
+    </OverlayScrollArea>
   </GitSection>;
 }
 
