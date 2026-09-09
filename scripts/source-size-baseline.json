@@ -14,7 +14,7 @@
     "src/components/dialogs/ConnectionDialog.tsx": 685,
     "src/components/dialogs/CredentialDialog.tsx": 503,
     "src/files/FileBrowserPane.test.tsx": 1104,
-    "src/files/FileBrowserPane.tsx": 738,
+    "src/files/FileBrowserPane.tsx": 730,
     "src/git/GitPane.tsx": 1138,
     "src/git/styles/gitBranchOverlays.css": 645,
     "src/git/styles/gitChangePreview.css": 574,

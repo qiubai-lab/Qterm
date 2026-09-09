@@ -129,4 +129,27 @@ describe("MarkdownPreview", () => {
     fireEvent.keyDown(window, { key: "Escape" });
     await waitFor(() => expect(preview).toHaveFocus());
   });
+
+  it("reports rendered text and highlights a match spanning inline nodes", () => {
+    const onSearchTextChange = vi.fn();
+    const view = render(<MarkdownPreview
+      content="**Qterm** docs"
+      searchMatches={[{ from: 0, to: 10 }]}
+      activeSearchIndex={0}
+      onSearchTextChange={onSearchTextChange}
+    />);
+
+    expect(onSearchTextChange).toHaveBeenCalledWith("Qterm docs");
+    expect(view.container.querySelectorAll(".file-search-match")).toHaveLength(2);
+    expect(view.container.querySelectorAll(".file-search-match-active")).toHaveLength(2);
+    expect(screen.getByText("Qterm")).toHaveClass("file-search-match-active");
+    expect(Array.from(view.container.querySelectorAll(".file-search-match-active"), (element) => element.textContent)).toEqual(["Qterm", " docs"]);
+  });
+
+  it("does not include blocked image placeholders in searchable Markdown text", () => {
+    const onSearchTextChange = vi.fn();
+    render(<MarkdownPreview content="Before ![secret](https://example.com/a.png) after" onSearchTextChange={onSearchTextChange}/>);
+
+    expect(onSearchTextChange).toHaveBeenCalledWith("Before  after");
+  });
 });

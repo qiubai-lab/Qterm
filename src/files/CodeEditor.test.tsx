@@ -199,6 +199,22 @@ describe("CodeEditor context menu", () => {
     view.unmount();
     expect(onViewReady).toHaveBeenLastCalledWith(null);
   });
+
+  it("renders controlled file-search matches without changing the document", async () => {
+    const onChange = vi.fn();
+    const view = render(<CodeEditor
+      value="one two one"
+      language="text"
+      searchMatches={[{ from: 0, to: 3 }, { from: 8, to: 11 }]}
+      activeSearchIndex={1}
+      onChange={onChange}
+      onSave={vi.fn()}
+    />);
+
+    await waitFor(() => expect(view.container.querySelectorAll(".cm-file-search-match")).toHaveLength(2));
+    expect(view.container.querySelectorAll(".cm-file-search-match-active")).toHaveLength(1);
+    expect(onChange).not.toHaveBeenCalled();
+  });
 });
 
 async function editorContent(container: HTMLElement) {

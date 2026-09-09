@@ -12,6 +12,8 @@ import { plainTextLanguageSupport, type EditorLanguage } from "../editor/editorL
 import { useEditorLanguage } from "../editor/useEditorLanguage";
 import { FileTextContextMenu } from "./FileTextContextMenu";
 import { fileTextShortcutLabels } from "./fileTextContextMenuModel";
+import { codeEditorSearch, setCodeEditorSearch } from "./codeEditorSearch";
+import type { FileSearchMatch } from "./fileSearchModel";
 
 export type { EditorLanguage } from "../editor/editorLanguage";
 type EditorContextMenuState = { x: number; y: number; hasSelection: boolean; hasContent: boolean; canUndo: boolean; canRedo: boolean; focusOnOpen: boolean };
@@ -20,13 +22,16 @@ type EditorOperationMessage = { text: string; tone: "success" | "error" };
 const SUCCESS_OPERATION_MESSAGE_MS = 1_800;
 const ERROR_OPERATION_MESSAGE_MS = 4_200;
 const EMPTY_EXTENSIONS: Extension = [];
+const EMPTY_SEARCH_MATCHES: FileSearchMatch[] = [];
 
-export function CodeEditor({ value, language, readOnly = false, ariaLabel, extensions = EMPTY_EXTENSIONS, onViewReady, onChange, onSave }: {
+export function CodeEditor({ value, language, readOnly = false, ariaLabel, extensions = EMPTY_EXTENSIONS, searchMatches = EMPTY_SEARCH_MATCHES, activeSearchIndex = -1, onViewReady, onChange, onSave }: {
   value: string;
   language: EditorLanguage;
   readOnly?: boolean;
   ariaLabel?: string;
   extensions?: Extension;
+  searchMatches?: FileSearchMatch[];
+  activeSearchIndex?: number;
   onViewReady?: (view: EditorView | null) => void;
   onChange: (value: string) => void;
   onSave: () => void;
@@ -76,6 +81,7 @@ export function CodeEditor({ value, language, readOnly = false, ariaLabel, exten
         doc: initialValue.current,
         extensions: [
           basicSetup,
+          codeEditorSearch,
           EditorView.lineWrapping,
           EditorState.readOnly.of(readOnly),
           EditorView.editable.of(!readOnly),
@@ -123,6 +129,11 @@ export function CodeEditor({ value, language, readOnly = false, ariaLabel, exten
   useEffect(() => {
     editor.current?.dispatch({ effects: featureExtensions.current.reconfigure(extensions) });
   }, [extensions]);
+
+  useEffect(() => {
+    const view = editor.current;
+    if (view) setCodeEditorSearch(view, searchMatches, activeSearchIndex);
+  }, [activeSearchIndex, searchMatches]);
 
   function closeMenu(restoreFocus: boolean) {
     setContextMenu(null);

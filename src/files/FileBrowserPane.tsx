@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FocusEvent, type FormEvent, type KeyboardEvent, type MouseEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FocusEvent, type FormEvent, type KeyboardEvent, type MouseEvent } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { writeText as writeClipboardText } from "@tauri-apps/plugin-clipboard-manager";
 
@@ -11,11 +11,11 @@ import { copyFile, createEntry, deleteEntry, listLocalDirectory, listLocalRoots,
 import { cancelTransfer, downloadDirectory, downloadFile, selectDownloadDirectory, selectDownloadPath, selectUploadFiles, selectUploadFolder, uploadDroppedEntries, uploadSelectedEntries, type TransferEvent } from "../lib/tauri/transfers";
 import type { FileRuntime } from "../workspace/WorkspaceProvider";
 import { FileList, FileSortHeader } from "./FileList";
-import { FILE_LIST_PADDING, FILE_ROW_HEIGHT, FILE_VIRTUAL_FALLBACK_ROWS, FILE_VIRTUAL_OVERSCAN, copyName, fileErrorMessage, fileListAnchor, fileVirtualRange, fitContextMenu, formatSize, imageMime, previewKindFor, sortEntries, type PreviewKind, type SortKey, type SortState, type VirtualRange } from "./fileBrowserModel";
+import { FILE_LIST_PADDING, FILE_ROW_HEIGHT, FILE_VIRTUAL_FALLBACK_ROWS, FILE_VIRTUAL_OVERSCAN, copyName, fileErrorMessage, fileListAnchor, fileVirtualRange, fitContextMenu, formatSize, imageMime, previewKindFor, sortEntries, type SortKey, type SortState, type VirtualRange } from "./fileBrowserModel";
+import { FilePreviewDocument, type FilePreviewState } from "./FilePreviewDocument";
 import { displayLocalPath, isWindowsDriveRoot, parentPath } from "./path";
 
 type FileViewMode = "preview" | "edit";
-type PreviewState = { entry: FileEntry; kind: PreviewKind; mode: FileViewMode; loading: boolean; error: string; content: string; original: string; revision: string; imageUrl: string };
 type TransferState = { transferId: string; status: "starting" | "running" | "completed" | "cancelled" | "failed"; transferred: number; total: number; message: string; direction: "download" | "upload" };
 type NameOperation = { kind: "copy" | "rename" | "createFile" | "createDirectory"; entry: FileEntry | null; value: string; error: string; busy: boolean };
 type DeleteOperation = { entries: FileEntry[]; error: string; busy: boolean };
@@ -25,9 +25,6 @@ type DirectoryLocation = { scrollTop: number; selectedPath: string | null; ancho
 type PendingDirectoryLocation = { key: string; location: DirectoryLocation };
 
 const LOCAL_ROOTS_LOCATION = "\0local-roots";
-
-const CodeEditor = lazy(() => import("./CodeEditor").then((module) => ({ default: module.CodeEditor })));
-const MarkdownPreview = lazy(() => import("./MarkdownPreview").then((module) => ({ default: module.MarkdownPreview })));
 
 function FileLoadingState({ label }: { label: string }) {
   return <div className="file-loading-state" role="status" aria-live="polite">
@@ -50,7 +47,7 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(() => new Set());
   const [sort, setSort] = useState<SortState>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
-  const [preview, setPreview] = useState<PreviewState | null>(null);
+  const [preview, setPreview] = useState<FilePreviewState | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveConfirmation, setSaveConfirmation] = useState<{ error: string } | null>(null);
   const [leaveConfirmation, setLeaveConfirmation] = useState(false);
@@ -618,23 +615,18 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
     const dirty = preview.mode === "edit" && preview.content !== preview.original;
     const previewDisplayPath = kind === "local" ? displayLocalPath(preview.entry.path) : preview.entry.path;
     return <div className="file-browser file-preview">
-      <header className="file-preview-toolbar">
-        <button aria-label="返回文件夹" title="返回文件夹" onClick={requestLeavePreview}><Icon name="back" size={14}/></button>
-        <div className="file-preview-identity"><strong>{preview.entry.name}{dirty && <span className="file-dirty-indicator" aria-label="有未保存的修改">*</span>}</strong><small title={previewDisplayPath}>{previewDisplayPath}</small></div>
-        {preview.mode === "edit" && <StatusBadge tone="warning" presentation="tag" size="compact">实验功能</StatusBadge>}
-        <span className="file-view-mode">{preview.mode === "preview" ? "预览" : "编辑"}</span>
-        {preview.mode === "preview" && <button className="file-edit-button" disabled={preview.kind === "image"} title={preview.kind === "image" ? "此文件类型不支持编辑" : "编辑文件（实验功能）"} onClick={() => setPreview((current) => current && current.kind !== "image" ? { ...current, mode: "edit" } : current)}><Icon name="edit" size={11}/><span>编辑</span></button>}
-        {preview.mode === "edit" && <button className="file-cancel-button" onClick={requestLeavePreview}><Icon name="close" size={10}/><span>取消</span></button>}
-        {preview.mode === "edit" && <button className="file-save-button" aria-label={saving ? "正在保存" : dirty ? "保存" : "已保存"} aria-busy={saving || undefined} title={saving ? "正在保存" : dirty ? "保存文件" : "文件已保存"} disabled={!dirty || saving || preview.loading} onClick={requestPreviewSave}><Icon name={dirty || saving ? "save" : "check"} size={11}/><span>保存</span></button>}
-      </header>
-      {preview.error && <div className="file-preview-message error" role="alert">{preview.error}</div>}
-      <main className="file-preview-content">
-        {preview.loading && <FileLoadingState label="正在读取文件…"/>}
-        {!preview.loading && preview.kind === "image" && preview.imageUrl && <div className="file-image-preview" onContextMenu={(event) => { event.preventDefault(); showContextMenu(preview.entry, event.clientX, event.clientY); }}><img src={preview.imageUrl} alt={preview.entry.name}/></div>}
-        {!preview.loading && preview.mode === "preview" && preview.kind === "markdown" && <Suspense fallback={<FileLoadingState label="正在加载预览…"/>}><MarkdownPreview content={preview.content}/></Suspense>}
-        {!preview.loading && preview.kind !== "image" && (preview.mode === "edit" || preview.kind !== "markdown") && <Suspense fallback={<FileLoadingState label="正在加载文件…"/>}><CodeEditor value={preview.content} language={preview.kind} readOnly={preview.mode === "preview"} onChange={(content) => setPreview((current) => current ? { ...current, content } : current)} onSave={requestPreviewSave}/></Suspense>}
-      </main>
-      {operationMessage && <div className="file-preview-operation" role="status" aria-label="图片操作状态" aria-live="polite">{operationMessage}</div>}
+      <FilePreviewDocument
+        preview={preview}
+        displayPath={previewDisplayPath}
+        dirty={dirty}
+        saving={saving}
+        operationMessage={operationMessage}
+        onLeave={requestLeavePreview}
+        onEdit={() => setPreview((current) => current && current.kind !== "image" ? { ...current, mode: "edit" } : current)}
+        onSave={requestPreviewSave}
+        onContentChange={(content) => setPreview((current) => current ? { ...current, content } : current)}
+        onImageContextMenu={(event) => { event.preventDefault(); showContextMenu(preview.entry, event.clientX, event.clientY); }}
+      />
       {contextMenu && preview.kind === "image" && preview.imageUrl && <div ref={menuRef} className="file-context-menu" data-placement={contextMenu.placement} role="menu" aria-label={`${preview.entry.name} 图片菜单`} style={{ left: contextMenu.x, top: contextMenu.y }} onKeyDown={handleContextMenuKeyDown} onContextMenu={(event) => event.preventDefault()}>
         <button role="menuitem" onClick={() => void copyImage(preview.entry, preview.imageUrl)}><Icon name="copy" size={13}/><span>复制图片</span></button>
         <button role="menuitem" onClick={() => void copyPath(preview.entry)}><Icon name="copy" size={13}/><span>复制路径</span></button>

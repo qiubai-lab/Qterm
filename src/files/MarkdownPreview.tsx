@@ -1,4 +1,4 @@
-import { useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
+import { useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { writeText as writeClipboardText } from "@tauri-apps/plugin-clipboard-manager";
@@ -6,14 +6,32 @@ import { writeText as writeClipboardText } from "@tauri-apps/plugin-clipboard-ma
 import { isExternalHttpUrl, openExternalHttpUrl } from "../lib/externalUrl";
 import { FileTextContextMenu } from "./FileTextContextMenu";
 import { fileTextShortcutLabels, selectAllTextWithin, selectedTextWithin } from "./fileTextContextMenuModel";
+import type { FileSearchMatch } from "./fileSearchModel";
+import { markdownSearchPlugin, markdownSearchText } from "./markdownPreviewSearch";
 
 type MarkdownContextMenuState = { x: number; y: number; selectedText: string; linkHref: string | null; focusOnOpen: boolean };
 
-export function MarkdownPreview({ content }: { content: string }) {
+export function MarkdownPreview({ content, searchMatches = [], activeSearchIndex = -1, onSearchTextChange }: {
+  content: string;
+  searchMatches?: FileSearchMatch[];
+  activeSearchIndex?: number;
+  onSearchTextChange?: (text: string) => void;
+}) {
   const previewRef = useRef<HTMLElement>(null);
   const invokerRef = useRef<HTMLElement | null>(null);
   const [contextMenu, setContextMenu] = useState<MarkdownContextMenuState | null>(null);
   const shortcuts = fileTextShortcutLabels();
+  const searchPlugin = useMemo(() => markdownSearchPlugin(searchMatches, activeSearchIndex), [activeSearchIndex, searchMatches]);
+
+  useLayoutEffect(() => {
+    const preview = previewRef.current;
+    if (preview) onSearchTextChange?.(markdownSearchText(preview));
+  }, [content, onSearchTextChange]);
+
+  useLayoutEffect(() => {
+    const active = previewRef.current?.querySelector<HTMLElement>(".file-search-match-active");
+    active?.scrollIntoView?.({ block: "center", inline: "nearest" });
+  }, [activeSearchIndex, searchMatches]);
 
   function openMenu(x: number, y: number, target: EventTarget | null, focusOnOpen: boolean) {
     const preview = previewRef.current;
@@ -47,7 +65,7 @@ export function MarkdownPreview({ content }: { content: string }) {
   }
 
   return <article ref={previewRef} className="file-markdown-preview" tabIndex={0} aria-label="Markdown 文件预览" onContextMenu={handleContextMenu} onKeyDown={handleKeyDown}>
-    <Markdown remarkPlugins={[remarkGfm]} components={{
+    <Markdown remarkPlugins={[remarkGfm]} rehypePlugins={[searchPlugin]} components={{
       a: ({ children, href, title }) => isExternalHttpUrl(href)
         ? <a href={href} title={title} target="_blank" rel="noreferrer" onClick={(event) => {
           event.preventDefault();
