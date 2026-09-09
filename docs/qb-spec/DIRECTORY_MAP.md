@@ -13,7 +13,7 @@
 
 - `native/conpty/`：G0 隔离原型的上游版本锁、MIT 许可与原生输出边界补丁；`scripts/build-conpty-prototype.ps1` 构建未发布的测试 host，`scripts/conpty-ordered-probe-consumer.mjs` 只供真实 PTY 探针消费 QTR0 帧。尚未作为生产 runtime 或应用 IPC 协议接线。
 
-- `src/components/ThemedTooltipButton.tsx`、`themedTooltip.css`：跨终端、Git、文件和网络窗口共享的主题提示按钮与浮层样式；只负责提示展示、定位和无障碍交互，不拥有操作业务逻辑。`src/workspace/BlockHeaderClose.tsx` 组合窗口头部关闭入口。
+- `src/components/ThemedTooltipButton.tsx`、`useThemedTooltip.tsx`、`themedTooltip.css`：跨终端、Git、文件和网络窗口共享的主题提示触发、视口定位、退出生命周期与浮层样式；按钮和被截断的操作标识复用同一实现，该层不拥有操作业务逻辑。`src/workspace/BlockHeaderClose.tsx` 组合窗口头部关闭入口。
 
 - `src/terminal/terminalLayout.ts`：终端尺寸测量与布局同步 owner；Windows ConPTY 在拖动停稳并处理已接收输出后提交尺寸，其余终端即时适配；`resizeScheduler.ts` 继续负责有序 IPC 与去重。`scripts/conpty-resize-probe.mjs` 和 `src-tauri/examples/conpty_resize_probe.rs` 提供真实 Windows PTY 回归检查。
 

@@ -671,9 +671,9 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
     <div className="file-browser-content" ref={listScroll} onPointerEnter={() => setEditingPath(false)} onScroll={(event) => { setEditingPath(false); updateVirtualRange(event.currentTarget, activeEntries.length); }}>
       <div className="file-browser-columns" aria-label="文件排序">
         <FileSortHeader label="名称" sortKey="name" sort={sort} onChange={cycleSort}/>
-        <FileSortHeader label="大小" sortKey="size" sort={sort} onChange={cycleSort}/>
+        <FileSortHeader className="file-size-column" label="大小" sortKey="size" sort={sort} onChange={cycleSort}/>
         <span className="file-browser-column-label file-permission-column">权限</span>
-        <FileSortHeader label="修改时间" sortKey="modifiedAt" sort={sort} onChange={cycleSort}/>
+        <FileSortHeader className="file-modified-column" label="修改时间" sortKey="modifiedAt" sort={sort} onChange={cycleSort}/>
       </div>
       {showLocalRoots && loading && <FileLoadingState label="正在读取本机位置…"/>}
       {showLocalRoots && !loading && error && localRoots.length === 0 && <div className="file-browser-state error"><Icon name="files" size={22}/><span>{error}</span><button onClick={() => void openLocalRoots()}>重试</button></div>}

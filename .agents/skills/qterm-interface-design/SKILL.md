@@ -32,6 +32,7 @@ Read [references/qterm-ui-spec.md](references/qterm-ui-spec.md) completely befor
 
 - Prefer density over decorative whitespace, but never compress controls below reliable pointer and keyboard targets.
 - Show important controls persistently. Hover may enhance them; it must not be the only way to discover core actions.
+- For operational labels that may be ellipsized, such as file names and paths, expose the full value with the shared application-themed tooltip only when overflow actually occurs. Do not rely on the browser or WebView native `title` tooltip for product UI; preserve keyboard or assistive access to the full value.
 - Indicate selection with surface, text, and a small semantic indicator. Avoid oversized accent fills, thick rails, or glow as decoration.
 - For single-selection list/detail managers, use one theme-aware moving selection surface behind the rows and the directional detail-stage pattern in the UI specification. Retarget the surface immediately; never draw a second selected frame on the destination row while it moves.
 - Treat the file browser row interaction in `src/files/fileBrowser.css` as canonical for dense file/path selection, including Git change lists: reuse its theme-aware active and selection tokens, full inset selection outline, foreground roles, and selected-over-hover precedence.

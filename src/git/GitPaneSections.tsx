@@ -3,6 +3,7 @@ import type { KeyboardEvent, MouseEvent, ReactNode, RefObject } from "react";
 
 import { ExactTextArea } from "../components/ExactTextInput";
 import { Icon } from "../components/Icon";
+import { isElementOverflowing, useThemedTooltip } from "../components/useThemedTooltip";
 import type { GitChange, GitSnapshot } from "../lib/tauri/git";
 import type { GitRuntime } from "../workspace/WorkspaceProvider";
 import { GitChangeList } from "./GitChangeList";
@@ -191,9 +192,12 @@ export function GitEmpty({ icon, title, detail, action, secondary, onAction, onS
   return <div className="git-empty"><Icon name={icon} size={28}/><strong>{title}</strong><span>{detail}</span><div>{action && <button type="button" onClick={onAction}>{action}</button>}{secondary && <button type="button" className="secondary" onClick={onSecondary}>{secondary}</button>}</div></div>;
 }
 
-function GitFeedback({ title, detail, tone = "error", icon = "alertCircle" }: { title: string; detail: string; tone?: "error" | "warning"; icon?: "alertCircle" | "disconnect" }) {
-  return <div className="git-feedback" data-tone={tone} role="status" aria-live="polite" aria-atomic="true">
+export function GitFeedback({ title, detail, tone = "error", icon = "alertCircle" }: { title: string; detail: string; tone?: "error" | "warning"; icon?: "alertCircle" | "disconnect" }) {
+  const [detailRef, descriptionId, hideTooltip, showTooltip, tooltipSurface] = useThemedTooltip<HTMLSpanElement>({ tooltip: detail, shouldShow: isElementOverflowing });
+  return <><div className="git-feedback" data-tone={tone} role="status" aria-live="polite" aria-atomic="true">
     <span className="git-feedback-icon"><Icon name={icon} size={13}/></span>
-    <span className="git-feedback-copy"><strong>{title}</strong><span title={detail}>{detail}</span></span>
-  </div>;
+    <span className="git-feedback-copy"><strong>{title}</strong><span ref={detailRef} tabIndex={0} aria-describedby={descriptionId}
+      onMouseEnter={showTooltip} onMouseLeave={hideTooltip} onFocus={showTooltip} onBlur={hideTooltip}
+      onKeyDown={(event) => { if (event.key === "Escape") hideTooltip(); }}>{detail}</span></span>
+  </div>{tooltipSurface}</>;
 }

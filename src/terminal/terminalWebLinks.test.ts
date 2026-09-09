@@ -31,3 +31,13 @@ it("creates a Web Links addon that requests terminal link confirmation", () => {
   expect(event.defaultPrevented).toBe(true);
   expect(mocks.requestTerminalExternalLink).toHaveBeenCalledExactlyOnceWith("https://example.com/docs", "web-link");
 });
+
+it("does not activate a detected web link from a right click", () => {
+  createTerminalWebLinksAddon();
+  const event = new MouseEvent("click", { button: 2, cancelable: true });
+
+  mocks.handlers[0](event, "https://example.com/docs");
+
+  expect(event.defaultPrevented).toBe(false);
+  expect(mocks.requestTerminalExternalLink).not.toHaveBeenCalled();
+});

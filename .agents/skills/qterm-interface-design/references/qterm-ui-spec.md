@@ -118,6 +118,7 @@ At narrower supported widths, reduce the sidebar to roughly 165–180px before c
 - Give `overflow: auto` only to the list or editor stage that owns scrolling.
 - Keep creation buttons, tabs, global status, and save/delete actions outside scrolling regions.
 - Truncate one-line identifiers with ellipsis; wrap explanatory copy.
+- When an operational identifier is actually truncated, reveal its full value through the shared viewport-bound themed tooltip on pointer hover and keyboard focus where the trigger is focusable. Do not use native `title` bubbles as the visible interaction, and do not show a tooltip when the text already fits.
 - Never solve nested-scroll bugs by adding arbitrary fixed heights to children.
 
 ## 4. Component patterns

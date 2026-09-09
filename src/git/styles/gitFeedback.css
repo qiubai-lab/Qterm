@@ -63,6 +63,12 @@
   font-size: 8.5px;
 }
 
+.git-feedback-copy span:focus-visible {
+  outline: 1px solid color-mix(in srgb, var(--git-feedback-color) 72%, transparent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
 .git-repository-card .git-feedback {
   margin: 0 3px 3px;
 }
