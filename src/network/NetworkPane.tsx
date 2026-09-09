@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
+import { createPortal } from "react-dom";
 
 import { Icon } from "../components/Icon";
 import { Button } from "../components/Button";
@@ -152,10 +153,10 @@ export function NetworkPane({ profileId, profileHost = "", runtimeStates = {}, l
       const state = runtimeStates[contextMenu.rule.id] ?? "stopped";
       const mutationLocked = state === "running" || state === "starting" || state === "stopping" || lockedRuleIds.has(contextMenu.rule.id);
       const lockTitle = lockedRuleIds.has(contextMenu.rule.id) && state === "stopped" ? "该规则正在其他网络窗口运行" : "请先停止该规则";
-      return <div ref={contextMenuRef} className="network-context-menu" role="menu" aria-label={`${contextMenu.rule.name} 网络规则菜单`} data-placement={contextMenu.placement} style={{ left: contextMenu.x, top: contextMenu.y }}>
+      return createPortal(<div ref={contextMenuRef} className="network-context-menu" role="menu" aria-label={`${contextMenu.rule.name} 网络规则菜单`} data-placement={contextMenu.placement} style={{ left: contextMenu.x, top: contextMenu.y }}>
         <button role="menuitem" disabled={mutationLocked} title={mutationLocked ? lockTitle : undefined} onClick={() => { setContextMenu(null); setEditor(contextMenu.rule); }}><Icon name="edit" size={13}/><span>编辑规则</span></button>
         <button className="danger" role="menuitem" disabled={mutationLocked} title={mutationLocked ? lockTitle : undefined} onClick={() => { setContextMenu(null); setDeleteRule(contextMenu.rule); }}><Icon name="trash" size={13}/><span>删除规则</span></button>
-      </div>;
+      </div>, document.body);
     })()}
     {choosingType && <NetworkRuleTypeDialog
       onClose={() => setChoosingType(false)}

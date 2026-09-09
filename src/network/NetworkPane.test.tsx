@@ -196,6 +196,7 @@ describe("NetworkPane", () => {
     await screen.findByText("Web tunnel");
     expect(screen.queryByRole("menuitem", { name: "编辑规则" })).not.toBeInTheDocument();
     fireEvent.contextMenu(screen.getByRole("listitem", { name: "Web tunnel，运行中" }), { clientX: 80, clientY: 60 });
+    expect(screen.getByRole("menu", { name: "Web tunnel 网络规则菜单" }).parentElement).toBe(document.body);
     expect(screen.getByRole("menuitem", { name: "编辑规则" })).toBeDisabled();
     expect(screen.getByRole("menuitem", { name: "删除规则" })).toBeDisabled();
     view.rerender(<NetworkPane profileId="profile-1" runtimeStates={{ "rule-1": "stopped" }} onStart={vi.fn()}/>);
