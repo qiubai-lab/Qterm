@@ -3,19 +3,19 @@ import { createPortal } from "react-dom";
 import { FitAddon } from "@xterm/addon-fit";
 import type { ISearchOptions } from "@xterm/addon-search";
 import { Terminal } from "@xterm/xterm";
-import { writeText as writeClipboardText } from "@tauri-apps/plugin-clipboard-manager";
+import { writeText as writeClipboardText } from "@qterm/services/textClipboard";
 import "@xterm/xterm/css/xterm.css";
 import { resolveAppShortcut } from "../app/shortcuts";
 import { DialogFrame } from "../components/dialogs/DialogFrame";
 import { ExactTextInput } from "../components/ExactTextInput";
 import { Icon } from "../components/Icon";
 import { currentDesktopPlatform } from "../lib/tauri/window";
-import { prepareLocalTerminalClipboardPaste } from "../lib/tauri/localSessions";
+import { prepareLocalTerminalClipboardPaste } from "@qterm/services/localSessions";
 import {
   cancelTerminalClipboardStaging,
   startTerminalClipboardStaging,
   type TerminalStagingEvent,
-} from "../lib/tauri/sessions";
+} from "@qterm/services/sessions";
 import { useWorkspace } from "../workspace/WorkspaceProvider";
 import { parseOsc7Cwd } from "./osc7";
 import { createTerminalLayout, type TerminalLayout } from "./terminalLayout";

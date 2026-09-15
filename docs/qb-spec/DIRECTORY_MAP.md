@@ -7,9 +7,16 @@
 - `src-tauri/`：负责桌面运行时、应用用例、领域规则和基础设施适配器；不承载 React 页面状态。
 - `scripts/`：负责仓库级可测试命令入口；当前只为 Tauri `dev` 注入开发 flavor 并把其他 CLI 参数原样转发，不承载应用业务、发布凭据或 shell 拼接。
 - `docs/qb-spec/`：负责长期产品上下文、需求规格和实施计划；不作为运行时代码或配置来源。
-- `.github/`：负责持续集成、依赖更新和原生桌面产物构建自动化；不包含产品业务逻辑、发布凭据或部署实现。
+- `.github/`：负责持续集成、依赖更新、桌面产物与静态产品站点构建发布自动化；不包含产品业务逻辑或发布凭据。
+
+- `site/`：静态项目介绍、独立 demo HTML 与站点专用公开资源；构建产物为 `dist-site/`，不参与桌面 `dist/`。
 
 ## Important Files
+
+- `vite.site.config.ts`、`.github/workflows/site.yml`、`scripts/check-site.mjs`、`docs/browser-demo.md`：站点多页构建、Pages 发布、子路径资源与 desktop/demo 产物隔离检查及操作说明；不改原 Tauri 打包入口。Pages 发布由仓库变量显式启用。
+- `src/lib/runtime/environment.ts`、`@qterm/services/*`：显式 build-selected workspace/terminal service 边界，默认选择现有 Tauri adapters，仅 site 选择模拟服务；不伪造原生环境、不自动降级。
+- `src/demo/`：DemoApp/DemoWorkbench 组合真实 workspace 与终端组件及浏览器居中外壳；fixtures/shellCommands 拥有有限命令与虚构数据，terminalSession/sessionRegistry 拥有可取消、隔离的模拟后端会话，services 实现类型受约束的浏览器 adapters。UI 状态仍归 WorkspaceProvider，首版不开放原生 Files/Git/Network 操作。
+- `src/site/site.css`：静态介绍页的独立布局，复用产品主题 token，不导入应用运行时。
 
 - `native/conpty/`：G0 隔离原型的上游版本锁、MIT 许可与原生输出边界补丁；`scripts/build-conpty-prototype.ps1` 构建未发布的测试 host，`scripts/conpty-ordered-probe-consumer.mjs` 只供真实 PTY 探针消费 QTR0 帧。尚未作为生产 runtime 或应用 IPC 协议接线。
 

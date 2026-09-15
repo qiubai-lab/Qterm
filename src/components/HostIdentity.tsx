@@ -1,4 +1,4 @@
-import { writeText as writeClipboardText } from "@tauri-apps/plugin-clipboard-manager";
+import { writeText as writeClipboardText } from "@qterm/services/textClipboard";
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 

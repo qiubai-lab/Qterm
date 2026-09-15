@@ -1,7 +1,8 @@
+import { hasWorkspaceRuntime } from "../../lib/runtime/environment";
 /* eslint-disable react-refresh/only-export-components -- provider and hook form one app boundary. */
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 
-import { getSettings, type AppTheme } from "../../lib/tauri/settings";
+import { getSettings, type AppTheme } from "@qterm/services/settings";
 import { setNativeWindowTheme } from "../../lib/tauri/window";
 import { refreshTerminalThemes } from "../../terminal/terminalTheme";
 
@@ -28,7 +29,7 @@ export function applyAppTheme(theme: AppTheme): void {
 
 export async function bootstrapAppTheme(): Promise<AppTheme> {
   let theme: AppTheme = "dark";
-  if (typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) {
+  if (hasWorkspaceRuntime()) {
     try {
       theme = (await getSettings()).appearance.theme;
     } catch {

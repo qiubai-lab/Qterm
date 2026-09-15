@@ -15,6 +15,10 @@ Qterm 基于 Tauri 2、React、TypeScript 与 Rust 构建，将本地终端、SS
 
 ![Qterm 工作台：远程终端、本地终端、文件编辑、网络转发与文件浏览](images/screenshoot.png)
 
+## 🌐 浏览器交互演示
+
+运行 `pnpm dev:demo`，在浏览器中体验模拟终端、工作区、分屏与主题。演示使用虚构数据，不连接真实服务器。站点构建、GitHub Pages 发布与体验范围见 [浏览器演示说明](docs/browser-demo.md)。
+
 ## 🤖 为远程 AI 开发优化
 
 Qterm 不内置 AI 模型或专属 Agent，而是面向在 SSH 服务器中运行 Codex、Claude Code 等 CLI Agent 的开发方式优化宿主体验。终端、文件和 Git 都直接作用于同一台远程主机，项目无需先下载到本机。

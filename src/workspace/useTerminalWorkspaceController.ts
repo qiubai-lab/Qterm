@@ -1,8 +1,9 @@
+import { hasWorkspaceRuntime } from "../lib/runtime/environment";
 import { useCallback, type Dispatch } from "react";
 
-import { closeLocalSession, connectLocalSession, resizeLocalSession, writeLocalSession, type LocalSessionEvent } from "../lib/tauri/localSessions";
+import { closeLocalSession, connectLocalSession, resizeLocalSession, writeLocalSession, type LocalSessionEvent } from "@qterm/services/localSessions";
 import type { ConnectionProfile } from "../lib/tauri/profiles";
-import { acceptHostKey, closeSession, connectSession, rejectHostKey, resizeSession, writeSession, type SessionAuth, type SessionEvent, type TerminalSizeInput } from "../lib/tauri/sessions";
+import { acceptHostKey, closeSession, connectSession, rejectHostKey, resizeSession, writeSession, type SessionAuth, type SessionEvent, type TerminalSizeInput } from "@qterm/services/sessions";
 import { completeConnectionProgress, connectionProgressFromRouteEvent, failConnectionProgress, initialConnectionProgress } from "./connectionProgress";
 import { findLeaf } from "./layout";
 import { createId, type SplitDirection } from "./model";
@@ -16,7 +17,6 @@ import {
   defaultRuntime,
   deleteFailureHandlers,
   epochKey,
-  isTauriRuntime,
   nodeLabel,
   routeFailureNotice,
   terminalFailureKey,
@@ -126,7 +126,7 @@ export function useTerminalWorkspaceController(state: WorkspaceRuntimeState, dis
   }, [documentRef]);
 
   const startLocalBlock = useCallback(async (blockId: string, columns: number, rows: number, osc7Enabled: boolean) => {
-    if (!isTauriRuntime() || startingLocal.current.has(blockId)) return;
+    if (!hasWorkspaceRuntime() || startingLocal.current.has(blockId)) return;
     if (!connectionIntentAllows(connectionTargetIntents.current, "terminal", blockId, null)) return;
     const current = runtimesRef.current[blockId];
     if (current?.kind === "local" && current.sessionId) return;

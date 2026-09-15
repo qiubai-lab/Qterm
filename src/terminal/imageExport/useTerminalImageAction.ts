@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { copyImageUrlToClipboard } from "../../lib/tauri/clipboard";
-import { saveTerminalImage } from "../../lib/tauri/terminalImage";
+import { copyImageUrlToClipboard } from "@qterm/services/clipboard";
+import { saveTerminalImage } from "@qterm/services/terminalImage";
 import type { RenderedTerminalImage } from "./renderTerminalImage";
 import { IMAGE_FEEDBACK_ERROR_MS, IMAGE_FEEDBACK_SUCCESS_MS, imageExportError, type TerminalImageFeedback } from "./terminalImageModel";
 

@@ -1,0 +1,61 @@
+name: Product site
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: product-site-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Verify product site
+    runs-on: ubuntu-latest
+    env:
+      QTERM_SITE_BASE: ${{ vars.QTERM_SITE_BASE || '/Qterm/' }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22.22.2
+      - name: Set up pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@11.0.8 --activate
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check
+      - run: pnpm test:demo
+      - run: pnpm build:site
+      - run: pnpm check:site
+      - name: Upload site
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: dist-site
+
+  deploy:
+    name: Publish GitHub Pages
+    # Opt in only after Settings → Pages is configured. PRs and other refs never publish.
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && vars.QTERM_PAGES_ENABLED == 'true'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/configure-pages@v5
+      - name: Deploy site
+        id: deployment
+        uses: actions/deploy-pages@v4

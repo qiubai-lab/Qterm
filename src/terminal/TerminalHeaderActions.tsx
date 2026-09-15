@@ -1,9 +1,11 @@
+import { supportsNativeTools } from "../lib/runtime/environment";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { createPortal } from "react-dom";
 import { Icon, type IconName } from "../components/Icon";
 import { ThemedTooltipButton } from "../components/ThemedTooltipButton";
 
 interface TerminalHeaderAction {
+  nativeOnly?: boolean;
   label: string;
   title?: string;
   icon: IconName;
@@ -26,7 +28,8 @@ function fitHeaderMenu(anchor: DOMRect, width: number, height: number): HeaderMe
   return { left, top: Math.max(gutter, anchor.top - height - offset), placement: "above" };
 }
 
-export function TerminalHeaderActions({ actions, closeDisabled, onClose }: { actions: TerminalHeaderAction[]; closeDisabled: boolean; onClose: () => void }) {
+export function TerminalHeaderActions({ actions: requestedActions, closeDisabled, onClose }: { actions: TerminalHeaderAction[]; closeDisabled: boolean; onClose: () => void }) {
+  const actions = requestedActions.map(action => action.nativeOnly && !supportsNativeTools ? { ...action, disabled: true, title: "此功能请在桌面版体验" } : action);
   const moreButtonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [menuPosition, setMenuPosition] = useState<HeaderMenuPosition | null>(null);

@@ -1,14 +1,15 @@
+import { hasWorkspaceRuntime } from "../lib/runtime/environment";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type Dispatch } from "react";
 
-import { listProfileGroups, listProfiles, type ConnectionProfile, type ProfileGroup } from "../lib/tauri/profiles";
-import { loadWorkspaces, saveWorkspaces } from "../lib/tauri/workspaces";
+import { listProfileGroups, listProfiles, type ConnectionProfile, type ProfileGroup } from "@qterm/services/profiles";
+import { loadWorkspaces, saveWorkspaces } from "@qterm/services/workspaces";
 import { registerCurrentWindowCloseFlush } from "../lib/tauri/window";
 import type { WorkspaceDocument } from "./model";
 import type { WorkspaceAction } from "./reducer";
-import { isTauriRuntime, workspaceErrorMessage } from "./workspaceRuntime";
+import { workspaceErrorMessage } from "./workspaceRuntime";
 
 export function useWorkspacePersistence(document: WorkspaceDocument, dispatch: Dispatch<WorkspaceAction>) {
-  const [hydrated, setHydrated] = useState(() => !isTauriRuntime());
+  const [hydrated, setHydrated] = useState(() => !hasWorkspaceRuntime());
   const [profiles, setProfiles] = useState<ConnectionProfile[]>([]);
   const [profileGroups, setProfileGroups] = useState<ProfileGroup[]>([]);
   const [storageNotice, setStorageNotice] = useState("");
@@ -16,14 +17,14 @@ export function useWorkspacePersistence(document: WorkspaceDocument, dispatch: D
   useLayoutEffect(() => { documentRef.current = document; }, [document]);
 
   const refreshProfiles = useCallback(async () => {
-    if (!isTauriRuntime()) return;
+    if (!hasWorkspaceRuntime()) return;
     const [items, groups] = await Promise.all([listProfiles(), listProfileGroups()]);
     setProfiles(items);
     setProfileGroups(groups);
   }, []);
 
   useEffect(() => {
-    if (!isTauriRuntime()) return;
+    if (!hasWorkspaceRuntime()) return;
     let active = true;
     void Promise.all([loadWorkspaces(), listProfiles(), listProfileGroups()]).then(
       ([stored, items, groups]) => {
@@ -43,7 +44,7 @@ export function useWorkspacePersistence(document: WorkspaceDocument, dispatch: D
   }, [dispatch]);
 
   useEffect(() => {
-    if (!hydrated || !isTauriRuntime()) return;
+    if (!hydrated || !hasWorkspaceRuntime()) return;
     const timer = window.setTimeout(() => {
       void saveWorkspaces(document).catch((error: unknown) => setStorageNotice(`无法保存工作区：${workspaceErrorMessage(error)}`));
     }, 180);
@@ -51,7 +52,7 @@ export function useWorkspacePersistence(document: WorkspaceDocument, dispatch: D
   }, [document, hydrated]);
 
   useEffect(() => {
-    if (!hydrated || !isTauriRuntime()) return;
+    if (!hydrated || !hasWorkspaceRuntime()) return;
     let disposed = false;
     let stop: (() => void) | undefined;
     void registerCurrentWindowCloseFlush(async () => {

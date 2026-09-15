@@ -1,7 +1,8 @@
+import { hasWorkspaceRuntime } from "../lib/runtime/environment";
 import type { TerminalOutputObserver } from "../terminal/notifications/notificationRuntime";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 
-import { getLocalTerminalCapabilities, type LocalTerminalCapabilities } from "../lib/tauri/localSessions";
+import { getLocalTerminalCapabilities, type LocalTerminalCapabilities } from "@qterm/services/localSessions";
 import type { TerminalSizeInput } from "../lib/tauri/sessions";
 import type { WorkspaceDocument } from "./model";
 import {
@@ -9,7 +10,6 @@ import {
   defaultGitRuntime,
   defaultNetworkRuntime,
   defaultRuntime,
-  isTauriRuntime,
   workspaceErrorMessage,
   type FileRuntime,
   type GitRuntime,
@@ -102,7 +102,7 @@ export function useWorkspaceRuntimeState(document: WorkspaceDocument, setStorage
   const isCurrentEpoch = useCallback((blockId: string, epoch: number) => sessionEpochs.current.get(blockId) === epoch, []);
 
   useEffect(() => {
-    if (!isTauriRuntime()) return;
+    if (!hasWorkspaceRuntime()) return;
     let active = true;
     void getLocalTerminalCapabilities().then(
       (capabilities) => { if (active) setLocalTerminalCapabilities(capabilities); },

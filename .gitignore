@@ -38,3 +38,6 @@ id_dsa*
 *.njsproj
 *.sln
 *.sw?
+
+# Browser product site
+dist-site

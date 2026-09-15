@@ -16,6 +16,7 @@
 
     /* Linting */
     "strict": true,
+    "paths": { "@qterm/services/*": ["./src/lib/tauri/*"] },
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true
