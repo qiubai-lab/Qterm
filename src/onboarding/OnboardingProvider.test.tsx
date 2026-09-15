@@ -5,7 +5,7 @@ import { OnboardingProvider } from "./OnboardingProvider";
 import { OnboardingRestart } from "./OnboardingRestart";
 import { HelpDialog } from "../components/dialogs/InfoDialogs";
 import { WorkspaceUtilityRail } from "../workspace/WorkspaceUtilityRail";
-import { guideSteps } from "./onboardingState";
+import { guideSteps, markOnboardingSeen } from "./onboardingState";
 
 vi.mock("../app/theme/AppThemeProvider", () => ({ useAppTheme: () => ({ theme: "cyberpunk" }) }));
 vi.mock("@tauri-apps/api/app", () => ({ getVersion: vi.fn().mockResolvedValue("0.1.0") }));
@@ -23,14 +23,27 @@ function advanceToEnd() {
   for (let index = 0; index < 6; index++) fireEvent.click(screen.getByRole("button", { name: "下一步" }));
 }
 
-it("shows once, records skipping, and allows explicit replay without a version gate", () => {
-  const mount = () => render(<OnboardingProvider mode="demo"><OnboardingRestart/></OnboardingProvider>);
+it("shows desktop once, records skipping, and allows explicit replay without a version gate", () => {
+  const mount = () => render(<OnboardingProvider mode="desktop"><main data-onboarding-ready="true"/><OnboardingRestart/></OnboardingProvider>);
   const first = mount(); tick();
   expect(screen.getByRole("dialog", { name: "使用引导" })).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "跳过" }));
   first.unmount(); mount(); tick();
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "使用引导" }));
+  expect(screen.getByText("欢迎使用 Qterm")).toBeInTheDocument();
+});
+
+it("starts demo on each fresh mount despite old history, but not after skipping in the same page", () => {
+  markOnboardingSeen("demo");
+  const mount = () => render(<OnboardingProvider mode="demo"><OnboardingRestart/></OnboardingProvider>);
+  const first = mount(); tick();
+  expect(screen.getByText("欢迎使用 Qterm")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "跳过" })); tick(2000);
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "重新引导" }));
+  expect(screen.getByText("欢迎使用 Qterm")).toBeInTheDocument();
+  first.unmount(); mount(); tick();
   expect(screen.getByText("欢迎使用 Qterm")).toBeInTheDocument();
 });
 

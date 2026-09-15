@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useWorkspace } from "../workspace/WorkspaceProvider";
 import { OnboardingContext } from "./OnboardingContext";
 import { GuideCard } from "./GuideCard";
@@ -12,20 +12,23 @@ function canShow(mode: OnboardingMode) {
 
 export function OnboardingProvider({ mode, children }: { mode: OnboardingMode; children: ReactNode }) {
   const { hydrated } = useWorkspace();
+  const started = useRef(false);
   const [index, setIndex] = useState<number | null>(null);
   const [paused, setPaused] = useState(false);
   const [flashing, setFlashing] = useState(false);
   const start = useCallback(() => {
-    markOnboardingSeen(mode);
+    started.current = true;
+    if (mode === "desktop") markOnboardingSeen(mode);
     setFlashing(false); setPaused(false); setIndex(0);
   }, [mode]);
   const finish = useCallback(() => { setIndex(null); setFlashing(true); }, []);
   const skip = useCallback(() => { setIndex(null); }, []);
 
   useEffect(() => {
-    if (!hydrated || hasSeenOnboarding(mode)) return;
+    const alreadyStarted = () => started.current || (mode === "desktop" && hasSeenOnboarding(mode));
+    if (!hydrated || alreadyStarted()) return;
     const timer = window.setInterval(() => {
-      if (hasSeenOnboarding(mode)) { clearInterval(timer); return; }
+      if (alreadyStarted()) { clearInterval(timer); return; }
       if (canShow(mode)) { clearInterval(timer); start(); }
     }, 400);
     return () => clearInterval(timer);
