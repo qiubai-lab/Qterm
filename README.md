@@ -7,6 +7,11 @@
     <a href="LICENSE"><img src="https://img.shields.io/github/license/qiubai-lab/Qterm" alt="许可证"></a>
     <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey" alt="支持平台">
   </p>
+  <p>
+    <a href="https://qiubai-lab.github.io/Qterm/">官网</a> ·
+    <a href="https://qiubai-lab.github.io/Qterm/demo/">在线演示</a> ·
+    <a href="https://github.com/qiubai-lab/Qterm/releases/latest">下载安装</a>
+  </p>
 </div>
 
 Qterm 基于 Tauri 2、React、TypeScript 与 Rust 构建，将本地终端、SSH 会话、SFTP 文件管理、Git 操作和网络转发组织在可持久化、可自由拆分的 Workspace 中。
@@ -17,7 +22,7 @@ Qterm 基于 Tauri 2、React、TypeScript 与 Rust 构建，将本地终端、SS
 
 ## 🌐 浏览器交互演示
 
-运行 `pnpm dev:demo`，在浏览器中体验模拟终端、工作区、分屏、文件编辑、Git 审阅提交、虚构网络规则与主题。演示使用虚构数据，不连接真实服务器或建立隧道。站点构建、GitHub Pages 发布与体验范围见 [浏览器演示说明](docs/browser-demo.md)。
+打开 [在线演示](https://qiubai-lab.github.io/Qterm/demo/)，无需安装即可在浏览器中体验模拟终端、工作区、分屏、文件编辑、Git 审阅提交、虚构网络规则与主题；也可运行 `pnpm dev:demo` 在本地体验。演示使用虚构数据，不连接真实服务器或建立隧道。站点构建、GitHub Pages 发布与体验范围见 [浏览器演示说明](docs/browser-demo.md)。
 
 ## 🤖 为远程 AI 开发优化
 
