@@ -52,14 +52,13 @@ Files 的创建、复制、重命名、删除、图片读取、上传下载，�
 
 ## GitHub Pages 发布
 
-工作流 `.github/workflows/site.yml` 对 main 推送、指向 main 的 PR 和手动触发运行站点验证。发布默认未启用，不会改动现有桌面 Release 流程。
+工作流 `.github/workflows/site.yml` 对 main 推送、指向 main 的 PR 和手动触发运行站点验证。main 推送或在 main 上手动触发时，验证成功后自动发布；PR 和其他分支只验证，不发布。网站发布独立于桌面 Release，不由版本 tag 触发。
 
 准备正式发布时：
 
 1. 仓库 Settings → Pages → Source 选择 **GitHub Actions**。
 2. 确认 `github-pages` environment 只允许 main 发布。
-3. 在 Settings → Secrets and variables → Actions → Variables 新建 `QTERM_PAGES_ENABLED`，值为 `true`。
-4. 在 main 上手动运行 Product site，或通过后续 main 推送发布。
+3. 在 main 上手动运行 Product site，或通过后续 main 推送发布，无需额外配置发布开关变量。
 
 默认地址为 `https://qiubai-lab.github.io/Qterm/`。构建 base 默认为 `/Qterm/`。改仓库名或使用自定义域名时，配置 Actions variable `QTERM_SITE_BASE`（例如 `/`）；同时更新 `site/index.html` 中绝对分享图片 URL，并配置 Pages 域名。默认构建没有设置 canonical，避免本地/fork 指向错误域名。
 
@@ -69,7 +68,7 @@ Files 的创建、复制、重命名、删除、图片读取、上传下载，�
 
 介绍页实际 Demo 截图位于 `site/public/screenshots/`，采集说明见同目录 README。更新截图时同步 HTML 图片宽高；`qterm-social.png` 保留用于社交分享。HTML 中图片、图标和脚本的 public 资源使用根路径交给 Vite 添加 base，避免 `%BASE_URL%` 在资源转换时产生重复前缀；普通导航链接仍使用该占位符。
 
-发布回退：在 main 上恢复站点变更并重跑工作流；需要暂停发布时将 `QTERM_PAGES_ENABLED` 设为 `false`。这不会删除已经发布的页面。
+发布回退：在 main 上恢复站点变更并重跑工作流；需要暂停发布时，可在 Actions 页面禁用 Product site 工作流（同时暂停该工作流的站点验证）。这不会删除已经发布的页面。
 
 ## 人工浏览器验收
 

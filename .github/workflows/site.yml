@@ -43,8 +43,8 @@ jobs:
 
   deploy:
     name: Publish GitHub Pages
-    # Opt in only after Settings → Pages is configured. PRs and other refs never publish.
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && vars.QTERM_PAGES_ENABLED == 'true'
+    # Publish main after verification. PRs and other refs never publish.
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     needs: build
     runs-on: ubuntu-latest
     permissions:
