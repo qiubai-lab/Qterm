@@ -1,0 +1,19 @@
+.onboarding-highlight { position:fixed; z-index:1001; pointer-events:none; box-sizing:border-box; border:1px solid var(--guide-accent); border-radius:5px; background:color-mix(in srgb,var(--guide-accent) 5%,transparent); transition:top 180ms ease,left 180ms ease,width 180ms ease,height 180ms ease; }
+.onboarding-card { position:fixed; z-index:1002; left:0; top:0; transition:transform 220ms ease; width:340px; max-width:calc(100vw - 24px); max-height:calc(100dvh - 32px); overflow:auto; padding:18px; border:1px solid var(--border); border-radius:12px; background:var(--raised); color:var(--text); box-shadow:0 12px 36px var(--shadow-strong); outline:none; font:13px/1.7 system-ui,sans-serif; }
+.onboarding-card:focus-visible { outline:2px solid var(--guide-accent); outline-offset:2px; }
+.onboarding-progress,.onboarding-hint { color:var(--muted); font-size:11px; }
+.onboarding-card h2 { margin:6px 0 8px; font-size:16px; }
+.onboarding-card p { margin:0 0 16px; }
+.onboarding-card footer { display:flex; align-items:center; gap:8px; }
+.onboarding-card footer>span:first-of-type { flex:1; }
+.onboarding-replay-flash { animation:onboarding-replay 2400ms ease-out; }
+@keyframes onboarding-replay { 0%,35% { outline:2px solid var(--accent); outline-offset:3px; background:var(--accent-bg); } 100% { outline:2px solid transparent; outline-offset:6px; } }
+@media(prefers-reduced-motion:reduce) { .onboarding-highlight,.onboarding-card { transition:none; } .onboarding-replay-flash { animation:none; outline:2px solid var(--accent); outline-offset:3px; } }
+
+.onboarding-card,.onboarding-highlight { --guide-accent:var(--accent); }
+.onboarding-card[data-demo-theme="cyberpunk"],.onboarding-highlight[data-demo-theme="cyberpunk"] { --guide-accent:var(--signature); }
+.onboarding-card[data-demo-theme] { border-color:var(--guide-accent); background:var(--raised); }
+.onboarding-card h2,.onboarding-card .onboarding-progress { color:var(--guide-accent); }
+.onboarding-card .onboarding-next { border-color:var(--guide-accent); background:var(--raised); color:var(--guide-accent); }
+
+.onboarding-highlight[data-demo-theme] { background:color-mix(in srgb,var(--guide-accent) 5%,transparent); }

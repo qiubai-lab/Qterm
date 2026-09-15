@@ -317,7 +317,7 @@ function TerminalBlock(props: BlockRenderProps & { blockId: string; profileId: s
     tabIndex={0}
     aria-label={`终端 Block ${profile?.name ?? "本地终端"}`}
   >
-    <header className="terminal-block-header" onPointerDown={(event) => props.beginDrag(event, props.blockId)}>
+    <header data-onboarding="terminal" className="terminal-block-header" onPointerDown={(event) => props.beginDrag(event, props.blockId)}>
       <TerminalTargetPicker profiles={profiles} groups={profileGroups} recentProfileIds={document?.recentProfileIds ?? []} selectedProfileId={props.profileId} status={status} detail={detail} hideDetail={Boolean(runtime?.connectionProgress)} localAttention={props.localTerminalAttention} onSelect={(profileId) => void chooseTarget(profileId)} onManageConnections={props.onOpenConnectionManager} onRequestDisconnect={status === "connected" && props.profileId !== null ? requestDisconnect : undefined} statusAction={statusAction}/>
       <ConnectionRouteProgress progress={runtime?.connectionProgress} endpoint={endpoint} profile={profile} onRequestDisconnect={status === "connected" && props.profileId !== null ? requestDisconnect : undefined} statusAction={runtime?.connectionProgress ? statusAction : undefined}/>
       <TerminalProtocolTag blockId={props.blockId} connected={status === "connected"} directoryState={osc7TagState} directoryMessage={osc7TagMessage}/>

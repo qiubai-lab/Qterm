@@ -1,3 +1,4 @@
+import { OnboardingRestart } from "../onboarding/OnboardingRestart";
 import { WorkspaceUtilityRail } from "../workspace/WorkspaceUtilityRail";
 import { useCallback, useState } from "react";
 import { DialogFrame } from "../components/dialogs/DialogFrame";
@@ -54,7 +55,7 @@ export function DemoWorkbench() {
         </div>
       </section>
     </section>
-    <p className="demo-caption">模拟环境 · 输入 <code>help</code> 查看命令 · <kbd>Ctrl C</kbd> 停止任务</p>
+    <footer className="demo-footer"><p className="demo-caption">模拟环境 · 输入 <code>help</code> 查看命令 · <kbd>Ctrl C</kbd> 停止任务</p><OnboardingRestart/></footer>
     {(error || storageNotice) && <p role="alert">{error || storageNotice}</p>}
     {connections && <DialogFrame title="演示连接" subtitle="仅展示虚构目标，选择目标请使用 Block 左上角" onClose={() => setConnections(false)}><div className="demo-guide"><p>本页不连接真实服务器，也不需要密码或私钥。打开终端左上角的目标菜单可以在以下目标间切换。</p><ul>{profiles.map(profile => <li key={profile.id}><strong>{profile.name}</strong> · <code>{profile.username}@{profile.host}:{profile.port}</code></li>)}</ul></div></DialogFrame>}
   </>;

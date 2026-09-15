@@ -8,8 +8,10 @@ vi.mock("../lib/tauri/window", () => ({
   setCurrentWindowAlwaysOnTop: vi.fn(), minimizeCurrentWindow: vi.fn(), toggleMaximizeWindow: vi.fn(),
   toggleMaximizeCurrentWindow: vi.fn(), closeCurrentWindow: vi.fn(), startDraggingCurrentWindow: vi.fn(),
 }));
-afterEach(cleanup);
+afterEach(() => { cleanup(); localStorage.removeItem("qterm.onboarding.desktop.shown"); });
 it("closes other workspaces with one confirmation through the real shell and reducer", async () => {
+  // This is a returning-user workspace flow; onboarding has its own first-run tests.
+  localStorage.setItem("qterm.onboarding.desktop.shown", "true");
   render(<App/>);
   const nav = await screen.findByRole("navigation", { name: "工作区" });
   fireEvent.click(screen.getByRole("button", { name: "新建工作区" }));

@@ -491,7 +491,7 @@ export function WorkspaceShell() {
         : !vaultStatus.initialized
           ? "请先初始化凭证库"
         : "锁定终端";
-  return <main className="app-shell" data-platform={desktopPlatform}>
+  return <main data-onboarding-ready={hydrated && terminalSettingsReady && !terminalLocked} className="app-shell" data-platform={desktopPlatform}>
     <header className="app-chrome" onPointerDown={beginWindowDrag}>
       <div className="app-brand" aria-label="Qterm">
         <Icon name="terminal" size={15}/><span>Qterm</span>

@@ -1,3 +1,4 @@
+import { OnboardingRestart } from "../../onboarding/OnboardingRestart";
 import { getVersion } from "@tauri-apps/api/app";
 import { writeText as writeClipboardText } from "@tauri-apps/plugin-clipboard-manager";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -71,6 +72,7 @@ export function HelpDialog({ onClose, autoCheckOnStartup = false, onAutoCheckOnS
       <DialogFrame
         title="关于 Qterm"
         subtitle="项目与版本信息"
+        headerActions={<OnboardingRestart onBeforeStart={onClose}/>}
         onClose={onClose}
         dismissible={!updateDialogOpen}
         blocking={false}

@@ -30,7 +30,7 @@ export function WorkspaceUtilityRail({ controls = {}, unavailableTitle }: { cont
       const control = controls[id];
       return <Fragment key={id}>
         {id === "lock" && <span className="rail-spacer"/>}
-        <button type="button" className={`rail-button${control?.active ? " active" : ""}${control?.notice ? " update-attention" : ""}`}
+        <button data-onboarding={`rail-${id}`} type="button" className={`rail-button${control?.active ? " active" : ""}${control?.notice ? " update-attention" : ""}`}
           aria-label={control?.accessibleLabel ?? (control?.notice ? `${label}，${control.notice}` : label)}
           title={control ? control.title ?? control.notice : unavailableTitle} aria-pressed={control?.active}
           aria-disabled={!control || undefined} disabled={!control || control.disabled} onClick={control?.onClick}>

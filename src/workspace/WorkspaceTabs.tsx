@@ -72,7 +72,7 @@ export function WorkspaceTabs({ disabled: terminalLocked, requestClose, onReorde
     ? document.workspaces.findIndex((workspace) => workspace.id === workspaceDragVisual.targetId)
     : -1;
 
-  return <WorkspaceTabStrip {...deck.events} onInteractionAnchorChange={setMenuAnchor} style={{ "--workspace-deck-top": ids.length + 1 } as CSSProperties} data-stacked={deck.layout.stacked || undefined} disabled={terminalLocked} className="workspace-tab-bar" aria-label="工作区">
+  return <WorkspaceTabStrip data-onboarding="workspaces" {...deck.events} onInteractionAnchorChange={setMenuAnchor} style={{ "--workspace-deck-top": ids.length + 1 } as CSSProperties} data-stacked={deck.layout.stacked || undefined} disabled={terminalLocked} className="workspace-tab-bar" aria-label="工作区">
       {deck.overflowing && <IconButton className="workspace-tab-scroll" size="compact" label="显示左侧工作区" disabled={!scroll.left || terminalLocked} onClick={() => scroll.move(-1)}><Icon name="back" size={13}/></IconButton>}
       <div data-hidden-left={scroll.left || undefined} data-hidden-right={scroll.right || undefined} ref={workspaceTabStripRef} data-stacked={deck.layout.stacked || undefined} className={`workspace-tab-strip${workspaceDragVisual ? " dragging" : ""}${workspaceDropSettling ? " drop-settling" : ""}`}>
         <span

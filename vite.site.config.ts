@@ -25,5 +25,5 @@ export default defineConfig({
     },
   },
   server: { port: 1422, strictPort: true },
-  test: { root: source("./"), environment: "jsdom", setupFiles: source("./src/test/setup.ts"), include: ["src/demo/**/*.test.{ts,tsx}", "src/lib/runtime/*.test.ts"] },
+  test: { root: source("./"), environment: "jsdom", setupFiles: source("./src/test/setup.ts"), include: ["src/demo/**/*.test.{ts,tsx}", "src/onboarding/**/*.test.{ts,tsx}", "src/lib/runtime/*.test.ts"] },
 });
