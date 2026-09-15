@@ -36,7 +36,7 @@ describe("terminal image preview dialog", () => {
     expect(screen.getByRole("button", { name: "浅色" })).toHaveAttribute("aria-pressed", "true");
     fireEvent.click(screen.getByRole("button", { name: "Windows" }));
     fireEvent.click(screen.getByRole("button", { name: "深色" }));
-    await waitFor(() => expect(mocks.render).toHaveBeenLastCalledWith(request.snapshot, "windows", "dark"));
+    await waitFor(() => expect(mocks.render).toHaveBeenLastCalledWith(request.snapshot, "windows", "dark", 2));
     expect(document.documentElement.dataset.theme).toBe("cyberpunk");
     expect(screen.queryByText("主题", { exact: true })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "MacOS" })).toBeInTheDocument();
@@ -153,13 +153,89 @@ describe("terminal image preview dialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Windows" }));
     expect(screen.getByRole("img")).toBe(img);
     expect(img).toHaveAttribute("src", "blob:previous");
+    for (const name of ["保存 PNG", "复制图片"]) {
+      const button = screen.getByRole("button", { name });
+      expect(button).toHaveAttribute("data-available", "true");
+      expect(button).toBeDisabled();
+      fireEvent.click(button);
+    }
+    expect(mocks.save).not.toHaveBeenCalled();
+    expect(mocks.copy).not.toHaveBeenCalled();
     expect(previous.dispose).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: "保存 PNG" })).toBeDisabled();
     expect(screen.getByRole("region")).toHaveAttribute("aria-busy", "true");
     await act(async () => finish(image("blob:next")));
     expect(img).toHaveAttribute("src", "blob:next");
+    for (const name of ["保存 PNG", "复制图片"]) {
+      expect(screen.getByRole("button", { name })).toHaveAttribute("data-available", "true");
+      expect(screen.getByRole("button", { name })).toBeEnabled();
+    }
     expect(previous.dispose).toHaveBeenCalledOnce();
     expect(screen.getByRole("button", { name: "保存 PNG" })).toBeEnabled();
+  });
+
+  it("defaults to M, renders the chosen scale and retains it across appearance changes", async () => {
+    render(<TerminalImageExportDialog request={request} onClose={vi.fn()}/>);
+    await screen.findByRole("img");
+    const sizeShell = screen.getByRole("group", { name: "导出图片尺寸" }).parentElement!;
+    expect(sizeShell).toHaveClass("terminal-image-size-shell");
+    expect(sizeShell.firstElementChild).toHaveClass("terminal-image-size-caption");
+    expect(sizeShell.children[1]).toHaveClass("terminal-image-sizes");
+    expect(sizeShell.lastElementChild).toHaveClass("terminal-image-pixel-size");
+    const sizeControl = sizeShell.parentElement!;
+    expect(sizeControl.nextElementSibling).toHaveAttribute("data-action", "save");
+    expect(screen.getByText("尺寸")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "M" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByText("1620 × 196 px")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "S" }));
+    await waitFor(() => expect(mocks.render).toHaveBeenLastCalledWith(request.snapshot, "macos", "light", 1));
+    expect(screen.getByText("810 × 98 px")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "L" }));
+    fireEvent.click(screen.getByRole("button", { name: "Windows" }));
+    await waitFor(() => expect(mocks.render).toHaveBeenLastCalledWith(request.snapshot, "windows", "light", 3));
+    expect(screen.getByText("2430 × 294 px")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "L" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("falls back to S when M is too large and explains unavailable sizes without rendering them", async () => {
+    const large = { ...request, snapshot: { ...request.snapshot!, width: 1000, lines: Array.from({ length: 400 }, () => []) } };
+    render(<TerminalImageExportDialog request={large} onClose={vi.fn()}/>);
+    await screen.findByRole("img");
+    expect(mocks.render).toHaveBeenLastCalledWith(large.snapshot, "macos", "light", 1);
+    expect(screen.getByRole("button", { name: "S" })).toHaveAttribute("aria-pressed", "true");
+    const medium = screen.getByRole("button", { name: "M" });
+    expect(medium).toHaveAttribute("aria-disabled", "true");
+    fireEvent.focus(medium);
+    expect(await screen.findByRole("tooltip")).toHaveTextContent("超出图片尺寸限制");
+    fireEvent.click(medium);
+    fireEvent.click(screen.getByRole("button", { name: "L" }));
+    expect(mocks.render).toHaveBeenCalledOnce();
+  });
+
+  it("keeps the preview and button appearance stable while sizing and exports only the latest scale", async () => {
+    let finishSmall!: (value: RenderedTerminalImage) => void;
+    let finishLarge!: (value: RenderedTerminalImage) => void;
+    render(<TerminalImageExportDialog request={request} onClose={vi.fn()}/>);
+    const img = await screen.findByRole("img");
+    mocks.render.mockReturnValueOnce(new Promise<RenderedTerminalImage>(resolve => { finishSmall = resolve; }));
+    mocks.render.mockReturnValueOnce(new Promise<RenderedTerminalImage>(resolve => { finishLarge = resolve; }));
+    fireEvent.click(screen.getByRole("button", { name: "S" }));
+    fireEvent.click(screen.getByRole("button", { name: "L" }));
+    const save = screen.getByRole("button", { name: "保存 PNG" });
+    expect(save).toHaveAttribute("data-available", "true");
+    expect(save).toBeDisabled();
+    expect(screen.getByRole("img")).toBe(img);
+    const stale = image("blob:small");
+    await act(async () => finishSmall(stale));
+    expect(stale.dispose).toHaveBeenCalledOnce();
+    const latest = image("blob:large");
+    await act(async () => finishLarge(latest));
+    fireEvent.click(save);
+    await screen.findByText("图片已保存");
+    expect(mocks.save).toHaveBeenCalledWith(latest.blob);
+    fireEvent.click(screen.getByRole("button", { name: "复制图片" }));
+    await screen.findByText("图片已复制");
+    expect(mocks.copy).toHaveBeenCalledWith("blob:large");
   });
 
   it("handles oversized selections and render errors without enabling export", async () => {

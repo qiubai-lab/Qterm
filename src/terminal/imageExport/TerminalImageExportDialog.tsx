@@ -1,5 +1,7 @@
 import { useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
+import { TerminalImageSizePicker } from "./TerminalImageSizePicker";
+import { defaultImageScale } from "./terminalImageSizes";
 import { TerminalImageActionButton } from "./TerminalImageActionButton";
 import { DialogFrame } from "../../components/dialogs/DialogFrame";
 import { TerminalImagePreview } from "./TerminalImagePreview";
@@ -11,7 +13,8 @@ import { useTerminalImagePreview } from "./useTerminalImagePreview";
 export function TerminalImageExportDialog({ request, onClose }: { request: TerminalImageRequest; onClose: () => void }) {
   const [style, setStyle] = useState(request.style);
   const [theme, setTheme] = useState(request.theme);
-  const preview = useTerminalImagePreview(request.snapshot, style, theme);
+  const [scale, setScale] = useState(() => defaultImageScale(request.snapshot));
+  const preview = useTerminalImagePreview(request.snapshot, style, theme, scale);
   const error = request.error || preview.renderError;
   const busy = preview.operation !== null;
   return createPortal(<DialogFrame wide className="terminal-image-dialog" title="导出终端图片" subtitle={request.snapshot ? `${request.snapshot.lines.length} 行 · 保留原终端宽度` : "请选择需要导出的终端行"} onClose={onClose} headerActions={
@@ -34,12 +37,13 @@ export function TerminalImageExportDialog({ request, onClose }: { request: Termi
       <TerminalImagePreview image={preview.displayImage} error={error} pending={preview.pending} snapshot={request.snapshot} style={style} theme={theme}/>
     </div>
     <footer className="terminal-image-footer">
+      <TerminalImageSizePicker snapshot={request.snapshot} scale={scale} busy={busy} onChange={value => { preview.clearFeedback(); setScale(value); }}/>
       <div className="terminal-image-action" data-action="save">
-        <TerminalImageActionButton action="save" available={!!preview.image} operation={preview.operation} feedback={preview.feedback} onClick={() => void preview.run("save")}/>
+        <TerminalImageActionButton action="save" available={!!preview.image} refreshing={preview.pending && !!preview.displayImage} operation={preview.operation} feedback={preview.feedback} onClick={() => void preview.run("save")}/>
         {preview.feedback?.action === "save" && <TerminalImageFeedbackBubble key={preview.feedback.id} feedback={preview.feedback}/>}
       </div>
       <div className="terminal-image-action" data-action="copy">
-        <TerminalImageActionButton action="copy" available={!!preview.image} operation={preview.operation} feedback={preview.feedback} onClick={() => void preview.run("copy")}/>
+        <TerminalImageActionButton action="copy" available={!!preview.image} refreshing={preview.pending && !!preview.displayImage} operation={preview.operation} feedback={preview.feedback} onClick={() => void preview.run("copy")}/>
         {preview.feedback?.action === "copy" && <TerminalImageFeedbackBubble key={preview.feedback.id} feedback={preview.feedback}/>}
       </div>
     </footer>

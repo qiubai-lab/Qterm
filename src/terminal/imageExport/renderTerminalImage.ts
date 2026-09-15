@@ -1,6 +1,7 @@
 import type { AppTheme } from "../../lib/tauri/settings";
+import { applyTerminalImageCorners } from "./terminalImageCorners";
 import { drawImageChrome } from "./terminalImageChrome";
-import { IMAGE_HEADER_HEIGHT, IMAGE_SCALE, IMAGE_VERTICAL_PADDING, imageDimensions, type TerminalImageCell, type TerminalImageSnapshot, type TerminalImageStyle } from "./terminalImageModel";
+import { IMAGE_CORNER_RADIUS, IMAGE_HEADER_HEIGHT, IMAGE_SCALE, IMAGE_VERTICAL_PADDING, imageDimensions, type TerminalImageCell, type TerminalImageSnapshot, type TerminalImageStyle, type TerminalImageScale } from "./terminalImageModel";
 import { readImagePalette, resolveCellColor, type TerminalImagePalette } from "./terminalImageTheme";
 
 export interface RenderedTerminalImage {
@@ -11,14 +12,14 @@ export interface RenderedTerminalImage {
   dispose: () => void;
 }
 
-export async function renderTerminalImage(snapshot: TerminalImageSnapshot, style: TerminalImageStyle, theme: AppTheme): Promise<RenderedTerminalImage> {
+export async function renderTerminalImage(snapshot: TerminalImageSnapshot, style: TerminalImageStyle, theme: AppTheme, scale: TerminalImageScale = IMAGE_SCALE): Promise<RenderedTerminalImage> {
   if (document.fonts) {
     await Promise.all([document.fonts.load(`${snapshot.fontSize}px ${snapshot.fontFamily}`), document.fonts.load(`${snapshot.fontWeightBold} ${snapshot.fontSize}px ${snapshot.fontFamily}`)]);
     await document.fonts.ready;
   }
   const canvas = document.createElement("canvas");
   try {
-    paintTerminalImage(canvas, snapshot, style, readImagePalette(theme));
+    paintTerminalImage(canvas, snapshot, style, readImagePalette(theme), scale);
     const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob(value => value ? resolve(value) : reject(new Error("图片生成失败，请重试")), "image/png"));
     const url = URL.createObjectURL(blob);
     return { blob, url, width: canvas.width, height: canvas.height, dispose: () => URL.revokeObjectURL(url) };
@@ -28,20 +29,20 @@ export async function renderTerminalImage(snapshot: TerminalImageSnapshot, style
   }
 }
 
-export function paintTerminalImage(canvas: HTMLCanvasElement, snapshot: TerminalImageSnapshot, style: TerminalImageStyle, palette: TerminalImagePalette) {
-  const dimensions = imageDimensions(snapshot.width, snapshot.cellHeight, snapshot.lines.length);
+export function paintTerminalImage(canvas: HTMLCanvasElement, snapshot: TerminalImageSnapshot, style: TerminalImageStyle, palette: TerminalImagePalette, scale: TerminalImageScale = IMAGE_SCALE) {
+  const dimensions = imageDimensions(snapshot.width, snapshot.cellHeight, snapshot.lines.length, scale);
   canvas.width = dimensions.pixelWidth;
   canvas.height = dimensions.pixelHeight;
   const context = canvas.getContext("2d");
   if (!context) throw new Error("无法生成终端图片");
-  context.scale(IMAGE_SCALE, IMAGE_SCALE);
-  context.save();
-  context.beginPath();
-  context.roundRect(0, 0, snapshot.width, dimensions.height, style === "windows" ? 6 : 9);
-  context.clip();
+  context.scale(scale, scale);
+  // Paint onto an opaque, pixel-aligned rectangle first. Apply transparency once,
+  // after all layers, so overlapping fills cannot accumulate along the curved edge.
+  const width = canvas.width / scale;
+  const height = canvas.height / scale;
   context.fillStyle = palette.background;
-  context.fillRect(0, 0, snapshot.width, dimensions.height);
-  drawImageChrome(context, snapshot.width, style, palette);
+  context.fillRect(0, 0, width, height);
+  drawImageChrome(context, width, style, palette);
   const top = IMAGE_HEADER_HEIGHT + IMAGE_VERTICAL_PADDING;
   context.font = `${snapshot.fontWeight} ${snapshot.fontSize}px ${snapshot.fontFamily}`;
   const metrics = context.measureText("Mg");
@@ -71,11 +72,14 @@ export function paintTerminalImage(canvas: HTMLCanvasElement, snapshot: Terminal
     if (cell.strikethrough) strokeLine(context, x, y + baseline - ascent * 0.35, width);
     if (cell.overline) strokeLine(context, x, y + 1, width);
   }));
-  context.globalAlpha = 1;
-  context.restore();
+  context.globalAlpha = 0.55;
   context.strokeStyle = palette.border;
   context.lineWidth = 1;
-  context.beginPath(); context.roundRect(0.5, 0.5, snapshot.width - 1, dimensions.height - 1, style === "windows" ? 6 : 9); context.stroke();
+  context.beginPath();
+  context.roundRect(0.5, 0.5, width - 1, height - 1, IMAGE_CORNER_RADIUS - 0.5);
+  context.stroke();
+  context.globalAlpha = 1;
+  applyTerminalImageCorners(context, width, height, scale);
 }
 
 export function cellColors(cell: TerminalImageCell, snapshot: Pick<TerminalImageSnapshot, "brightBold">, palette: TerminalImagePalette) {

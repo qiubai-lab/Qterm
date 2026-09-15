@@ -29,7 +29,7 @@ export function captureTerminalImage(terminal: Terminal, geometry: TerminalImage
   const buffer = terminal.buffer.active;
   if (first < 0 || last < first || last >= buffer.length) throw new Error("选区已失效，请重新选择终端行");
   const rows = last - first + 1;
-  imageDimensions(geometry.width, geometry.cellHeight, rows);
+  imageDimensions(geometry.width, geometry.cellHeight, rows, 1);
   if (rows * terminal.cols > 500_000) throw new Error("选中内容过长，请减少行数后重新导出");
   const lines = [];
   const reusable = buffer.getNullCell();

@@ -122,7 +122,7 @@
 - `src/app/`：负责顶层布局、feature 组合与应用级预设主题生命周期；不承载认证、连接或传输规则。
 - `src/workspace/`：负责工作区结构模型、布局树变换、顶部 Workspace 导航、按连接的有界 Git 仓库历史和 block runtime 编排；不读取本地文件、验证仓库有效性或实现 SSH/SFTP。
 - `src/terminal/`：负责 xterm 实例及终端 I/O 适配；不持久化 buffer 或拥有 Workspace 生命周期。
-- `src/terminal/imageExport/`：负责选中完整行的固定宽度快照、系统主题采样、终端外框与图片绘制、预览及导出状态；不修改 live buffer、应用主题或会话。`TerminalContextMenu.tsx` 拥有终端菜单展示和菜单键盘导航，`TerminalPanel.tsx` 只组合导出入口。
+- `src/terminal/imageExport/`：负责选中完整行的固定宽度快照、系统主题采样、终端外框与图片绘制、S/M/L（1×/2×/3×）尺寸档位与像素上限、预览及导出状态；不修改 live buffer、应用主题或会话。`TerminalContextMenu.tsx` 拥有终端菜单展示和菜单键盘导航，`TerminalPanel.tsx` 只组合导出入口。
 - `src/lib/tauri/terminalImage.ts`、`src-tauri/src/commands/terminal_image.rs`、`src-tauri/src/infrastructure/terminal_image.rs`：分别负责 PNG 原始字节 IPC、原生保存路径选择与错误映射、PNG 有界校验及原子落盘；不接受前端指定的任意保存路径，不接管文件传输或终端会话。
 - `src/files/`：负责内部文件窗口展示、导航、下载反馈与瞬时预览编辑状态；不直接访问本地文件系统或 SSH infrastructure。
 - `src/editor/`：负责跨 feature 的编辑器语言识别、解析器适配和异步加载生命周期；不读取文件、不计算 Git 差异，也不拥有 feature 编辑状态或后端能力。

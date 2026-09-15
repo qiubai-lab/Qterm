@@ -66,6 +66,15 @@ describe("terminal image row snapshots", () => {
     expect(line.filter(cell => cell.background.mode === "palette")).toHaveLength(2);
   });
 
+  it("allows long selections that fit S even when the default M resolution exceeds the limit", async () => {
+    const terminal = await fixture(Array.from({ length: 400 }, () => "line").join("\r\n"), 100);
+    select(terminal, 0, 0, 4, 399);
+    const snapshot = captureTerminalImage(terminal, { ...geometry, width: 1000 });
+    expect(snapshot.lines).toHaveLength(400);
+    expect(() => imageDimensions(1000, 16, 400, 2)).toThrow("减少行数");
+    expect(imageDimensions(1000, 16, 400, 1).pixelHeight).toBe(6466);
+  });
+
   it("rejects missing or stale selections and oversized images without truncating", async () => {
     const terminal = await fixture("line");
     vi.spyOn(terminal, "getSelectionPosition").mockReturnValue(undefined);
