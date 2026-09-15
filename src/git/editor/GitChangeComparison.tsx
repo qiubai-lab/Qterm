@@ -71,7 +71,7 @@ export function GitChangeComparison({ before, after, beforeLabel, afterLabel, la
       b: { doc: after, extensions: comparisonExtensions(languageSupport, afterLabel) },
       parent: host.current,
       orientation: "a-b",
-      highlightChanges: true,
+      highlightChanges: false,
       gutter: true,
       diffConfig: { timeout: 250 },
     });

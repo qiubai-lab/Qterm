@@ -50,6 +50,20 @@ describe("GitChangeComparison", () => {
     expect(editors.every((editor) => editor.querySelectorAll(".cm-lineNumbers .cm-gutterElement:not([style*='visibility: hidden'])").length === 1)).toBe(true);
   });
 
+  it("keeps line-level change markers without character-level underlines", async () => {
+    const view = render(<GitChangeComparison
+      before={"shared\nbefore\n"}
+      after={"shared\nafter\n"}
+      beforeLabel="HEAD"
+      afterLabel="工作区"
+      language="text"
+    />);
+
+    await waitFor(() => expect(view.container.querySelectorAll(".cm-changedLine").length).toBeGreaterThan(0));
+    expect(view.container.querySelector(".cm-changedText")).not.toBeInTheDocument();
+    expect(view.container.querySelectorAll(".cm-changedLineGutter").length).toBeGreaterThan(0);
+  });
+
   it("loads the selected language parser into both diff panes", async () => {
     const view = render(<GitChangeComparison
       before={"const beforeValue = 1;\n"}
