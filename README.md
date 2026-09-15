@@ -9,8 +9,8 @@
   </p>
   <p>
     <a href="https://qiubai-lab.github.io/Qterm/">官网</a> ·
-    <a href="https://qiubai-lab.github.io/Qterm/demo/">在线演示</a> ·
-    <a href="https://github.com/qiubai-lab/Qterm/releases/latest">下载安装</a>
+    <a href="https://qiubai-lab.github.io/Qterm/demo/">在线体验</a> ·
+    <a href="https://qiubai-lab.github.io/Qterm/#install">安装</a>
   </p>
 </div>
 
