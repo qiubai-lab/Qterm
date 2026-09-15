@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { AppThemeProvider } from "../app/theme/AppThemeProvider";
 import { ThemedTitleTooltipProvider } from "../components/ThemedTitleTooltipProvider";
 import { WorkspaceProvider } from "../workspace/WorkspaceProvider";
@@ -12,18 +12,16 @@ import "../app/app.css";
 import "./demo.css";
 
 export default function DemoApp() {
-  const [generation, setGeneration] = useState(0);
   useEffect(() => {
     // BFCache resumes must not leave a mounted UI referring to closed sessions.
     const leave = (event: PageTransitionEvent) => { if (!event.persisted) resetDemo(); };
     window.addEventListener("pagehide", leave);
     return () => { window.removeEventListener("pagehide", leave); resetDemo(); };
   }, []);
-  function reset() { resetDemo(); setGeneration(value => value + 1); }
   return <AppThemeProvider><ThemedTitleTooltipProvider>
-    <div className="demo-page">
-      <nav className="demo-navigation" aria-label="站点导航"><a href={import.meta.env.BASE_URL}>← Qterm</a><span>在线体验</span><a href="https://github.com/qiubai-lab/Qterm/releases/latest" target="_blank" rel="noreferrer">下载桌面版 ↗</a></nav>
-      <div className="demo-presentation"><WorkspaceProvider key={generation}><DemoWorkbench onReset={reset}/><TerminalExternalLinkConfirmationHost/></WorkspaceProvider></div>
+    <div className="demo-page" data-demo-theme="cyberpunk">
+      <nav className="demo-navigation" aria-label="站点导航"><div className="demo-brand"><a href={import.meta.env.BASE_URL} aria-label="返回 Qterm 首页"><span aria-hidden="true">›_</span> Qterm</a><span>在线体验</span></div><a href="https://github.com/qiubai-lab/Qterm/releases/latest" target="_blank" rel="noreferrer">下载桌面版 ↗</a></nav>
+      <div className="demo-presentation"><WorkspaceProvider><DemoWorkbench/><TerminalExternalLinkConfirmationHost/></WorkspaceProvider></div>
     </div>
   </ThemedTitleTooltipProvider></AppThemeProvider>;
 }

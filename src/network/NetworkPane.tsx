@@ -9,7 +9,7 @@ import { createNetworkRule, deleteNetworkRule, listNetworkRules, updateNetworkRu
 import { NetworkAccessDialog } from "./NetworkAccessDialog";
 import { NetworkRuleDialog } from "./NetworkRuleDialog";
 import { NetworkRuleTypeDialog } from "./NetworkRuleTypeDialog";
-import { hasWorkspaceRuntime, isDemo } from "../lib/runtime/environment";
+import { hasWorkspaceRuntime } from "../lib/runtime/environment";
 import type { NetworkRuleType } from "./networkRuleTypes";
 
 const NETWORK_RULES_CHANGED_EVENT = "qterm:network-rules-changed";
@@ -130,7 +130,6 @@ export function NetworkPane({ profileId, profileHost = "", runtimeStates = {}, l
   if (!profileId) return <div className="network-empty"><Icon name="network" size={28}/><strong>选择远程连接</strong><p>网络规则按连接配置保存。选择连接后即可创建端口转发或 SOCKS5 代理。</p></div>;
 
   return <div className="network-pane">
-    {isDemo && <div className="network-inline-error" role="note">模拟环境：启停仅改变演示状态，没有建立真实隧道或代理。</div>}
     <div className="network-toolbar"><div className="network-toolbar-summary"><strong>网络实例</strong><span>{rules.length} 条配置 · 默认停止</span></div><button className="network-create-button" aria-label="创建网络实例" title="创建网络实例" onClick={() => setChoosingType(true)}><Icon name="plus" size={12}/></button></div>
     {message && <div className="network-inline-error" role="alert">{message}</div>}
     <OverlayScrollArea className="network-rule-list-scroll-area" viewportClassName={`network-rule-list${!loading && rules.length === 0 ? " empty" : ""}`} viewportProps={{ role: "list", "aria-busy": loading }} trackInsets={{ right: 3, bottom: 3 }}>

@@ -42,7 +42,7 @@ export class DemoTerminalSession {
 
   start() {
     this.emit("\x1b[36mQterm · 交互演示\x1b[0m\r\n");
-    this.emit("这是虚构环境，输入 help 查看命令。\r\n\r\n");
+    this.emit("\r\n");
     this.reportCwd();
     this.prompt();
   }

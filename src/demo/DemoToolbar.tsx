@@ -1,33 +1,41 @@
+import type { CSSProperties, KeyboardEvent } from "react";
 import { useAppTheme } from "../app/theme/AppThemeProvider";
-import { Button } from "../components/Button";
 import { useWorkspace } from "../workspace/WorkspaceProvider";
 import type { AppTheme } from "../lib/tauri/settings";
 import { blockIds, findLeaf } from "../workspace/layout";
 
-export function DemoToolbar({ onReset, onHelp, onConnections }: { onReset: () => void; onHelp: () => void; onConnections: () => void }) {
+const themes: { value: AppTheme; label: string }[] = [
+  { value: "dark", label: "深色" },
+  { value: "light", label: "浅色" },
+  { value: "cyberpunk", label: "赛博" },
+];
+
+export function DemoToolbar() {
   const { theme, commitTheme } = useAppTheme();
-  const { activeBlockId, activeWorkspace, dispatch, runtimes, writeBlock } = useWorkspace();
-  const ready = runtimes[activeBlockId]?.status === "connected";
+  const { activeBlockId, activeWorkspace, dispatch } = useWorkspace();
   const blocks = blockIds(activeWorkspace.layout).map(id => findLeaf(activeWorkspace.layout, id)!).filter(Boolean);
-  async function run(command: string) {
-    await writeBlock(activeBlockId, new TextEncoder().encode(`\x03${command}\r`));
-    document.querySelector<HTMLElement>(`[data-layout-block="${activeBlockId}"] .xterm-helper-textarea`)?.focus();
+  const selected = themes.findIndex(option => option.value === theme);
+  function navigate(event: KeyboardEvent<HTMLButtonElement>, index: number) {
+    const next = event.key === "Home" ? 0 : event.key === "End" ? 2
+      : ["ArrowRight", "ArrowDown"].includes(event.key) ? (index + 1) % 3
+        : ["ArrowLeft", "ArrowUp"].includes(event.key) ? (index + 2) % 3 : null;
+    if (next === null) return;
+    event.preventDefault();
+    commitTheme(themes[next].value);
+    event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>("button")[next].focus();
   }
   return <div className="demo-toolbar">
-    <div className="demo-samples" role="group" aria-label="示例命令">
-      <span>试一试</span>
-      <Button size="compact" disabled={!ready} onClick={() => void run("npm run build")}>构建项目</Button>
-      <Button size="compact" disabled={!ready} onClick={() => void run("tail -f /home/demo/qterm/logs/app.log")}>实时日志</Button>
-      <Button size="compact" disabled={!ready} onClick={() => void run("git status")}>Git 状态</Button>
+    <div className="demo-themes" role="radiogroup" aria-label="演示主题" style={{ "--theme-index": selected } as CSSProperties}>
+      <span className="demo-theme-indicator" aria-hidden="true"/>
+      {themes.map((option, index) => <button key={option.value} type="button" role="radio"
+        aria-checked={theme === option.value} tabIndex={theme === option.value ? 0 : -1}
+        onClick={() => commitTheme(option.value)} onKeyDown={event => navigate(event, index)}>
+        <span className="demo-theme-swatch" data-theme={option.value} aria-hidden="true"/>{option.label}
+      </button>)}
     </div>
-    <div className="demo-preferences">
-      <label className="demo-block-switch">视图<select aria-label="手机视图" value={activeBlockId} onChange={event => dispatch({ type: "selectBlock", workspaceId: activeWorkspace.id, blockId: event.target.value })}>{blocks.map((block, index) => <option key={block.blockId} value={block.blockId}>{block.type === "terminal" ? "终端" : block.type === "files" ? "文件" : block.type === "git" ? "Git" : "网络"} {index + 1}</option>)}</select></label>
-      <label className="demo-theme-label">主题<select aria-label="演示主题" value={theme} onChange={event => commitTheme(event.target.value as AppTheme)}>
-        <option value="dark">深色</option><option value="light">浅色</option><option value="cyberpunk">赛博朋克</option>
-      </select></label>
-      <Button size="compact" onClick={onHelp}>体验指南</Button>
-      <Button size="compact" onClick={onConnections}>演示连接</Button>
-      <Button size="compact" onClick={() => { commitTheme("dark"); onReset(); }}>重置演示</Button>
-    </div>
+    <select className="demo-block-switch" aria-label="手机视图" value={activeBlockId}
+      onChange={event => dispatch({ type: "selectBlock", workspaceId: activeWorkspace.id, blockId: event.target.value })}>
+      {blocks.map((block, index) => <option key={block.blockId} value={block.blockId}>{block.type === "terminal" ? "终端" : block.type === "files" ? "文件" : block.type === "git" ? "Git" : "网络"} {index + 1}</option>)}
+    </select>
   </div>;
 }

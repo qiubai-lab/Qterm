@@ -1,8 +1,9 @@
 import type * as Desktop from "../../lib/tauri/network";
 import { featureTarget, openFeatureSession } from "../featureSessions";
 import { demoProfiles } from "../fixtures";
+import { createDemoNetworkRules } from "../networkFixtures";
 export type * from "../../lib/tauri/network";
-const rules = new Map<string, Desktop.NetworkRule>();
+const rules = new Map<string, Desktop.NetworkRule>(createDemoNetworkRules().map(rule => [rule.id, rule]));
 function validate(input: Desktop.NetworkRuleInput) {
   if (!demoProfiles.some(profile => profile.id === input.profileId)) throw new Error("请选择虚构演示连接。");
   if (!input.name.trim() || !input.bindHost.trim() || !Number.isInteger(input.bindPort) || input.bindPort < 1 || input.bindPort > 65535) throw new Error("请填写有效规则名称、监听地址和端口。");
@@ -18,4 +19,4 @@ export const startNetworkRule: typeof Desktop.startNetworkRule = async (sessionI
   if (rules.get(ruleId)?.profileId !== profileId) throw new Error("规则与当前演示连接不匹配。");
 };
 export const stopNetworkRule: typeof Desktop.stopNetworkRule = async (sessionId, ruleId) => { featureTarget(sessionId, "network"); if (rules.get(ruleId)?.profileId !== featureTarget(sessionId, "network")) throw new Error("规则与当前演示连接不匹配。"); };
-export function resetDemoNetwork() { rules.clear(); }
+export function resetDemoNetwork() { rules.clear(); for (const rule of createDemoNetworkRules()) rules.set(rule.id, rule); }

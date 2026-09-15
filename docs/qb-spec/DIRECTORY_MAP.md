@@ -15,7 +15,7 @@
 
 - `vite.site.config.ts`、`.github/workflows/site.yml`、`scripts/check-site.mjs`、`docs/browser-demo.md`：站点多页构建、Pages 发布、子路径资源与 desktop/demo 产物隔离检查及操作说明；不改原 Tauri 打包入口。Pages 发布由仓库变量显式启用。
 - `src/lib/runtime/environment.ts`、`@qterm/services/*`：显式 build-selected workspace/terminal service 边界，默认选择现有 Tauri adapters，仅 site 选择模拟服务；不伪造原生环境、不自动降级。
-- `src/demo/`：DemoApp/DemoWorkbench 只拥有站点外壳、场景入口、重置和虚构连接路由；通过相同 LayoutView 与 Files/Git/Network 产品面板消费 build-selected services。demoProject 拥有按目标隔离的文件/Git 模拟后端，demoGitAdapter 映射产品 Git 快照，terminalSession/sessionRegistry 拥有终端模拟任务，featureSessions 拥有按用途与目标隔离的非终端模拟连接；services 适配原 typed service 契约，未支持操作明确拒绝。WorkspaceProvider 仍唯一拥有 UI runtime，不另建 Demo 功能页面。
+- `src/demo/`：DemoApp/DemoWorkbench 只拥有站点外壳、主题分段控件、刷新清理和虚构连接路由；通过相同 LayoutView 与 Files/Git/Network 产品面板消费 build-selected services。demoProject 拥有按目标隔离的文件/Git 模拟后端，demoGitAdapter 映射产品 Git 快照，terminalSession/sessionRegistry 拥有终端模拟任务，featureSessions 拥有按用途与目标隔离的非终端模拟连接；networkFixtures 提供开发服务器的三类网络种子，services 适配原 typed service 契约，未支持操作明确拒绝。WorkspaceProvider 仍唯一拥有 UI runtime，不另建 Demo 功能页面。
 - `src/site/site.css`：静态介绍页的独立布局，复用产品主题 token，不导入应用运行时。
 
 - `native/conpty/`：G0 隔离原型的上游版本锁、MIT 许可与原生输出边界补丁；`scripts/build-conpty-prototype.ps1` 构建未发布的测试 host，`scripts/conpty-ordered-probe-consumer.mjs` 只供真实 PTY 探针消费 QTR0 帧。尚未作为生产 runtime 或应用 IPC 协议接线。
@@ -163,3 +163,5 @@
 - `scripts/`：禁止 shell 字符串拼接、用户数据读写和业务规则；只能调用仓库锁定的工具并保留参数边界。
 
 - `scripts/tauri-dev-runner.mjs`：macOS 开发 bundle 构造、完整 ad-hoc 签名及进程启动；签名 identity 与 Info.dev.plist 一致，保证原生通知服务识别真实应用身份。
+
+- `src/workspace/WorkspaceUtilityRail.tsx`：共享桌面与 Demo 的工具项名称、图标、顺序及布局；桌面注入操作和状态，Demo 仅为文件、网络、Git 和终端传入 controls，其余禁用并提示尚未开放。该组件不拥有工具业务逻辑。

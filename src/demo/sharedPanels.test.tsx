@@ -46,7 +46,8 @@ it.runIf(isDemo)("uses the product document view, search, dirty guard and save c
 it.runIf(isDemo)("uses the product Network creation dialog with simulated services", async () => {
   const start = vi.fn(); const stop = vi.fn();
   const pane = render(<NetworkPane profileId={demoProfiles[0].id} onStart={start} onStop={stop}/>);
-  expect(screen.getByRole("note")).toHaveTextContent("没有建立真实隧道");
+  expect(screen.queryByText(/模拟环境：启停/)).not.toBeInTheDocument();
+  expect(await screen.findByRole("switch", { name: "启动 Web 开发服务" })).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "创建网络实例" }));
   expect(await screen.findByRole("dialog")).toHaveTextContent("SOCKS5");
   fireEvent.click(screen.getByRole("button", { name: /^SOCKS5/ }));
@@ -54,7 +55,7 @@ it.runIf(isDemo)("uses the product Network creation dialog with simulated servic
   fireEvent.click(screen.getByRole("button", { name: "保存规则" }));
   fireEvent.click(await screen.findByRole("switch", { name: "启动 Shared SOCKS" }));
   expect(start).toHaveBeenCalledOnce();
-  const [rule] = await listNetworkRules(demoProfiles[0].id);
+  const rule = (await listNetworkRules(demoProfiles[0].id)).find(rule => rule.name === "Shared SOCKS")!;
   pane.rerender(<NetworkPane profileId={demoProfiles[0].id} onStart={start} onStop={stop} runtimeStates={{ [rule.id]: "running" }}/>);
   fireEvent.click(screen.getByRole("switch", { name: "停止 Shared SOCKS" })); expect(stop).toHaveBeenCalledOnce();
   fireEvent.click(screen.getByRole("button", { name: "打开 Shared SOCKS 代理工具" }));

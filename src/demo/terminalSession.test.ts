@@ -15,6 +15,18 @@ describe("simulated terminal behavior", () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => { vi.useRealTimers(); resetDemoProjects(); });
 
+  it("keeps startup brief and shows help only when requested", () => {
+    const client = session();
+    expect(client.text()).not.toContain("可体验命令");
+    const before = client.text();
+    client.write("\x1b[A\r");
+    expect(client.text().slice(before.length)).not.toContain("可体验命令");
+    expect(client.terminal.cwd).toBe(DEMO_HOME);
+    client.write("help\r");
+    expect(client.text()).toContain("可体验命令");
+    client.terminal.close();
+  });
+
   it("shares project edits between terminals on one target and isolates another target", () => {
     const target = "demo-development";
     const first = session(target); const second = session(target); const staging = session("demo-staging");

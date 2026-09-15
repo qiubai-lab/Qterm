@@ -9,7 +9,7 @@ export const loadWorkspaces: typeof Desktop.loadWorkspaces = async () => {
   const terminal = workspace.layout;
   if (terminal.type === "terminal") {
     terminal.restoreDirectory = DEMO_HOME;
-    if (new URLSearchParams(location.search).get("scene") === "remote") terminal.profileId = "demo-development";
+    if (new URLSearchParams(location.search).get("scene") !== "local") terminal.profileId = "demo-development";
   }
   return document;
 };

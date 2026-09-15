@@ -1,10 +1,11 @@
+import { WorkspaceUtilityRail } from "./WorkspaceUtilityRail";
 import { WorkspaceTabs } from "./WorkspaceTabs";
 import { type CloseRequest } from "./workspaceClose";
 import { focusWorkspaceBlock, findBlockType } from "./workspaceFocus";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 
 import { resolveAppShortcut } from "../app/shortcuts";
-import { Icon, type IconName } from "../components/Icon";
+import { Icon } from "../components/Icon";
 import { ConnectionDialog } from "../components/dialogs/ConnectionDialog";
 import { CredentialDialog } from "../components/dialogs/CredentialDialog";
 import { DialogFrame } from "../components/dialogs/DialogFrame";
@@ -515,25 +516,18 @@ export function WorkspaceShell() {
             return <div key={workspace.id} className={`workspace-canvas-stage${visible ? " visible" : ""}${transitionDirection ? ` workspace-transition-${transitionDirection}` : ""}`} aria-hidden={!visible}><WorkspaceCanvas workspace={workspace} visible={visible} localTerminalAttention={localTerminalAttentionWorkspaceId === workspace.id} remoteShellIntegrationEnabled={remoteShellIntegrationEnabled} terminalSettingsReady={terminalSettingsReady} onRequestClose={closeBlock} onRequestDisconnect={(owner, blockId, name, local) => setDisconnectRequest({ owner, blockId, name, local })} onRequestAuthConnection={(owner, blockId, profile) => void requestConfiguredConnection(owner, blockId, profile)} onOpenConnectionManager={() => setTool("connections")}/></div>;
           })}
         </div>
-        <aside className="utility-rail" aria-label="工具">
-          <RailButton tool="connections" icon="computer" label="连接管理" active={tool === "connections"} onClick={setTool}/>
-          <RailButton tool="credentials" icon="key" label="凭证管理" active={tool === "credentials"} onClick={setTool}/>
-          <RailActionButton icon="files" label="文件管理" onClick={() => dispatch(openFileWindowAction(activeWorkspace, runtimes, remoteShellIntegrationEnabled))}/>
-          <RailActionButton icon="network" label="网络管理" onClick={() => dispatch(openNetworkWindowAction(activeWorkspace))}/>
-          <RailActionButton icon="git" label="Git 管理" onClick={() => dispatch(openGitWindowAction(activeWorkspace, runtimes))}/>
-          <RailActionButton icon="terminal" label="打开终端" onClick={() => splitTerminalBlock(activeWorkspace.id, activeWorkspace.activeBlockId, "horizontal", remoteShellIntegrationEnabled)}/>
-          <span className="rail-spacer"/>
-          <RailActionButton icon="lock" label="锁定终端" accessibleLabel={terminalLockLabel} title={terminalLockLabel} disabled={!vaultStatus?.initialized || vaultStatus.legacy || vaultLockBusy} onClick={() => { setVaultLockError(""); setLockChoiceOpen(true); }}/>
-          <RailButton tool="settings" icon="settings" label="系统设置" active={tool === "settings"} onClick={setTool}/>
-          <RailButton
-            tool="help"
-            icon="help"
-            label="关于"
-            active={tool === "help"}
-            notice={availableUpdateVersion ? `发现新版本 v${availableUpdateVersion}` : undefined}
-            onClick={(next) => { setAvailableUpdateVersion(null); setTool(next); }}
-          />
-        </aside>
+        <WorkspaceUtilityRail controls={{
+          connections: { active: tool === "connections", onClick: () => setTool(tool === "connections" ? null : "connections") },
+          credentials: { active: tool === "credentials", onClick: () => setTool(tool === "credentials" ? null : "credentials") },
+          files: { onClick: () => dispatch(openFileWindowAction(activeWorkspace, runtimes, remoteShellIntegrationEnabled)) },
+          network: { onClick: () => dispatch(openNetworkWindowAction(activeWorkspace)) },
+          git: { onClick: () => dispatch(openGitWindowAction(activeWorkspace, runtimes)) },
+          terminal: { onClick: () => splitTerminalBlock(activeWorkspace.id, activeWorkspace.activeBlockId, "horizontal", remoteShellIntegrationEnabled) },
+          lock: { accessibleLabel: terminalLockLabel, title: terminalLockLabel, disabled: !vaultStatus?.initialized || vaultStatus.legacy || vaultLockBusy, onClick: () => { setVaultLockError(""); setLockChoiceOpen(true); } },
+          settings: { active: tool === "settings", onClick: () => setTool(tool === "settings" ? null : "settings") },
+          help: { active: tool === "help", notice: availableUpdateVersion ? `发现新版本 v${availableUpdateVersion}` : undefined, onClick: () => { setAvailableUpdateVersion(null); setTool(tool === "help" ? null : "help"); } },
+        }}/>
+
       </div>
       {terminalLocked && (
         <TerminalLockScreen onUnlocked={() => {
@@ -585,14 +579,6 @@ export function WorkspaceShell() {
 
 function isInteractiveTitlebarTarget(target: EventTarget): boolean {
   return target instanceof Element && Boolean(target.closest("button,input,[data-workspace-id]"));
-}
-
-function RailButton({ tool, icon, label, active, notice, onClick }: { tool: Tool; icon: IconName; label: string; active: boolean; notice?: string; onClick: (tool: Tool | null) => void }) {
-  return <button className={`rail-button${active ? " active" : ""}${notice ? " update-attention" : ""}`} aria-label={notice ? `${label}，${notice}` : label} title={notice} aria-pressed={active} onClick={() => onClick(active ? null : tool)}><Icon name={icon}/><span className="rail-button-label">{label}</span></button>;
-}
-
-function RailActionButton({ icon, label, accessibleLabel = label, title, disabled = false, onClick }: { icon: IconName; label: string; accessibleLabel?: string; title?: string; disabled?: boolean; onClick: () => void }) {
-  return <button className="rail-button" aria-label={accessibleLabel} title={title} disabled={disabled} onClick={onClick}><Icon name={icon}/><span className="rail-button-label">{label}</span></button>;
 }
 
 function errorMessage(error: unknown): string {

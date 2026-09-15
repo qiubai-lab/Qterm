@@ -38,11 +38,14 @@ it("cancels pending connection events and refuses unsupported native operations"
 });
 
 it("isolates network rules and resets their in-memory persistence", async () => {
+  const defaults = await network.listNetworkRules(input.profileId);
+  expect(defaults.map(rule => rule.type)).toEqual(["local", "remote", "socks5"]);
+  await network.deleteNetworkRule(defaults[0].id);
   const rule = await network.createNetworkRule({ profileId: input.profileId, type: "socks5", name: "Demo SOCKS", bindHost: "127.0.0.1", bindPort: 1080 });
   const id = await network.connectNetworkSession(input, vi.fn());
   await network.startNetworkRule(id, rule.id); await network.stopNetworkRule(id, rule.id);
   expect(await network.listNetworkRules(demoProfiles[1].id)).toEqual([]);
   const other = await network.connectNetworkSession({ ...input, profileId: demoProfiles[1].id }, vi.fn());
   await expect(network.startNetworkRule(other, rule.id)).rejects.toThrow("不匹配");
-  network.resetDemoNetwork(); expect(await network.listNetworkRules()).toEqual([]);
+  network.resetDemoNetwork(); expect(await network.listNetworkRules()).toEqual(defaults);
 });
