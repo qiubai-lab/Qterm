@@ -12,6 +12,7 @@ pub mod network;
 pub mod profile;
 pub mod session;
 pub mod settings;
+pub mod terminal_image;
 pub mod transfer;
 pub mod workspace;
 

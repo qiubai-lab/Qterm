@@ -317,6 +317,7 @@ pub fn run() {
             notification_settings_get,
             notification_settings_update,
             terminal_notification_send,
+            commands::terminal_image::terminal_image_save,
             notification_body_settings_get,
             notification_body_settings_update,
             settings_update_terminal,

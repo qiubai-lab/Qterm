@@ -7,5 +7,6 @@ pub(crate) mod git_execution;
 pub mod local;
 pub mod persistence;
 pub mod ssh;
+pub(crate) mod terminal_image;
 
 pub mod notifications;

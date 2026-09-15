@@ -22,7 +22,7 @@
     "src/git/styles/gitRepositoryPicker.css": 486,
     "src/git/styles/gitShell.css": 824,
     "src/terminal/TerminalPanel.test.tsx": 889,
-    "src/terminal/TerminalPanel.tsx": 764,
+    "src/terminal/TerminalPanel.tsx": 729,
     "src/workspace/LayoutView.test.tsx": 808,
     "src/workspace/LayoutView.tsx": 655,
     "src/workspace/WorkspaceShell.tsx": 612

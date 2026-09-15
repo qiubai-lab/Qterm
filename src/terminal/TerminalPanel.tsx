@@ -5,7 +5,7 @@ import type { ISearchOptions } from "@xterm/addon-search";
 import { Terminal } from "@xterm/xterm";
 import { writeText as writeClipboardText } from "@tauri-apps/plugin-clipboard-manager";
 import "@xterm/xterm/css/xterm.css";
-import { resolveAppShortcut, shortcutLabel } from "../app/shortcuts";
+import { resolveAppShortcut } from "../app/shortcuts";
 import { DialogFrame } from "../components/dialogs/DialogFrame";
 import { ExactTextInput } from "../components/ExactTextInput";
 import { Icon } from "../components/Icon";
@@ -25,6 +25,9 @@ import { terminalOsc8LinkHandler } from "./terminalOsc8Link";
 import { createTerminalWebLinksAddon } from "./terminalWebLinks";
 import { ensureTerminalSearch, type TerminalSearchHost } from "./terminalSearch";
 import { bindTerminalTheme, readTerminalSearchColors, readTerminalTheme } from "./terminalTheme";
+import { TerminalContextMenu } from "./TerminalContextMenu";
+import { TerminalImageExportDialog } from "./imageExport/TerminalImageExportDialog";
+import { useTerminalImageExport } from "./imageExport/useTerminalImageExport";
 import { registerTerminalController } from "./terminalViewRegistry";
 import {
   TerminalStagingStatus,
@@ -123,6 +126,8 @@ export function TerminalPanel({ blockId, sessionKey, visible, local, osc7Enabled
   const restoreTerminalFocus = useCallback(() => {
     window.requestAnimationFrame(() => viewRef.current?.terminal.focus());
   }, []);
+
+  const imageExport = useTerminalImageExport(viewRef, containerRef, sessionKey, restoreTerminalFocus);
 
   const closeContextMenu = useCallback((restoreFocus = true) => {
     setContextMenu(null);
@@ -489,22 +494,6 @@ export function TerminalPanel({ blockId, sessionKey, visible, local, osc7Enabled
     setContextMenu({ anchorX, anchorY, x: anchorX, y: anchorY, placement: "below", hasSelection: viewRef.current?.terminal.hasSelection() ?? false });
   }
 
-  function handleMenuKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
-    const items = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>("[role='menuitem']:not(:disabled)"));
-    if (items.length === 0) return;
-    const index = items.indexOf(document.activeElement as HTMLButtonElement);
-    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-      event.preventDefault();
-      const offset = event.key === "ArrowDown" ? 1 : -1;
-      items[(index + offset + items.length) % items.length]?.focus();
-    } else if (event.key === "Home" || event.key === "End") {
-      event.preventDefault();
-      items[event.key === "Home" ? 0 : items.length - 1]?.focus();
-    } else if (event.key === "Tab") {
-      closeContextMenu();
-    }
-  }
-
   function confirmPaste() {
     if (!pendingPaste || !inputEnabled) return;
     const view = viewRef.current;
@@ -550,25 +539,9 @@ export function TerminalPanel({ blockId, sessionKey, visible, local, osc7Enabled
       </span>
       <button className="terminal-search-close" type="button" aria-label="关闭搜索" onClick={closeSearch}><Icon name="close" size={12}/></button>
     </div>}
-    {contextMenu && createPortal(<div
-      ref={menuRef}
-      className="terminal-context-menu"
-      data-placement={contextMenu.placement}
-      role="menu"
-      aria-label="终端菜单"
-      style={{ left: contextMenu.x, top: contextMenu.y }}
-      onContextMenu={(event) => event.preventDefault()}
-      onKeyDown={handleMenuKeyDown}
-    >
-      <button role="menuitem" disabled={!contextMenu.hasSelection} onClick={() => void copySelection()}><span>复制</span><kbd>{copyShortcutLabel(clipboardPlatform)}</kbd></button>
-      <button role="menuitem" disabled={!inputEnabled} onClick={() => void requestPaste()}><span>粘贴</span><kbd>{pasteShortcutLabel(clipboardPlatform)}</kbd></button>
-      <div className="terminal-context-menu-separator" role="separator"/>
-      <button role="menuitem" onClick={openSearch}><span>搜索</span><kbd>{shortcutLabel("searchTerminal", desktopPlatform)}</kbd></button>
-      <div className="terminal-context-menu-separator" role="separator"/>
-      <button role="menuitem" onClick={selectAll}><span>全选</span></button>
-      <div className="terminal-context-menu-separator" role="separator"/>
-      <button role="menuitem" onClick={clearBuffer}><span>清除终端缓冲区</span></button>
-    </div>, document.body)}
+    {contextMenu && <TerminalContextMenu state={contextMenu} menuRef={menuRef} platform={desktopPlatform} canPaste={inputEnabled} close={closeContextMenu}
+      actions={{ copy: copySelection, paste: requestPaste, search: openSearch, selectAll, clear: clearBuffer, exportImage: () => { closeContextMenu(false); imageExport.open(); } }}/>}
+    {imageExport.request && <TerminalImageExportDialog request={imageExport.request} onClose={imageExport.close}/>}
     {pendingPaste && createPortal(<DialogFrame compact title="确认粘贴？" subtitle="多行或较长内容可能立即执行命令" onClose={() => { setPendingPaste(null); restoreTerminalFocus(); }}>
       <p className="confirm-copy">剪贴板包含 {pendingPaste.lines} 行、{pendingPaste.characters} 个字符。确认只会把内容发送到当前终端，不会在此处显示剪贴板正文。</p>
       <footer className="dialog-actions end"><button className="secondary-button" onClick={() => { setPendingPaste(null); restoreTerminalFocus(); }}>取消</button><button data-dialog-autofocus className="primary-button" disabled={!inputEnabled} onClick={confirmPaste}>粘贴到终端</button></footer>
@@ -614,14 +587,6 @@ function handleMacWordNavigationShortcut(event: KeyboardEvent, platform: Clipboa
   event.stopPropagation();
   write(input);
   return false;
-}
-
-function copyShortcutLabel(platform: ClipboardPlatform): string {
-  return platform === "mac" ? "⌘C" : platform === "windows" ? "Ctrl+C" : "Ctrl+Shift+C";
-}
-
-function pasteShortcutLabel(platform: ClipboardPlatform): string {
-  return platform === "mac" ? "⌘V" : platform === "windows" ? "Ctrl+V" : "Ctrl+Shift+V";
 }
 
 function terminalStagingErrorMessage(reason: unknown): string {
