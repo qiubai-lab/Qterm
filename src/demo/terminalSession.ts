@@ -42,7 +42,13 @@ export class DemoTerminalSession {
 
   start() {
     this.emit("\x1b[36mQterm · 交互演示\x1b[0m\r\n");
-    this.emit("\r\n");
+    this.emit("欢迎来到你的远程开发工作台。\r\n");
+    this.emit("\x1b[2m浏览器模拟环境 · 无需配置，即刻体验\x1b[0m\r\n\r\n");
+    this.emit("  \x1b[36mnpm run build\x1b[0m         运行项目构建\r\n");
+    this.emit("  \x1b[36mgit status\x1b[0m            查看代码变更\r\n");
+    this.emit("  \x1b[36mtail -f logs/app.log\x1b[0m   跟踪实时日志\r\n\r\n");
+    this.emit("右侧工具栏可体验文件、网络与 Git 面板。\r\n");
+    this.emit("输入 \x1b[36mhelp\x1b[0m 查看更多命令，\x1b[36mCtrl+C\x1b[0m 停止任务。\r\n\r\n");
     this.reportCwd();
     this.prompt();
   }
