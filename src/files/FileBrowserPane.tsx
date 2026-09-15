@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FocusEvent, type FormEvent, type KeyboardEvent, type MouseEvent } from "react";
 import { createPortal } from "react-dom";
-import { getCurrentWebview } from "@tauri-apps/api/webview";
-import { writeText as writeClipboardText } from "@tauri-apps/plugin-clipboard-manager";
+import { listenFileDrop } from "@qterm/services/fileDrop";
+import { writeText as writeClipboardText } from "@qterm/services/textClipboard";
 import { Icon } from "../components/Icon";
 import { Button, StatusBadge } from "../components/Button";
 import { DialogActionStatus, DialogFrame } from "../components/dialogs/DialogFrame";
 import { ExactTextInput } from "../components/ExactTextInput";
 import { OverlayScrollArea } from "../components/scrollbars/OverlayScrollArea";
-import { copyImageUrlToClipboard } from "../lib/tauri/clipboard";
-import { copyFile, createEntry, deleteEntry, listLocalDirectory, listLocalRoots, listRemoteDirectory, readBinaryFile, readTextFile, renameEntry, writeTextFile, type DirectoryListing, type FileEntry, type LocalRoot } from "../lib/tauri/files";
-import { cancelTransfer, downloadDirectory, downloadFile, selectDownloadDirectory, selectDownloadPath, selectUploadFiles, selectUploadFolder, uploadDroppedEntries, uploadSelectedEntries, type TransferEvent } from "../lib/tauri/transfers";
+import { copyImageUrlToClipboard } from "@qterm/services/clipboard";
+import { copyFile, createEntry, deleteEntry, listLocalDirectory, listLocalRoots, listRemoteDirectory, readBinaryFile, readTextFile, renameEntry, writeTextFile, type DirectoryListing, type FileEntry, type LocalRoot } from "@qterm/services/files";
+import { cancelTransfer, downloadDirectory, downloadFile, selectDownloadDirectory, selectDownloadPath, selectUploadFiles, selectUploadFolder, uploadDroppedEntries, uploadSelectedEntries, type TransferEvent } from "@qterm/services/transfers";
 import type { FileRuntime } from "../workspace/WorkspaceProvider";
 import { FileList, FileSortHeader } from "./FileList";
 import { FileUploadMenu } from "./FileUploadMenu";
@@ -290,7 +290,7 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
       const y = position.y / ratio;
       return Boolean(rect && x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom);
     };
-    void getCurrentWebview().onDragDropEvent((event) => {
+    void listenFileDrop((event) => {
       const payload = event.payload;
       if (document.querySelector(".dialog-scrim")) { setDropActive(false); return; }
       if (payload.type === "leave") { setDropActive(false); return; }

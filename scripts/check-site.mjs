@@ -35,3 +35,12 @@ for (const file of await files(desktop)) {
   if (/qterm-(social|icon)\.png$/.test(file)) throw new Error(`Site-only asset leaked into desktop: ${file}`);
 }
 console.log(`Site links and assets verified under ${base}; desktop/demo artifacts are isolated.`);
+
+const demoCode = (await Promise.all((await files(site)).filter(file => file.endsWith(".js")).map(file => readFile(file, "utf8")))).join("\n");
+for (const marker of ["file-preview-document", "file-browser-navigation", "git-repository", "network-pane"]) {
+  if (!demoCode.includes(marker)) throw new Error(`Shared product panel missing from demo: ${marker}`);
+}
+for (const marker of ["demo-files-body", "demo-git-body", "demo-network-body", "files_read_text", "files_session_connect", "git_snapshot", "git_remote_execute", "network_rule_start", "network_rule_list", "transfer_select_upload_files", "browser_proxy_launch", "plugin:clipboard-manager|read_text", "plugin:clipboard-manager|write_text"]) {
+  if (demoCode.includes(marker)) throw new Error(`Forked demo panel or native service leaked into site: ${marker}`);
+}
+console.log("Demo uses shared product panels with browser service boundaries.");

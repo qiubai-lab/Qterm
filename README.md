@@ -17,7 +17,7 @@ Qterm 基于 Tauri 2、React、TypeScript 与 Rust 构建，将本地终端、SS
 
 ## 🌐 浏览器交互演示
 
-运行 `pnpm dev:demo`，在浏览器中体验模拟终端、工作区、分屏与主题。演示使用虚构数据，不连接真实服务器。站点构建、GitHub Pages 发布与体验范围见 [浏览器演示说明](docs/browser-demo.md)。
+运行 `pnpm dev:demo`，在浏览器中体验模拟终端、工作区、分屏、文件编辑、Git 审阅提交、虚构网络规则与主题。演示使用虚构数据，不连接真实服务器或建立隧道。站点构建、GitHub Pages 发布与体验范围见 [浏览器演示说明](docs/browser-demo.md)。
 
 ## 🤖 为远程 AI 开发优化
 

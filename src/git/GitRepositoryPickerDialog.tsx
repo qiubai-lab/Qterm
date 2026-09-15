@@ -6,8 +6,8 @@ import { DialogFrame } from "../components/dialogs/DialogFrame";
 import { useDialogCloseTransition } from "../components/dialogs/useDialogCloseTransition";
 import { ExactTextInput } from "../components/ExactTextInput";
 import { Icon } from "../components/Icon";
-import { listRemoteGitDirectory, type GitDirectoryEntry, type GitDirectoryListing } from "../lib/tauri/git";
-import { listLocalDirectory, listLocalRoots } from "../lib/tauri/files";
+import { listRemoteGitDirectory, type GitDirectoryEntry, type GitDirectoryListing } from "@qterm/services/git";
+import { listLocalDirectory, listLocalRoots } from "@qterm/services/files";
 import { fileErrorMessage, formatPermissions } from "../files/fileBrowserModel";
 import { displayLocalPath, parentPath } from "../files/path";
 

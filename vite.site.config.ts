@@ -3,7 +3,6 @@ import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
 
 const source = (path: string) => fileURLToPath(new URL(path, import.meta.url));
-const demoServices = ["localSessions", "sessions", "profiles", "workspaces", "settings", "textClipboard", "clipboard", "terminalImage"];
 
 export default defineConfig({
   root: source("./site"),
@@ -13,8 +12,7 @@ export default defineConfig({
   define: { __QTERM_DEMO__: true },
   resolve: {
     alias: [
-      ...demoServices.map(name => ({ find: `@qterm/services/${name}`, replacement: source(`./src/demo/services/${name}.ts`) })),
-      { find: "@qterm/services", replacement: source("./src/lib/tauri") },
+      { find: "@qterm/services", replacement: source("./src/demo/services") },
       { find: "/src", replacement: source("./src") },
     ],
   },

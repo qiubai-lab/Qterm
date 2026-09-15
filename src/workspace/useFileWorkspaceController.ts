@@ -1,8 +1,8 @@
 import { useCallback, type Dispatch } from "react";
 
-import { connectFileSession } from "../lib/tauri/files";
+import { connectFileSession } from "@qterm/services/files";
 import type { ConnectionProfile } from "../lib/tauri/profiles";
-import { acceptHostKey, closeSession, rejectHostKey, type SessionAuth, type SessionEvent } from "../lib/tauri/sessions";
+import { acceptHostKey, closeSession, rejectHostKey, type SessionAuth, type SessionEvent } from "@qterm/services/sessions";
 import { completeConnectionProgress, connectionProgressFromRouteEvent, failConnectionProgress, initialConnectionProgress } from "./connectionProgress";
 import type { WorkspaceAction } from "./reducer";
 import type { WorkspaceRuntimeState } from "./useWorkspaceRuntimeState";

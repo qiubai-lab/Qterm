@@ -22,29 +22,33 @@ pnpm preview:site
 
 预览地址默认 `http://localhost:4173/Qterm/`。`check:site` 检查两个真实 HTML 入口、子路径资源和桌面产物隔离，因此需要先完成桌面前端和站点构建。
 
-## 首版体验范围
+## 当前体验范围
 
 - 真实 WorkspaceProvider、WorkspaceCanvas、WorkspaceTabs、xterm 终端、搜索、主题与分屏。
 - local/SSH 模拟会话，独立 cwd、输入与历史；上下箭头、光标移动、退格、文本粘贴。
 - `help`、`pwd`、`ls`、`cd`、`cat`、`whoami`、`uname`、`echo`、`clear`、`exit`。
 - `git status`、`git log`、`npm run build`、`tail -f logs/app.log`。持续日志用 Ctrl+C 停止。
+- 从终端当前目录或工具轨打开虚构 Files/Git/Network Block。Files 可浏览与保存预置文本，Git 可查看由文件修改产生的差异、暂存、取消暂存和提交；同一目标的终端命令与面板共享结果。不同虚构目标的数据隔离。
+- Network 只模拟规则创建与启停状态，显示虚构地址；不建立真实隧道或代理。连接入口展示虚构目标，目标切换只由 Block 左上角发起。
 - 窗口随容器尺寸适配；macOS 交通灯只是装饰，不进入焦点序列，无关闭、拖动或全屏逻辑。
 - 所有数据只在内存中。刷新/重置恢复初始场景，关闭或重置清理连接和流任务。
 - 图片导出通过浏览器下载/剪贴板；剪贴板权限取决于浏览器，失败显示反馈。
 
-Files/Git/Network 面板及凭证管理尚未模拟。相关操作禁用并引导桌面版；`git` 示例只展示预置命令结果。不接受真实服务器配置、不收集密码、不执行真实 Shell，不是完整 POSIX Shell 模拟器。
+Files 的创建、复制、重命名、删除、图片读取、上传下载，以及 Git 历史文件检查、分支、同步、合并和冲突处理尚未模拟，调用时显示明确限制。文本预览、Markdown 渲染、搜索、编辑、保存确认与未保存保护使用产品原组件。真实 Network 转发与凭证库尚未模拟。Network 启动仅改变页面内的演示状态，不代表端口监听成功。连接入口只展示两台预置虚构服务器。不接受真实服务器配置、不收集密码、不执行真实 Shell，不是完整 POSIX Shell 模拟器。
 
 ## 运行时边界
 
 - `vite.config.ts` 默认定义 `__QTERM_DEMO__ = false`，`@qterm/services/*` 指向原 `src/lib/tauri/*`。
-- `vite.site.config.ts` 显式定义 Demo，选择 `src/demo/services/` 中的对应 typed adapters。每个 adapter 用原服务函数类型约束签名。
+- `vite.site.config.ts` 显式定义 Demo，选择 `src/demo/services/` 中的对应 typed adapters。每个 adapter 用原服务函数类型约束签名；缺少浏览器 adapter 时构建失败，不回退到原生服务。
 - `src/lib/runtime/environment.ts` 区分可用 workspace runtime 与真实 Tauri host，绝不伪造 `__TAURI_INTERNALS__`，不在 IPC 失败后降级。
-- `src/demo/terminalSession.ts` 拥有单个模拟会话；`sessionRegistry.ts` 拥有模拟连接进度与销毁；`fixtures.ts`、`shellCommands.ts` 提供虚构数据与有限命令。
-- `src/demo/DemoWorkbench.tsx` 仅组合工作区组件和展示控制，桌面 WorkspaceShell 保持独立。
+- `src/demo/demoProject.ts` 是按目标隔离的模拟文件和 Git 后端状态；`terminalSession.ts` 拥有单个模拟会话；`sessionRegistry.ts` 拥有模拟连接进度与销毁；`fixtures.ts`、`shellCommands.ts` 提供初始数据与有限命令。
+- `src/demo/DemoWorkbench.tsx` 只组合站点外壳、场景入口和虚构连接。两端通过同一 LayoutView 使用 FileBrowserPane/FilePreviewDocument/CodeEditor、GitPane 和 NetworkPane，没有独立 Demo 功能页面。
+- `src/demo/featureSessions.ts` 拥有 Files/Git/Network 虚构后端连接，`demoGitAdapter.ts` 将项目状态映射为产品 Git 快照；`services/files|git|network|transfers|fileDrop|browserProxy` 适配统一服务。
+- `src/lib/tauri/fileDrop.ts` 隔离原生 WebView 拖放订阅，浏览器实现不订阅原生事件；文件编辑器、Markdown 和 Network 使用统一剪贴板服务。
 - 高频字节继续走现有 writer，session、buffer 和任务不进入 reducer/持久化。
 - 站点资源位于 `site/public/`，输出 `dist-site/`；原 Tauri 始终读取 `dist/`。普通 `pnpm dev` 不启用 mock。
 
-添加新功能时：先定义对应模拟服务的正常、失败与清理行为，接入构建映射及测试，再开放 UI 能力。不要仅取消禁用，让调用落到原生 IPC。
+添加新功能时：先定义对应模拟数据的正常、失败与清理行为，接入构建隔离及测试，再开放 UI 能力。不要仅取消禁用，让调用落到原生 IPC。
 
 ## GitHub Pages 发布
 

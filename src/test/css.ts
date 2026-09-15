@@ -10,7 +10,7 @@ export function readCssBundle(entry: string): string {
 function readCssFile(file: string, ancestors: Set<string>): string {
   if (ancestors.has(file)) throw new Error(`Circular CSS import: ${file}`);
   const nextAncestors = new Set(ancestors).add(file);
-  return readFileSync(file, "utf8").replace(
+  return readFileSync(file, "utf8").replace(/\r\n/g, "\n").replace(
     /@import\s+["']([^"']+)["'];?/g,
     (_statement: string, imported: string) => readCssFile(resolve(dirname(file), imported), nextAncestors),
   );

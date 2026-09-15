@@ -1,4 +1,5 @@
-import { DEMO_HOME, isDemoDirectory } from "./fixtures";
+import { DEMO_HOME } from "./fixtures";
+import { getDemoProject, type DemoProject, type DemoTarget } from "./demoProject";
 import { buildLines, runDemoCommand } from "./shellCommands";
 
 interface SessionOptions {
@@ -6,6 +7,7 @@ interface SessionOptions {
   cwd?: string;
   columns: number;
   rows: number;
+  target?: DemoTarget;
   output: (data: Uint8Array) => void;
   closed: () => void;
 }
@@ -29,9 +31,11 @@ export class DemoTerminalSession {
   private running = false;
   private renderedCursor = 0;
   private cursorAtEnd = true;
+  private readonly project: DemoProject;
 
   constructor(private readonly options: SessionOptions) {
-    this.cwd = options.cwd && isDemoDirectory(options.cwd) ? options.cwd : DEMO_HOME;
+    this.project = getDemoProject(options.target ?? null);
+    this.cwd = options.cwd && this.project.isDirectory(options.cwd) ? options.cwd : DEMO_HOME;
     this.columns = options.columns;
     this.rows = options.rows;
   }
@@ -125,7 +129,7 @@ export class DemoTerminalSession {
     if (line.trim()) this.history = [...this.history.slice(-49), line];
     this.historyIndex = this.history.length; this.draft = "";
     this.emit("\r\n");
-    const result = runDemoCommand(line, this.cwd);
+    const result = runDemoCommand(line, this.cwd, this.project);
     if (result.clear) this.emit("\x1b[2J\x1b[H");
     if (result.output) this.emit(`${result.output.replace(/\r?\n/g, "\r\n")}\r\n`);
     if (result.cwd) { this.cwd = result.cwd; this.reportCwd(); }

@@ -42,7 +42,7 @@ import {
   type GitConflictResolution,
   type GitSnapshot,
   type RemoteGitAction,
-} from "../lib/tauri/git";
+} from "@qterm/services/git";
 
 interface GitRepositoryClientContext {
   remote: boolean;

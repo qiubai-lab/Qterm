@@ -1,4 +1,3 @@
-import { supportsNativeTools } from "../lib/runtime/environment";
 import { TerminalHeaderActions } from "../terminal/TerminalHeaderActions";
 import { TerminalProtocolTag } from "../terminal/notifications/TerminalProtocolTag";
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
@@ -10,7 +9,7 @@ import { GitPane } from "../git/GitPane";
 import { GitRemoteTargetConfig } from "../git/GitRemoteTargetConfig";
 import { GitRepositoryHistoryPopover } from "../git/GitRepositoryHistoryPopover";
 import { GitRepositoryPickerDialog } from "../git/GitRepositoryPickerDialog";
-import { selectGitRepositoryDirectory } from "../lib/tauri/git";
+import { selectGitRepositoryDirectory } from "@qterm/services/git";
 import type { ConnectionProfile } from "../lib/tauri/profiles";
 import { NetworkPane } from "../network/NetworkPane";
 import { TerminalPanel } from "../terminal/TerminalPanel";
@@ -33,9 +32,7 @@ interface DragState {
   y: number;
 }
 
-function BlockNotice({ message }: { message: string }) {
-  return <div className="block-notice" role="alert" aria-live="assertive" aria-atomic="true">{message}</div>;
-}
+function BlockNotice({ message }: { message: string }) { return <div className="block-notice" role="alert" aria-live="assertive" aria-atomic="true">{message}</div>; }
 
 export function WorkspaceCanvas({ workspace, visible, localTerminalAttention = false, remoteShellIntegrationEnabled = false, terminalSettingsReady = true, onRequestClose, onRequestDisconnect, onRequestAuthConnection, onOpenConnectionManager }: { workspace: Workspace; visible: boolean; localTerminalAttention?: boolean; remoteShellIntegrationEnabled?: boolean; terminalSettingsReady?: boolean; onRequestClose: (blockId: string) => void; onRequestDisconnect?: (owner: ConnectionOwner, blockId: string, name: string, local: boolean) => void; onRequestAuthConnection: (owner: ConnectionOwner, blockId: string, profile: ConnectionProfile) => void; onOpenConnectionManager?: () => void }) {
   const { dispatch } = useWorkspace();
@@ -116,7 +113,7 @@ export function WorkspaceCanvas({ workspace, visible, localTerminalAttention = f
   const blockProps: BlockRenderProps = { workspace, visible, localTerminalAttention, remoteShellIntegrationEnabled, terminalSettingsReady, drag, beginDrag, onRequestClose, onRequestDisconnect, onRequestAuthConnection, onOpenConnectionManager };
   return <div className="workspace-canvas">
     <div ref={layoutSurfaceRef} className="workspace-layout-surface">
-      {geometry.leaves.map(({ node, bounds }) => <div key={node.blockId} className="workspace-block-host" data-workspace-block-host={node.blockId} style={boundsStyle(bounds)}>
+      {geometry.leaves.map(({ node, bounds }) => <div key={node.blockId} className="workspace-block-host" data-workspace-block-host={node.blockId} data-active={node.blockId === workspace.activeBlockId || undefined} style={boundsStyle(bounds)}>
         <BlockView {...blockProps} node={node}/>
       </div>)}
       {geometry.dividers.map((divider) => <div
@@ -155,13 +152,13 @@ function BlockView(props: BlockRenderProps & { node: LayoutLeaf }) {
   if (props.node.type === "terminal") {
     return <TerminalBlock {...props} blockId={props.node.blockId} profileId={props.node.profileId} />;
   }
-  if (supportsNativeTools && props.node.type === "files") {
+  if (props.node.type === "files") {
     return <FilesBlock {...props} blockId={props.node.blockId} profileId={props.node.profileId} path={props.node.path}/>;
   }
-  if (supportsNativeTools && props.node.type === "network") {
+  if (props.node.type === "network") {
     return <NetworkBlock {...props} blockId={props.node.blockId} profileId={props.node.profileId}/>;
   }
-  if (supportsNativeTools && props.node.type === "git") {
+  if (props.node.type === "git") {
     return <GitBlock {...props} blockId={props.node.blockId} target={props.node.target}/>;
   }
   return null;
@@ -330,9 +327,9 @@ function TerminalBlock(props: BlockRenderProps & { blockId: string; profileId: s
         actions={[
           { label: "搜索终端输出", icon: "search", onSelect: () => openTerminalSearch(props.blockId) },
           { label: "清除终端缓冲区", icon: "clear", onSelect: () => clearBlockBuffer(props.blockId) },
-          { nativeOnly: true, label: "打开仓库管理", title: status === "connected" ? `管理终端目录仓库 ${fileBrowserPath}` : "连接终端后打开仓库管理", icon: "git", disabled: status !== "connected", onSelect: openTerminalRepository },
-          { nativeOnly: true, label: "打开终端文件夹", title: cwdButtonTitle, icon: "files", disabled: status !== "connected", onSelect: openTerminalDirectory },
-          { nativeOnly: true, label: "打开网络窗口", title: props.profileId ? "使用当前远程连接打开网络窗口" : "本地终端无法创建网络窗口", icon: "network", disabled: !props.profileId, onSelect: () => dispatch({ type: "openNetwork", workspaceId: props.workspace.id, anchorBlockId: props.blockId, profileId: props.profileId }) },
+          { label: "打开仓库管理", title: status === "connected" ? `管理终端目录仓库 ${fileBrowserPath}` : "连接终端后打开仓库管理", icon: "git", disabled: status !== "connected", onSelect: openTerminalRepository },
+          { label: "打开终端文件夹", title: cwdButtonTitle, icon: "files", disabled: status !== "connected", onSelect: openTerminalDirectory },
+          { label: "打开网络窗口", title: props.profileId ? "使用当前远程连接打开网络窗口" : "本地终端无法创建网络窗口", icon: "network", disabled: !props.profileId, onSelect: () => dispatch({ type: "openNetwork", workspaceId: props.workspace.id, anchorBlockId: props.blockId, profileId: props.profileId }) },
           { label: "左右分割", icon: "splitHorizontal", onSelect: () => splitTerminalBlock(props.workspace.id, props.blockId, "horizontal", props.remoteShellIntegrationEnabled) },
           { label: "上下分割", icon: "splitVertical", onSelect: () => splitTerminalBlock(props.workspace.id, props.blockId, "vertical", props.remoteShellIntegrationEnabled) },
         ]}

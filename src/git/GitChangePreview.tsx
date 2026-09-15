@@ -14,7 +14,7 @@ import {
   type GitCommitFileDiff,
   type GitConflictVersion,
   type GitDiffSource,
-} from "../lib/tauri/git";
+} from "@qterm/services/git";
 import { presentGitFileStatus } from "./gitStatus";
 
 const GitChangeComparison = lazy(() => import("./editor/GitChangeComparison").then((module) => ({ default: module.GitChangeComparison })));

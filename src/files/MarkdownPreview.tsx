@@ -1,7 +1,7 @@
 import { useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { writeText as writeClipboardText } from "@tauri-apps/plugin-clipboard-manager";
+import { writeText as writeClipboardText } from "@qterm/services/textClipboard";
 
 import { isExternalHttpUrl, openExternalHttpUrl } from "../lib/externalUrl";
 import { FileTextContextMenu } from "./FileTextContextMenu";

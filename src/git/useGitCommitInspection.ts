@@ -1,6 +1,6 @@
 import { useCallback, useId, useLayoutEffect, useRef, useState } from "react";
 
-import { gitError, type GitCommit, type GitCommitFile, type GitSnapshot } from "../lib/tauri/git";
+import { gitError, type GitCommit, type GitCommitFile, type GitSnapshot } from "@qterm/services/git";
 import { calculateGitCommitTooltipPosition } from "./gitCommitTooltipPosition";
 import type { GitCommitFilesState } from "./gitPaneTypes";
 

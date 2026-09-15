@@ -5,7 +5,7 @@ import { jsonParseLinter } from "@codemirror/lang-json";
 import { linter } from "@codemirror/lint";
 import { Compartment, EditorState, type Extension } from "@codemirror/state";
 import { EditorView, type Command } from "@codemirror/view";
-import { readText as readClipboardText, writeText as writeClipboardText } from "@tauri-apps/plugin-clipboard-manager";
+import { readText as readClipboardText, writeText as writeClipboardText } from "@qterm/services/textClipboard";
 import { parseDocument } from "yaml";
 
 import { plainTextLanguageSupport, type EditorLanguage } from "../editor/editorLanguage";

@@ -6,7 +6,7 @@ import { DialogActionStatus, DialogFrame } from "../components/dialogs/DialogFra
 import { useDialogCloseTransition } from "../components/dialogs/useDialogCloseTransition";
 import { Icon } from "../components/Icon";
 import { editorLanguageForFileName } from "../editor/editorLanguage";
-import { gitError, type GitChange, type GitConflictDetail, type GitConflictResolution, type GitConflictVersion, type GitSnapshot } from "../lib/tauri/git";
+import { gitError, type GitChange, type GitConflictDetail, type GitConflictResolution, type GitConflictVersion, type GitSnapshot } from "@qterm/services/git";
 import { findGitConflictBlocks, gitConflictEditorExtension, goToGitConflict } from "./editor/gitConflictEditorExtension";
 
 const CodeEditor = lazy(() => import("../files/CodeEditor").then((module) => ({ default: module.CodeEditor })));

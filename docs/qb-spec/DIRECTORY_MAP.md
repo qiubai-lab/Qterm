@@ -15,7 +15,7 @@
 
 - `vite.site.config.ts`、`.github/workflows/site.yml`、`scripts/check-site.mjs`、`docs/browser-demo.md`：站点多页构建、Pages 发布、子路径资源与 desktop/demo 产物隔离检查及操作说明；不改原 Tauri 打包入口。Pages 发布由仓库变量显式启用。
 - `src/lib/runtime/environment.ts`、`@qterm/services/*`：显式 build-selected workspace/terminal service 边界，默认选择现有 Tauri adapters，仅 site 选择模拟服务；不伪造原生环境、不自动降级。
-- `src/demo/`：DemoApp/DemoWorkbench 组合真实 workspace 与终端组件及浏览器居中外壳；fixtures/shellCommands 拥有有限命令与虚构数据，terminalSession/sessionRegistry 拥有可取消、隔离的模拟后端会话，services 实现类型受约束的浏览器 adapters。UI 状态仍归 WorkspaceProvider，首版不开放原生 Files/Git/Network 操作。
+- `src/demo/`：DemoApp/DemoWorkbench 只拥有站点外壳、场景入口、重置和虚构连接路由；通过相同 LayoutView 与 Files/Git/Network 产品面板消费 build-selected services。demoProject 拥有按目标隔离的文件/Git 模拟后端，demoGitAdapter 映射产品 Git 快照，terminalSession/sessionRegistry 拥有终端模拟任务，featureSessions 拥有按用途与目标隔离的非终端模拟连接；services 适配原 typed service 契约，未支持操作明确拒绝。WorkspaceProvider 仍唯一拥有 UI runtime，不另建 Demo 功能页面。
 - `src/site/site.css`：静态介绍页的独立布局，复用产品主题 token，不导入应用运行时。
 
 - `native/conpty/`：G0 隔离原型的上游版本锁、MIT 许可与原生输出边界补丁；`scripts/build-conpty-prototype.ps1` 构建未发布的测试 host，`scripts/conpty-ordered-probe-consumer.mjs` 只供真实 PTY 探针消费 QTR0 帧。尚未作为生产 runtime 或应用 IPC 协议接线。
@@ -64,6 +64,7 @@
 - `src/components/dialogs/SshConfigImportDialog.tsx`：SSH Config 文件选择、连接信息/凭证双 Tab 与批量导入界面；负责默认未分组、连接选择和逐项私钥授权，不接收设备路径或私钥正文。
 - `src/terminal/TerminalPanel.tsx`、`terminalSessionReset.ts`、`TerminalStagingStatus.tsx`、`terminalTheme.ts`、`terminalOsc8Link.ts`、`terminalWebLinks.ts`、`terminalExternalLinkRequests.ts`、`TerminalExternalLinkConfirmation.tsx`：每个 Block 的 xterm 生命周期、与已排队输出有序执行的会话重置、直接输出 writer、本地剪贴板路径准备与远端暂存任务的有序粘贴、按动作挂载的右下角悬浮状态卡片、OSC 工作目录、OSC 8 激活及普通 HTTP/HTTPS 文本识别适配、终端外链请求边界与风险确认、PTY 尺寸适配与 semantic token palette registry；OSC 8 与 Web Links 继续由 xterm 解析和展示，实际 HTTP/HTTPS 目标经统一确认后才委托给共享外链边界；悬浮卡片不占用 xterm 布局高度；该层只消费一次性最终粘贴文本，不读取本机文件内容/图片像素、选择缓存/远端临时目录、管理连接配置、布局树或 theme selection。
 - `src/files/FileBrowserPane.tsx`、`FileList.tsx`、`FileUploadMenu.tsx`、`fileBrowserModel.ts`、`FilePreviewDocument.tsx`、`FileSearchBar.tsx`、`useFileSearchSession.ts`、`fileSearchModel.ts`、`codeEditorSearch.ts`、`markdownPreviewSearch.ts`、`CodeEditor.tsx`、`MarkdownPreview.tsx`、`FileTextContextMenu.tsx`、`fileTextContextMenuModel.ts`：内部文件窗口的目录导航、虚拟列表/排序纯规则、下载、viewport 级上传菜单、瞬时预览编辑状态与按需编辑/渲染组件；文件预览组合层拥有单文件搜索会话，纯模型负责文字匹配，CodeMirror 与 Markdown adapter 只负责各自表面的高亮和定位；文本预览与编辑共用 Files-owned 菜单生命周期，CodeMirror 独立拥有编辑历史/选区命令，Markdown 独立拥有受预览范围约束的 DOM 选区与链接目标；不依赖 TerminalRuntime，不直接读取本地文件或实现 SFTP。
+- `src/lib/tauri/fileDrop.ts`：原生文件拖放订阅的平台入口；产品文件面板通过 `@qterm/services/fileDrop` 调用，浏览器选择无原生订阅的实现。
 - `src/lib/tauri/profiles.ts`：连接配置、有序跃点候选/route 要求、不兼容存储清除与 SSH Config 导入 IPC 客户端契约；不包含配置路径、私钥路径、强制删除参数或领域校验。
 - `src/lib/tauri/credentials.ts`：密码/私钥凭证库的窄 IPC 契约；不实现 KDF、加密或 JSON 访问。
 - `src/lib/tauri/settings.ts`：配置根选择、当前构建模式默认根与派生存储布局快照，以及设备安全、外观、更新和远程终端集成偏好的窄 IPC 契约；不开放 locator 路径、构建模式、分区路径写入、Shell cache 或执行锁定/探测策略。

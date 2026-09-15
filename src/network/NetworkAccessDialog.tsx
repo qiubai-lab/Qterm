@@ -1,12 +1,13 @@
-import { writeText as writeClipboardText } from "@tauri-apps/plugin-clipboard-manager";
+import { writeText as writeClipboardText } from "@qterm/services/textClipboard";
 import { useEffect, useState } from "react";
 
 import { Icon } from "../components/Icon";
 import { IconButton, StatusBadge } from "../components/Button";
 import { DialogFrame } from "../components/dialogs/DialogFrame";
-import { listProxyBrowsers, launchProxyBrowser, type ProxyBrowserAvailability, type ProxyBrowserId } from "../lib/tauri/browserProxy";
+import { listProxyBrowsers, launchProxyBrowser, type ProxyBrowserAvailability, type ProxyBrowserId } from "@qterm/services/browserProxy";
 import type { NetworkRule, NetworkRuleRuntimeState } from "../lib/tauri/network";
 import { deriveNetworkAccess, type NetworkAccessField } from "./networkAccess";
+import { isDemo } from "../lib/runtime/environment";
 
 const BROWSERS: ProxyBrowserAvailability[] = [
   { id: "chrome", name: "Google Chrome", installed: false, supported: true },
@@ -82,6 +83,7 @@ export function NetworkAccessDialog({ rule, profileHost, runtimeState, activeEls
     onClose={onClose}
   >
     <div className="network-access-content network-access-content-compact">
+      {isDemo && <p className="network-access-warning" role="note">演示地址仅供查看和复制，没有建立真实代理或端口监听。</p>}
       <section className="network-access-addresses" aria-label="访问地址">
         {access.description && <p className="network-access-description"><Icon name={rule.type === "remote" ? "server" : "computer"} size={14}/><span>{access.description}</span></p>}
         {access.fields.map((field) => <div className="network-access-field" key={field.label}>

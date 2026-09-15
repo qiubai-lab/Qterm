@@ -11,7 +11,7 @@ import {
   type GitCommitFile,
   type GitConflictResolution,
   type GitSnapshot,
-} from "../lib/tauri/git";
+} from "@qterm/services/git";
 import { gitRepositoryHistoryEntryKey } from "../workspace/gitRepositoryHistory";
 import type { GitRepositoryHistoryEntry, GitTarget } from "../workspace/model";
 import type { GitRuntime } from "../workspace/WorkspaceProvider";

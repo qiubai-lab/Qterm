@@ -1,18 +1,32 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEMO_HOME } from "./fixtures";
+import { getDemoProject, resetDemoProjects, type DemoTarget } from "./demoProject";
 import { DemoTerminalSession } from "./terminalSession";
 
-function session() {
+function session(target?: DemoTarget) {
   let output = "";
   const closed = vi.fn();
-  const terminal = new DemoTerminalSession({ host: "localhost", columns: 100, rows: 24, closed, output: data => { output += new TextDecoder().decode(data); } });
+  const terminal = new DemoTerminalSession({ host: "localhost", columns: 100, rows: 24, target, closed, output: data => { output += new TextDecoder().decode(data); } });
   terminal.start();
   return { terminal, closed, text: () => output, write: (text: string) => terminal.write(new TextEncoder().encode(text)) };
 }
 
 describe("simulated terminal behavior", () => {
   beforeEach(() => vi.useFakeTimers());
-  afterEach(() => vi.useRealTimers());
+  afterEach(() => { vi.useRealTimers(); resetDemoProjects(); });
+
+  it("shares project edits between terminals on one target and isolates another target", () => {
+    const target = "demo-development";
+    const first = session(target); const second = session(target); const staging = session("demo-staging");
+    const project = getDemoProject(target);
+    const path = `${DEMO_HOME}/src/main.ts`;
+    project.write(path, "two terminals\n", project.read(path).revision);
+    second.write("cat src/main.ts\r"); staging.write("cat src/main.ts\r"); first.write("git status\r");
+    expect(second.text()).toContain("two terminals");
+    expect(staging.text()).not.toContain("two terminals");
+    expect(first.text()).toContain("src/main.ts");
+    first.terminal.close(); second.terminal.close(); staging.terminal.close();
+  });
 
   it("isolates directories and command histories between sessions", () => {
     const first = session(); const second = session();

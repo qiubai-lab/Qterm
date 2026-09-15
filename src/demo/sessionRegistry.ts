@@ -11,6 +11,7 @@ export function openDemoSession(columns: number, rows: number, onData: (data: Ui
   const id = `demo-session-${crypto.randomUUID()}`;
   const session = new DemoTerminalSession({
     host: profile ? profile.host : "localhost", cwd, columns, rows, output: onData,
+    target: profileId ?? null,
     closed: () => {
       connectionTimers.get(id)?.forEach(clearTimeout);
       connectionTimers.delete(id); sessions.delete(id);

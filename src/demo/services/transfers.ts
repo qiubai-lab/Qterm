@@ -1,0 +1,14 @@
+import type * as Desktop from "../../lib/tauri/transfers";
+export type * from "../../lib/tauri/transfers";
+const unavailable = async (): Promise<never> => { throw new Error("演示环境尚未模拟文件上传下载；请使用预置文件体验编辑。"); };
+export const selectUploadFile: typeof Desktop.selectUploadFile = unavailable;
+export const selectUploadFiles: typeof Desktop.selectUploadFiles = unavailable;
+export const selectUploadFolder: typeof Desktop.selectUploadFolder = unavailable;
+export const selectDownloadPath: typeof Desktop.selectDownloadPath = unavailable;
+export const selectDownloadDirectory: typeof Desktop.selectDownloadDirectory = unavailable;
+export const uploadFile: typeof Desktop.uploadFile = unavailable;
+export const downloadFile: typeof Desktop.downloadFile = unavailable;
+export const uploadDroppedEntries: typeof Desktop.uploadDroppedEntries = unavailable;
+export const uploadSelectedEntries: typeof Desktop.uploadSelectedEntries = unavailable;
+export const downloadDirectory: typeof Desktop.downloadDirectory = unavailable;
+export const cancelTransfer: typeof Desktop.cancelTransfer = unavailable;
