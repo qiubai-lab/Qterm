@@ -186,6 +186,11 @@ describe("terminal image preview dialog", () => {
     expect(sizeControl.nextElementSibling).toHaveAttribute("data-action", "save");
     expect(screen.getByText("尺寸")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "M" })).toHaveAttribute("aria-pressed", "true");
+    for (const label of ["S", "M", "L"]) {
+      const button = screen.getByRole("button", { name: label });
+      expect(button).toHaveTextContent(label);
+      expect(button.children).toHaveLength(0);
+    }
     expect(screen.getByText("1620 × 196 px")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "S" }));
     await waitFor(() => expect(mocks.render).toHaveBeenLastCalledWith(request.snapshot, "macos", "light", 1));

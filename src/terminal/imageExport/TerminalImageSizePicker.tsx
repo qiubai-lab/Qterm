@@ -13,7 +13,7 @@ export function TerminalImageSizePicker({ snapshot, scale, busy, onChange }: {
         {imageSizes.map(item => {
           const allowed = !!imageSizeDimensions(snapshot, item.scale);
           const tooltip = allowed ? `${item.label} · ${item.scale}× 清晰度` : snapshot ? "选中行数较多，此档位超出图片尺寸限制" : "暂无可导出的图片";
-          return <ThemedTooltipButton key={item.scale} tooltip={tooltip} aria-label={item.label} aria-pressed={scale === item.scale} aria-disabled={!allowed || busy} disabled={busy} onClick={() => { if (allowed && !busy) onChange(item.scale); }}><span className="terminal-image-size-label">{item.label}</span></ThemedTooltipButton>;
+          return <ThemedTooltipButton key={item.scale} tooltip={tooltip} aria-label={item.label} aria-pressed={scale === item.scale} aria-disabled={!allowed || busy} disabled={busy} onClick={() => { if (allowed && !busy) onChange(item.scale); }}>{item.label}</ThemedTooltipButton>;
         })}
       </div>
       <span className="terminal-image-pixel-size" aria-label="导出像素尺寸">{dimensions ? `${dimensions.pixelWidth} × ${dimensions.pixelHeight} px` : "—"}</span>

@@ -15,11 +15,13 @@ it("keeps controls fixed around an independently scrolling preview and isolates 
   expect(css).toMatch(/\.terminal-image-action \{[^}]*position:relative/);
   expect(css).toMatch(/\.terminal-image-feedback-bubble \{[^}]*position:absolute[^}]*bottom:calc\(100% \+ 10px\)/);
   expect(css).toContain('.terminal-image-feedback-bubble[data-tone="error"] { --feedback-accent:var(--danger); }');
-  expect(css).toMatch(/\.terminal-image-size-control \{[^}]*margin-right:24px/);
-  expect(css).toMatch(/\.terminal-image-size-shell \{[^}]*width:252px[^}]*height:26px[^}]*gap:4px[^}]*padding:0 6px 0 18px[^}]*border:1px solid var\(--border\)/);
-  expect(css).toMatch(/\.terminal-image-pixel-size \{[^}]*width:100px[^}]*text-align:center/);
-  expect(css).toMatch(/\.terminal-image-sizes>button \{[^}]*align-items:center[^}]*justify-content:center[^}]*text-align:center/);
-  expect(css).toMatch(/\.terminal-image-size-label \{[^}]*place-items:center/);
+  expect(css).toMatch(/\.terminal-image-footer \{[^}]*min-height:72px/);
+  expect(css).toMatch(/\.terminal-image-action>\.ui-button \{[^}]*min-width:112px[^}]*min-height:34px/);
+  expect(css).toMatch(/\.terminal-image-size-control \{[^}]*margin-right:16px/);
+  expect(css).toMatch(/\.terminal-image-size-shell \{[^}]*width:282px[^}]*height:34px[^}]*gap:4px[^}]*padding:0 8px 0 16px[^}]*border:1px solid var\(--border\)/);
+  expect(css).toMatch(/\.terminal-image-sizes \{[^}]*height:100%[^}]*padding-block:2px/);
+  expect(css).toMatch(/\.terminal-image-pixel-size \{[^}]*width:104px[^}]*text-align:center/);
+  expect(css).toMatch(/\.terminal-image-sizes>button \{[^}]*height:100%[^}]*align-items:center[^}]*justify-content:center[^}]*line-height:1[^}]*text-align:center/);
   expect(css).toMatch(/\.terminal-image-sizes>button:hover[^}]*background:var\(--hover\)/);
   expect(css).toMatch(/\.terminal-image-sizes>button\[aria-pressed="true"\] \{[^}]*color:var\(--selection-marker\)/);
   expect(css).not.toContain(".terminal-image-sizes::before");
