@@ -18,12 +18,13 @@ function image(url = "blob:test"): RenderedTerminalImage {
 }
 
 beforeEach(() => {
+  vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: true })));
   mocks.render.mockReset().mockImplementation(async () => image());
   mocks.copy.mockReset().mockResolvedValue(undefined);
   mocks.save.mockReset().mockResolvedValue("/chosen/terminal.png");
   document.documentElement.dataset.theme = "cyberpunk";
 });
-afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); delete document.documentElement.dataset.theme; });
+afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); delete document.documentElement.dataset.theme; });
 
 describe("terminal image preview dialog", () => {
   it("offers exactly three styles and three themes, defaults to the captured choice and leaves the app theme alone", async () => {
@@ -37,6 +38,8 @@ describe("terminal image preview dialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "深色" }));
     await waitFor(() => expect(mocks.render).toHaveBeenLastCalledWith(request.snapshot, "windows", "dark"));
     expect(document.documentElement.dataset.theme).toBe("cyberpunk");
+    expect(screen.queryByText("主题", { exact: true })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "MacOS" })).toBeInTheDocument();
     expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
   });
 

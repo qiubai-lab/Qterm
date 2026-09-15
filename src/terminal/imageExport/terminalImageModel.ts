@@ -2,7 +2,7 @@ import type { AppTheme } from "../../lib/tauri/settings";
 import type { DesktopPlatform } from "../../lib/tauri/window";
 
 export type TerminalImageStyle = DesktopPlatform;
-export const imageStyles = [{ id: "macos", label: "macOS" }, { id: "linux", label: "Linux" }, { id: "windows", label: "Windows" }] as const;
+export const imageStyles = [{ id: "macos", label: "MacOS" }, { id: "linux", label: "Linux" }, { id: "windows", label: "Windows" }] as const;
 export const imageThemes: ReadonlyArray<{ id: AppTheme; label: string }> = [{ id: "dark", label: "深色" }, { id: "light", label: "浅色" }, { id: "cyberpunk", label: "赛博朋克" }];
 export const IMAGE_SCALE = 2;
 export const IMAGE_HEADER_HEIGHT = 38;

@@ -1,8 +1,7 @@
 import { useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
-import { Button } from "../../components/Button";
+import { TerminalImageActionButton } from "./TerminalImageActionButton";
 import { DialogFrame } from "../../components/dialogs/DialogFrame";
-import { Icon } from "../../components/Icon";
 import { TerminalImagePreview } from "./TerminalImagePreview";
 import { imageStyles, imageThemes } from "./terminalImageModel";
 import { TerminalImageFeedbackBubble } from "./TerminalImageFeedbackBubble";
@@ -25,7 +24,6 @@ export function TerminalImageExportDialog({ request, onClose }: { request: Termi
   }>
     <div className="terminal-image-workbench">
       <aside className="terminal-image-theme-sidebar">
-        <span className="terminal-image-section-label">主题</span>
         <div className="terminal-image-themes" role="group" aria-label="图片主题" style={{ "--choice-index": imageThemes.findIndex(item => item.id === theme) } as CSSProperties}>
           {imageThemes.map(item => <button key={item.id} type="button" aria-pressed={theme === item.id} disabled={busy} onClick={() => { preview.clearFeedback(); setTheme(item.id); }}>
             <span className="terminal-image-theme-swatch" data-terminal-image-theme={item.id} aria-hidden="true"><span>❯ <i>_</i></span><b/></span>
@@ -37,11 +35,11 @@ export function TerminalImageExportDialog({ request, onClose }: { request: Termi
     </div>
     <footer className="terminal-image-footer">
       <div className="terminal-image-action" data-action="save">
-        <Button size="compact" disabled={!preview.image || busy} loading={preview.operation === "save"} onClick={() => void preview.run("save")}><span className="terminal-image-action-icon" data-loading={preview.operation === "save"}><Icon name="download" size={13}/><i className="terminal-image-spinner" aria-hidden="true"/></span>{preview.operation === "save" ? "正在保存…" : "保存 PNG"}</Button>
+        <TerminalImageActionButton action="save" available={!!preview.image} operation={preview.operation} feedback={preview.feedback} onClick={() => void preview.run("save")}/>
         {preview.feedback?.action === "save" && <TerminalImageFeedbackBubble key={preview.feedback.id} feedback={preview.feedback}/>}
       </div>
       <div className="terminal-image-action" data-action="copy">
-        <Button size="compact" variant="primary" disabled={!preview.image || busy} loading={preview.operation === "copy"} onClick={() => void preview.run("copy")}><span className="terminal-image-action-icon" data-loading={preview.operation === "copy"}><Icon name="copy" size={13}/><i className="terminal-image-spinner" aria-hidden="true"/></span>{preview.operation === "copy" ? "正在复制…" : "复制图片"}</Button>
+        <TerminalImageActionButton action="copy" available={!!preview.image} operation={preview.operation} feedback={preview.feedback} onClick={() => void preview.run("copy")}/>
         {preview.feedback?.action === "copy" && <TerminalImageFeedbackBubble key={preview.feedback.id} feedback={preview.feedback}/>}
       </div>
     </footer>
