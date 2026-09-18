@@ -18,7 +18,7 @@ Qterm 基于 Tauri 2、React、TypeScript 与 Rust 构建，将本地终端、SS
 
 ## 🌠 界面预览
 
-![Qterm 工作台：远程终端、本地终端、文件编辑、网络转发与文件浏览](images/screenshoot.png)
+![Qterm 工作台：远程终端、本地终端、文件编辑、网络转发与文件浏览](site/public/screenshots/workspace.png)
 
 ## 🌐 浏览器交互演示
 
