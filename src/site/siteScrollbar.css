@@ -1,0 +1,11 @@
+/* Hide native gutters from the first render, even before the enhancement loads. */
+html { scrollbar-width:none; }
+html::-webkit-scrollbar { width:0; height:0; display:none; }
+.site-scrollbar { position:fixed; top:4px; bottom:4px; right:0; width:14px; z-index:20; opacity:0; transition:opacity 220ms ease; touch-action:none; cursor:pointer; }
+.site-scrollbar[hidden] { display:none; }
+.site-scrollbar span { position:absolute; top:0; right:3px; width:2px; min-height:28px; border-radius:999px; background:var(--muted); pointer-events:none; }
+.site-scrollbar.is-scrolling,.site-scrollbar:focus-visible { opacity:1; }
+.site-scrollbar:focus-visible { outline:1px solid var(--focus); outline-offset:-1px; border-radius:6px; }
+html.site-scrollbar-dragging { scroll-behavior:auto; user-select:none; }
+html.image-viewer-open .site-scrollbar { visibility:hidden; }
+@media (prefers-reduced-motion:reduce) { .site-scrollbar { transition:none; } }

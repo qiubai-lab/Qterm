@@ -13,37 +13,98 @@
     <link rel="icon" type="image/png" href="/qterm-icon.png" />
     <link rel="stylesheet" href="/src/site/site.css" />
     <script defer src="/site-interactions.js"></script>
+    <script defer src="/site-scrollbar.js"></script>
+    <script defer src="/image-viewer.js"></script>
   </head>
   <body>
     <header class="site-nav"><a class="site-brand" href="%BASE_URL%"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><path d="m7 8 4 4-4 4m6 0h4"/></svg>Qterm</a><nav aria-label="主导航"><a href="#features">功能</a><a href="https://github.com/qiubai-lab/Qterm" target="_blank" rel="noreferrer" class="site-github-link"><svg class="site-action-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .75a11.25 11.25 0 0 0-3.558 21.923c.563.105.768-.244.768-.542 0-.267-.01-.975-.015-1.913-3.13.68-3.79-1.508-3.79-1.508-.512-1.3-1.25-1.646-1.25-1.646-1.023-.7.078-.686.078-.686 1.13.08 1.725 1.16 1.725 1.16 1.006 1.724 2.64 1.226 3.283.937.102-.73.394-1.226.716-1.508-2.498-.284-5.124-1.249-5.124-5.562 0-1.23.44-2.235 1.16-3.023-.116-.285-.502-1.43.11-2.98 0 0 .945-.303 3.094 1.155A10.8 10.8 0 0 1 12 6.177c.955.004 1.917.13 2.815.38 2.148-1.458 3.092-1.155 3.092-1.155.613 1.55.227 2.695.112 2.98.72.788 1.158 1.793 1.158 3.023 0 4.324-2.63 5.275-5.136 5.553.404.35.765 1.043.765 2.1 0 1.517-.014 2.74-.014 3.112 0 .3.203.652.774.542A11.25 11.25 0 0 0 12 .75Z"/></svg>GitHub</a><a class="site-link-button" href="%BASE_URL%demo/"><svg class="site-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3M13 15h4"/></svg>在线体验</a></nav></header>
-    <main>
+    <main id="site-main">
       <section class="site-hero">
         <p class="site-eyebrow">开源 · 跨平台 · 远程开发</p>
         <h1>Vibe Coding，<br />一个终端就够了。</h1>
-        <p class="site-summary">终端、文件与 Git 并排工作。<br />从连接服务器，到检查 Agent 的修改，让上下文始终在眼前。</p>
+        <p class="site-summary">终端、文件与 Git 并排工作，支持 OSC 协议。<br />粘贴截图给远程 Agent，接收任务通知，再审阅它的修改。</p>
         <div class="site-actions"><a class="site-primary site-demo-action" href="%BASE_URL%demo/"><svg class="site-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3M13 15h4"/></svg>打开交互演示</a><a class="site-secondary" href="#install">安装 Qterm</a></div>
         <p class="site-platforms">macOS · Windows · Linux <span>基于 Tauri 2 与 Rust</span></p>
       </section>
-      <figure class="site-preview" data-reveal><div class="preview-heading"><span><i></i> 一个工作区，完整的开发上下文</span><span>TERMINAL / FILES / GIT</span></div><a href="%BASE_URL%demo/" aria-label="打开 Qterm 交互演示"><img src="/screenshots/workspace.png" width="1206" height="737" alt="Demo 实际截图：构建终端、Git 更改、文件目录与网络面板并排工作" fetchpriority="high" /></a><figcaption>来自交互 Demo 的实际截图 · 虚构开发环境</figcaption></figure>
+      <figure class="site-preview" data-reveal><div class="preview-heading"><span><i></i> 一个工作区，完整的开发上下文</span><span>TERMINAL / FILES / GIT</span></div><a href="%BASE_URL%screenshots/workspace.png" data-image-viewer aria-label="查看工作区截图原图"><img src="/screenshots/workspace.png" width="1206" height="737" alt="Demo 实际截图：构建终端、Git 更改、文件目录与网络面板并排工作" fetchpriority="high" /></a><figcaption>来自交互 Demo 的实际截图 · 虚构开发环境</figcaption></figure>
       <section class="site-section" id="features" aria-labelledby="features-title" data-reveal>
-        <div class="site-section-heading"><p class="site-eyebrow">从连接，到交付</p><h2 id="features-title">工具并排，思路不断。</h2><p>文件、网络和代码变化，都在终端身边。</p></div>
-        <div class="workflow-tabs" aria-label="功能展示" data-tabs>
-          <button id="tab-files" aria-controls="panel-files" type="button">01 <span>文件管理</span></button>
-          <button id="tab-network" aria-controls="panel-network" type="button">02 <span>网络转发</span></button>
-          <button id="tab-git" aria-controls="panel-git" type="button">03 <span>Git 审阅</span></button>
+        <div class="site-section-heading"><p class="site-eyebrow">为 Vibe Coding 准备</p><h2 id="features-title">把上下文交给 Agent，把注意力留给思路。</h2><p>从粘贴截图到接收通知，让远程 CLI Agent 更顺手。</p></div>
+        <div class="workflow-tabs" aria-label="为 Vibe Coding 准备功能展示" data-tabs>
+          <button id="tab-paste-image" aria-controls="panel-paste-image" type="button">01 <span>粘贴图片</span></button>
+          <button id="tab-notification" aria-controls="panel-notification" type="button">02 <span>Agent 通知</span></button>
+          <button id="tab-paste-file" aria-controls="panel-paste-file" type="button">03 <span>粘贴文件</span></button>
         </div>
-        <article class="workflow-panel" id="panel-files" aria-labelledby="tab-files"><div class="workflow-copy"><h3>打开文件，接着写。</h3><p>浏览远程目录，预览和编辑文本。终端继续运行，修改就在一旁完成。</p><span class="feature-tag">SFTP · 文本编辑 · 文件预览</span></div><a href="%BASE_URL%screenshots/files.png" target="_blank" aria-label="查看文件管理截图原图"><img src="/screenshots/files.png" width="1206" height="737" alt="Demo 文件管理：终端、文件目录和 README 预览并排展示" loading="lazy" /></a></article>
-        <article class="workflow-panel" id="panel-network" aria-labelledby="tab-network"><div class="workflow-copy"><h3>让远程服务，近在手边。</h3><p>集中管理本地转发、远程转发和 SOCKS5 代理，查看每条规则的运行状态。</p><span class="feature-tag">Demo 展示模拟规则与启停状态</span></div><a href="%BASE_URL%screenshots/network.png" target="_blank" aria-label="查看网络规则截图原图"><img src="/screenshots/network.png" width="1206" height="737" alt="Demo 网络规则编辑：SOCKS5 动态代理的监听地址与端口设置" loading="lazy" /></a></article>
-        <article class="workflow-panel" id="panel-git" aria-labelledby="tab-git"><div class="workflow-copy"><h3>每一次修改，都看得清。</h3><p>检查文件差异，暂存更改并提交。把 Agent 的输出，变成自己确认过的改动。</p><span class="feature-tag">差异对比 · 暂存 · 提交</span></div><a href="%BASE_URL%screenshots/git.png" target="_blank" aria-label="查看 Git 审阅截图原图"><img src="/screenshots/git.png" width="1206" height="737" alt="Demo Git 审阅：仓库、分支、待暂存文件和提交入口" loading="lazy" /></a></article>
+        <article class="workflow-panel" id="panel-paste-image" aria-labelledby="tab-paste-image">
+          <div class="workflow-copy"><h3>截图一贴，远程 Agent 就能接着做。</h3><p>复制一张截图，直接粘贴到 SSH 终端。Qterm 将图片上传至远程并插入路径，让 CLI Agent 读取你的视觉上下文。</p><span class="feature-tag">桌面端实拍 · 图片上传 · 远程路径</span></div>
+          <a href="%BASE_URL%screenshots/paste-image-to-cli.png" data-image-viewer aria-label="查看粘贴图片截图原图"><img src="/screenshots/paste-image-to-cli.png" width="1165" height="709" alt="远程 Codex 终端接收粘贴图片，输入区显示 Image #1，底部提示路径已粘贴" loading="lazy" /></a>
+        </article>
+        <article class="workflow-panel" id="panel-notification" aria-labelledby="tab-notification">
+          <div class="workflow-copy"><h3>让 Agent 跑，需要你时再回来。</h3><p>当 Agent 通过 OSC 9 或 OSC 777 主动发送消息，Qterm 会将它呈现为会话提醒。切到其他工作区也能收到提示，点击通知即可回到来源终端。</p><span class="feature-tag">桌面端实拍 · OSC 9 消息 / OSC 777 标题与正文 · 正文显示可在设置中开启</span></div>
+          <a href="%BASE_URL%screenshots/notification.png" data-image-viewer aria-label="查看Agent 通知截图原图"><img src="/screenshots/notification.png" width="1165" height="709" alt="切换到本地 Codex 工作区时，右上角显示来自另一开发服务器会话的 Agent 通知" loading="lazy" /></a>
+        </article>
+        <article class="workflow-panel" id="panel-paste-file" aria-labelledby="tab-paste-file">
+          <div class="workflow-copy"><h3>本机资料，一次粘贴送到远程。</h3><p>复制本机文件或文件夹，在远程终端粘贴。上传完成后自动插入远程路径，接着交给命令行或 Agent 使用。</p><span class="feature-tag">桌面端实拍 · 文件与文件夹 · 上传后插入路径</span></div>
+          <a href="%BASE_URL%screenshots/paste-file-to-cli.png" data-image-viewer aria-label="查看粘贴文件截图原图"><img src="/screenshots/paste-file-to-cli.png" width="1165" height="709" alt="本机 configs.json 上传完成，远程终端已插入临时文件路径" loading="lazy" /></a>
+        </article>
+      </section>
+      <section class="site-section" id="workflow" aria-labelledby="workflow-title" data-reveal>
+        <div class="site-section-heading"><p class="site-eyebrow">从文件，到交付</p><h2 id="workflow-title">工具并排，思路不断。</h2><p>文件传输、代码修改和 Git 审阅，都在终端身边。</p></div>
+        <div class="workflow-tabs" aria-label="从文件，到交付功能展示" data-tabs>
+          <button id="tab-files" aria-controls="panel-files" type="button">01 <span>文件管理</span></button>
+          <button id="tab-upload" aria-controls="panel-upload" type="button">02 <span>拖拽上传</span></button>
+          <button id="tab-git" aria-controls="panel-git" type="button">03 <span>Git 管理</span></button>
+          <button id="tab-git-diff" aria-controls="panel-git-diff" type="button">04 <span>差异审阅</span></button>
+        </div>
+        <article class="workflow-panel" id="panel-files" aria-labelledby="tab-files">
+          <div class="workflow-copy"><h3>打开文件，接着写。</h3><p>启用 OSC 7 目录跟踪后，Shell 会向 Qterm 报告当前路径。从终端打开文件管理，就能直接进入同一远程目录，接着浏览、预览和编辑文件。</p><span class="feature-tag">Demo 截图 · OSC 7 目录定位 · SFTP · 文件预览与编辑</span></div>
+          <a href="%BASE_URL%screenshots/files.png" data-image-viewer aria-label="查看文件管理截图原图"><img src="/screenshots/files.png" width="1206" height="737" alt="Demo 文件管理：终端、文件目录和 README 预览并排展示" loading="lazy" /></a>
+        </article>
+        <article class="workflow-panel" id="panel-upload" aria-labelledby="tab-upload">
+          <div class="workflow-copy"><h3>拖进目录，文件就到位。</h3><p>将本机文件或文件夹拖入远程文件面板，直接上传到当前目录。终端和目标位置并排可见，少一次路径切换。</p><span class="feature-tag">桌面端实拍 · 拖拽上传 · 当前远程目录</span></div>
+          <a href="%BASE_URL%screenshots/drag-file-upload.png" data-image-viewer aria-label="查看拖拽上传截图原图"><img src="/screenshots/drag-file-upload.png" width="1165" height="709" alt="文件面板显示拖拽上传区域，提示将 configs.json 上传到当前远程目录" loading="lazy" /></a>
+        </article>
+        <article class="workflow-panel" id="panel-git" aria-labelledby="tab-git">
+          <div class="workflow-copy"><h3>从检查更改，到确认提交。</h3><p>从终端打开 Git 面板时，Qterm 使用 OSC 7 上报的当前目录定位仓库。检查分支与文件状态，暂存并提交，把 Agent 的输出变成自己确认过的改动。</p><span class="feature-tag">Demo 截图 · OSC 7 仓库定位 · 暂存 · 提交</span></div>
+          <a href="%BASE_URL%screenshots/git.png" data-image-viewer aria-label="查看Git 管理截图原图"><img src="/screenshots/git.png" width="1206" height="737" alt="Demo Git 管理：仓库、分支、待暂存文件和提交入口" loading="lazy" /></a>
+        </article>
+        <article class="workflow-panel" id="panel-git-diff" aria-labelledby="tab-git-diff">
+          <div class="workflow-copy"><h3>每一处修改，左右对照。</h3><p>并排查看修改前后的代码，逐处检查增删内容。在提交之前，看清 Agent 改了什么。</p><span class="feature-tag">桌面端实拍 · 并排 Diff · 代码审阅</span></div>
+          <a href="%BASE_URL%screenshots/git-diff.png" data-image-viewer aria-label="查看差异审阅截图原图"><img src="/screenshots/git-diff.png" width="1165" height="709" alt="Git 更改预览左右对照暂存区与工作区，突出显示 index.html 的代码差异" loading="lazy" /></a>
+        </article>
+      </section>
+      <section class="site-section" id="connections" aria-labelledby="connections-title" data-reveal>
+        <div class="site-section-heading"><p class="site-eyebrow">连接与凭证</p><h2 id="connections-title">连得上，也管得清。</h2><p>连接路径、认证凭证和网络转发，在一个工作台里安排妥当。</p></div>
+        <div class="workflow-tabs" aria-label="连接与凭证功能展示" data-tabs>
+          <button id="tab-network" aria-controls="panel-network" type="button">01 <span>网络转发</span></button>
+          <button id="tab-ssh-jump" aria-controls="panel-ssh-jump" type="button">02 <span>SSH 跳板</span></button>
+          <button id="tab-vault-manager" aria-controls="panel-vault-manager" type="button">03 <span>凭证管理</span></button>
+          <button id="tab-vault" aria-controls="panel-vault" type="button">04 <span>凭证连接</span></button>
+        </div>
+        <article class="workflow-panel" id="panel-network" aria-labelledby="tab-network">
+          <div class="workflow-copy"><h3>让远程服务，近在手边。</h3><p>集中管理本地转发、远程转发和 SOCKS5 代理，查看每条规则的运行状态。</p><span class="feature-tag">Demo 截图 · 模拟规则与启停状态</span></div>
+          <a href="%BASE_URL%screenshots/network.png" data-image-viewer aria-label="查看网络转发截图原图"><img src="/screenshots/network.png" width="1206" height="737" alt="Demo 网络规则编辑：SOCKS5 动态代理的监听地址与端口设置" loading="lazy" /></a>
+        </article>
+        <article class="workflow-panel" id="panel-ssh-jump" aria-labelledby="tab-ssh-jump">
+          <div class="workflow-copy"><h3>经过哪些服务器，一眼看清。</h3><p>配置多级 SSH 跳板，预览从本机到目标服务器的连接路径，复用已保存连接的认证方式。</p><span class="feature-tag">桌面端实拍 · 实验功能 · 多级跳板</span></div>
+          <a href="%BASE_URL%screenshots/ssh-jump.png" data-image-viewer aria-label="查看SSH 跳板截图原图"><img src="/screenshots/ssh-jump.png" width="1165" height="709" alt="SSH 连接管理的跳板页展示本机、两级跳板与目标服务器的连接路径" loading="lazy" /></a>
+        </article>
+        <article class="workflow-panel" id="panel-vault-manager" aria-labelledby="tab-vault-manager">
+          <div class="workflow-copy"><h3>常用密码和私钥，集中管理。</h3><p>在凭证库中管理密码与私钥，导入已有私钥或生成新密钥，为不同连接准备可复用的凭证。</p><span class="feature-tag">桌面端实拍 · 密码管理 · 私钥导入与生成</span></div>
+          <a href="%BASE_URL%screenshots/key-vault-manager.png" data-image-viewer aria-label="查看凭证管理截图原图"><img src="/screenshots/key-vault-manager.png" width="1165" height="709" alt="凭证管理窗口显示已有密码与私钥，以及导入私钥和生成新私钥入口" loading="lazy" /></a>
+        </article>
+        <article class="workflow-panel" id="panel-vault" aria-labelledby="tab-vault">
+          <div class="workflow-copy"><h3>连接时，选好这一次的凭证。</h3><p>解锁凭证库，选择已保存的密码或私钥用于当前连接。临时选择不会改写原有连接配置。</p><span class="feature-tag">桌面端实拍 · 凭证库解锁 · 按次选择</span></div>
+          <a href="%BASE_URL%screenshots/key-vault.png" data-image-viewer aria-label="查看凭证连接截图原图"><img src="/screenshots/key-vault.png" width="1165" height="709" alt="SSH 连接认证弹窗处于凭证模式，显示凭证库已锁定和解锁入口" loading="lazy" /></a>
+        </article>
       </section>
       <section class="site-section" aria-labelledby="details-title" data-reveal><div class="site-section-heading"><p class="site-eyebrow">顺手，来自细节</p><h2 id="details-title">为真实的开发习惯留出空间。</h2></div>
         <div class="site-feature-grid">
           <article><span class="site-feature-number">01 / WORKSPACE</span><div class="mini-layout" aria-hidden="true"><span>终端</span><span>文件</span><span>Git</span></div><h3>按任务，自由分屏</h3><p>本地终端与 SSH 会话横向、纵向拆分。多个工作区各自保留布局，切换任务也保留现场。</p></article>
-          <article><span class="site-feature-number">02 / CONTEXT</span><div class="mini-flow" aria-hidden="true"><code>cd project</code><span>→</span><span>文件 / Git</span></div><h3>目录跟着终端走</h3><p>通过 OSC 7 跟踪终端当前目录，关联文件与仓库入口，减少反复寻找路径。</p></article>
-          <article><span class="site-feature-number">03 / CLI AGENT</span><div class="mini-flow" aria-hidden="true"><span>本机资料</span><span>→</span><code>远程路径</code></div><h3>把资料交给远程 Agent</h3><p>桌面端可将本机文件、文件夹和截图暂存至远程，并插入路径，供你的 CLI Agent 使用。</p><span class="feature-tag">桌面端能力 · 不内置 AI 模型</span></article>
+          <article><span class="site-feature-number">02 / CONTEXT</span><div class="mini-flow" aria-hidden="true"><code>cd project</code><span>→</span><span>文件 / Git</span></div><h3>目录跟着终端走</h3><p>在终端执行 cd 后，Shell 通过 OSC 7 告诉 Qterm 你到了哪里。再打开文件或 Git 面板，就能从当前目录接着工作，减少复制路径和逐级查找。</p></article>
+          <article><span class="site-feature-number">03 / TERMINAL</span><div class="mini-flow" aria-hidden="true"><span>本地 Shell</span><span>↔</span><code>SSH 会话</code></div><h3>本地与远程，同样顺手</h3><p>本地 Shell 与远程 SSH 会话共用工作区，按任务组合终端面板，从本机开发自然切换到服务器。</p></article>
         </div>
       </section>
-      <section class="site-section site-export" aria-labelledby="export-title" data-reveal><div><p class="site-eyebrow">值得留下的，不止代码</p><h2 id="export-title">选中终端内容，<br />导出为图片。</h2><p>把一段构建结果、排查记录或命令输出，变成清晰的图片。保留终端配色，自选窗口样式与导出尺寸。</p><ol class="export-steps"><li>选中输出</li><li>预览样式</li><li>保存 PNG</li></ol><a class="text-link" href="%BASE_URL%demo/">在 Demo 中试试 <span aria-hidden="true">→</span></a></div><figure class="export-card"><div class="export-card-heading"><span>OUTPUT → IMAGE</span><span>PNG</span></div><a href="%BASE_URL%screenshots/export.png" target="_blank" aria-label="查看终端图片导出效果原图"><img src="/screenshots/export.png" width="1206" height="737" alt="Demo 导出终端图片弹窗：Windows 窗口样式、赛博主题、尺寸选择与构建输出预览" loading="lazy" /></a><figcaption>Demo 实际导出界面 · Windows 窗口样式</figcaption></figure></section>
+      <section class="site-section site-export" aria-labelledby="export-title" data-reveal><div><p class="site-eyebrow">值得留下的，不止代码</p><h2 id="export-title">选中终端内容，<br />导出为图片。</h2><p>把一段构建结果、排查记录或命令输出，变成清晰的图片。保留终端配色，自选窗口样式与导出尺寸。</p><ol class="export-steps"><li>选中输出</li><li>预览样式</li><li>保存 PNG</li></ol><a class="text-link" href="%BASE_URL%demo/">在 Demo 中试试 <span aria-hidden="true">→</span></a></div><figure class="export-card"><div class="export-card-heading"><span>OUTPUT → IMAGE</span><span>PNG</span></div><a href="%BASE_URL%screenshots/export.png" data-image-viewer aria-label="查看终端图片导出效果原图"><img src="/screenshots/export.png" width="1206" height="737" alt="Demo 导出终端图片弹窗：Windows 窗口样式、赛博主题、尺寸选择与构建输出预览" loading="lazy" /></a><figcaption>Demo 实际导出界面 · Windows 窗口样式</figcaption></figure></section>
       <section class="site-section site-install" id="install" aria-labelledby="install-title" tabindex="-1" data-reveal>
         <div class="site-section-heading"><p class="site-eyebrow">准备好，开始工作</p><h2 id="install-title">安装 Qterm</h2><p>选择你的系统，将完整工作台带到本机。</p></div>
         <div class="install-grid">

@@ -17,7 +17,7 @@
 - `src/lib/runtime/environment.ts`、`@qterm/services/*`：显式 build-selected workspace/terminal service 边界，默认选择现有 Tauri adapters，仅 site 选择模拟服务；不伪造原生环境、不自动降级。
 - `src/demo/`：DemoApp/DemoWorkbench 只拥有站点外壳、主题分段控件、刷新清理和虚构连接路由；通过相同 LayoutView 与 Files/Git/Network 产品面板消费 build-selected services。demoProject 拥有按目标隔离的文件/Git 模拟后端，demoGitAdapter 映射产品 Git 快照，terminalSession/sessionRegistry 拥有终端模拟任务，featureSessions 拥有按用途与目标隔离的非终端模拟连接；networkFixtures 提供开发服务器的三类网络种子，services 适配原 typed service 契约，未支持操作明确拒绝。WorkspaceProvider 仍唯一拥有 UI runtime，不另建 Demo 功能页面。
 - `src/onboarding/`：两端共享首次展示记录、引导步骤、高亮定位和重看入口；工作区就绪后运行，遇到其他弹窗暂停。不发起连接、执行命令或修改项目数据，版本更新不触发。
-- `site/index.html`、`src/site/site.css`：静态介绍页的文案与独立布局，复用产品主题 token，不导入应用运行时。`site/public/site-interactions.js` 仅增强功能页签、键盘导航和一次性显现；`site/public/screenshots/` 保存虚构 Demo 的实际展示截图和采集说明，`src/site/siteInteractions.test.ts` 保护渐进增强行为。
+- `site/index.html`、`src/site/site.css`：静态介绍页的文案与独立布局，复用产品主题 token，不导入应用运行时。`site/public/site-interactions.js` 仅增强功能页签、键盘导航和一次性显现；`site/public/site-scrollbar.js` 与 `src/site/siteScrollbar.css` 负责不占布局空间的页面悬浮滚动条、拖动/键盘操作与延时隐藏；`site/public/image-viewer.js` 与 `src/site/imageViewer.css` 负责独立的原图弹窗、尺寸切换与焦点返回，`src/site/imageViewer.test.ts` 保护其交互；`site/public/screenshots/` 保存 Demo 和桌面端展示截图及来源说明，`src/site/siteInteractions.test.ts` 保护渐进增强行为。
 
 - `native/conpty/`：G0 隔离原型的上游版本锁、MIT 许可与原生输出边界补丁；`scripts/build-conpty-prototype.ps1` 构建未发布的测试 host，`scripts/conpty-ordered-probe-consumer.mjs` 只供真实 PTY 探针消费 QTR0 帧。尚未作为生产 runtime 或应用 IPC 协议接线。
 
