@@ -1,7 +1,6 @@
 (() => {
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-  const tabList = document.querySelector('[data-tabs]');
-  if (tabList) {
+  document.querySelectorAll('[data-tabs]').forEach(tabList => {
     const tabs = Array.from(tabList.querySelectorAll('button'));
     const panels = tabs.map(tab => document.getElementById(tab.getAttribute('aria-controls')));
     if (panels.every(Boolean)) {
@@ -34,7 +33,7 @@
       });
       activate(0);
     }
-  }
+  });
   if (!reducedMotion.matches && 'IntersectionObserver' in window) {
     const observer = new IntersectionObserver(entries => {
       entries.forEach(entry => {

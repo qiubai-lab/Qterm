@@ -12,20 +12,35 @@ afterEach(() => { vi.unstubAllGlobals(); document.body.innerHTML = ""; });
 describe("introduction progressive enhancement", () => {
   it("keeps all feature content accessible before JavaScript runs", () => {
     document.body.innerHTML = html;
-    expect(document.querySelectorAll(".workflow-panel")).toHaveLength(3);
+    expect(document.querySelectorAll(".workflow-panel")).toHaveLength(11);
     expect(document.querySelectorAll(".workflow-panel[hidden]")).toHaveLength(0);
   });
   it("switches panels by click and wraps keyboard navigation with focus", () => {
     const tabs = mount();
     tabs[1].click();
-    expect(document.getElementById("panel-network")).not.toHaveAttribute("hidden");
-    expect(document.getElementById("panel-files")).toHaveAttribute("hidden");
+    expect(document.getElementById("panel-notification")).not.toHaveAttribute("hidden");
+    expect(document.getElementById("panel-paste-image")).toHaveAttribute("hidden");
     tabs[1].dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true }));
     expect(document.activeElement).toBe(tabs[2]);
     tabs[2].dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
     expect(document.activeElement).toBe(tabs[0]);
     expect(tabs[0]).toHaveAttribute("aria-selected", "true");
     expect(tabs[2].tabIndex).toBe(-1);
+  });
+  it("keeps each feature group independent when switching and navigating", () => {
+    mount();
+    const groups = Array.from(document.querySelectorAll("[role=tablist]"));
+    expect(groups).toHaveLength(3);
+    for (const group of groups) {
+      const tabs = Array.from(group.querySelectorAll<HTMLButtonElement>("[role=tab]"));
+      tabs[0].dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true }));
+      expect(document.activeElement).toBe(tabs[tabs.length - 1]);
+      expect(tabs[tabs.length - 1]).toHaveAttribute("aria-selected", "true");
+      expect(document.querySelectorAll(".workflow-panel:not([hidden])")).toHaveLength(3);
+    }
+    expect(document.getElementById("panel-paste-file")).not.toHaveAttribute("hidden");
+    expect(document.getElementById("panel-git-diff")).not.toHaveAttribute("hidden");
+    expect(document.getElementById("panel-vault")).not.toHaveAttribute("hidden");
   });
   it("does not animate or hide sections when reduced motion is requested", () => {
     const animate = vi.fn();
