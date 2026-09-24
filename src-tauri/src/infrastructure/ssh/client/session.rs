@@ -2,6 +2,7 @@ use super::*;
 
 mod files;
 mod git;
+mod history_free;
 mod terminal;
 
 use files::run_files_session;

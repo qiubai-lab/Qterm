@@ -9,12 +9,15 @@ pub(super) async fn run_terminal_session(
     cancel: &mut oneshot::Receiver<()>,
     controls: &mut mpsc::Receiver<SessionControl>,
 ) -> bool {
-    let remote_shell = match shell_target.as_ref() {
+    let remote_shell = match shell_target
+        .as_ref()
+        .filter(|_| !request.history_free_bash_enabled)
+    {
         Some(target) => shell_integration::resolve_remote_shell(handle, shell_cache, target).await,
         None => None,
     };
 
-    let terminal = match handle.channel_open_session().await {
+    let mut terminal = match handle.channel_open_session().await {
         Ok(channel) => channel,
         Err(_) => {
             entry.fail(SessionFailure::ConnectionFailed);
@@ -41,13 +44,28 @@ pub(super) async fn run_terminal_session(
         )
         .await
         .is_err()
-        || terminal.request_shell(false).await.is_err()
+        || (!request.history_free_bash_enabled && terminal.request_shell(false).await.is_err())
     {
         entry.fail(SessionFailure::ConnectionFailed);
         let _ = handle
             .disconnect(Disconnect::ByApplication, "session failed", "en")
             .await;
         return false;
+    }
+    if request.history_free_bash_enabled
+        && super::history_free::initialize(&mut terminal, &request, cancel)
+            .await
+            .is_err()
+    {
+        let cancelled = entry.state() == SessionState::Closing;
+        if !cancelled {
+            entry.fail(SessionFailure::HistoryFreeStartupFailed);
+        }
+        let _ = terminal.close().await;
+        let _ = handle
+            .disconnect(Disconnect::ByApplication, "shell startup failed", "en")
+            .await;
+        return cancelled;
     }
     if let Some(shell) = remote_shell
         && terminal

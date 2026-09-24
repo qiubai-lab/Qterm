@@ -4,6 +4,7 @@ pub mod auth;
 pub mod credential;
 pub mod files;
 pub mod git;
+pub mod history_free_shell;
 pub mod network;
 pub mod profile;
 pub mod session;

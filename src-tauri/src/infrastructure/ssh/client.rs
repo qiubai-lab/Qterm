@@ -90,6 +90,7 @@ pub struct SessionConnectRequest {
     pub initial_directory: Option<InitialDirectory>,
     pub terminal_output: Arc<dyn Fn(Vec<u8>) + Send + Sync>,
     pub remote_shell_integration_enabled: bool,
+    pub history_free_bash_enabled: bool,
 }
 
 pub struct SessionRouteNode {
@@ -536,5 +537,7 @@ enum RemoteMutation {
     },
 }
 
+#[cfg(test)]
+mod history_free_tests;
 #[cfg(test)]
 mod tests;

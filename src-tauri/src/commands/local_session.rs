@@ -2,7 +2,7 @@ use std::{path::PathBuf, sync::Arc};
 
 use portable_pty::PtySize;
 use serde::Serialize;
-use tauri::{State, ipc::Channel};
+use tauri::{AppHandle, Manager, State, ipc::Channel};
 
 use crate::{
     application::error::{ApplicationError, ApplicationErrorCode},
@@ -73,14 +73,14 @@ pub fn local_terminal_capabilities() -> LocalTerminalCapabilitiesDto {
 }
 
 #[tauri::command]
-pub fn local_session_connect(
+pub async fn local_session_connect(
     columns: u32,
     rows: u32,
     osc7_enabled: bool,
     initial_directory: Option<String>,
     on_event: Channel<LocalSessionEventDto>,
     on_terminal: Channel<LocalTerminalDataDto>,
-    state: State<'_, LocalSessionState>,
+    app: AppHandle,
 ) -> Result<LocalSessionConnectionDto, IpcError> {
     let size = terminal_size(columns, rows)?;
     let events = Arc::new(move |event| {
@@ -93,9 +93,13 @@ pub fn local_session_connect(
     let output = Arc::new(move |data| {
         let _ = on_terminal.send(LocalTerminalDataDto { data });
     });
-    let connection = state
-        .manager
-        .connect(
+    let manager = Arc::clone(&app.state::<LocalSessionState>().manager);
+    let history_free = app
+        .state::<crate::commands::settings::SettingsState>()
+        .terminal()
+        .history_free_bash_enabled;
+    let connection = tauri::async_runtime::spawn_blocking(move || {
+        manager.connect_with_mode(
             size,
             osc7_enabled,
             initial_directory
@@ -104,8 +108,12 @@ pub fn local_session_connect(
                 .map(PathBuf::from),
             output,
             events,
+            history_free,
         )
-        .map_err(local_error)?;
+    })
+    .await
+    .map_err(|_| local_error(LocalSessionError::StartFailed))?
+    .map_err(local_error)?;
     Ok(LocalSessionConnectionDto {
         session_id: connection.session_id,
         cwd: connection.cwd.to_string_lossy().into_owned(),
@@ -158,6 +166,11 @@ fn terminal_size(columns: u32, rows: u32) -> Result<PtySize, IpcError> {
 
 fn local_error(error: LocalSessionError) -> IpcError {
     let application_error = match error {
+        LocalSessionError::HistoryFreeUnavailable => ApplicationError::new(
+            ApplicationErrorCode::LocalShellUnavailable,
+            "无法启动无历史 Bash 会话：本地仅支持安装了 Bash 的 Linux / macOS，未降级为普通会话",
+            true,
+        ),
         LocalSessionError::StartFailed => ApplicationError::new(
             ApplicationErrorCode::LocalShellUnavailable,
             "无法启动本地终端",

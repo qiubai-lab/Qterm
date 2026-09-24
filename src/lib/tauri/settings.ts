@@ -17,6 +17,7 @@ export interface UpdateSettings {
 
 export interface TerminalSettings {
   remoteShellIntegrationEnabled: boolean;
+  historyFreeBashEnabled: boolean;
 }
 
 export interface GeneralSettings {
@@ -55,5 +56,5 @@ export const updateAppearanceSettings = (appearance: AppearanceSettings): Promis
 export const updateUpdateSettings = (updates: UpdateSettings): Promise<SettingsSnapshot> =>
   invoke("settings_update_updates", { input: updates });
 
-export const updateTerminalSettings = (terminal: TerminalSettings): Promise<SettingsSnapshot> =>
+export const updateTerminalSettings = (terminal: Partial<TerminalSettings>): Promise<SettingsSnapshot> =>
   invoke("settings_update_terminal", { input: terminal });

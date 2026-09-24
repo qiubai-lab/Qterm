@@ -50,6 +50,7 @@ pub enum LocalSessionEvent {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LocalSessionError {
+    HistoryFreeUnavailable,
     StartFailed,
     SessionNotFound,
     InvalidTerminalInput,
@@ -74,6 +75,7 @@ pub struct LocalSessionManager {
 }
 
 impl LocalSessionManager {
+    #[cfg(test)]
     pub fn connect(
         &self,
         size: PtySize,
@@ -82,19 +84,47 @@ impl LocalSessionManager {
         terminal_output: OutputSink,
         events: EventSink,
     ) -> Result<LocalSessionConnection, LocalSessionError> {
+        self.connect_with_mode(
+            size,
+            osc7_enabled,
+            initial_directory,
+            terminal_output,
+            events,
+            false,
+        )
+    }
+
+    pub fn connect_with_mode(
+        &self,
+        size: PtySize,
+        osc7_enabled: bool,
+        initial_directory: Option<PathBuf>,
+        terminal_output: OutputSink,
+        events: EventSink,
+        history_free: bool,
+    ) -> Result<LocalSessionConnection, LocalSessionError> {
         let cwd =
             resolve_start_directory(initial_directory).ok_or(LocalSessionError::StartFailed)?;
         let pair = native_pty_system()
             .openpty(size)
             .map_err(|_| LocalSessionError::StartFailed)?;
-        let mut command = CommandBuilder::new_default_prog();
+        let startup = history_free.then(crate::infrastructure::shell_startup::ShellStartup::new);
+        let mut command = match startup.as_ref() {
+            Some(startup) => super::history_free::command(startup, osc7_enabled)?,
+            None => CommandBuilder::new_default_prog(),
+        };
         command.cwd(&cwd);
         command.env("TERM", "xterm-256color");
-        configure_osc7_integration(&mut command, osc7_enabled);
-        let mut child = pair
-            .slave
-            .spawn_command(command)
-            .map_err(|_| LocalSessionError::StartFailed)?;
+        if !history_free {
+            configure_osc7_integration(&mut command, osc7_enabled);
+        }
+        let mut child = pair.slave.spawn_command(command).map_err(|_| {
+            if history_free {
+                LocalSessionError::HistoryFreeUnavailable
+            } else {
+                LocalSessionError::StartFailed
+            }
+        })?;
         drop(pair.slave);
 
         let mut reader = pair
@@ -105,6 +135,25 @@ impl LocalSessionManager {
             .master
             .take_writer()
             .map_err(|_| LocalSessionError::StartFailed)?;
+        if let Some(startup) = startup {
+            if let Err(error) =
+                super::history_free::read_until_ready(reader, Arc::clone(&terminal_output), startup)
+            {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(error);
+            }
+        } else {
+            thread::spawn(move || {
+                let mut buffer = vec![0; 8192];
+                while let Ok(read) = reader.read(&mut buffer) {
+                    if read == 0 {
+                        break;
+                    }
+                    terminal_output(buffer[..read].to_vec());
+                }
+            });
+        }
         let session = Arc::new(LocalSession {
             master: Mutex::new(pair.master),
             writer: Mutex::new(writer),
@@ -115,16 +164,6 @@ impl LocalSessionManager {
             .lock()
             .map_err(|_| LocalSessionError::ControlUnavailable)?
             .insert(session_id.clone(), session);
-
-        thread::spawn(move || {
-            let mut buffer = vec![0; 8192];
-            while let Ok(read) = reader.read(&mut buffer) {
-                if read == 0 {
-                    break;
-                }
-                terminal_output(buffer[..read].to_vec());
-            }
-        });
 
         let sessions = Arc::clone(&self.sessions);
         let finished_id = session_id.clone();

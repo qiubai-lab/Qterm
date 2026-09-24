@@ -49,6 +49,7 @@ impl TerminalSettingsRepository for JsonTerminalSettingsRepository {
     fn load(&self) -> Result<Option<TerminalSettings>, SettingsError> {
         Ok(self.document()?.map(|document| TerminalSettings {
             remote_shell_integration_enabled: document.remote_shell_integration_enabled,
+            history_free_bash_enabled: document.history_free_bash_enabled,
         }))
     }
 
@@ -62,6 +63,7 @@ impl TerminalSettingsRepository for JsonTerminalSettingsRepository {
         let document = Document {
             schema_version: TERMINAL_SETTINGS_VERSION,
             remote_shell_integration_enabled: settings.remote_shell_integration_enabled,
+            history_free_bash_enabled: settings.history_free_bash_enabled,
         };
         let mut bytes =
             serde_json::to_vec_pretty(&document).map_err(|_| SettingsError::StorageUnavailable)?;
@@ -79,6 +81,8 @@ impl TerminalSettingsRepository for JsonTerminalSettingsRepository {
 struct Document {
     schema_version: u64,
     remote_shell_integration_enabled: bool,
+    #[serde(default)]
+    history_free_bash_enabled: bool,
 }
 
 #[cfg(test)]
@@ -98,9 +102,23 @@ mod tests {
         assert_eq!(repository.load().expect("load"), None);
         let settings = TerminalSettings {
             remote_shell_integration_enabled: false,
+            history_free_bash_enabled: true,
         };
         repository.save(settings).expect("save");
         assert_eq!(repository.load().expect("load"), Some(settings));
+    }
+
+    #[test]
+    fn legacy_documents_default_to_normal_sessions_without_rewriting() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("terminal.json");
+        let original = br#"{"schemaVersion":1,"remoteShellIntegrationEnabled":false}"#;
+        fs::write(&path, original).unwrap();
+        let repository = JsonTerminalSettingsRepository::new(path.clone());
+        let settings = repository.load().unwrap().unwrap();
+        assert!(!settings.history_free_bash_enabled);
+        assert!(!settings.remote_shell_integration_enabled);
+        assert_eq!(fs::read(path).unwrap(), original);
     }
 
     #[test]

@@ -8,7 +8,7 @@
     "src-tauri/src/infrastructure/persistence/json_workspace_repository.rs": 763,
     "src-tauri/src/infrastructure/ssh/auth.rs": 828,
     "src-tauri/src/infrastructure/ssh/client/git.rs": 1255,
-    "src-tauri/src/infrastructure/ssh/client/tests.rs": 2199,
+    "src-tauri/src/infrastructure/ssh/client/tests.rs": 2164,
     "src/app/appStyles.test.ts": 1033,
     "src/components/dialogs/aboutUpdate.css": 520,
     "src/components/dialogs/ConnectionDialog.tsx": 685,

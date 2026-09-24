@@ -127,6 +127,7 @@ pub enum SessionState {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SessionFailure {
+    HistoryFreeStartupFailed,
     ConnectionFailed,
     TransportLost,
     RemoteDisconnected,

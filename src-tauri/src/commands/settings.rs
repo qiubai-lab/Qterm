@@ -83,7 +83,8 @@ pub struct UpdateSettingsDto {
 #[derive(Clone, Copy, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct TerminalSettingsDto {
-    remote_shell_integration_enabled: bool,
+    remote_shell_integration_enabled: Option<bool>,
+    history_free_bash_enabled: Option<bool>,
 }
 
 #[derive(Clone, Copy, Deserialize, Serialize)]
@@ -146,6 +147,7 @@ struct UpdateSettingsOutputDto {
 #[serde(rename_all = "camelCase")]
 struct TerminalSettingsOutputDto {
     remote_shell_integration_enabled: bool,
+    history_free_bash_enabled: bool,
 }
 
 #[tauri::command]
@@ -238,10 +240,16 @@ pub fn settings_update_terminal(
     input: TerminalSettingsDto,
     state: State<'_, SettingsState>,
 ) -> Result<SettingsSnapshotDto, IpcError> {
+    let current = state.terminal();
     let snapshot = state
         .service
         .update_terminal(TerminalSettings {
-            remote_shell_integration_enabled: input.remote_shell_integration_enabled,
+            remote_shell_integration_enabled: input
+                .remote_shell_integration_enabled
+                .unwrap_or(current.remote_shell_integration_enabled),
+            history_free_bash_enabled: input
+                .history_free_bash_enabled
+                .unwrap_or(current.history_free_bash_enabled),
         })
         .map_err(IpcError::from)?;
     Ok(SettingsSnapshotDto::new(snapshot))
@@ -275,6 +283,7 @@ impl SettingsSnapshotDto {
             },
             terminal: TerminalSettingsOutputDto {
                 remote_shell_integration_enabled: value.terminal.remote_shell_integration_enabled,
+                history_free_bash_enabled: value.terminal.history_free_bash_enabled,
             },
             warning: value.warning.map(|warning| match warning {
                 SettingsWarning::Corrupt => "corrupt",
@@ -327,6 +336,20 @@ mod tests {
     };
     use serde_json::json;
     use tempfile::tempdir;
+
+    #[test]
+    fn history_free_setting_is_a_boolean_patch_not_a_shell_command() {
+        let patch: TerminalSettingsDto =
+            serde_json::from_value(json!({ "historyFreeBashEnabled": true })).unwrap();
+        assert_eq!(patch.history_free_bash_enabled, Some(true));
+        assert_eq!(patch.remote_shell_integration_enabled, None);
+        assert!(
+            serde_json::from_value::<TerminalSettingsDto>(
+                json!({ "historyFreeBashEnabled": "yes" })
+            )
+            .is_err()
+        );
+    }
 
     #[test]
     fn settings_input_rejects_unknown_and_sensitive_fields() {
@@ -457,6 +480,7 @@ mod tests {
         assert_eq!(updated["appearance"]["theme"], "dark");
         assert_eq!(updated["updates"]["autoCheckOnStartup"], false);
         assert_eq!(updated["terminal"]["remoteShellIntegrationEnabled"], true);
+        assert_eq!(updated["terminal"]["historyFreeBashEnabled"], false);
 
         let reset = service
             .update_configuration_directory_from_input("~", directory.path())

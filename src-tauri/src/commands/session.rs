@@ -132,14 +132,16 @@ pub fn session_connect(
     let terminal_output = Arc::new(move |data| {
         let _ = on_terminal.send(TerminalDataDto { data });
     });
-    let request = build_connect_request(
+    let terminal_settings = settings_state.terminal();
+    let mut request = build_connect_request(
         input,
         &credential_state,
         &profile_state,
         SessionPurpose::Terminal,
         terminal_output,
-        settings_state.terminal().remote_shell_integration_enabled,
+        terminal_settings.remote_shell_integration_enabled,
     )?;
+    request.history_free_bash_enabled = terminal_settings.history_free_bash_enabled;
     let sink = Arc::new(move |event| {
         let _ = on_event.send(SessionEventDto::from(event));
     });
@@ -201,6 +203,7 @@ pub(crate) fn build_connect_request(
             None
         },
         terminal_output,
+        history_free_bash_enabled: false,
         remote_shell_integration_enabled: purpose == SessionPurpose::Terminal
             && remote_shell_integration_enabled,
     })
@@ -486,6 +489,10 @@ fn state_name(state: DomainSessionState) -> &'static str {
 
 fn failure_message(failure: SessionFailure) -> (&'static str, &'static str) {
     match failure {
+        SessionFailure::HistoryFreeStartupFailed => (
+            "historyFreeStartupFailed",
+            "无历史 Bash 会话启动失败；请确认目标支持 Bash 和 SSH exec，未降级为普通会话",
+        ),
         SessionFailure::ConnectionFailed => ("connectionFailed", "无法建立 SSH 连接"),
         SessionFailure::TransportLost => {
             ("transportLost", "SSH 连接已中断，请检查网络或服务器状态")
