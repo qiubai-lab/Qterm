@@ -8,7 +8,7 @@ use crate::{
     ports::settings_repository::TerminalSettingsRepository,
 };
 
-const TERMINAL_SETTINGS_VERSION: u64 = 1;
+const TERMINAL_SETTINGS_VERSION: u64 = 2;
 const MAX_BYTES: u64 = 4 * 1024;
 
 pub struct JsonTerminalSettingsRepository {
@@ -32,11 +32,12 @@ impl JsonTerminalSettingsRepository {
         let bytes = fs::read(&self.path).map_err(|_| SettingsError::StorageUnavailable)?;
         let value: serde_json::Value =
             serde_json::from_slice(&bytes).map_err(|_| SettingsError::Corrupt)?;
-        if value
-            .get("schemaVersion")
-            .and_then(serde_json::Value::as_u64)
-            != Some(TERMINAL_SETTINGS_VERSION)
-        {
+        if !matches!(
+            value
+                .get("schemaVersion")
+                .and_then(serde_json::Value::as_u64),
+            Some(1 | TERMINAL_SETTINGS_VERSION)
+        ) {
             return Err(SettingsError::UnsupportedVersion);
         }
         serde_json::from_value(value)
@@ -54,9 +55,7 @@ impl TerminalSettingsRepository for JsonTerminalSettingsRepository {
     }
 
     fn save(&self, settings: TerminalSettings) -> Result<(), SettingsError> {
-        if self.path.exists() {
-            self.document()?;
-        }
+        let previous = self.document()?;
         if let Some(parent) = self.path.parent() {
             fs::create_dir_all(parent).map_err(|_| SettingsError::StorageUnavailable)?;
         }
@@ -64,6 +63,8 @@ impl TerminalSettingsRepository for JsonTerminalSettingsRepository {
             schema_version: TERMINAL_SETTINGS_VERSION,
             remote_shell_integration_enabled: settings.remote_shell_integration_enabled,
             history_free_bash_enabled: settings.history_free_bash_enabled,
+            remote_shell_integration_passive: previous
+                .and_then(|document| document.remote_shell_integration_passive),
         };
         let mut bytes =
             serde_json::to_vec_pretty(&document).map_err(|_| SettingsError::StorageUnavailable)?;
@@ -83,6 +84,10 @@ struct Document {
     remote_shell_integration_enabled: bool,
     #[serde(default)]
     history_free_bash_enabled: bool,
+    // A prior v2 writer stored this preference. Preserve it across updates even
+    // though the current shell integration does not consume passive mode.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    remote_shell_integration_passive: Option<bool>,
 }
 
 #[cfg(test)]
@@ -122,6 +127,41 @@ mod tests {
     }
 
     #[test]
+    fn legacy_versions_can_enable_history_free_without_losing_preferences() {
+        for original in [
+            r#"{"schemaVersion":1,"remoteShellIntegrationEnabled":false}"#,
+            r#"{"schemaVersion":2,"remoteShellIntegrationEnabled":true,"remoteShellIntegrationPassive":true}"#,
+            r#"{"schemaVersion":2,"remoteShellIntegrationEnabled":false,"remoteShellIntegrationPassive":false}"#,
+        ] {
+            let dir = tempdir().unwrap();
+            let path = dir.path().join("terminal.json");
+            fs::write(&path, original).unwrap();
+            let repository = JsonTerminalSettingsRepository::new(path.clone());
+            let mut settings = repository.load().unwrap().unwrap();
+            assert!(!settings.history_free_bash_enabled);
+            assert_eq!(fs::read_to_string(&path).unwrap(), original);
+            let legacy: serde_json::Value = serde_json::from_str(original).unwrap();
+            for enabled in [true, false] {
+                settings.history_free_bash_enabled = enabled;
+                repository.save(settings).unwrap();
+                assert_eq!(repository.load().unwrap(), Some(settings));
+                let saved: serde_json::Value =
+                    serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+                assert_eq!(saved["schemaVersion"], 2);
+                assert_eq!(saved["historyFreeBashEnabled"], enabled);
+                assert_eq!(
+                    saved["remoteShellIntegrationEnabled"],
+                    legacy["remoteShellIntegrationEnabled"]
+                );
+                assert_eq!(
+                    saved["remoteShellIntegrationPassive"],
+                    legacy["remoteShellIntegrationPassive"]
+                );
+            }
+        }
+    }
+
+    #[test]
     fn corrupt_unknown_and_future_documents_are_preserved() {
         for (name, bytes, error) in [
             (
@@ -136,8 +176,18 @@ mod tests {
             ),
             (
                 "future",
-                br#"{"schemaVersion":2,"remoteShellIntegrationEnabled":true}"#.as_slice(),
+                br#"{"schemaVersion":3,"remoteShellIntegrationEnabled":true}"#.as_slice(),
                 SettingsError::UnsupportedVersion,
+            ),
+            (
+                "invalid-passive",
+                br#"{"schemaVersion":2,"remoteShellIntegrationEnabled":true,"remoteShellIntegrationPassive":"yes"}"#.as_slice(),
+                SettingsError::Corrupt,
+            ),
+            (
+                "unknown-v2",
+                br#"{"schemaVersion":2,"remoteShellIntegrationEnabled":true,"command":"forbidden"}"#.as_slice(),
+                SettingsError::Corrupt,
             ),
         ] {
             let dir = tempdir().expect("dir");
