@@ -168,7 +168,7 @@ fn local_error(error: LocalSessionError) -> IpcError {
     let application_error = match error {
         LocalSessionError::HistoryFreeUnavailable => ApplicationError::new(
             ApplicationErrorCode::LocalShellUnavailable,
-            "无法启动无历史 Bash 会话：本地仅支持安装了 Bash 的 Linux / macOS，未降级为普通会话",
+            "无法启动禁用历史的 Bash 会话：本地仅支持安装了 Bash 的 Linux / macOS",
             true,
         ),
         LocalSessionError::StartFailed => ApplicationError::new(

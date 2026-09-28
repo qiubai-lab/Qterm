@@ -491,7 +491,7 @@ fn failure_message(failure: SessionFailure) -> (&'static str, &'static str) {
     match failure {
         SessionFailure::HistoryFreeStartupFailed => (
             "historyFreeStartupFailed",
-            "无历史 Bash 会话启动失败；请确认目标支持 Bash 和 SSH exec，未降级为普通会话",
+            "Bash 会话启动失败；请检查 Bash 启动配置及 SSH exec 支持",
         ),
         SessionFailure::ConnectionFailed => ("connectionFailed", "无法建立 SSH 连接"),
         SessionFailure::TransportLost => {

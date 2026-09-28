@@ -19,14 +19,14 @@ afterEach(() => { cleanup(); vi.resetAllMocks(); });
 async function open() {
   render(<AppThemeProvider><SettingsDialog onClose={() => undefined}/></AppThemeProvider>);
   await userEvent.click(screen.getByRole("button", { name: /高级/ }));
-  return screen.findByRole("switch", { name: "无历史 Bash 会话" });
+  return screen.findByRole("switch", { name: "禁用 Bash 历史记录" });
 }
 
 it("labels the opt-in as experimental, saves immediately, and restores it without changing OSC", async () => {
   const toggle = await open();
   expect(toggle).not.toBeChecked();
   expect(toggle.closest(".settings-row")?.querySelector(".settings-experimental-tag")).toHaveTextContent("实验功能");
-  expect(screen.getByText(/仅对新建和重连的终端生效/)).toBeInTheDocument();
+  expect(screen.getByText(/仅对新建和重连的终端生效/)).toHaveTextContent("正常加载用户 Bash 配置，不记录本会话的新命令，不清除已有历史");
   await userEvent.click(toggle);
   await waitFor(() => expect(toggle).toBeChecked());
   expect(mocks.updateTerminalSettings).toHaveBeenCalledWith({ historyFreeBashEnabled: true });

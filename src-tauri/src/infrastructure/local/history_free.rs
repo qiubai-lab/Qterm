@@ -15,13 +15,8 @@ pub(super) fn command(
     {
         use crate::domain::history_free_shell;
         let mut command = CommandBuilder::new("bash");
-        command.args(history_free_shell::BASH_ARGUMENTS);
-        for key in ["BASH_ENV", "ENV", "SHELLOPTS", "BASHOPTS"] {
-            command.env_remove(key);
-        }
-        for (key, value) in history_free_shell::environment(osc7, None, startup.marker()) {
-            command.env(key, value);
-        }
+        command.arg("-c");
+        command.arg(history_free_shell::bootstrap(osc7, None, startup.marker()));
         Ok(command)
     }
     #[cfg(not(unix))]

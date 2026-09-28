@@ -1,33 +1,39 @@
-# 无历史 Bash 会话（实验功能）
+# 禁用 Bash 历史记录（实验功能）
 
-在“系统设置 → 高级”开启“无历史 Bash 会话”。默认关闭，修改即时保存到设备的 `terminal.json`；只影响之后新建、分屏或重连的终端，已有会话保持原来的行为。
+在“系统设置 → 高级”开启“禁用 Bash 历史记录”。默认关闭，修改即时保存到设备的 `terminal.json`；只影响之后新建、分屏或重连的终端，已有会话保持原来的行为。持久化字段仍为 `historyFreeBashEnabled`，原有开关值继续有效，无需迁移。
 
-终端设置兼容 schema v1 和旧版带 `remoteShellIntegrationPassive` 的 v2 文件：读取不修改文件，缺少无历史开关时默认关闭；保存时写入 v2 并保留原有 OSC 7 开关及旧 passive 字段。未知的更高版本、未知字段或格式错误仍不会被覆盖。
+## 用户环境与历史行为
 
-开启后，Qterm 启动独立 Bash，跳过用户的 profile/rc 文件，不读取原 Bash 历史、不收集本会话命令历史，默认历史文件指向 `/dev/null`。历史文件与长度变量在该 Bash 内被设为只读；已有历史文件不被清空。用户别名、自定义提示符及由启动配置加载的环境不会自动生效。启动成功后终端显示英文的实验性无历史会话提示。
+Qterm 启动交互式、非登录 Bash，保留该类型的系统启动配置，并加载一次 `~/.bashrc`。其中配置的 PATH、Node 版本管理器、别名、函数和提示符正常生效。不强制加载登录 Shell 的 profile；仅在 profile 中配置的环境应由用户按正常 Bash 配置方式提供给 `.bashrc`。
 
-OSC 7 目录跟踪可以独立开启或关闭；初始化发生在受控启动阶段，不通过模拟键盘输入执行，也不调用普通模式的 `history -d` 清理逻辑。上/下方向键不能找回本会话的命令，这是禁用内存历史的预期行为。
+用户配置加载完成后，Qterm 关闭 history 收集，并将 `HISTFILE` 指向 `/dev/null`，避免常规退出保存和默认 `history -a` 写回原历史文件。不清空或删除原历史文件，不将 `HISTSIZE`、`HISTFILESIZE` 设为零，也不锁定历史变量。原历史可以读取、查看或通过方向键检索，本会话输入的新命令不会加入历史。用户配置自身执行的文件操作保持原行为。
+
+启动成功后终端显示历史记录已禁用的提示。若用户配置把 `HISTFILE` 设为只读、无法重定向，会显示历史禁用不完整的警告，终端仍可使用。之后手动重新加载配置可能重新启用历史或改回历史文件；本功能不强制拦截用户主动修改。
+
+## OSC 7 与启动
+
+OSC 7 开关和初始目录恢复独立。初始化通过内存中的 rc 包装脚本执行，不模拟键盘输入，不把初始化或 Hook 命令提交到交互历史。用户 `PROMPT_COMMAND` 的字符串/数组内容保留，OSC Hook 追加到可执行的 prompt 项中。若用户将 `PROMPT_COMMAND` 设为只读，显示 OSC Hook 未安装的警告。
+
+SSH 和本地 Unix PTY 复用启动策略。Bash process substitution 提供一次性 rc 文件，不创建远程临时文件。保留按会话隔离、有界的初始化握手；初始化前禁止交互。Bash 缺失、SSH exec 被拒绝、配置脚本退出/阻塞导致启动失败或超时，仍作为启动失败处理，不自动创建另一种 Shell。
 
 支持范围：
 
-- 远程：目标提供 Bash、兼容 POSIX 的命令启动环境及 `env -u`，SSH 服务端允许 exec。默认登录 Shell 可以与 Bash 不同，但服务器仍会先处理自身的账户 Shell/强制命令配置。
-- 本地：Linux / macOS 且 PATH 中提供 Bash。Windows 本地终端暂不支持；Windows 上连接支持条件满足的远程主机不受影响。
-- Bash 缺失、启动被拒绝、初始化超时或提前结束时连接失败，不会自动退回会记录历史的普通会话。
+- 远程：目标提供 Bash、process substitution 所需的文件描述符支持，SSH 服务端允许 exec。服务器仍会先处理账户 Shell/强制命令配置。
+- 本地：Linux / macOS 且 PATH 中提供 Bash。Windows 本地终端暂不支持；Windows 客户端可连接满足条件的远程主机。
 
-这不是完整的系统无痕模式。服务器审计、程序日志、Qterm 的目录恢复/通知/滚动缓冲，以及 `sudo -i`、`su`、嵌套 SSH、其他 Shell 或已有 tmux 会话，不属于此机制的保护范围。显式写文件或自行重新配置环境同样不构成隔离边界。
+这只是当前 Bash 的常规历史开关，不是系统无痕模式。服务器审计、应用日志、Qterm 目录恢复/通知/滚动缓冲不受影响；嵌套 Bash、`sudo -i`、`su`、嵌套 SSH、其他 Shell 或已有 tmux 会话不继承保证。用户脚本重新启用 history、显式调用 `history -w 文件` 或自行写日志也不在控制范围内。
 
 ## 开发验证
 
-`cargo test --all-targets --all-features` 包含内存 SSH 服务端测试：普通连接兼容、OSC 开关、分片握手、拒绝/关闭/超时以及初始化期间的输入阻断与取消。共享解析器测试覆盖命令回显不能冒充握手、有界输出和跨数据块处理。
+`cargo test --all-targets --all-features` 包含共享策略单测与内存 SSH transport 测试：普通连接、OSC 开关、分片握手、拒绝/关闭/超时以及初始化期间输入阻断与取消。共享握手解析器覆盖命令回显不能冒充初始化成功、有界输出和跨数据块处理。
 
-真实 Bash/PTY 测试单独启用，使用临时 HOME 和预置历史，不访问真实账户历史：
+真实 Bash/PTY 测试使用临时 HOME、预置历史和测试可执行文件，不访问真实账户历史：
 
-```powershell
-$env:QTERM_TEST_BASH = "D:/SDK/Git/bin/bash.exe"
+```sh
 cd src-tauri
-cargo test history_free_live -- --ignored
+QTERM_TEST_BASH=/bin/bash cargo test history_free_live -- --ignored
 ```
 
-Unix 可设置 `QTERM_TEST_BASH=/bin/bash` 运行同一测试。Git Bash 仅用于 Windows 开发环境中验证受控 Bash 和远程启动命令；这不表示支持 Windows 本地无历史会话。
+Windows 开发环境可设置 `QTERM_TEST_BASH` 为 Git Bash 的 `bash.exe`，测试远程命令生成策略；这不表示支持 Windows 本地无历史终端。
 
-真实测试覆盖 OSC 开/关 × 正常退出/强制断开的四种组合，普通与多行命令、带引号和 `$()` 的目录、跳过 `.bashrc`、空内存 history，以及原历史文件内容不变。
+真实测试覆盖本地/远程启动 × OSC 开/关 × 退出/断连、rc 只加载一次、PATH 命令/别名、自定义提示符、字符串/数组 Hook、多行输入、特殊字符目录、历史变量可修改、旧历史可读、新输入及初始化/OSC 命令不进入历史、原文件不变，以及只读配置冲突后的警告与可用终端。
