@@ -115,6 +115,54 @@ xattr -cr /Applications/Qterm.app
 
 安全设计、信任边界与已知残余风险请阅读[安全模型](docs/security-model.md)。
 
+## 🔄 自托管同步服务部署
+
+同步为可选功能，可在多台 Qterm 之间同步连接、分组和跳板机顺序；密码与私钥保留在本机。服务使用 SQLite，数据持久化在 Docker 数据卷中，GHCR 仅托管镜像。
+
+### 1. 生成 Token 和摘要
+
+在 Linux 上执行（需要 OpenSSL 和 `sha256sum`）：
+
+```sh
+SYNC_TOKEN=$(openssl rand -hex 32); printf '客户端 TOKEN ：%s\n服务端 SHA256：%s\n' "$SYNC_TOKEN" "$(printf '%s' "$SYNC_TOKEN" | sha256sum | cut -d ' ' -f 1)"; unset SYNC_TOKEN
+```
+
+保存原始 Token 到密码管理器，供客户端填写。摘要输出取开头的 64 位十六进制值，填入 Compose 的 `QTERM_SYNC_TOKEN_SHA256`。
+
+### 2. 配置并启动 Compose
+
+需要 Docker Engine 和 Compose。克隆本仓库后，直接编辑 `docker/compose.yaml` 的以下配置，无需创建 `.env` 文件：
+
+```yaml
+ports:
+  - "127.0.0.1:8080:8080"
+environment:
+  QTERM_SYNC_TOKEN_SHA256: "替换为64位十六进制摘要"
+  QTERM_SYNC_LISTEN: "0.0.0.0:8080"
+  QTERM_SYNC_DATA_DIR: "/data"
+```
+
+`QTERM_SYNC_LISTEN` 是容器内监听地址，保持 `0.0.0.0:8080`；宿主机开放地址由 `ports` 左侧控制。`/data` 已挂载持久化数据卷。请替换摘要占位符后启动，否则服务会拒绝启动。
+
+[Compose 配置](docker/compose.yaml) 固定使用 `ghcr.io/qiubai-lab/qterm-sync:0.5.0`，无需设置镜像环境变量。镜像随 Qterm 的 `v*` 发版标签发布，版本与 Qterm 一致（如 `v0.5.0` → `0.5.0`）；该版本须先发布成功。私有 Package 需先登录 GHCR，公开 Package 可匿名拉取。
+
+在仓库根目录运行：
+
+```sh
+docker compose -f docker/compose.yaml up -d
+docker compose -f docker/compose.yaml logs -f sync
+```
+
+默认仅监听服务器本机 `127.0.0.1:8080`，可由反向代理提供 HTTPS。局域网直连时，将 `ports` 中的 `127.0.0.1` 改为服务器的局域网 IP，再重新执行 `up -d`。
+
+### 3. 连接 Qterm
+
+打开 **系统设置 → 同步**，启用同步，填写服务器地址与原始 Token，保存后点击“立即同步”。本机测试地址为 `http://127.0.0.1:8080`；其他设备使用服务器局域网 IP 或 HTTPS 域名。使用 HTTP 时需在“本地网络”行勾选“允许 HTTP”，Token 与配置将以明文传输。
+
+默认数据卷为 `qterm-sync_sync-data`。停止服务用 `docker compose -f docker/compose.yaml down`，不要加 `-v`，以保留数据。升级时先备份数据，修改 Compose 的固定镜像版本，再执行 `pull` 和 `up -d`。
+
+本地无 Docker 启动、鉴权、备份及冲突处理见[同步服务部署文档](docs/sync-service.md)。
+
 ## ⌨️ 常用操作
 
 Qterm 只提供搜索当前终端和切换到指定 Workspace 两类工作台快捷键。为避免覆盖 Shell、vim 和 tmux 的控制键，macOS 使用 `Command`，Windows/Linux 使用 `Ctrl+Shift`。
@@ -142,6 +190,7 @@ pnpm tauri dev
 | 文档 | 内容 |
 | --- | --- |
 | [开发指引](docs/DEVELOPMENT.md) | 环境准备、源码运行、测试、构建与贡献约定 |
+| [同步服务部署](docs/sync-service.md) | Docker、自托管同步、本地测试、备份与恢复 |
 | [安全模型](docs/security-model.md) | 凭据、主机密钥、文件传输与信任边界 |
 | [故障排查](docs/troubleshooting.md) | SSH、私钥、SFTP 与开发环境常见问题 |
 | [发布流程](docs/release.md) | 版本检查、标签发布、CI 产物与失败处理 |

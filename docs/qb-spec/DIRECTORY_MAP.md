@@ -170,7 +170,7 @@
 # Optional connection synchronization
 
 - `crates/sync-core/src/` owns portable, secret-free catalogs, validation, protocol v1 and entity three-way merge; shared by desktop and server.
-- `services/qterm-sync/src/` owns the independent HTTP API, constant-time token digest verification and normalized SQLite catalog transactions; Docker/Compose and `.github/workflows/build-sync.yml` own image delivery.
+- `services/qterm-sync/src/` owns the independent HTTP API, constant-time token digest verification and normalized SQLite catalog transactions; `services/qterm-sync/Dockerfile`, `docker/compose.yaml` and `.github/workflows/build-sync.yml` own image delivery and deployment.
 - `src-tauri/src/ports/sync.rs` defines local catalog CAS, device checkpoint and remote transport capabilities.
 - `src-tauri/src/application/sync_service.rs` owns optional synchronization, conflict snapshots, baseline/recovery journal sequencing and server rollback detection.
 - `src-tauri/src/infrastructure/sync/` owns bounded HTTPS and native credential storage; `persistence/json_profile_repository/sync.rs` owns lock-shared catalog conversion and atomic import preserving eligible device credential bindings.
