@@ -11,6 +11,7 @@ pub mod network_service;
 pub mod profile_service;
 pub mod settings_service;
 pub mod ssh_config_import;
+pub mod sync_service;
 pub mod terminal_staging_service;
 pub mod workspace_service;
 

@@ -245,9 +245,9 @@ pub fn run() {
                 JsonUpdateSettingsRepository::new(paths.updates.clone()),
                 JsonTerminalSettingsRepository::new(paths.terminal.clone()),
             ));
-            app.manage(ProfileState::new(JsonProfileRepository::new(
-                paths.profiles,
-            )));
+            let profile_repository = JsonProfileRepository::new(paths.profiles);
+            app.manage(ProfileState::new(profile_repository.clone()));
+            commands::sync::SyncState::install(app, profile_repository, paths.device.clone());
             app.manage(CredentialState::new(JsonCredentialVault::new(
                 paths.credentials,
             )));
@@ -266,6 +266,9 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            commands::sync::sync_get,
+            commands::sync::sync_configure,
+            commands::sync::sync_run,
             browser_proxy_list,
             browser_proxy_launch,
             profile_list,

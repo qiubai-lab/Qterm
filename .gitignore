@@ -41,3 +41,4 @@ id_dsa*
 
 # Browser product site
 dist-site
+**/target/

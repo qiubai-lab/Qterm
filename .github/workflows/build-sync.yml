@@ -1,0 +1,59 @@
+name: Build sync service
+on:
+  pull_request:
+    paths: ['services/qterm-sync/**', 'crates/sync-core/**', '.github/workflows/build-sync.yml']
+  push:
+    tags: ['sync-v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - run: cargo fmt --manifest-path services/qterm-sync/Cargo.toml --check
+      - run: cargo fmt --manifest-path crates/sync-core/Cargo.toml --check
+      - run: cargo clippy --locked --manifest-path services/qterm-sync/Cargo.toml --all-targets -- -D warnings
+      - run: cargo test --locked --manifest-path services/qterm-sync/Cargo.toml
+      - run: cargo test --locked --manifest-path crates/sync-core/Cargo.toml
+  image:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - name: Image name
+        id: image
+        shell: bash
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/qterm-sync" >> "$GITHUB_OUTPUT"
+      - uses: docker/login-action@v3
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/sync-v')
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/metadata-action@v5
+        id: meta
+        with:
+          images: ${{ steps.image.outputs.name }}
+          tags: |
+            type=match,pattern=sync-v(.*),group=1
+            type=sha
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: services/qterm-sync/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/sync-v') }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}

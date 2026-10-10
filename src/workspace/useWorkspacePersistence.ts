@@ -4,6 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type Dispatc
 import { listProfileGroups, listProfiles, type ConnectionProfile, type ProfileGroup } from "@qterm/services/profiles";
 import { loadWorkspaces, saveWorkspaces } from "@qterm/services/workspaces";
 import { registerCurrentWindowCloseFlush } from "../lib/tauri/window";
+import { onSyncProfilesChanged } from "../lib/tauri/sync";
 import type { WorkspaceDocument } from "./model";
 import type { WorkspaceAction } from "./reducer";
 import { workspaceErrorMessage } from "./workspaceRuntime";
@@ -22,6 +23,16 @@ export function useWorkspacePersistence(document: WorkspaceDocument, dispatch: D
     setProfiles(items);
     setProfileGroups(groups);
   }, []);
+
+  useEffect(() => {
+    if (!("__TAURI_INTERNALS__" in window)) return;
+    let disposed = false;
+    let stop: (() => void) | undefined;
+    void onSyncProfilesChanged(() => { void refreshProfiles().catch(() => setStorageNotice("同步后刷新连接列表失败")); })
+      .then((unlisten) => { if (disposed) unlisten(); else stop = unlisten; })
+      .catch(() => setStorageNotice("无法监听连接同步更新"));
+    return () => { disposed = true; stop?.(); };
+  }, [refreshProfiles]);
 
   useEffect(() => {
     if (!hasWorkspaceRuntime()) return;

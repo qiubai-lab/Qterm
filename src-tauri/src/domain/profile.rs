@@ -247,6 +247,30 @@ pub fn validate_jump_routes(profiles: &[ConnectionProfile]) -> Result<(), JumpRo
     Ok(())
 }
 
+/// Portable topology remains valid before this device has bound its credentials.
+/// Execution still uses resolve_profile_route and enforces credential eligibility.
+pub fn validate_stored_jump_routes(profiles: &[ConnectionProfile]) -> Result<(), JumpRouteError> {
+    for profile in profiles {
+        if profile.jump_profile_ids().len() > MAX_JUMP_PROFILES {
+            return Err(JumpRouteError::TooDeep);
+        }
+        let mut seen = std::collections::HashSet::new();
+        for id in profile.jump_profile_ids() {
+            if id == profile.id() {
+                return Err(JumpRouteError::SelfReference);
+            }
+            if !seen.insert(id) {
+                return Err(JumpRouteError::DuplicateProfile);
+            }
+            let jump = find_profile(profiles, id).ok_or(JumpRouteError::MissingProfile)?;
+            if jump.auth_preference() == AuthPreference::Manual {
+                return Err(JumpRouteError::ManualAuthentication);
+            }
+        }
+    }
+    Ok(())
+}
+
 pub fn resolve_profile_route(
     profiles: &[ConnectionProfile],
     target_id: &ProfileId,

@@ -17,3 +17,4 @@ pub mod transfer;
 pub mod workspace;
 
 pub mod notification;
+pub mod sync;
