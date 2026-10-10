@@ -1,5 +1,6 @@
 //! Bash history policy, applied after user rc initialization and before terminal input.
 use super::session::InitialDirectory;
+use super::shell_integration::ShellFeatures;
 
 pub const SESSION_NOTICE: &str =
     "[Qterm] Bash command history recording disabled; user shell configuration loaded.\r\n";
@@ -9,13 +10,23 @@ const HISTORY_WARNING: &str =
 /// The outer non-interactive Bash only supplies an in-memory rc file. The inner
 /// interactive, non-login Bash retains its normal system rc and sources ~/.bashrc.
 /// Neither initialization nor OSC hooks are submitted through terminal input.
+#[cfg(test)]
 pub fn bootstrap(osc7: bool, directory: Option<&InitialDirectory>, marker: &str) -> String {
+    bootstrap_features(ShellFeatures::coupled(osc7), directory, marker)
+}
+
+pub fn bootstrap_features(
+    features: ShellFeatures,
+    directory: Option<&InitialDirectory>,
+    marker: &str,
+) -> String {
     format!(
         "exec \"$BASH\" --rcfile <(builtin printf '%s' {}) +o history -i",
-        quote(&startup_script(osc7, directory, marker))
+        quote(&startup_script_features(features, directory, marker))
     )
 }
 
+#[cfg(test)]
 pub fn remote_command(osc7: bool, directory: Option<&InitialDirectory>, marker: &str) -> String {
     format!(
         "exec bash -c {}",
@@ -23,7 +34,27 @@ pub fn remote_command(osc7: bool, directory: Option<&InitialDirectory>, marker: 
     )
 }
 
+pub fn remote_features(
+    features: ShellFeatures,
+    directory: Option<&InitialDirectory>,
+    marker: &str,
+) -> String {
+    format!(
+        "exec bash -c {}",
+        quote(&bootstrap_features(features, directory, marker))
+    )
+}
+
+#[cfg(test)]
 fn startup_script(osc7: bool, directory: Option<&InitialDirectory>, marker: &str) -> String {
+    startup_script_features(ShellFeatures::coupled(osc7), directory, marker)
+}
+
+fn startup_script_features(
+    features: ShellFeatures,
+    directory: Option<&InitialDirectory>,
+    marker: &str,
+) -> String {
     // Read prior history before redirecting the default file, without clearing it.
     // No readonly variables: users can source their configuration again normally.
     let mut script = format!(
@@ -46,7 +77,7 @@ fi
             quote(directory.as_str())
         ));
     }
-    if osc7 {
+    if features.osc7 {
         // Appending to the last existing entry preserves both scalar and array
         // PROMPT_COMMAND, including older Bash versions that only execute [0].
         // A newline also keeps a trailing user comment from swallowing our hook.
@@ -63,6 +94,12 @@ fi
 builtin unset _qterm_prompt_index
 "#,
         );
+    }
+    if features.osc133 {
+        script.push_str(&super::command_markers::installation(
+            super::shell_integration::RemoteShell::Bash,
+        ));
+        script.push('\n');
     }
     // An echoed exec request must not impersonate an initialized shell.
     let encoded_marker: String = marker.bytes().map(|byte| format!("\\{byte:03o}")).collect();
@@ -83,6 +120,22 @@ mod tests {
     use super::*;
 
     #[test]
+    fn independently_composes_protocols_after_the_history_policy() {
+        for (osc7, osc133) in [(false, false), (true, false), (false, true), (true, true)] {
+            let script = startup_script_features(ShellFeatures { osc7, osc133 }, None, "ready");
+            assert_eq!(script.contains("file://"), osc7);
+            assert_eq!(script.contains("__qterm_commands_loaded"), osc133);
+            assert!(script.contains("set +o history"));
+            if osc133 {
+                assert!(
+                    script.find("set +o history").unwrap()
+                        < script.find("__qterm_install_commands").unwrap()
+                );
+            }
+        }
+    }
+
+    #[test]
     fn configures_history_after_user_rc_without_clearing_or_locking_variables() {
         let script = startup_script(false, None, "ready");
         assert!(script.find("builtin source").unwrap() < script.find("set +o history").unwrap());
@@ -100,6 +153,8 @@ mod tests {
         assert!(script.contains("builtin cd -- '/tmp/a'\\''$(touch nope)\nfolder'"));
         assert!(!script.contains("file://"));
         assert!(!script.contains("PROMPT_COMMAND"));
+        assert!(!script.contains("__qterm_commands_loaded"));
+        assert!(startup_script(true, None, "ready").contains("__qterm_commands_loaded"));
         assert!(startup_script(true, None, "ready").contains("file://"));
     }
 }

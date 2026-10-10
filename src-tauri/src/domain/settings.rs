@@ -25,6 +25,7 @@ pub struct UpdateSettings {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TerminalSettings {
     pub remote_shell_integration_enabled: bool,
+    pub command_markers_enabled: bool,
     pub history_free_bash_enabled: bool,
 }
 
@@ -32,6 +33,7 @@ impl Default for TerminalSettings {
     fn default() -> Self {
         Self {
             remote_shell_integration_enabled: true,
+            command_markers_enabled: true,
             history_free_bash_enabled: false,
         }
     }

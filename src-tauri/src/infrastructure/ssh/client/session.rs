@@ -18,7 +18,9 @@ pub(super) fn initial_terminal_size(request: &SessionConnectRequest) -> Terminal
 pub(super) fn shell_integration_target(
     request: &SessionConnectRequest,
 ) -> Option<crate::domain::shell_integration::RemoteShellTarget> {
-    if request.purpose != SessionPurpose::Terminal || !request.remote_shell_integration_enabled {
+    if request.purpose != SessionPurpose::Terminal
+        || !(request.remote_shell_integration_enabled || request.command_markers_enabled)
+    {
         return None;
     }
     request.route.last().map(|target| {

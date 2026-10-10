@@ -21,6 +21,14 @@ function base64(text: string) {
 }
 
 describe("terminal OSC 52 clipboard writes", () => {
+  it("accepts BEL clipboard writes in tmux escaped envelopes and directly forwarded OSC", async () => {
+    const { write, writeText } = setup();
+    const sequence = `\x1b]52;c;${base64("forwarded")}\x07`;
+    await write(`\x1bPtmux;${sequence.split("\x1b").join("\x1b\x1b")}\x1b\\`);
+    expect(writeText).toHaveBeenCalledExactlyOnceWith("forwarded");
+    await write(sequence);
+    expect(writeText.mock.calls).toEqual([["forwarded"], ["forwarded"]]);
+  });
   it("copies UTF-8 across output chunks with BEL and ST terminators without rendering control data", async () => {
     const { terminal, write, writeText } = setup();
     const text = "你好 👋\nsecond line";

@@ -10,8 +10,11 @@ pub(super) async fn initialize(
     cancel: &mut oneshot::Receiver<()>,
 ) -> Result<(), ()> {
     let mut startup = ShellStartup::new();
-    let command = history_free_shell::remote_command(
-        request.remote_shell_integration_enabled,
+    let command = history_free_shell::remote_features(
+        crate::domain::shell_integration::ShellFeatures {
+            osc7: request.remote_shell_integration_enabled,
+            osc133: request.command_markers_enabled,
+        },
         request.initial_directory.as_ref(),
         startup.marker(),
     );

@@ -17,12 +17,12 @@ export function TerminalProtocolTag({ blockId, connected, directoryState, direct
   const id = useId();
   const [position, setPosition] = useState<CSSProperties | null>(null);
   const [open, setOpen] = useState(false);
-  const enabled = connected && (notifications.enabled || Boolean(directoryState));
+  const enabled = connected;
   if (!enabled && position !== null) { setPosition(null); setOpen(false); }
   const unread = notifications.enabled && notifications.unread(blockId);
   const message = notifications.enabled
     ? unread ? "终端有未读通知，点击查看" : "终端通知已启用（实验功能）"
-    : directoryMessage;
+    : (directoryState ? directoryMessage : undefined) ?? "终端协议支持";
   const hide = () => setOpen(false);
   const show = () => {
     if (open) return;
@@ -68,6 +68,10 @@ export function TerminalProtocolTag({ blockId, connected, directoryState, direct
     {position && createPortal(<div ref={bubble} id={id} role="tooltip" aria-hidden={!open} data-open={open} className="themed-tooltip terminal-protocol-tooltip" style={position}>
       {directoryState && <p className="terminal-protocol-directory"><strong>OSC 7</strong><span>同步当前目录 · <small data-state={directoryState}>{directoryStatus}</small></span></p>}
       <div className="terminal-protocol-notifications">
+        <p><strong>OSC 0/2</strong><span>显示应用标题，保留主机名称</span></p>
+        <p><strong>OSC 133</strong><span>接收命令边界，用于导航与输出复制</span></p>
+        <p><strong>OSC 9;4</strong><span>显示应用上报的任务进度</span></p>
+        <p><strong>OSC 52</strong><span>应用复制到本机剪贴板 · 只写，不读取</span></p>
         <p><strong>OSC 8</strong><span>HTTP(S) 超链接，确认后打开</span></p>
         {notifications.enabled && <>
           <p><strong>BEL</strong><span>响铃信号，提醒关注终端</span></p>

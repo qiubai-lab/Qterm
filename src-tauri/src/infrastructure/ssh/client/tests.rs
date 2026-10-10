@@ -54,32 +54,9 @@ fn route_metadata(host: &str, port: u16) -> RouteNodeMetadata {
     }
 }
 
-pub(super) fn connect_request(
-    endpoint: HostEndpoint,
-    username: String,
-    auth: AuthRequest,
-    purpose: SessionPurpose,
-    profile_id: Option<String>,
-    terminal_output: Arc<dyn Fn(Vec<u8>) + Send + Sync>,
-) -> SessionConnectRequest {
-    SessionConnectRequest {
-        route: vec![SessionRouteNode {
-            profile_id: profile_id.clone().unwrap_or_else(|| "profile-1".into()),
-            name: "Test profile".into(),
-            endpoint,
-            username,
-            auth,
-        }],
-        purpose,
-        profile_id,
-        terminal_size: (purpose == SessionPurpose::Terminal)
-            .then(|| TerminalSize::new(93, 31).expect("terminal size")),
-        initial_directory: None,
-        terminal_output,
-        remote_shell_integration_enabled: false,
-        history_free_bash_enabled: false,
-    }
-}
+#[path = "tests/connect_fixture.rs"]
+mod connect_fixture;
+pub(super) use connect_fixture::connect_request;
 
 #[path = "tests/connection_policy.rs"]
 mod connection_policy;
@@ -1058,6 +1035,7 @@ fn local_openssh_connects_to_a_target_through_a_jump_profile() {
                 let _ = terminal_sender.send(data);
             }),
             remote_shell_integration_enabled: false,
+            command_markers_enabled: false,
             history_free_bash_enabled: false,
         },
         Arc::new(move |event| {

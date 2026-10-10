@@ -63,7 +63,7 @@
 - `src/components/dialogs/ConnectionDialog.tsx`：连接、分组、凭证引用、显式跃点编辑和不兼容配置清除确认入口；展示后端候选与原因，不拥有 route 校验、列表动效测量或文件删除授权。
 - `src/components/dialogs/connection/`、`credential/`：Connection jump/反馈展示、纯 profile 模型、分组内容过渡存在期，以及连接与凭证列表主选择、详情 stage 的局部动效测量和 Credential 浮层/安全提示模块；分组展示组件与 motion hook 不拥有展开意图、draft、业务选择或 persistence，父 dialog 继续拥有这些状态和 nested dialog 生命周期。
 - `src/components/dialogs/SshConfigImportDialog.tsx`：SSH Config 文件选择、连接信息/凭证双 Tab 与批量导入界面；负责默认未分组、连接选择和逐项私钥授权，不接收设备路径或私钥正文。
-- `src/terminal/TerminalPanel.tsx`、`terminalSessionReset.ts`、`TerminalStagingStatus.tsx`、`terminalTheme.ts`、`terminalOsc8Link.ts`、`terminalWebLinks.ts`、`terminalExternalLinkRequests.ts`、`TerminalExternalLinkConfirmation.tsx`：每个 Block 的 xterm 生命周期、与已排队输出有序执行的会话重置、直接输出 writer、本地剪贴板路径准备与远端暂存任务的有序粘贴、按动作挂载的右下角悬浮状态卡片、OSC 工作目录、OSC 8 激活及普通 HTTP/HTTPS 文本识别适配、终端外链请求边界与风险确认、PTY 尺寸适配与 semantic token palette registry；OSC 8 与 Web Links 继续由 xterm 解析和展示，实际 HTTP/HTTPS 目标经统一确认后才委托给共享外链边界；悬浮卡片不占用 xterm 布局高度；该层只消费一次性最终粘贴文本，不读取本机文件内容/图片像素、选择缓存/远端临时目录、管理连接配置、布局树或 theme selection。
+- `src/terminal/TerminalPanel.tsx`、`terminalView.ts`、`terminalSessionReset.ts`、`TerminalStagingStatus.tsx`、`terminalTheme.ts`、`terminalOsc8Link.ts`、`terminalWebLinks.ts`、`terminalExternalLinkRequests.ts`、`TerminalExternalLinkConfirmation.tsx`：每个 Block 的 xterm 生命周期、与已排队输出有序执行的会话重置、直接输出 writer、本地剪贴板路径准备与远端暂存任务的有序粘贴、按动作挂载的右下角悬浮状态卡片、OSC 工作目录、OSC 8 激活及普通 HTTP/HTTPS 文本识别适配、终端外链请求边界与风险确认、PTY 尺寸适配与 semantic token palette registry；OSC 8 与 Web Links 继续由 xterm 解析和展示，实际 HTTP/HTTPS 目标经统一确认后才委托给共享外链边界；悬浮卡片不占用 xterm 布局高度；该层只消费一次性最终粘贴文本，不读取本机文件内容/图片像素、选择缓存/远端临时目录、管理连接配置、布局树或 theme selection。
 - `src/files/FileBrowserPane.tsx`、`FileList.tsx`、`FileUploadMenu.tsx`、`fileBrowserModel.ts`、`FilePreviewDocument.tsx`、`FileSearchBar.tsx`、`useFileSearchSession.ts`、`fileSearchModel.ts`、`codeEditorSearch.ts`、`markdownPreviewSearch.ts`、`CodeEditor.tsx`、`MarkdownPreview.tsx`、`FileTextContextMenu.tsx`、`fileTextContextMenuModel.ts`：内部文件窗口的目录导航、虚拟列表/排序纯规则、下载、viewport 级上传菜单、瞬时预览编辑状态与按需编辑/渲染组件；文件预览组合层拥有单文件搜索会话，纯模型负责文字匹配，CodeMirror 与 Markdown adapter 只负责各自表面的高亮和定位；文本预览与编辑共用 Files-owned 菜单生命周期，CodeMirror 独立拥有编辑历史/选区命令，Markdown 独立拥有受预览范围约束的 DOM 选区与链接目标；不依赖 TerminalRuntime，不直接读取本地文件或实现 SFTP。
 - `src/lib/tauri/fileDrop.ts`：原生文件拖放订阅的平台入口；产品文件面板通过 `@qterm/services/fileDrop` 调用，浏览器选择无原生订阅的实现。
 - `src/lib/tauri/profiles.ts`：连接配置、有序跃点候选/route 要求、不兼容存储清除与 SSH Config 导入 IPC 客户端契约；不包含配置路径、私钥路径、强制删除参数或领域校验。
@@ -88,8 +88,8 @@
 - `src-tauri/src/domain/auth.rs`：短期凭据包装、可执行认证请求与稳定认证失败；不表达 profile 的 `manual` 策略，也不依赖 `russh` 或 Tauri。
 - `src-tauri/src/domain/credential.rs`、`ports/credential_vault.rs`、`application/credential_service.rs`：vault 领域语义、外部存储端口与用例边界；不依赖具体密码学文件格式或 UI。
 - `src-tauri/src/domain/settings.rs`、`ports/settings_repository.rs`、`application/settings_service.rs`：安全、外观、更新与终端集成设置的默认值、范围、注入配置根、存储端口与用例；domain 只展开/校验输入并使用组合根注入的默认目录，application snapshot 投影默认/配置/活动根，不依赖 JSON、Tauri、Cargo build mode、SSH 或 Windows API。
-- `src-tauri/src/domain/shell_integration.rs`、`ports/remote_shell_cache.rs`：受支持远程 Shell、目标签名、固定探测输出解析、当前会话 Hook、Shell 专属初始目录字面量编码与可丢弃 cache 契约；不依赖 russh、JSON 或 Tauri。
-- `src-tauri/src/domain/history_free_shell.rs`：实验性 Bash 历史禁用的 rc 启动脚本、用户配置加载、兼容 prompt 的可选 OSC 7 与目录字面量；`infrastructure/shell_startup.rs` 拥有有界、按会话隔离的初始化握手，`infrastructure/ssh/client/session/history_free.rs` 与 `infrastructure/local/history_free.rs` 分别适配 SSH exec 和本地 Unix PTY。高级设置偏好复用 TerminalSettings，仅在启动时取快照；配置冲突警告、实际启动失败不降级。边界与测试方法见 `docs/history-free-bash.md`。
+- `src-tauri/src/domain/shell_integration.rs`、`domain/command_markers.rs`、`ports/remote_shell_cache.rs`：受支持远程 Shell、目标签名、固定探测输出解析、按 ShellFeatures 独立组合的当前会话 OSC 7/133 Hook（命令标记复用内嵌 Bash/Zsh 脚本）、Shell 专属初始目录字面量编码与可丢弃 cache 契约；不依赖 russh、JSON 或 Tauri。
+- `src-tauri/src/domain/history_free_shell.rs`：实验性 Bash 历史禁用的 rc 启动脚本、用户配置加载、兼容 prompt 的可选 OSC 7/133 与目录字面量；`infrastructure/shell_startup.rs` 拥有有界、按会话隔离的初始化握手，`infrastructure/ssh/client/session/history_free.rs` 与 `infrastructure/local/history_free.rs` 分别适配 SSH exec 和本地 Unix PTY。高级设置偏好复用 TerminalSettings（OSC 7/133 独立布尔配置），仅在启动时取快照；配置冲突警告、实际启动失败不降级。边界与测试方法见 `docs/history-free-bash.md`。
 - `src-tauri/src/application/credential_lifecycle.rs`：统一拥有凭证解锁时间、deadline generation、锁定原因与 data-key 生命周期编排；不依赖 Tokio timer、Tauri event 或 Win32 类型。
 - `src-tauri/src/application/credential_workflow.rs`：恢复重置与私钥草稿的 opaque pending 状态、替换、完成和取消语义；secret bytes 保持 zeroizing 且不进入 DTO。
 - `src-tauri/src/application/ssh_config_import.rs`：SSH Config preview 生命周期、应用层候选模型、选择/唯一命名、凭证复用、批量 profile commit 与失败 rollback coordinator；不依赖 Tauri、infrastructure parser 类型、对话框或 command DTO。
@@ -115,7 +115,7 @@
 - `src-tauri/src/infrastructure/persistence/json_remote_shell_cache.rs`：`cache/remote-shells.json` 的严格、原子、可丢弃适配器；只保存目标签名和 Shell 枚举，不保存探测输出、Hook、终端内容或凭据。
 - `src-tauri/src/infrastructure/ssh/forwarding.rs`：本地 listener、SOCKS5 CONNECT、Remote target 路由、有界转发任务与 TCP/SSH 双向数据泵；第三方 channel 类型不得离开 infrastructure。
 - `src-tauri/src/ports/profile_repository.rs`：应用层拥有的连接配置 repository 契约；不规定文件格式。
-- `src-tauri/src/infrastructure/local/pty.rs`：本地 PTY 创建与进程 I/O owner；在 spawn 时解析一次性工作目录并对无效/失效路径回退到规范化 home，不解释远程 Shell 语法。
+- `src-tauri/src/infrastructure/local/pty.rs`：本地 PTY 创建与进程 I/O owner；在 spawn 时解析一次性工作目录并对无效/失效路径回退到规范化 home，不解释远程 Shell 语法。`infrastructure/local/shell_integration.rs` 组合普通 Unix Bash/Zsh 登录进程与输入前的关闭回显握手，复用 domain 的会话 Hook；未知 Shell 保留平台默认启动。
 - `src-tauri/src/infrastructure/clipboard.rs`：在阻塞工作线程读取原生 file list/text/RGBA；现有文件路径只生成 Rust 内部一次性来源，RGBA 校验后流式编码到 Qterm cache root 下私有 clipboard 目录的 UUID PNG，并仅清理过期受管图片；不向 WebView 返回图片资源或字节。
 - `src-tauri/src/infrastructure/ssh/client.rs`、`client/manager_{core,control,files,ports}.rs`：稳定 `SshSessionManager` façade 与按核心会话、控制、文件/传输和端口转发分组的 manager 实现；不向 commands/application 泄漏 russh 或 SFTP 类型。
 - `src-tauri/src/infrastructure/ssh/client/session.rs`、`session/{terminal,files,git}.rs`：route 建连 façade 与 Terminal、Files、Git purpose-specific runner；Git runner 通过同一 profile-owned session 执行固定 conflict detail/side/delete/stage，并仅为有界结果写回复用内部 SFTP 原子写语义，各用途对外能力仍独立，取消、task drop 和关闭语义仍由共享 manager/session ownership 约束。
@@ -131,7 +131,9 @@
 - `.agents/skills/`：负责把长期工程与界面规范转成可执行的 agent 决策流程；不替代 qb-spec change、测试、linter 或源码门禁。
 - `src/app/`：负责顶层布局、feature 组合与应用级预设主题生命周期；不承载认证、连接或传输规则。
 - `src/workspace/`：负责工作区结构模型、布局树变换、顶部 Workspace 导航、按连接的有界 Git 仓库历史和 block runtime 编排；不读取本地文件、验证仓库有效性或实现 SSH/SFTP。
-- `src/terminal/`：负责 xterm 实例及终端 I/O 适配；不持久化 buffer 或拥有 Workspace 生命周期。`terminalOsc52.ts` 拥有有界、只写的 OSC 52 剪贴板协议适配，由 xterm addon 生命周期管理；`terminalClipboardShortcuts.ts` 拥有原生选区与应用复制快捷键的分流，不读取应用内部选区或拥有粘贴任务。
+- `src/terminal/`：负责 xterm 实例及终端 I/O 适配；不持久化 buffer 或拥有 Workspace 生命周期。`terminalView.ts` 拥有可重挂载的 xterm 视图与 addon 生命周期；`terminalOsc52.ts` 拥有有界、只写的剪贴板协议适配；`terminalClipboardShortcuts.ts` 拥有原生选区与应用复制快捷键的分流。
+- `src/terminal/terminalCommands.ts`、`terminalActivity.ts`、`terminalActivityRegistry.ts`：分别拥有普通缓冲区命令标记与输出边界、进度/标题协议与瞬时快照、视图运行时引用索引；不保存命令文本或另建 Workspace 状态。`TerminalHeaderMetadata.tsx` 和 `TerminalCommandMenuItems.tsx` 消费快照，展示次级应用信息并提供命令操作。
+- `scripts/shell-integration/`：当前会话可加载的命令标记脚本与解释器行为检查；脚本由 domain 内嵌供本地/SSH 自动安装，不修改用户 profile 或历史策略。
 - `src/terminal/imageExport/`：负责选中完整行的固定宽度快照、系统主题采样、终端外框与图片绘制、S/M/L（1×/2×/3×）尺寸档位与像素上限、预览及导出状态；不修改 live buffer、应用主题或会话。`TerminalContextMenu.tsx` 拥有终端菜单展示和菜单键盘导航，`TerminalPanel.tsx` 只组合导出入口。
 - `src/lib/tauri/terminalImage.ts`、`src-tauri/src/commands/terminal_image.rs`、`src-tauri/src/infrastructure/terminal_image.rs`：分别负责 PNG 原始字节 IPC、原生保存路径选择与错误映射、PNG 有界校验及原子落盘；不接受前端指定的任意保存路径，不接管文件传输或终端会话。
 - `src/files/`：负责内部文件窗口展示、导航、下载反馈与瞬时预览编辑状态；不直接访问本地文件系统或 SSH infrastructure。
@@ -167,3 +169,5 @@
 - `scripts/tauri-dev-runner.mjs`：macOS 开发 bundle 构造、完整 ad-hoc 签名及进程启动；签名 identity 与 Info.dev.plist 一致，保证原生通知服务识别真实应用身份。
 
 - `src/workspace/WorkspaceUtilityRail.tsx`：共享桌面与 Demo 的工具项名称、图标、顺序及布局；桌面注入操作和状态，Demo 仅为文件、网络、Git 和终端传入 controls，其余禁用并提示尚未开放。该组件不拥有工具业务逻辑。
+
+- `src-tauri/src/infrastructure/ssh/client/tests/connect_fixture.rs`：SSH 测试共用的终端/辅助会话请求 fixture，默认不启用任一 Shell 注入协议。

@@ -7,6 +7,14 @@ const styles = readFileSync("src/components/dialogs/settingsDialog.css", "utf8")
 const lightOverrides = readFileSync("src/app/styles/themes/lightOverrides.css", "utf8");
 
 describe("settings category navigation motion", () => {
+  it("constrains advanced scrolling to the options below the fixed heading", () => {
+    expect(styles).toContain(".settings-content-scroll.settings-content-fixed{display:flex;overflow:hidden}");
+    expect(styles).toContain(".settings-content-fixed>.settings-category-panel{display:flex;min-height:0;flex:1}");
+    expect(styles).toContain(".settings-advanced-view{display:flex;min-width:0;min-height:0;flex:1;flex-direction:column}");
+    expect(styles).toContain(".settings-advanced-view>.settings-section-heading{flex:none}");
+    expect(styles).toContain(".settings-advanced-scroll{flex:1}");
+    expect(styles).toContain(".settings-advanced-options{overflow:auto;overscroll-behavior:contain}");
+  });
   it("moves one selection indicator between fixed category rows", () => {
     expect(styles).toMatch(/\.settings-nav-indicator\{[^}]*transition:transform 250ms cubic-bezier\(\.2,\.8,\.2,1\)/);
     expect(styles).toContain('.settings-nav-list[data-active="appearance"] .settings-nav-indicator{transform:translateY(47px)}');

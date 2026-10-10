@@ -94,21 +94,23 @@ pub async fn local_session_connect(
         let _ = on_terminal.send(LocalTerminalDataDto { data });
     });
     let manager = Arc::clone(&app.state::<LocalSessionState>().manager);
-    let history_free = app
+    let terminal_settings = app
         .state::<crate::commands::settings::SettingsState>()
-        .terminal()
-        .history_free_bash_enabled;
+        .terminal();
     let connection = tauri::async_runtime::spawn_blocking(move || {
         manager.connect_with_mode(
             size,
-            osc7_enabled,
+            crate::domain::shell_integration::ShellFeatures {
+                osc7: osc7_enabled,
+                osc133: terminal_settings.command_markers_enabled,
+            },
             initial_directory
                 .and_then(InitialDirectory::new)
                 .map(InitialDirectory::into_string)
                 .map(PathBuf::from),
             output,
             events,
-            history_free,
+            terminal_settings.history_free_bash_enabled,
         )
     })
     .await

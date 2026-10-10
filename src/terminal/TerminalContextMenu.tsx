@@ -2,6 +2,7 @@ import { type KeyboardEvent, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { shortcutLabel } from "../app/shortcuts";
 import type { DesktopPlatform } from "../lib/tauri/window";
+import { TerminalCommandMenuItems } from "./TerminalCommandMenuItems";
 
 interface TerminalMenuActions {
   copy: () => void | Promise<void>;
@@ -12,7 +13,8 @@ interface TerminalMenuActions {
   clear: () => void;
 }
 
-export function TerminalContextMenu({ state, menuRef, platform, canPaste, actions, close }: {
+export function TerminalContextMenu({ state, menuRef, platform, canPaste, actions, close, sessionKey }: {
+  sessionKey?: string;
   state: { x: number; y: number; placement: "above" | "below"; hasSelection: boolean };
   menuRef: RefObject<HTMLDivElement | null>;
   platform: DesktopPlatform;
@@ -40,6 +42,7 @@ export function TerminalContextMenu({ state, menuRef, platform, canPaste, action
     <button role="menuitem" disabled={!canPaste} onClick={() => void actions.paste()}><span>粘贴</span><kbd>{modifier}V</kbd></button>
     <div className="terminal-context-menu-separator" role="separator"/>
     <button role="menuitem" onClick={actions.search}><span>搜索</span><kbd>{shortcutLabel("searchTerminal", platform)}</kbd></button>
+    {sessionKey && <TerminalCommandMenuItems sessionKey={sessionKey} close={close}/>}
     <div className="terminal-context-menu-separator" role="separator"/>
     <button role="menuitem" onClick={actions.selectAll}><span>全选</span></button>
     <div className="terminal-context-menu-separator" role="separator"/>

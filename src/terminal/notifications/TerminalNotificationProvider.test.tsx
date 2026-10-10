@@ -29,7 +29,7 @@ describe("experimental terminal notification controls", () => {
     expect(screen.getByRole("button", { name: "终端有未读通知，点击查看" })).toBeInTheDocument();
     expect(mocks.send).toHaveBeenCalledTimes(1);
     fireEvent.click(toggle);
-    await waitFor(() => expect(screen.queryByRole("button")).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole("button", { name: "终端协议支持" })).toHaveAttribute("data-state", "ready"));
     feed("\x07"); expect(mocks.send).toHaveBeenCalledTimes(1);
   });
   it("preserves the switch after a failed save and fails closed after a failed read", async () => {

@@ -200,7 +200,7 @@ describe("TerminalPanel view lifetime", () => {
 
     expect(mocks.terminals).toHaveLength(1);
     expect(terminal.dispose).not.toHaveBeenCalled();
-    expect(terminal.loadAddon).toHaveBeenCalledTimes(4);
+    expect(terminal.loadAddon).toHaveBeenCalledTimes(5);
     expect(view.container.querySelector("[data-xterm-view=preserved]")).toBe(terminal.element);
     view.unmount();
     act(() => vi.runAllTimers());
@@ -459,12 +459,12 @@ describe("TerminalPanel clipboard interaction", () => {
 
     fireEvent.contextMenu(surface, { clientX: 40, clientY: 50 });
     expect(screen.getByRole("menu", { name: "终端菜单" })).toBeInTheDocument();
-    expect(screen.getByRole("menuitem", { name: /复制/ })).toBeDisabled();
+    expect(screen.getByRole("menuitem", { name: /^复制(?:Ctrl|⌘)/ })).toBeDisabled();
 
     terminal.hasSelection.mockReturnValue(true);
     terminal.getSelection.mockReturnValue("selected output");
     fireEvent.contextMenu(surface, { clientX: 40, clientY: 50 });
-    await act(async () => { fireEvent.click(screen.getByRole("menuitem", { name: /复制/ })); });
+    await act(async () => { fireEvent.click(screen.getByRole("menuitem", { name: /^复制(?:Ctrl|⌘)/ })); });
 
     expect(mocks.writeClipboardText).toHaveBeenCalledWith("selected output");
     expect(screen.queryByRole("menu", { name: "终端菜单" })).not.toBeInTheDocument();

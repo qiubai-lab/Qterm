@@ -33,7 +33,7 @@ it("combines enabled protocols in one compact hover tooltip and hides disabled o
   expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
   fireEvent.mouseEnter(screen.getByRole("button"));
   const tooltip = screen.getByRole("tooltip");
-  for (const name of ["OSC 7", "OSC 8", "BEL", "OSC 9", "OSC 777"]) expect(tooltip).toHaveTextContent(name);
+  for (const name of ["OSC 7", "OSC 8", "OSC 52", "BEL", "OSC 9", "OSC 777"]) expect(tooltip).toHaveTextContent(name);
   expect(tooltip).toHaveTextContent("同步当前目录");
   expect(tooltip).toHaveTextContent("HTTP(S) 超链接，确认后打开");
   fireEvent.mouseLeave(screen.getByRole("button"));
@@ -47,7 +47,8 @@ it("combines enabled protocols in one compact hover tooltip and hides disabled o
   fireEvent.keyDown(screen.getByRole("button"), { key: "Escape" });
   expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
   view.rerender(<TerminalProtocolTag blockId="b" connected/>);
-  expect(screen.queryByRole("button")).not.toBeInTheDocument();
+  fireEvent.focus(screen.getByRole("button"));
+  expect(screen.getByRole("tooltip")).toHaveTextContent("OSC 52");
 });
 it.each(["ready", "waiting", "attention"] as const)("keeps the %s directory appearance when a notification arrives", directoryState => {
   const view = render(<TerminalProtocolTag blockId="b" connected directoryState={directoryState}/>);

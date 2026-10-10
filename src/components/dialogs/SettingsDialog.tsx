@@ -15,6 +15,7 @@ import {
 import { useAppTheme } from "../../app/theme/AppThemeProvider";
 import { Button } from "../Button";
 import { Icon } from "../Icon";
+import { OverlayScrollArea } from "../scrollbars/OverlayScrollArea";
 import { ConfigurationDirectorySetting } from "./ConfigurationDirectorySetting";
 import { ConfigurationPaths } from "./ConfigurationPaths";
 import { TerminalNotificationSetting } from "./TerminalNotificationSetting";
@@ -146,7 +147,7 @@ export function SettingsDialog({ onClose, onSecuritySettingsChanged, onTerminalS
         </div>
       </nav>
       <section className="settings-content" aria-labelledby={`${category}-settings-title`}>
-        <div className="settings-content-scroll">
+        <div className={`settings-content-scroll${category === "advanced" ? " settings-content-fixed" : ""}`}>
           <div key={category} className={`settings-category-panel${categoryDirection ? ` settings-category-${categoryDirection}` : " settings-category-idle"}`} data-category={category}>
           {category === "general" ? <div className="settings-general-view">
             <div className="settings-section-heading"><h3 id="general-settings-title">通用</h3><p>配置 Qterm 数据根目录与存储路径。</p></div>
@@ -176,10 +177,15 @@ export function SettingsDialog({ onClose, onSecuritySettingsChanged, onTerminalS
             </div> : <p className="dialog-note">正在读取设置…</p>}
           </> : <div className="settings-advanced-view">
             <div className="settings-section-heading"><h3 id="advanced-settings-title">高级</h3><p>管理远程终端集成等进阶功能。</p></div>
+            <OverlayScrollArea className="settings-advanced-scroll" viewportClassName="settings-advanced-options" density="compact" viewportProps={{ role: "region", "aria-label": "高级设置选项", tabIndex: 0 }}>
             {terminal ? <div className="settings-rows">
               <div className="settings-row">
-                <span><strong>OSC 7 终端目录跟踪</strong><small>开启后显示并验证终端目录状态；普通远程登录会识别 Shell，禁用历史的 Bash 会话在启动时配置 OSC 7 Hook。关闭后不再解析或显示 OSC 7 状态。</small></span>
+                <span><strong>OSC 7 终端目录跟踪</strong><small>同步终端目录并显示目录状态。新建或重连时按此配置安装目录 Hook，与 OSC 133 命令导航独立。</small></span>
                 <SettingsSwitch label="OSC 7 终端目录跟踪" checked={terminal.remoteShellIntegrationEnabled} disabled={busy} onChange={changeRemoteShellIntegration}/>
+              </div>
+              <div className="settings-row">
+                <span><strong>OSC 133 命令导航</strong><small>自动配置命令导航与输出复制。支持本地 Linux/macOS 和 SSH 的 Bash 4.4+ / Zsh，含免历史 Bash；新建或重连生效，不修改启动文件。</small></span>
+                <SettingsSwitch label="OSC 133 命令导航" checked={terminal.commandMarkersEnabled} disabled={busy} onChange={(enabled) => void persistTerminalSettings({ commandMarkersEnabled: enabled })}/>
               </div>
               <div className="settings-row">
                 <span><strong>禁用 Bash 历史记录 <span className="settings-experimental-tag">实验功能</span></strong><small>仅对新建和重连的终端生效：正常加载用户 Bash 配置，不记录本会话的新命令，不清除已有历史。OSC 7 可独立开启；不影响服务器日志或嵌套 Shell。本地仅支持 Linux / macOS，远程需支持 Bash。</small></span>
@@ -187,6 +193,7 @@ export function SettingsDialog({ onClose, onSecuritySettingsChanged, onTerminalS
               </div>
               <TerminalNotificationSetting/>
             </div> : <p className="dialog-note">正在读取设置…</p>}
+            </OverlayScrollArea>
           </div>}
           </div>
         </div>
@@ -203,7 +210,7 @@ export function SettingsDialog({ onClose, onSecuritySettingsChanged, onTerminalS
   </DialogFrame>
     {confirmRemoteIntegration && <DialogFrame compact className="settings-integration-confirmation" title="开启 OSC 7 终端目录跟踪" subtitle="本地与远程终端" onClose={() => setConfirmRemoteIntegration(false)}>
       <div className="settings-integration-confirmation-body">
-        <div className="settings-integration-confirmation-intro"><span aria-hidden="true"><Icon name="terminal" size={17}/></span><p>Qterm 将跟踪终端上报的 OSC 7 目录；普通远程会话先识别 Shell，再注入临时 Hook；关闭历史记录的 Bash 会话在启动时配置 Hook。</p></div>
+        <div className="settings-integration-confirmation-intro"><span aria-hidden="true"><Icon name="terminal" size={17}/></span><p>Qterm 将跟踪 OSC 7 目录，在新建或重连时安装目录 Hook。此开关不改变 OSC 133 命令导航设置。</p></div>
         <ul>
           <li>不会修改远程 <code>.bashrc</code>、Profile 或其他文件</li>
           <li>只缓存目标标识与 Shell 类型，不保存命令输出或凭据</li>

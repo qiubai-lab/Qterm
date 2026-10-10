@@ -84,6 +84,7 @@ pub struct UpdateSettingsDto {
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct TerminalSettingsDto {
     remote_shell_integration_enabled: Option<bool>,
+    command_markers_enabled: Option<bool>,
     history_free_bash_enabled: Option<bool>,
 }
 
@@ -147,6 +148,7 @@ struct UpdateSettingsOutputDto {
 #[serde(rename_all = "camelCase")]
 struct TerminalSettingsOutputDto {
     remote_shell_integration_enabled: bool,
+    command_markers_enabled: bool,
     history_free_bash_enabled: bool,
 }
 
@@ -247,6 +249,9 @@ pub fn settings_update_terminal(
             remote_shell_integration_enabled: input
                 .remote_shell_integration_enabled
                 .unwrap_or(current.remote_shell_integration_enabled),
+            command_markers_enabled: input
+                .command_markers_enabled
+                .unwrap_or(current.command_markers_enabled),
             history_free_bash_enabled: input
                 .history_free_bash_enabled
                 .unwrap_or(current.history_free_bash_enabled),
@@ -283,6 +288,7 @@ impl SettingsSnapshotDto {
             },
             terminal: TerminalSettingsOutputDto {
                 remote_shell_integration_enabled: value.terminal.remote_shell_integration_enabled,
+                command_markers_enabled: value.terminal.command_markers_enabled,
                 history_free_bash_enabled: value.terminal.history_free_bash_enabled,
             },
             warning: value.warning.map(|warning| match warning {

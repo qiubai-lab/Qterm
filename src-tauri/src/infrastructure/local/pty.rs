@@ -86,7 +86,7 @@ impl LocalSessionManager {
     ) -> Result<LocalSessionConnection, LocalSessionError> {
         self.connect_with_mode(
             size,
-            osc7_enabled,
+            crate::domain::shell_integration::ShellFeatures::coupled(osc7_enabled),
             initial_directory,
             terminal_output,
             events,
@@ -97,7 +97,7 @@ impl LocalSessionManager {
     pub fn connect_with_mode(
         &self,
         size: PtySize,
-        osc7_enabled: bool,
+        features: crate::domain::shell_integration::ShellFeatures,
         initial_directory: Option<PathBuf>,
         terminal_output: OutputSink,
         events: EventSink,
@@ -109,14 +109,14 @@ impl LocalSessionManager {
             .openpty(size)
             .map_err(|_| LocalSessionError::StartFailed)?;
         let startup = history_free.then(crate::infrastructure::shell_startup::ShellStartup::new);
-        let mut command = match startup.as_ref() {
-            Some(startup) => super::history_free::command(startup, osc7_enabled)?,
-            None => CommandBuilder::new_default_prog(),
+        let (mut command, initialization) = match startup.as_ref() {
+            Some(startup) => (super::history_free::command(startup, features)?, None),
+            None => super::shell_integration::command(features),
         };
         command.cwd(&cwd);
         command.env("TERM", "xterm-256color");
         if !history_free {
-            configure_osc7_integration(&mut command, osc7_enabled);
+            configure_osc7_integration(&mut command, features.osc7);
         }
         let mut child = pair.slave.spawn_command(command).map_err(|_| {
             if history_free {
@@ -131,11 +131,24 @@ impl LocalSessionManager {
             .master
             .try_clone_reader()
             .map_err(|_| LocalSessionError::StartFailed)?;
-        let writer = pair
+        let mut writer = pair
             .master
             .take_writer()
             .map_err(|_| LocalSessionError::StartFailed)?;
-        if let Some(startup) = startup {
+        if let Some((initialization, ready)) = initialization {
+            let result =
+                super::history_free::read_until_ready(reader, Arc::clone(&terminal_output), ready)
+                    .and_then(|_| {
+                        writer
+                            .write_all(initialization.as_bytes())
+                            .map_err(|_| LocalSessionError::StartFailed)
+                    });
+            if result.is_err() {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(LocalSessionError::StartFailed);
+            }
+        } else if let Some(startup) = startup {
             if let Err(error) =
                 super::history_free::read_until_ready(reader, Arc::clone(&terminal_output), startup)
             {

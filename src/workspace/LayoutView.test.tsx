@@ -401,7 +401,7 @@ describe("WorkspaceCanvas terminal actions", () => {
     fireEvent.mouseEnter(ready); expect(screen.getByRole("tooltip")).toHaveTextContent("已收到目录");
 
     view.rerender(<WorkspaceCanvas workspace={remoteWorkspace} visible remoteShellIntegrationEnabled={false} onRequestClose={vi.fn()} onRequestAuthConnection={vi.fn()}/>);
-    expect(screen.queryByText("osc")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("终端协议支持")).toHaveAttribute("data-state", "ready");
   });
 
   it("keeps OSC 7 display and validation disabled while opening the local launch directory", () => {
@@ -409,14 +409,14 @@ describe("WorkspaceCanvas terminal actions", () => {
     terminalRuntimes = { "block-1": { ...connectedLocalRuntime, cwd: "/stale", cwdSource: "osc7" } };
     const view = render(<WorkspaceCanvas workspace={workspace} visible remoteShellIntegrationEnabled={false} onRequestClose={vi.fn()} onRequestAuthConnection={vi.fn()}/>);
 
-    expect(screen.queryByText("osc")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("终端协议支持")).toHaveAttribute("data-state", "ready");
     const openDirectory = within(view.container).getByRole("button", { name: "打开终端文件夹" });
     expect(openDirectory).toBeEnabled();
     fireEvent.mouseEnter(openDirectory); expect(screen.getByRole("tooltip")).toHaveTextContent( "打开启动目录 C:/launch");
     act(() => openDirectory.click());
     expect(dispatch).toHaveBeenCalledWith({ type: "openFiles", workspaceId: "workspace-1", anchorBlockId: "block-1", profileId: null, path: "C:/launch" });
     act(() => vi.advanceTimersByTime(10_000));
-    expect(screen.queryByText("osc")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("终端协议支持")).toHaveAttribute("data-state", "ready");
   });
 
   it("opens the remote home directory when OSC 7 is disabled", () => {
@@ -430,7 +430,7 @@ describe("WorkspaceCanvas terminal actions", () => {
     openDirectory.click();
 
     expect(dispatch).toHaveBeenCalledWith({ type: "openFiles", workspaceId: "workspace-1", anchorBlockId: "block-1", profileId: "password-profile", path: "." });
-    expect(screen.queryByText("osc")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("终端协议支持")).toHaveAttribute("data-state", "ready");
   });
 
   it("allows only a remote terminal to create a network leaf inheriting its profile", async () => {

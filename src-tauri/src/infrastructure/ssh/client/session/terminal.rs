@@ -17,6 +17,17 @@ pub(super) async fn run_terminal_session(
         None => None,
     };
 
+    // Unsupported OSC 133-only shells must retain their normal PTY echo.
+    let remote_shell = remote_shell.filter(|shell| {
+        request.remote_shell_integration_enabled
+            || (request.command_markers_enabled
+                && matches!(
+                    shell,
+                    crate::domain::shell_integration::RemoteShell::Bash
+                        | crate::domain::shell_integration::RemoteShell::Zsh
+                ))
+    });
+
     let mut terminal = match handle.channel_open_session().await {
         Ok(channel) => channel,
         Err(_) => {
@@ -71,7 +82,13 @@ pub(super) async fn run_terminal_session(
         && terminal
             .data(
                 shell
-                    .initialization_command(request.initial_directory.as_ref())
+                    .initialization_with_features(
+                        request.initial_directory.as_ref(),
+                        crate::domain::shell_integration::ShellFeatures {
+                            osc7: request.remote_shell_integration_enabled,
+                            osc133: request.command_markers_enabled,
+                        },
+                    )
                     .as_bytes(),
             )
             .await

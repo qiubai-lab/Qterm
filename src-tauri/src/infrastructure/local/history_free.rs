@@ -9,19 +9,23 @@ use std::{
 
 pub(super) fn command(
     startup: &ShellStartup,
-    osc7: bool,
+    features: crate::domain::shell_integration::ShellFeatures,
 ) -> Result<CommandBuilder, LocalSessionError> {
     #[cfg(unix)]
     {
         use crate::domain::history_free_shell;
         let mut command = CommandBuilder::new("bash");
         command.arg("-c");
-        command.arg(history_free_shell::bootstrap(osc7, None, startup.marker()));
+        command.arg(history_free_shell::bootstrap_features(
+            features,
+            None,
+            startup.marker(),
+        ));
         Ok(command)
     }
     #[cfg(not(unix))]
     {
-        let _ = (startup, osc7);
+        let _ = (startup, features);
         Err(LocalSessionError::HistoryFreeUnavailable)
     }
 }
@@ -68,7 +72,10 @@ mod tests {
     #[test]
     fn unsupported_local_platform_never_falls_back() {
         assert!(matches!(
-            command(&ShellStartup::new(), true),
+            command(
+                &ShellStartup::new(),
+                crate::domain::shell_integration::ShellFeatures::coupled(true)
+            ),
             Err(LocalSessionError::HistoryFreeUnavailable)
         ));
     }
