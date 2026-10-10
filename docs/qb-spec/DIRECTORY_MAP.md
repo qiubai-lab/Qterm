@@ -111,7 +111,7 @@
 - `src-tauri/src/infrastructure/browser/`：共享 SOCKS5 greeting、固定 Chromium 参数和机器本地隔离 Profile，并以 Windows、macOS、Linux adapter 受限探测和无 Shell 启动 Chrome/Edge；不修改系统代理、支持沙箱化 Linux 浏览器、复用日常 Profile 或管理浏览器退出。
 - `src-tauri/src/infrastructure/persistence/json_network_repository.rs`：`network-forwards.json` schema v1 的严格、无敏感字段、原子持久化适配器。
 - `src-tauri/src/infrastructure/persistence/json_workspace_repository.rs`：`workspaces.json` schema v10 的严格、无敏感字段、原子持久化与受支持旧版本显式迁移适配器；不保存 session、Git snapshot、仓库内容或连接凭据。
-- `src-tauri/src/ports/settings_repository.rs`、`src-tauri/src/infrastructure/persistence/json_{appearance,update,terminal}_settings_repository.rs`：设备外观/更新/终端集成偏好 ports 与独立 JSON 适配器；外观/更新使用 schema v1，终端读取 v1/v2、保存 v2 并保留旧 passive 字段；只保存封闭预设或布尔偏好，不覆盖损坏/未来文件，也不修改 security settings。
+- `src-tauri/src/ports/settings_repository.rs`、`src-tauri/src/infrastructure/persistence/json_{appearance,update,terminal}_settings_repository.rs`：设备外观/更新/终端集成偏好 ports 与独立 JSON 适配器；外观/更新使用 schema v1，终端兼容 v1–v3、保存 v4，新增默认关闭的应用标题偏好并保留旧 passive 字段；只保存封闭预设或布尔偏好，不覆盖损坏/未来文件，也不修改 security settings。
 - `src-tauri/src/infrastructure/persistence/json_remote_shell_cache.rs`：`cache/remote-shells.json` 的严格、原子、可丢弃适配器；只保存目标签名和 Shell 枚举，不保存探测输出、Hook、终端内容或凭据。
 - `src-tauri/src/infrastructure/ssh/forwarding.rs`：本地 listener、SOCKS5 CONNECT、Remote target 路由、有界转发任务与 TCP/SSH 双向数据泵；第三方 channel 类型不得离开 infrastructure。
 - `src-tauri/src/ports/profile_repository.rs`：应用层拥有的连接配置 repository 契约；不规定文件格式。
@@ -132,7 +132,7 @@
 - `src/app/`：负责顶层布局、feature 组合与应用级预设主题生命周期；不承载认证、连接或传输规则。
 - `src/workspace/`：负责工作区结构模型、布局树变换、顶部 Workspace 导航、按连接的有界 Git 仓库历史和 block runtime 编排；不读取本地文件、验证仓库有效性或实现 SSH/SFTP。
 - `src/terminal/`：负责 xterm 实例及终端 I/O 适配；不持久化 buffer 或拥有 Workspace 生命周期。`terminalView.ts` 拥有可重挂载的 xterm 视图与 addon 生命周期；`terminalOsc52.ts` 拥有有界、只写的剪贴板协议适配；`terminalClipboardShortcuts.ts` 拥有原生选区与应用复制快捷键的分流。
-- `src/terminal/terminalCommands.ts`、`terminalActivity.ts`、`terminalActivityRegistry.ts`：分别拥有普通缓冲区命令标记与输出边界、进度/标题协议与瞬时快照、视图运行时引用索引；不保存命令文本或另建 Workspace 状态。`TerminalHeaderMetadata.tsx` 和 `TerminalCommandMenuItems.tsx` 消费快照，展示次级应用信息并提供命令操作。
+- `src/terminal/terminalCommands.ts`、`terminalActivity.ts`、`terminalActivityRegistry.ts`：分别拥有普通缓冲区命令标记与输出边界、进度/标题协议与瞬时快照、视图运行时引用索引；不保存命令文本或另建 Workspace 状态。`TerminalHeaderMetadata.tsx` 组合协议入口与 `TerminalActivityStatus.tsx` 的主题化标题/独立进度标签；`useTerminalProgressPresence.ts` 只拥有进度退出动画与取消/超时生命周期。`TerminalTitleProvider.tsx` 拥有默认关闭的全局标题显示偏好，高级设置成功保存后发布快照；`terminalTitle.ts` 只拥有显示层的完整路径标题过滤，不修改协议快照或 OSC 7 目录。`TerminalCommandMenuItems.tsx` 消费命令快照并提供导航与输出复制。
 - `scripts/shell-integration/`：当前会话可加载的命令标记脚本与解释器行为检查；脚本由 domain 内嵌供本地/SSH 自动安装，不修改用户 profile 或历史策略。
 - `src/terminal/imageExport/`：负责选中完整行的固定宽度快照、系统主题采样、终端外框与图片绘制、S/M/L（1×/2×/3×）尺寸档位与像素上限、预览及导出状态；不修改 live buffer、应用主题或会话。`TerminalContextMenu.tsx` 拥有终端菜单展示和菜单键盘导航，`TerminalPanel.tsx` 只组合导出入口。
 - `src/lib/tauri/terminalImage.ts`、`src-tauri/src/commands/terminal_image.rs`、`src-tauri/src/infrastructure/terminal_image.rs`：分别负责 PNG 原始字节 IPC、原生保存路径选择与错误映射、PNG 有界校验及原子落盘；不接受前端指定的任意保存路径，不接管文件传输或终端会话。

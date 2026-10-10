@@ -27,6 +27,7 @@ pub struct TerminalSettings {
     pub remote_shell_integration_enabled: bool,
     pub command_markers_enabled: bool,
     pub history_free_bash_enabled: bool,
+    pub application_title_enabled: bool,
 }
 
 impl Default for TerminalSettings {
@@ -35,6 +36,7 @@ impl Default for TerminalSettings {
             remote_shell_integration_enabled: true,
             command_markers_enabled: true,
             history_free_bash_enabled: false,
+            application_title_enabled: false,
         }
     }
 }
@@ -131,6 +133,7 @@ mod tests {
         assert_eq!(AppearanceSettings::default().theme, AppTheme::Dark);
         assert!(!UpdateSettings::default().auto_check_on_startup);
         assert!(TerminalSettings::default().remote_shell_integration_enabled);
+        assert!(!TerminalSettings::default().application_title_enabled);
         assert_eq!(
             SecuritySettings::default(),
             SecuritySettings {

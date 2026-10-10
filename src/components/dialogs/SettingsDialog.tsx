@@ -13,6 +13,7 @@ import {
   type TerminalSettings,
 } from "../../lib/tauri/settings";
 import { useAppTheme } from "../../app/theme/AppThemeProvider";
+import { useTerminalTitlePreference } from "../../terminal/TerminalTitleProvider";
 import { Button } from "../Button";
 import { Icon } from "../Icon";
 import { OverlayScrollArea } from "../scrollbars/OverlayScrollArea";
@@ -29,6 +30,7 @@ const settingsCategoryOrder: SettingsCategory[] = ["general", "appearance", "sec
 
 export function SettingsDialog({ onClose, onSecuritySettingsChanged, onTerminalSettingsChanged }: { onClose: () => void; onSecuritySettingsChanged?: (settings: SecuritySettings) => void; onTerminalSettingsChanged?: (settings: TerminalSettings) => void }) {
   const { persistedTheme, previewTheme, commitTheme, restoreTheme } = useAppTheme();
+  const { applySettings: applyTitleSettings } = useTerminalTitlePreference();
   const [category, setCategory] = useState<SettingsCategory>("general");
   const [categoryDirection, setCategoryDirection] = useState<SettingsCategoryDirection | null>(null);
   const [general, setGeneral] = useState<GeneralSettings | null>(null);
@@ -47,11 +49,12 @@ export function SettingsDialog({ onClose, onSecuritySettingsChanged, onTerminalS
     if (!preserveDirectoryDraft) setConfigurationDirectory(snapshot.general.rootDirectory);
     setSecurity(snapshot.security);
     setTerminal(snapshot.terminal);
+    applyTitleSettings(snapshot.terminal);
     if (!preserveAppearanceDraft) {
       setAppearance(snapshot.appearance);
       commitTheme(snapshot.appearance.theme);
     }
-  }, [commitTheme]);
+  }, [commitTheme, applyTitleSettings]);
 
   useEffect(() => {
     void getSettings().then((snapshot) => {
@@ -179,6 +182,10 @@ export function SettingsDialog({ onClose, onSecuritySettingsChanged, onTerminalS
             <div className="settings-section-heading"><h3 id="advanced-settings-title">高级</h3><p>管理远程终端集成等进阶功能。</p></div>
             <OverlayScrollArea className="settings-advanced-scroll" viewportClassName="settings-advanced-options" density="compact" viewportProps={{ role: "region", "aria-label": "高级设置选项", tabIndex: 0 }}>
             {terminal ? <div className="settings-rows">
+              <div className="settings-row">
+                <span><strong>显示应用标题</strong><small>在终端栏显示应用上报的标题，默认关闭。开启后即时生效，自动隐藏纯路径标题；不影响任务进度。</small></span>
+                <SettingsSwitch label="显示应用标题" checked={terminal.applicationTitleEnabled ?? false} disabled={busy} onChange={(enabled) => void persistTerminalSettings({ applicationTitleEnabled: enabled })}/>
+              </div>
               <div className="settings-row">
                 <span><strong>OSC 7 终端目录跟踪</strong><small>同步终端目录并显示目录状态。新建或重连时按此配置安装目录 Hook，与 OSC 133 命令导航独立。</small></span>
                 <SettingsSwitch label="OSC 7 终端目录跟踪" checked={terminal.remoteShellIntegrationEnabled} disabled={busy} onChange={changeRemoteShellIntegration}/>

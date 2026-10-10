@@ -1,4 +1,5 @@
 import { OnboardingProvider } from "../onboarding/OnboardingProvider";
+import { TerminalTitleProvider } from "../terminal/TerminalTitleProvider";
 import { useEffect } from "react";
 import { AppThemeProvider } from "../app/theme/AppThemeProvider";
 import { ThemedTitleTooltipProvider } from "../components/ThemedTitleTooltipProvider";
@@ -19,12 +20,12 @@ export default function DemoApp() {
     window.addEventListener("pagehide", leave);
     return () => { window.removeEventListener("pagehide", leave); resetDemo(); };
   }, []);
-  return <AppThemeProvider><ThemedTitleTooltipProvider><WorkspaceProvider><OnboardingProvider mode="demo">
+  return <AppThemeProvider><TerminalTitleProvider><ThemedTitleTooltipProvider><WorkspaceProvider><OnboardingProvider mode="demo">
     <div className="demo-page" data-demo-theme="cyberpunk">
       <nav className="demo-navigation" aria-label="站点导航"><div className="demo-brand"><a href={import.meta.env.BASE_URL} aria-label="返回 Qterm 首页"><span aria-hidden="true">›_</span> Qterm</a><span>在线体验</span></div><div className="demo-navigation-actions"><a href="https://github.com/qiubai-lab/Qterm/releases/latest" target="_blank" rel="noreferrer">下载桌面版 ↗</a></div></nav>
       <div className="demo-presentation"><DemoWorkbench/><TerminalExternalLinkConfirmationHost/></div>
     </div>
-  </OnboardingProvider></WorkspaceProvider></ThemedTitleTooltipProvider></AppThemeProvider>;
+  </OnboardingProvider></WorkspaceProvider></ThemedTitleTooltipProvider></TerminalTitleProvider></AppThemeProvider>;
 }
 
 function resetDemo() { resetDemoSessions(); resetFeatureSessions(); resetDemoProjects(); resetDemoNetwork(); }

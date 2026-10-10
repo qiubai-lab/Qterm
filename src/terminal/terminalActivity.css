@@ -1,8 +1,51 @@
-.terminal-activity-metadata { display:flex; min-width:0; flex:0 1 auto; align-items:center; gap:6px; overflow:hidden; }
-.terminal-application-title { min-width:0; max-width:180px; overflow:hidden; color:var(--muted); text-overflow:ellipsis; white-space:nowrap; font-size:10px; }
+.terminal-activity-metadata {
+  display:grid; height:18px; flex:0 1 auto; gap:4px; align-items:center; grid-template-columns:minmax(0,1fr); overflow:clip;
+  font-size:9px; line-height:1;
+}
+.terminal-activity-metadata[data-has-progress="true"] { grid-template-columns:auto; }
+.terminal-activity-metadata[data-has-progress="true"][data-has-title="true"] { grid-template-columns:minmax(0,1fr) auto; }
+.terminal-application-title {
+  display:flex; min-width:0; max-width:180px; height:16px; flex:0 1 auto; gap:4px; align-items:center;
+  padding:0 5px; overflow:hidden; color:var(--muted); white-space:nowrap; font-weight:500;
+  border:1px solid color-mix(in srgb,var(--text) 13%,transparent); border-radius:var(--terminal-activity-radius);
+  background:color-mix(in srgb,var(--raised) 75%,transparent);
+}
+.terminal-application-title>svg { flex:none; color:var(--signature); opacity:.8; }
+.terminal-application-title-text { min-width:0; overflow:hidden; text-overflow:ellipsis; }
 .terminal-application-title:focus-visible { outline:2px solid var(--focus); outline-offset:-2px; }
-.terminal-task-progress { flex:none; color:var(--accent); white-space:nowrap; font-size:10px; font-variant-numeric:tabular-nums; }
-.terminal-task-progress[data-state="error"] { color:var(--danger); }
-.terminal-task-progress[data-state="paused"] { color:var(--muted); }
+.terminal-task-progress {
+  --terminal-progress-tone:var(--accent);
+  display:flex; height:16px; grid-column:-2/-1; gap:4px; align-items:center; padding:0 5px;
+  border:1px solid color-mix(in srgb,var(--terminal-progress-tone) 22%,transparent); border-radius:var(--terminal-activity-radius);
+  color:var(--terminal-progress-tone); background:color-mix(in srgb,var(--terminal-progress-tone) 9%,transparent);
+  white-space:nowrap; transform-origin:center; animation:terminal-progress-enter 140ms cubic-bezier(.2,.8,.2,1) both;
+}
+.terminal-task-progress[data-presence="closing"] { animation:terminal-progress-exit 120ms ease-in both; pointer-events:none; }
+.terminal-task-progress[data-state="error"] { --terminal-progress-tone:var(--danger); }
+.terminal-task-progress[data-state="paused"] { --terminal-progress-tone:var(--warning); }
+.terminal-progress-indicator { position:relative; display:grid; width:11px; height:11px; flex:none; place-items:center; }
+.terminal-progress-ring { width:11px; height:11px; fill:none; stroke:currentColor; stroke-width:1.7; transform:rotate(-90deg); }
+.terminal-progress-track { opacity:.22; }
+.terminal-progress-fill { stroke-linecap:round; }
+.terminal-task-progress[data-state="indeterminate"] .terminal-progress-ring { animation:terminal-progress-spin 1.2s linear infinite; }
+.terminal-progress-pause { position:absolute; width:1px; height:4px; margin-left:-3px; background:currentColor; box-shadow:3px 0 currentColor; }
+.terminal-progress-error { position:absolute; font-size:7px; font-weight:800; }
+.terminal-progress-label { font-weight:500; }
+.terminal-progress-value { font:600 9px/1 "SFMono-Regular",Consolas,monospace; font-variant-numeric:tabular-nums; }
+.terminal-progress-value>span { margin-left:1px; font-size:7px; font-weight:400; }
 .terminal-command-feedback { min-height:28px; max-width:220px; margin:3px 7px; color:var(--muted); font-size:10px; line-height:14px; overflow-wrap:anywhere; }
-@container terminal-block (max-width:480px) { .terminal-application-title { max-width:80px; } }
+@keyframes terminal-progress-spin { to { transform:rotate(270deg); } }
+@keyframes terminal-progress-enter { from { opacity:0; transform:translateY(1px) scale(.96); } to { opacity:1; transform:none; } }
+@keyframes terminal-progress-exit { from { opacity:1; transform:none; } to { opacity:0; transform:translateY(-1px) scale(.96); } }
+@container terminal-block (max-width:480px) {
+  .terminal-application-title { max-width:100px; }
+  .terminal-activity-metadata[data-has-progress="true"] .terminal-application-title { display:none; }
+}
+@container terminal-block (max-width:390px) { .terminal-progress-label { display:none; } }
+@media(prefers-reduced-motion:reduce) {
+  .terminal-progress-ring { animation:none!important; }
+  .terminal-task-progress { animation-duration:70ms; }
+  .terminal-task-progress[data-presence="closing"] { animation-duration:70ms; }
+  @keyframes terminal-progress-enter { from { opacity:0; } to { opacity:1; } }
+  @keyframes terminal-progress-exit { from { opacity:1; } to { opacity:0; } }
+}

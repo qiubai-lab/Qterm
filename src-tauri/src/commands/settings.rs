@@ -86,6 +86,7 @@ pub struct TerminalSettingsDto {
     remote_shell_integration_enabled: Option<bool>,
     command_markers_enabled: Option<bool>,
     history_free_bash_enabled: Option<bool>,
+    application_title_enabled: Option<bool>,
 }
 
 #[derive(Clone, Copy, Deserialize, Serialize)]
@@ -150,6 +151,7 @@ struct TerminalSettingsOutputDto {
     remote_shell_integration_enabled: bool,
     command_markers_enabled: bool,
     history_free_bash_enabled: bool,
+    application_title_enabled: bool,
 }
 
 #[tauri::command]
@@ -255,6 +257,9 @@ pub fn settings_update_terminal(
             history_free_bash_enabled: input
                 .history_free_bash_enabled
                 .unwrap_or(current.history_free_bash_enabled),
+            application_title_enabled: input
+                .application_title_enabled
+                .unwrap_or(current.application_title_enabled),
         })
         .map_err(IpcError::from)?;
     Ok(SettingsSnapshotDto::new(snapshot))
@@ -290,6 +295,7 @@ impl SettingsSnapshotDto {
                 remote_shell_integration_enabled: value.terminal.remote_shell_integration_enabled,
                 command_markers_enabled: value.terminal.command_markers_enabled,
                 history_free_bash_enabled: value.terminal.history_free_bash_enabled,
+                application_title_enabled: value.terminal.application_title_enabled,
             },
             warning: value.warning.map(|warning| match warning {
                 SettingsWarning::Corrupt => "corrupt",
@@ -354,6 +360,20 @@ mod tests {
                 json!({ "historyFreeBashEnabled": "yes" })
             )
             .is_err()
+        );
+    }
+
+    #[test]
+    fn application_title_setting_is_an_independent_boolean_patch() {
+        let patch: TerminalSettingsDto =
+            serde_json::from_value(json!({ "applicationTitleEnabled": true })).unwrap();
+        assert_eq!(patch.application_title_enabled, Some(true));
+        assert_eq!(patch.remote_shell_integration_enabled, None);
+        assert_eq!(patch.command_markers_enabled, None);
+        assert_eq!(patch.history_free_bash_enabled, None);
+        assert!(
+            serde_json::from_value::<TerminalSettingsDto>(json!({ "applicationTitleEnabled": 1 }))
+                .is_err()
         );
     }
 

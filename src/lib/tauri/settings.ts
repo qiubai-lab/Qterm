@@ -19,6 +19,7 @@ export interface TerminalSettings {
   remoteShellIntegrationEnabled: boolean;
   commandMarkersEnabled: boolean;
   historyFreeBashEnabled: boolean;
+  applicationTitleEnabled: boolean;
 }
 
 export interface GeneralSettings {

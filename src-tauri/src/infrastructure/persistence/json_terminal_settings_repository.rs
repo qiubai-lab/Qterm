@@ -8,7 +8,7 @@ use crate::{
     ports::settings_repository::TerminalSettingsRepository,
 };
 
-const TERMINAL_SETTINGS_VERSION: u64 = 3;
+const TERMINAL_SETTINGS_VERSION: u64 = 4;
 const MAX_BYTES: u64 = 4 * 1024;
 
 pub struct JsonTerminalSettingsRepository {
@@ -36,14 +36,16 @@ impl JsonTerminalSettingsRepository {
             value
                 .get("schemaVersion")
                 .and_then(serde_json::Value::as_u64),
-            Some(1 | 2 | TERMINAL_SETTINGS_VERSION)
+            Some(1 | 2 | 3 | TERMINAL_SETTINGS_VERSION)
         ) {
             return Err(SettingsError::UnsupportedVersion);
         }
         if value
             .get("commandMarkersEnabled")
             .is_some_and(|flag| !flag.is_boolean())
-            || (value["schemaVersion"] == TERMINAL_SETTINGS_VERSION
+            || (value["schemaVersion"]
+                .as_u64()
+                .is_some_and(|version| version >= 3)
                 && value.get("commandMarkersEnabled").is_none())
         {
             return Err(SettingsError::Corrupt);
@@ -62,6 +64,7 @@ impl TerminalSettingsRepository for JsonTerminalSettingsRepository {
                 .command_markers_enabled
                 .unwrap_or(document.remote_shell_integration_enabled),
             history_free_bash_enabled: document.history_free_bash_enabled,
+            application_title_enabled: document.application_title_enabled,
         }))
     }
 
@@ -75,6 +78,7 @@ impl TerminalSettingsRepository for JsonTerminalSettingsRepository {
             remote_shell_integration_enabled: settings.remote_shell_integration_enabled,
             command_markers_enabled: Some(settings.command_markers_enabled),
             history_free_bash_enabled: settings.history_free_bash_enabled,
+            application_title_enabled: settings.application_title_enabled,
             remote_shell_integration_passive: previous
                 .and_then(|document| document.remote_shell_integration_passive),
         };
@@ -98,6 +102,8 @@ struct Document {
     command_markers_enabled: Option<bool>,
     #[serde(default)]
     history_free_bash_enabled: bool,
+    #[serde(default)]
+    application_title_enabled: bool,
     // A prior v2 writer stored this preference. Preserve it across updates even
     // though the current shell integration does not consume passive mode.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -123,6 +129,7 @@ mod tests {
             remote_shell_integration_enabled: false,
             command_markers_enabled: false,
             history_free_bash_enabled: true,
+            application_title_enabled: true,
         };
         repository.save(settings).expect("save");
         assert_eq!(repository.load().expect("load"), Some(settings));
@@ -137,6 +144,7 @@ mod tests {
         let repository = JsonTerminalSettingsRepository::new(path.clone());
         let settings = repository.load().unwrap().unwrap();
         assert!(!settings.history_free_bash_enabled);
+        assert!(!settings.application_title_enabled);
         assert!(!settings.remote_shell_integration_enabled);
         assert_eq!(fs::read(path).unwrap(), original);
     }
@@ -154,6 +162,7 @@ mod tests {
             let repository = JsonTerminalSettingsRepository::new(path.clone());
             let mut settings = repository.load().unwrap().unwrap();
             assert!(!settings.history_free_bash_enabled);
+            assert!(!settings.application_title_enabled);
             assert_eq!(fs::read_to_string(&path).unwrap(), original);
             let legacy: serde_json::Value = serde_json::from_str(original).unwrap();
             for enabled in [true, false] {
@@ -162,7 +171,7 @@ mod tests {
                 assert_eq!(repository.load().unwrap(), Some(settings));
                 let saved: serde_json::Value =
                     serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
-                assert_eq!(saved["schemaVersion"], 3);
+                assert_eq!(saved["schemaVersion"], 4);
                 assert_eq!(saved["historyFreeBashEnabled"], enabled);
                 assert_eq!(
                     saved["remoteShellIntegrationEnabled"],
@@ -198,8 +207,38 @@ mod tests {
     }
 
     #[test]
+    fn title_preference_defaults_off_for_v3_and_preserves_protocol_flags() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("terminal.json");
+        let original = r#"{"schemaVersion":3,"remoteShellIntegrationEnabled":true,"commandMarkersEnabled":false,"historyFreeBashEnabled":true}"#;
+        fs::write(&path, original).unwrap();
+        let repository = JsonTerminalSettingsRepository::new(path.clone());
+        let mut settings = repository.load().unwrap().unwrap();
+        assert!(!settings.application_title_enabled);
+        assert_eq!(fs::read_to_string(&path).unwrap(), original);
+        for enabled in [true, false] {
+            settings.application_title_enabled = enabled;
+            repository.save(settings).unwrap();
+            assert_eq!(repository.load().unwrap(), Some(settings));
+            assert!(settings.remote_shell_integration_enabled);
+            assert!(!settings.command_markers_enabled);
+            assert!(settings.history_free_bash_enabled);
+        }
+    }
+
+    #[test]
     fn corrupt_unknown_and_future_documents_are_preserved() {
         for (name, bytes, error) in [
+            (
+                "invalid-title",
+                br#"{"schemaVersion":4,"remoteShellIntegrationEnabled":true,"commandMarkersEnabled":true,"applicationTitleEnabled":"yes"}"#.as_slice(),
+                SettingsError::Corrupt,
+            ),
+            (
+                "missing-markers-v3",
+                br#"{"schemaVersion":3,"remoteShellIntegrationEnabled":true}"#.as_slice(),
+                SettingsError::Corrupt,
+            ),
             (
                 "unknown",
                 br#"{"schemaVersion":1,"remoteShellIntegrationEnabled":true,"command":"forbidden"}"#.as_slice(),
@@ -212,7 +251,7 @@ mod tests {
             ),
             (
                 "future",
-                br#"{"schemaVersion":4,"remoteShellIntegrationEnabled":true}"#.as_slice(),
+                br#"{"schemaVersion":5,"remoteShellIntegrationEnabled":true}"#.as_slice(),
                 SettingsError::UnsupportedVersion,
             ),
             (
