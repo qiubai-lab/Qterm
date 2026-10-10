@@ -200,7 +200,7 @@ describe("TerminalPanel view lifetime", () => {
 
     expect(mocks.terminals).toHaveLength(1);
     expect(terminal.dispose).not.toHaveBeenCalled();
-    expect(terminal.loadAddon).toHaveBeenCalledTimes(3);
+    expect(terminal.loadAddon).toHaveBeenCalledTimes(4);
     expect(view.container.querySelector("[data-xterm-view=preserved]")).toBe(terminal.element);
     view.unmount();
     act(() => vi.runAllTimers());

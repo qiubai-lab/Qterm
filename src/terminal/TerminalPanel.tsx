@@ -17,6 +17,8 @@ import {
   type TerminalStagingEvent,
 } from "@qterm/services/sessions";
 import { useWorkspace } from "../workspace/WorkspaceProvider";
+import { createTerminalOsc52Addon } from "./terminalOsc52";
+import { handleClipboardShortcut, terminalClipboardPlatform, type ClipboardPlatform } from "./terminalClipboardShortcuts";
 import { parseOsc7Cwd } from "./osc7";
 import { createTerminalLayout, type TerminalLayout } from "./terminalLayout";
 import { createTerminalInputScheduler, type TerminalInputScheduler } from "./terminalInputScheduler";
@@ -48,7 +50,6 @@ interface TerminalView extends TerminalSearchHost {
   themeBinding: { dispose: () => void };
   disposeTimer: number | null;
 }
-type ClipboardPlatform = "mac" | "windows" | "linux";
 type ContextMenuState = { anchorX: number; anchorY: number; x: number; y: number; placement: "above" | "below"; hasSelection: boolean };
 type PendingPaste = { text: string; lines: number; characters: number };
 type SearchResults = { resultIndex: number; resultCount: number };
@@ -549,35 +550,6 @@ export function TerminalPanel({ blockId, sessionKey, visible, local, osc7Enabled
   </>;
 }
 
-function terminalClipboardPlatform(): ClipboardPlatform {
-  const navigatorWithData = navigator as Navigator & { userAgentData?: { platform?: string } };
-  const value = `${navigatorWithData.userAgentData?.platform ?? ""} ${navigator.platform ?? ""} ${navigator.userAgent ?? ""}`.toLowerCase();
-  if (value.includes("mac")) return "mac";
-  if (value.includes("win")) return "windows";
-  return "linux";
-}
-
-function handleClipboardShortcut(event: KeyboardEvent, platform: ClipboardPlatform, terminal: Terminal, inputEnabled: boolean, copy: () => Promise<void>, paste: () => Promise<void>): boolean {
-  if (event.type !== "keydown" || event.altKey) return true;
-  const key = event.key.toLowerCase();
-  const macShortcut = platform === "mac" && event.metaKey && !event.ctrlKey;
-  const terminalShortcut = platform !== "mac" && event.ctrlKey && event.shiftKey && !event.metaKey;
-  const windowsDesktopShortcut = platform === "windows" && event.ctrlKey && !event.shiftKey && !event.metaKey;
-  if (key === "c" && (macShortcut || terminalShortcut || (windowsDesktopShortcut && terminal.hasSelection()))) {
-    event.preventDefault();
-    event.stopPropagation();
-    void copy();
-    return false;
-  }
-  if (key === "v" && inputEnabled && (macShortcut || terminalShortcut || windowsDesktopShortcut)) {
-    event.preventDefault();
-    event.stopPropagation();
-    void paste();
-    return false;
-  }
-  return true;
-}
-
 function handleMacWordNavigationShortcut(event: KeyboardEvent, platform: ClipboardPlatform, write: (data: string) => void): boolean {
   const hasSingleWordModifier = event.ctrlKey !== event.altKey;
   if (platform !== "mac" || event.type !== "keydown" || !hasSingleWordModifier || event.shiftKey || event.metaKey) return true;
@@ -644,6 +616,7 @@ function acquireTerminalView(sessionKey: string, container: HTMLElement, windows
   });
   const fit = new FitAddon();
   terminal.loadAddon(fit);
+  terminal.loadAddon(createTerminalOsc52Addon(writeClipboardText));
   terminal.loadAddon(createTerminalWebLinksAddon());
   terminal.open(container);
   const element = terminal.element;
