@@ -11,4 +11,3 @@ pub mod ssh;
 pub(crate) mod terminal_image;
 
 pub mod notifications;
-pub mod sync;

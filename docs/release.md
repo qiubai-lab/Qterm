@@ -1,13 +1,11 @@
 # 发布流程
 
-本文说明如何通过版本标签发布 Qterm 桌面安装包。桌面流水线定义在 `.github/workflows/build-desktop.yml`，同步服务镜像流水线定义在 `.github/workflows/build-sync.yml`。
+本文说明如何通过版本标签发布 Qterm 桌面安装包。相关流水线定义在 `.github/workflows/build-desktop.yml`。
 
 ## 触发方式
 
-- **推送 `v*` 标签**：构建 macOS ARM64、macOS Intel、Windows x64、Linux x64 四个平台的安装包，并将产物发布到与标签同名的 GitHub Release；同时独立构建并推送同步服务镜像 `ghcr.io/qiubai-lab/qterm-sync:X.Y.Z`，镜像版本取标签去掉 `v` 的版本。两条流水线并行，需分别确认成功。
+- **推送 `v*` 标签**：构建 macOS ARM64、macOS Intel、Windows x64、Linux x64 四个平台的安装包，并将产物发布到与标签同名的 GitHub Release。
 - **手动触发（workflow_dispatch）**：只构建并上传为 workflow artifacts（保留 14 天），**不会**发布 Release，用于验证打包改动。
-
-同步镜像另保留 `sync-v*` 测试标签，例如 `sync-v0.5.0-test.1` 发布镜像 `0.5.0-test.1`，不会触发桌面发版。测试标签不要复用正式版本号，以免覆盖镜像。手动运行 **Build sync service** 只验证构建，不推送镜像。
 
 ## 发布前检查
 
@@ -22,7 +20,7 @@
    cargo test --all-targets --all-features
    ```
 
-3. 修改唯一版本源 `src-tauri/Cargo.toml` 的 `package.version`，然后运行一次 `cargo check` 刷新 `Cargo.lock` 并一并提交。Tauri 安装包版本会自动读取该 Cargo 包版本；同步更新 `docker/compose.yaml` 中固定的镜像版本及部署文档示例。正式镜像流水线也会校验标签与 Qterm Cargo 版本一致。
+3. 修改唯一版本源 `src-tauri/Cargo.toml` 的 `package.version`，然后运行一次 `cargo check` 刷新 `Cargo.lock` 并一并提交。Tauri 安装包版本会自动读取该 Cargo 包版本。
 
 版本号遵循语义化版本，标签格式为 `vX.Y.Z`，并与 `Cargo.toml` 的版本一致。标签发布流水线会在构建前自动校验二者；不一致时发布立即失败。
 

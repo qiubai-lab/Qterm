@@ -8,7 +8,6 @@ pub mod profile_repository;
 pub mod remote_git_executor;
 pub mod remote_shell_cache;
 pub mod settings_repository;
-pub mod sync;
 pub mod terminal_staging;
 pub mod workspace_repository;
 

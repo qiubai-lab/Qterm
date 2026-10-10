@@ -19,13 +19,12 @@ import { ConfigurationDirectorySetting } from "./ConfigurationDirectorySetting";
 import { ConfigurationPaths } from "./ConfigurationPaths";
 import { TerminalNotificationSetting } from "./TerminalNotificationSetting";
 import { DialogFrame } from "./DialogFrame";
-import { SyncSettingsPanel } from "./sync/SyncSettingsPanel";
 
 const credentialDurations = [300, 900, 1800, 3600, 7200, 14400, 28800, 86400];
 const terminalIdleDurations = [300, 900, 1800, 3600, 7200];
-type SettingsCategory = "general" | "appearance" | "security" | "advanced" | "sync";
+type SettingsCategory = "general" | "appearance" | "security" | "advanced";
 type SettingsCategoryDirection = "forward" | "backward";
-const settingsCategoryOrder: SettingsCategory[] = ["general", "appearance", "security", "advanced", "sync"];
+const settingsCategoryOrder: SettingsCategory[] = ["general", "appearance", "security", "advanced"];
 
 export function SettingsDialog({ onClose, onSecuritySettingsChanged, onTerminalSettingsChanged }: { onClose: () => void; onSecuritySettingsChanged?: (settings: SecuritySettings) => void; onTerminalSettingsChanged?: (settings: TerminalSettings) => void }) {
   const { persistedTheme, previewTheme, commitTheme, restoreTheme } = useAppTheme();
@@ -62,7 +61,7 @@ export function SettingsDialog({ onClose, onSecuritySettingsChanged, onTerminalS
   }, [applySnapshot]);
 
   async function save() {
-    if (!security || !general || !appearance || busy || category === "advanced" || category === "sync") return;
+    if (!security || !general || !appearance || busy || category === "advanced") return;
     setBusy(true); setSaved(false); setError("");
     try {
       const snapshot = category === "general"
@@ -144,11 +143,10 @@ export function SettingsDialog({ onClose, onSecuritySettingsChanged, onTerminalS
           <SettingsNavItem category="appearance" current={category} icon="eye" title="外观" subtitle="界面主题" onSelect={selectCategory}/>
           <SettingsNavItem category="security" current={category} icon="lock" title="安全" subtitle="凭证与终端锁定" onSelect={selectCategory}/>
           <SettingsNavItem category="advanced" current={category} icon="terminal" title="高级" subtitle="终端集成" onSelect={selectCategory}/>
-          <SettingsNavItem category="sync" current={category} icon="sync" title="同步" subtitle="自托管连接同步" onSelect={selectCategory}/>
         </div>
       </nav>
       <section className="settings-content" aria-labelledby={`${category}-settings-title`}>
-        {category === "sync" ? <SyncSettingsPanel/> : <><div className="settings-content-scroll">
+        <div className="settings-content-scroll">
           <div key={category} className={`settings-category-panel${categoryDirection ? ` settings-category-${categoryDirection}` : " settings-category-idle"}`} data-category={category}>
           {category === "general" ? <div className="settings-general-view">
             <div className="settings-section-heading"><h3 id="general-settings-title">通用</h3><p>配置 Qterm 数据根目录与存储路径。</p></div>
@@ -199,7 +197,7 @@ export function SettingsDialog({ onClose, onSecuritySettingsChanged, onTerminalS
                 : category === "general" && general?.restartRequired ? <p className="inline-message settings-message" role="status">Qterm 配置目录已保存，重启 Qterm 后生效。</p> : null}
           </div>
           {category !== "advanced" && <Button variant="primary" className={`save-state-button${saved ? " saved" : ""}`} loading={busy} disabled={!security || !general || !appearance || !terminal} onClick={() => void save()}>{busy ? "保存中…" : saved ? "✓ 已保存" : "保存设置"}</Button>}
-        </footer></>}
+        </footer>
       </section>
     </div>
   </DialogFrame>
@@ -223,7 +221,7 @@ export function SettingsDialog({ onClose, onSecuritySettingsChanged, onTerminalS
 function SettingsNavItem({ category, current, icon, title, subtitle, onSelect }: {
   category: SettingsCategory;
   current: SettingsCategory;
-  icon: "settings" | "eye" | "lock" | "terminal" | "sync";
+  icon: "settings" | "eye" | "lock" | "terminal";
   title: string;
   subtitle: string;
   onSelect: (category: SettingsCategory) => void;

@@ -7,14 +7,13 @@ import { Button, StatusBadge } from "../Button";
 import { ExactTextInput } from "../ExactTextInput";
 import { Icon } from "../Icon";
 import { RequiredFieldLabel } from "../RequiredFieldLabel";
-import { useConnectionCatalogRefresh } from "./connection/useConnectionCatalogRefresh";
 import { OverlayScrollArea } from "../scrollbars/OverlayScrollArea";
 import { DialogActionStatus, DialogFrame } from "./DialogFrame";
 import { CredentialDialog } from "./CredentialDialog";
 import { MasterPasswordDialog } from "./MasterPasswordDialog";
 import { SshConfigImportDialog } from "./SshConfigImportDialog";
 import { ConnectionSaveFeedbackBubble, JumpProfilePicker, JumpRouteFlow, type SaveFeedback } from "./connection/ConnectionDialogSupport";
-import { authPreferenceLabel, connectionErrorMessage, dropGroupAtPoint, duplicateProfileName, findProfileId, profileToInput } from "./connection/connectionDialogModel"; import { ConnectionSelectionIndicator } from "./connection/ConnectionSelectionIndicator"; import { ConnectionGroupContent } from "./connection/ConnectionGroupContent"; import { useConnectionManagerMotion } from "./connection/useConnectionManagerMotion";
+import { authPreferenceLabel, connectionErrorCode, connectionErrorMessage, dropGroupAtPoint, duplicateProfileName, findProfileId, profileToInput } from "./connection/connectionDialogModel"; import { ConnectionSelectionIndicator } from "./connection/ConnectionSelectionIndicator"; import { ConnectionGroupContent } from "./connection/ConnectionGroupContent"; import { useConnectionManagerMotion } from "./connection/useConnectionManagerMotion";
 
 const empty: ProfileInput = { name: "", host: "", port: 22, username: "", authPreference: "password", credentialId: null, groupId: null, jumpProfileIds: [] };
 type EditorTab = "connection" | "authentication" | "jump";
@@ -101,7 +100,16 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     void refreshCredentialSummaries();
   }, []);
-  useConnectionCatalogRefresh(setGroups, setCollapsedGroupIds, setProfileStorageUnsupported, setMessage);
+  useEffect(() => {
+    void listProfileGroups().then((items) => {
+      setGroups(items);
+      setProfileStorageUnsupported(false);
+      setCollapsedGroupIds(new Set(items.map((group) => group.id)));
+    }).catch((error) => {
+      setProfileStorageUnsupported(connectionErrorCode(error) === "profileStorageVersionUnsupported");
+      setMessage(connectionErrorMessage(error));
+    });
+  }, []);
   useEffect(() => {
     if (initializedSelectionRef.current || profiles.length === 0) return;
     initializedSelectionRef.current = true;
