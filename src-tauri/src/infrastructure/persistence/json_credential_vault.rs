@@ -1,9 +1,11 @@
+mod crypto;
+use crypto::*;
 use std::{
     collections::HashSet,
     fs,
     io::{self, Write},
     path::PathBuf,
-    sync::{Mutex, MutexGuard},
+    sync::{Arc, Mutex, MutexGuard},
 };
 
 use aes_gcm::{
@@ -39,10 +41,11 @@ const NONCE_BYTES: usize = 12;
 const CHECK: &[u8] = b"qterm-credential-vault-v3";
 const RECOVERY_PURPOSE: &str = "qterm-vault-recovery";
 
+#[derive(Clone)]
 pub struct JsonCredentialVault {
     path: PathBuf,
     default_kdf: KdfRecord,
-    state: Mutex<Runtime>,
+    state: Arc<Mutex<Runtime>>,
 }
 
 #[derive(Default)]
@@ -51,6 +54,12 @@ struct Runtime {
 }
 
 impl JsonCredentialVault {
+    pub(crate) fn fork_at(&self, path: PathBuf) -> Self {
+        let fork = Self::new(path);
+        fork.runtime().data_key = self.runtime().data_key.clone();
+        fork
+    }
+
     pub fn new(path: PathBuf) -> Self {
         Self::with_kdf(path, 65_536, 3, 4)
     }
@@ -64,7 +73,7 @@ impl JsonCredentialVault {
                 parallelism,
                 salt: String::new(),
             },
-            state: Mutex::new(Runtime::default()),
+            state: Arc::new(Mutex::new(Runtime::default())),
         }
     }
     #[cfg(test)]
@@ -182,6 +191,10 @@ impl JsonCredentialVault {
 
 impl CredentialVault for JsonCredentialVault {
     fn status(&self) -> Result<VaultStatus, CredentialError> {
+        let _storage = super::configuration_gate::lock();
+        if super::configuration_gate::pending(&self.path) {
+            return Err(CredentialError::StorageUnavailable);
+        }
         match self.stored_version()? {
             None => Ok(VaultStatus {
                 initialized: false,
@@ -205,6 +218,10 @@ impl CredentialVault for JsonCredentialVault {
         }
     }
     fn prepare_initial_recovery(&self) -> Result<RecoveryKeyFile, CredentialError> {
+        let _storage = super::configuration_gate::lock();
+        if super::configuration_gate::pending(&self.path) {
+            return Err(CredentialError::StorageUnavailable);
+        }
         recovery_file(uuid::Uuid::new_v4().to_string(), 1)
     }
     fn initialize(
@@ -212,6 +229,10 @@ impl CredentialVault for JsonCredentialVault {
         master_password: SecretText,
         recovery_file: RecoveryKeyFile,
     ) -> Result<(), CredentialError> {
+        let _storage = super::configuration_gate::lock();
+        if super::configuration_gate::pending(&self.path) {
+            return Err(CredentialError::StorageUnavailable);
+        }
         if master_password.expose().chars().count() < 12 {
             return Err(CredentialError::WeakMasterPassword);
         }
@@ -255,6 +276,10 @@ impl CredentialVault for JsonCredentialVault {
         Ok(())
     }
     fn unlock(&self, master_password: SecretText) -> Result<(), CredentialError> {
+        let _storage = super::configuration_gate::lock();
+        if super::configuration_gate::pending(&self.path) {
+            return Err(CredentialError::StorageUnavailable);
+        }
         let document = self.document()?;
         let kek = derive(master_password.expose(), &document.kdf)?;
         let data_key = decrypt(
@@ -283,6 +308,10 @@ impl CredentialVault for JsonCredentialVault {
         old_password: SecretText,
         new_password: SecretText,
     ) -> Result<(), CredentialError> {
+        let _storage = super::configuration_gate::lock();
+        if super::configuration_gate::pending(&self.path) {
+            return Err(CredentialError::StorageUnavailable);
+        }
         if new_password.expose().chars().count() < 12 {
             return Err(CredentialError::WeakMasterPassword);
         }
@@ -328,6 +357,10 @@ impl CredentialVault for JsonCredentialVault {
         &self,
         current_recovery_file: RecoveryKeyFile,
     ) -> Result<RecoveryKeyFile, CredentialError> {
+        let _storage = super::configuration_gate::lock();
+        if super::configuration_gate::pending(&self.path) {
+            return Err(CredentialError::StorageUnavailable);
+        }
         let document = self.document()?;
         let recovery = verify_recovery_file(&document, &current_recovery_file)?;
         let data_key = decrypt_recovery_data_key(&document, &recovery)?;
@@ -344,6 +377,10 @@ impl CredentialVault for JsonCredentialVault {
         replacement_recovery_file: RecoveryKeyFile,
         new_password: SecretText,
     ) -> Result<(), CredentialError> {
+        let _storage = super::configuration_gate::lock();
+        if super::configuration_gate::pending(&self.path) {
+            return Err(CredentialError::StorageUnavailable);
+        }
         if new_password.expose().chars().count() < 12 {
             return Err(CredentialError::WeakMasterPassword);
         }
@@ -387,9 +424,14 @@ impl CredentialVault for JsonCredentialVault {
         Ok(())
     }
     fn lock(&self) {
+        let _storage = super::configuration_gate::lock();
         self.runtime().data_key = None;
     }
     fn clear(&self) -> Result<(), CredentialError> {
+        let _storage = super::configuration_gate::lock();
+        if super::configuration_gate::pending(&self.path) {
+            return Err(CredentialError::StorageUnavailable);
+        }
         let mut runtime = self.runtime();
         match fs::remove_file(&self.path) {
             Ok(()) => {}
@@ -400,6 +442,10 @@ impl CredentialVault for JsonCredentialVault {
         Ok(())
     }
     fn list(&self) -> Result<Vec<CredentialSummary>, CredentialError> {
+        let _storage = super::configuration_gate::lock();
+        if super::configuration_gate::pending(&self.path) {
+            return Err(CredentialError::StorageUnavailable);
+        }
         self.document()?
             .credentials
             .into_iter()
@@ -412,6 +458,10 @@ impl CredentialVault for JsonCredentialVault {
         name: String,
         password: SecretText,
     ) -> Result<CredentialSummary, CredentialError> {
+        let _storage = super::configuration_gate::lock();
+        if super::configuration_gate::pending(&self.path) {
+            return Err(CredentialError::StorageUnavailable);
+        }
         if password.expose().is_empty() {
             return Err(CredentialError::InvalidCredential);
         }
@@ -431,6 +481,10 @@ impl CredentialVault for JsonCredentialVault {
         passphrase: Option<SecretText>,
         algorithm: String,
     ) -> Result<CredentialSummary, CredentialError> {
+        let _storage = super::configuration_gate::lock();
+        if super::configuration_gate::pending(&self.path) {
+            return Err(CredentialError::StorageUnavailable);
+        }
         if key.expose().is_empty() || key.expose().len() > MAX_KEY_BYTES {
             return Err(CredentialError::InvalidCredential);
         }
@@ -442,6 +496,10 @@ impl CredentialVault for JsonCredentialVault {
         id: &CredentialId,
         name: String,
     ) -> Result<CredentialSummary, CredentialError> {
+        let _storage = super::configuration_gate::lock();
+        if super::configuration_gate::pending(&self.path) {
+            return Err(CredentialError::StorageUnavailable);
+        }
         let runtime = self.runtime();
         runtime.data_key.as_deref().ok_or(CredentialError::Locked)?;
         let mut document = self.document()?;
@@ -456,6 +514,10 @@ impl CredentialVault for JsonCredentialVault {
         Ok(summary)
     }
     fn load(&self, id: &CredentialId) -> Result<CredentialMaterial, CredentialError> {
+        let _storage = super::configuration_gate::lock();
+        if super::configuration_gate::pending(&self.path) {
+            return Err(CredentialError::StorageUnavailable);
+        }
         let runtime = self.runtime();
         let key = runtime.data_key.as_deref().ok_or(CredentialError::Locked)?;
         let document = self.document()?;
@@ -482,6 +544,10 @@ impl CredentialVault for JsonCredentialVault {
         }
     }
     fn delete(&self, id: &CredentialId) -> Result<(), CredentialError> {
+        let _storage = super::configuration_gate::lock();
+        if super::configuration_gate::pending(&self.path) {
+            return Err(CredentialError::StorageUnavailable);
+        }
         let runtime = self.runtime();
         runtime.data_key.as_deref().ok_or(CredentialError::Locked)?;
         let mut document = self.document()?;
@@ -585,609 +651,5 @@ struct Encrypted {
     nonce: String,
     ciphertext: String,
 }
-fn random_key() -> Result<Zeroizing<Vec<u8>>, CredentialError> {
-    let mut key = Zeroizing::new(vec![0; KEY_BYTES]);
-    getrandom::fill(&mut key).map_err(|_| CredentialError::CryptoFailure)?;
-    Ok(key)
-}
-fn recovery_file(vault_id: String, generation: u64) -> Result<RecoveryKeyFile, CredentialError> {
-    if uuid::Uuid::parse_str(&vault_id).is_err() || generation == 0 {
-        return Err(CredentialError::InvalidRecoveryFile);
-    }
-    let key = random_key()?;
-    let document = RecoveryDocument {
-        schema_version: RECOVERY_FILE_VERSION,
-        purpose: RECOVERY_PURPOSE.into(),
-        vault_id,
-        generation,
-        recovery_key: BASE64.encode(&key),
-    };
-    let mut bytes =
-        serde_json::to_vec_pretty(&document).map_err(|_| CredentialError::CryptoFailure)?;
-    bytes.push(b'\n');
-    Ok(RecoveryKeyFile::new(bytes))
-}
-
-fn decode_recovery_file(value: &RecoveryKeyFile) -> Result<RecoveryDocument, CredentialError> {
-    if value.expose().is_empty() || value.expose().len() > MAX_RECOVERY_FILE_BYTES {
-        return Err(CredentialError::InvalidRecoveryFile);
-    }
-    let document: RecoveryDocument =
-        serde_json::from_slice(value.expose()).map_err(|_| CredentialError::InvalidRecoveryFile)?;
-    if document.schema_version != RECOVERY_FILE_VERSION
-        || document.purpose != RECOVERY_PURPOSE
-        || document.generation == 0
-        || uuid::Uuid::parse_str(&document.vault_id).is_err()
-    {
-        return Err(CredentialError::InvalidRecoveryFile);
-    }
-    document.key()?;
-    Ok(document)
-}
-
-fn verify_recovery_file(
-    document: &Document,
-    value: &RecoveryKeyFile,
-) -> Result<RecoveryDocument, CredentialError> {
-    let recovery = decode_recovery_file(value)?;
-    if recovery.vault_id != document.vault_id || recovery.generation != document.recovery_generation
-    {
-        return Err(CredentialError::RecoveryFileMismatch);
-    }
-    Ok(recovery)
-}
-
-fn decrypt_recovery_data_key(
-    document: &Document,
-    recovery: &RecoveryDocument,
-) -> Result<Zeroizing<Vec<u8>>, CredentialError> {
-    let key = recovery.key()?;
-    decrypt(
-        &key,
-        &document.recovery_wrapped_data_key,
-        recovery_wrap_aad(&document.vault_id, document.recovery_generation).as_bytes(),
-    )
-    .map_err(|_| CredentialError::InvalidRecoveryFile)
-}
-
-fn verify_data_key(document: &Document, data_key: &[u8]) -> Result<(), CredentialError> {
-    if data_key.len() != KEY_BYTES {
-        return Err(CredentialError::InvalidRecoveryFile);
-    }
-    let check = decrypt(
-        data_key,
-        &document.check,
-        check_aad(&document.vault_id).as_bytes(),
-    )
-    .map_err(|_| CredentialError::InvalidRecoveryFile)?;
-    if check.as_slice() != CHECK {
-        return Err(CredentialError::InvalidRecoveryFile);
-    }
-    Ok(())
-}
-fn derive(password: &str, kdf: &KdfRecord) -> Result<Zeroizing<Vec<u8>>, CredentialError> {
-    if kdf.algorithm != "argon2id" {
-        return Err(CredentialError::CorruptVault);
-    }
-    let salt = BASE64
-        .decode(&kdf.salt)
-        .map_err(|_| CredentialError::CorruptVault)?;
-    if salt.len() != SALT_BYTES {
-        return Err(CredentialError::CorruptVault);
-    }
-    let params = Params::new(
-        kdf.memory_kib,
-        kdf.iterations,
-        kdf.parallelism,
-        Some(KEY_BYTES),
-    )
-    .map_err(|_| CredentialError::CorruptVault)?;
-    let mut key = Zeroizing::new(vec![0; KEY_BYTES]);
-    Argon2::new(Algorithm::Argon2id, Version::V0x13, params)
-        .hash_password_into(password.as_bytes(), &salt, &mut key)
-        .map_err(|_| CredentialError::CryptoFailure)?;
-    Ok(key)
-}
-fn encrypt(
-    key: &[u8],
-    plain: &[u8],
-    aad: &[u8],
-    used: &[Vec<u8>],
-) -> Result<Encrypted, CredentialError> {
-    let cipher = Aes256Gcm::new_from_slice(key).map_err(|_| CredentialError::CryptoFailure)?;
-    let mut nonce = [0; NONCE_BYTES];
-    loop {
-        getrandom::fill(&mut nonce).map_err(|_| CredentialError::CryptoFailure)?;
-        if !used.iter().any(|value| value == nonce.as_slice()) {
-            break;
-        }
-    }
-    let nonce = Nonce::from(nonce);
-    let ciphertext = cipher
-        .encrypt(&nonce, Payload { msg: plain, aad })
-        .map_err(|_| CredentialError::CryptoFailure)?;
-    Ok(Encrypted {
-        nonce: BASE64.encode(nonce),
-        ciphertext: BASE64.encode(ciphertext),
-    })
-}
-fn decrypt(
-    key: &[u8],
-    encrypted: &Encrypted,
-    aad: &[u8],
-) -> Result<Zeroizing<Vec<u8>>, CredentialError> {
-    let nonce = nonce_bytes(encrypted)?;
-    let nonce = Nonce::try_from(nonce.as_slice()).map_err(|_| CredentialError::CorruptVault)?;
-    let ciphertext = BASE64
-        .decode(&encrypted.ciphertext)
-        .map_err(|_| CredentialError::CorruptVault)?;
-    Aes256Gcm::new_from_slice(key)
-        .map_err(|_| CredentialError::CryptoFailure)?
-        .decrypt(
-            &nonce,
-            Payload {
-                msg: &ciphertext,
-                aad,
-            },
-        )
-        .map(Zeroizing::new)
-        .map_err(|_| CredentialError::CryptoFailure)
-}
-fn nonce_bytes(encrypted: &Encrypted) -> Result<Vec<u8>, CredentialError> {
-    let nonce = BASE64
-        .decode(&encrypted.nonce)
-        .map_err(|_| CredentialError::CorruptVault)?;
-    if nonce.len() != NONCE_BYTES {
-        return Err(CredentialError::CorruptVault);
-    }
-    Ok(nonce)
-}
-fn validate_document(document: &Document) -> Result<(), CredentialError> {
-    if document.schema_version != VERSION {
-        return Err(CredentialError::UnsupportedVaultVersion);
-    }
-    if uuid::Uuid::parse_str(&document.vault_id).is_err() || document.recovery_generation == 0 {
-        return Err(CredentialError::CorruptVault);
-    }
-    validate_kdf(&document.kdf)?;
-    validate_encrypted(&document.wrapped_data_key)?;
-    validate_encrypted(&document.recovery_wrapped_data_key)?;
-    validate_encrypted(&document.check)?;
-    if document.credentials.len() > MAX_ITEMS {
-        return Err(CredentialError::CorruptVault);
-    }
-    let mut ids = HashSet::new();
-    let mut data_key_nonces = HashSet::from([nonce_bytes(&document.check)?]);
-    for item in &document.credentials {
-        CredentialId::parse(item.id.clone()).map_err(|_| CredentialError::CorruptVault)?;
-        if item.name.trim().is_empty() || item.name.chars().count() > 80 || !ids.insert(&item.id) {
-            return Err(CredentialError::CorruptVault);
-        }
-        validate_encrypted(&item.encrypted)?;
-        if !data_key_nonces.insert(nonce_bytes(&item.encrypted)?) {
-            return Err(CredentialError::CorruptVault);
-        }
-    }
-    Ok(())
-}
-fn validate_kdf(kdf: &KdfRecord) -> Result<(), CredentialError> {
-    if kdf.algorithm != "argon2id"
-        || BASE64
-            .decode(&kdf.salt)
-            .map_or(true, |salt| salt.len() != SALT_BYTES)
-    {
-        return Err(CredentialError::CorruptVault);
-    }
-    Params::new(
-        kdf.memory_kib,
-        kdf.iterations,
-        kdf.parallelism,
-        Some(KEY_BYTES),
-    )
-    .map(|_| ())
-    .map_err(|_| CredentialError::CorruptVault)
-}
-fn validate_encrypted(value: &Encrypted) -> Result<(), CredentialError> {
-    nonce_bytes(value)?;
-    if BASE64
-        .decode(&value.ciphertext)
-        .map_or(true, |data| data.len() < 16)
-    {
-        return Err(CredentialError::CorruptVault);
-    }
-    Ok(())
-}
-fn password_wrap_aad(vault_id: &str) -> String {
-    format!("qterm:vault:v3:{vault_id}:password-wrap")
-}
-fn recovery_wrap_aad(vault_id: &str, generation: u64) -> String {
-    format!("qterm:vault:v3:{vault_id}:recovery:{generation}:wrap")
-}
-fn check_aad(vault_id: &str) -> String {
-    format!("qterm:vault:v3:{vault_id}:check")
-}
-fn credential_aad(vault_id: &str, id: &str, kind: &str) -> String {
-    format!("qterm:vault:v3:{vault_id}:credential:{id}:{kind}:secret")
-}
-fn encode_key(
-    key: &[u8],
-    passphrase: Option<&SecretText>,
-) -> Result<Zeroizing<Vec<u8>>, CredentialError> {
-    let key_len = u32::try_from(key.len()).map_err(|_| CredentialError::InvalidCredential)?;
-    let pass = passphrase.map(SecretText::expose);
-    let pass_len = pass
-        .map(|value| u32::try_from(value.len()).map_err(|_| CredentialError::InvalidCredential))
-        .transpose()?
-        .unwrap_or(u32::MAX);
-    let mut out = Zeroizing::new(Vec::with_capacity(8 + key.len() + pass.map_or(0, str::len)));
-    out.extend_from_slice(&key_len.to_be_bytes());
-    out.extend_from_slice(key);
-    out.extend_from_slice(&pass_len.to_be_bytes());
-    if let Some(pass) = pass {
-        out.extend_from_slice(pass.as_bytes());
-    }
-    Ok(out)
-}
-fn decode_key(value: &[u8]) -> Result<(SecretBytes, Option<SecretText>), CredentialError> {
-    if value.len() < 8 {
-        return Err(CredentialError::CorruptVault);
-    }
-    let key_len = u32::from_be_bytes(
-        value[0..4]
-            .try_into()
-            .map_err(|_| CredentialError::CorruptVault)?,
-    ) as usize;
-    if key_len == 0 || key_len > MAX_KEY_BYTES || value.len() < key_len + 8 {
-        return Err(CredentialError::CorruptVault);
-    }
-    let offset = 4 + key_len;
-    let pass_len = u32::from_be_bytes(
-        value[offset..offset + 4]
-            .try_into()
-            .map_err(|_| CredentialError::CorruptVault)?,
-    );
-    let data = SecretBytes::new(value[4..offset].to_vec());
-    let passphrase = if pass_len == u32::MAX {
-        if value.len() != offset + 4 {
-            return Err(CredentialError::CorruptVault);
-        }
-        None
-    } else {
-        let pass_len = pass_len as usize;
-        if value.len() != offset + 4 + pass_len {
-            return Err(CredentialError::CorruptVault);
-        }
-        Some(SecretText::new(
-            String::from_utf8(value[offset + 4..].to_vec())
-                .map_err(|_| CredentialError::CorruptVault)?,
-        ))
-    };
-    Ok((data, passphrase))
-}
-
 #[cfg(test)]
-mod tests {
-    use super::JsonCredentialVault;
-    use crate::{
-        domain::{
-            auth::{SecretBytes, SecretText},
-            credential::{CredentialError, CredentialId, CredentialMaterial, RecoveryKeyFile},
-        },
-        ports::credential_vault::CredentialVault,
-    };
-    use std::fs;
-    use tempfile::tempdir;
-    fn id(value: &str) -> CredentialId {
-        CredentialId::parse(value).expect("id")
-    }
-    fn initialize(vault: &JsonCredentialVault, password: &str) -> RecoveryKeyFile {
-        let recovery = vault.prepare_initial_recovery().expect("recovery");
-        let saved = RecoveryKeyFile::new(recovery.expose().to_vec());
-        vault
-            .initialize(SecretText::new(password.into()), recovery)
-            .expect("init");
-        saved
-    }
-    #[test]
-    fn envelope_round_trip_keeps_all_secrets_out_of_json() {
-        let dir = tempdir().expect("dir");
-        let path = dir.path().join("vault.json");
-        let vault = JsonCredentialVault::new_for_test(path.clone());
-        initialize(&vault, "correct-master-password");
-        vault
-            .save_password(
-                id("password-1"),
-                "Production".into(),
-                SecretText::new("server-secret".into()),
-            )
-            .expect("save");
-        vault
-            .save_private_key(
-                id("key-1"),
-                "Deploy".into(),
-                SecretBytes::new(b"PRIVATE KEY MATERIAL".to_vec()),
-                Some(SecretText::new("key-secret".into())),
-                "ed25519".into(),
-            )
-            .expect("save key");
-        let json = fs::read_to_string(path).expect("read");
-        for value in [
-            "correct-master-password",
-            "server-secret",
-            "PRIVATE KEY MATERIAL",
-            "key-secret",
-        ] {
-            assert!(!json.contains(value));
-        }
-        assert!(json.contains("\"schemaVersion\": 3"));
-        vault.lock();
-        assert_eq!(
-            vault
-                .list()
-                .expect("credential metadata remains available while locked")
-                .into_iter()
-                .map(|item| item.name)
-                .collect::<Vec<_>>(),
-            vec!["Production", "Deploy"]
-        );
-        assert!(matches!(
-            vault.load(&id("password-1")),
-            Err(CredentialError::Locked)
-        ));
-        assert_eq!(
-            vault.unlock(SecretText::new("wrong-password-value".into())),
-            Err(CredentialError::InvalidMasterPassword)
-        );
-        vault
-            .unlock(SecretText::new("correct-master-password".into()))
-            .expect("unlock");
-        match vault.load(&id("password-1")).expect("load") {
-            CredentialMaterial::Password(secret) => assert_eq!(secret.expose(), "server-secret"),
-            _ => panic!("kind"),
-        }
-        match vault.load(&id("key-1")).expect("load") {
-            CredentialMaterial::PrivateKey { data, passphrase } => {
-                assert_eq!(data.expose(), b"PRIVATE KEY MATERIAL");
-                assert_eq!(passphrase.expect("pass").expose(), "key-secret");
-            }
-            _ => panic!("kind"),
-        }
-    }
-
-    #[test]
-    fn rename_changes_only_name_metadata_and_requires_unlock() {
-        let dir = tempdir().expect("dir");
-        let path = dir.path().join("vault.json");
-        let vault = JsonCredentialVault::new_for_test(path.clone());
-        initialize(&vault, "correct-master-password");
-        vault
-            .save_password(
-                id("password-1"),
-                "Production".into(),
-                SecretText::new("server-secret".into()),
-            )
-            .expect("save");
-        let before: serde_json::Value =
-            serde_json::from_slice(&fs::read(&path).expect("read")).expect("json");
-
-        let renamed = vault
-            .rename(&id("password-1"), "Primary production".into())
-            .expect("rename");
-        assert_eq!(renamed.name, "Primary production");
-        assert_eq!(renamed.id, id("password-1"));
-        let after: serde_json::Value =
-            serde_json::from_slice(&fs::read(&path).expect("read")).expect("json");
-        assert_eq!(after["credentials"][0]["name"], "Primary production");
-        assert_eq!(
-            before["credentials"][0]["id"],
-            after["credentials"][0]["id"]
-        );
-        assert_eq!(
-            before["credentials"][0]["kind"],
-            after["credentials"][0]["kind"]
-        );
-        assert_eq!(
-            before["credentials"][0]["nonce"],
-            after["credentials"][0]["nonce"]
-        );
-        assert_eq!(
-            before["credentials"][0]["ciphertext"],
-            after["credentials"][0]["ciphertext"]
-        );
-        assert_eq!(
-            vault.rename(&id("missing"), "Missing".into()),
-            Err(CredentialError::CredentialNotFound)
-        );
-
-        vault.lock();
-        assert_eq!(
-            vault.rename(&id("password-1"), "Locked rename".into()),
-            Err(CredentialError::Locked)
-        );
-    }
-
-    #[test]
-    fn rejects_legacy_vault_without_modifying_it() {
-        let dir = tempdir().expect("dir");
-        let path = dir.path().join("vault.json");
-        let legacy = br#"{"schemaVersion":1,"kdf":{},"check":{},"credentials":[]}"#;
-        fs::write(&path, legacy).expect("fixture");
-        let vault = JsonCredentialVault::new_for_test(path.clone());
-        assert_eq!(
-            vault.status(),
-            Ok(crate::domain::credential::VaultStatus {
-                initialized: false,
-                unlocked: false,
-                legacy: true,
-            })
-        );
-        assert_eq!(fs::read(path).expect("unchanged"), legacy);
-    }
-
-    #[test]
-    fn changing_master_password_rewraps_only_the_data_key() {
-        let dir = tempdir().expect("dir");
-        let path = dir.path().join("vault.json");
-        let vault = JsonCredentialVault::new_for_test(path.clone());
-        let recovery = initialize(&vault, "old-master-password");
-        vault
-            .save_password(
-                id("password-1"),
-                "Production".into(),
-                SecretText::new("server-secret".into()),
-            )
-            .expect("save");
-        let before: serde_json::Value =
-            serde_json::from_slice(&fs::read(&path).expect("read")).expect("json");
-
-        vault
-            .change_master_password(
-                SecretText::new("old-master-password".into()),
-                SecretText::new("new-master-password".into()),
-            )
-            .expect("change");
-        let after: serde_json::Value =
-            serde_json::from_slice(&fs::read(&path).expect("read")).expect("json");
-        assert_eq!(before["credentials"], after["credentials"]);
-        assert_eq!(before["check"], after["check"]);
-        assert_ne!(before["kdf"]["salt"], after["kdf"]["salt"]);
-        assert_ne!(before["wrappedDataKey"], after["wrappedDataKey"]);
-
-        vault.lock();
-        assert_eq!(
-            vault.unlock(SecretText::new("old-master-password".into())),
-            Err(CredentialError::InvalidMasterPassword)
-        );
-        vault
-            .unlock(SecretText::new("new-master-password".into()))
-            .expect("new unlock");
-        vault
-            .prepare_recovery_reset(recovery)
-            .expect("recovery remains valid after a normal password change");
-    }
-
-    #[test]
-    fn rejected_password_change_keeps_vault_bytes_unchanged() {
-        let dir = tempdir().expect("dir");
-        let path = dir.path().join("vault.json");
-        let vault = JsonCredentialVault::new_for_test(path.clone());
-        initialize(&vault, "old-master-password");
-        let before = fs::read(&path).expect("read");
-        assert_eq!(
-            vault.change_master_password(
-                SecretText::new("wrong-master-password".into()),
-                SecretText::new("new-master-password".into()),
-            ),
-            Err(CredentialError::InvalidMasterPassword)
-        );
-        assert_eq!(fs::read(path).expect("read"), before);
-    }
-
-    #[test]
-    fn recovery_reset_rotates_file_and_rewraps_without_touching_credentials() {
-        let dir = tempdir().expect("dir");
-        let path = dir.path().join("vault.json");
-        let vault = JsonCredentialVault::new_for_test(path.clone());
-        let current = initialize(&vault, "old-master-password");
-        vault
-            .save_password(
-                id("password-1"),
-                "Production".into(),
-                SecretText::new("server-secret".into()),
-            )
-            .expect("save");
-        let before: serde_json::Value =
-            serde_json::from_slice(&fs::read(&path).expect("read")).expect("json");
-        let current_for_commit = RecoveryKeyFile::new(current.expose().to_vec());
-        let current_after_rotation = RecoveryKeyFile::new(current.expose().to_vec());
-        let replacement = vault
-            .prepare_recovery_reset(current)
-            .expect("prepare replacement");
-        let replacement_saved = RecoveryKeyFile::new(replacement.expose().to_vec());
-
-        vault
-            .reset_master_password(
-                current_for_commit,
-                replacement,
-                SecretText::new("new-master-password".into()),
-            )
-            .expect("reset");
-        let after: serde_json::Value =
-            serde_json::from_slice(&fs::read(&path).expect("read")).expect("json");
-        assert_eq!(before["credentials"], after["credentials"]);
-        assert_eq!(before["check"], after["check"]);
-        assert_eq!(after["recoveryGeneration"], 2);
-        assert_ne!(before["wrappedDataKey"], after["wrappedDataKey"]);
-        assert_ne!(
-            before["recoveryWrappedDataKey"],
-            after["recoveryWrappedDataKey"]
-        );
-
-        vault.lock();
-        assert_eq!(
-            vault.unlock(SecretText::new("old-master-password".into())),
-            Err(CredentialError::InvalidMasterPassword)
-        );
-        vault
-            .unlock(SecretText::new("new-master-password".into()))
-            .expect("new unlock");
-        assert!(matches!(
-            vault.load(&id("password-1")).expect("credential"),
-            CredentialMaterial::Password(value) if value.expose() == "server-secret"
-        ));
-        assert!(matches!(
-            vault.prepare_recovery_reset(current_after_rotation),
-            Err(CredentialError::RecoveryFileMismatch)
-        ));
-        vault
-            .prepare_recovery_reset(replacement_saved)
-            .expect("replacement remains current");
-    }
-
-    #[test]
-    fn invalid_recovery_reset_keeps_vault_bytes_unchanged() {
-        let dir = tempdir().expect("dir");
-        let path = dir.path().join("vault.json");
-        let vault = JsonCredentialVault::new_for_test(path.clone());
-        initialize(&vault, "old-master-password");
-        let before = fs::read(&path).expect("before");
-        let other = JsonCredentialVault::new_for_test(dir.path().join("other.json"))
-            .prepare_initial_recovery()
-            .expect("other");
-        assert!(matches!(
-            vault.prepare_recovery_reset(other),
-            Err(CredentialError::RecoveryFileMismatch)
-        ));
-        assert_eq!(fs::read(path).expect("after"), before);
-    }
-
-    #[test]
-    fn tampered_recovery_and_weak_new_password_never_modify_the_vault() {
-        let dir = tempdir().expect("dir");
-        let path = dir.path().join("vault.json");
-        let vault = JsonCredentialVault::new_for_test(path.clone());
-        let current = initialize(&vault, "old-master-password");
-        let before = fs::read(&path).expect("before");
-        let mut tampered: serde_json::Value =
-            serde_json::from_slice(current.expose()).expect("recovery json");
-        tampered["recoveryKey"] =
-            serde_json::Value::String("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=".into());
-        assert!(matches!(
-            vault.prepare_recovery_reset(RecoveryKeyFile::new(
-                serde_json::to_vec(&tampered).expect("tampered")
-            )),
-            Err(CredentialError::InvalidRecoveryFile)
-        ));
-        assert_eq!(fs::read(&path).expect("after tamper"), before);
-
-        let current_for_prepare = RecoveryKeyFile::new(current.expose().to_vec());
-        let replacement = vault
-            .prepare_recovery_reset(current_for_prepare)
-            .expect("replacement");
-        assert_eq!(
-            vault.reset_master_password(current, replacement, SecretText::new("short".into())),
-            Err(CredentialError::WeakMasterPassword)
-        );
-        assert_eq!(fs::read(path).expect("after weak password"), before);
-    }
-}
+mod tests;

@@ -11,6 +11,7 @@ import { NetworkRuleDialog } from "./NetworkRuleDialog";
 import { NetworkRuleTypeDialog } from "./NetworkRuleTypeDialog";
 import { hasWorkspaceRuntime } from "../lib/runtime/environment";
 import type { NetworkRuleType } from "./networkRuleTypes";
+import { CONFIGURATION_MERGED } from "../lib/tauri/configurationMerge";
 
 const NETWORK_RULES_CHANGED_EVENT = "qterm:network-rules-changed";
 
@@ -54,7 +55,12 @@ export function NetworkPane({ profileId, profileHost = "", runtimeStates = {}, l
       if ((event as CustomEvent<string>).detail === profileId) void refresh();
     };
     window.addEventListener(NETWORK_RULES_CHANGED_EVENT, handleChange);
-    return () => window.removeEventListener(NETWORK_RULES_CHANGED_EVENT, handleChange);
+    const handleMerge = () => { void refresh(); };
+    window.addEventListener(CONFIGURATION_MERGED, handleMerge);
+    return () => {
+      window.removeEventListener(NETWORK_RULES_CHANGED_EVENT, handleChange);
+      window.removeEventListener(CONFIGURATION_MERGED, handleMerge);
+    };
   }, [profileId, refresh]);
   useEffect(() => {
     if (!contextMenu) return;

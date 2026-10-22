@@ -1,3 +1,4 @@
+import { CONFIGURATION_MERGED } from "../lib/tauri/configurationMerge";
 import { hasWorkspaceRuntime } from "../lib/runtime/environment";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type Dispatch } from "react";
 
@@ -22,6 +23,12 @@ export function useWorkspacePersistence(document: WorkspaceDocument, dispatch: D
     setProfiles(items);
     setProfileGroups(groups);
   }, []);
+
+  useEffect(() => {
+    const refresh = () => { void refreshProfiles().catch(() => setStorageNotice("配置已合并，但列表刷新失败，请重新打开应用")); };
+    window.addEventListener(CONFIGURATION_MERGED, refresh);
+    return () => window.removeEventListener(CONFIGURATION_MERGED, refresh);
+  }, [refreshProfiles]);
 
   useEffect(() => {
     if (!hasWorkspaceRuntime()) return;

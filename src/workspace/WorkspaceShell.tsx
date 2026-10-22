@@ -312,7 +312,7 @@ export function WorkspaceShell() {
       if (disposed) return;
       statusEventReceived = true;
       const current = vaultStatusRef.current;
-      commitVaultStatus({ initialized: current?.initialized ?? true, unlocked: event.unlocked, legacy: current?.legacy ?? false });
+      commitVaultStatus({ initialized: event.initialized ?? current?.initialized ?? true, unlocked: event.unlocked, legacy: event.legacy ?? current?.legacy ?? false });
       setVaultLockError("");
     }).then((value) => { if (disposed) value(); else unlisten = value; }).catch(() => undefined);
     void getVaultStatus().then((status) => {

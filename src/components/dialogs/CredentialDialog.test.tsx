@@ -247,6 +247,9 @@ describe("CredentialDialog", () => {
     act(() => statusHandler?.({ unlocked: false, reason: "windowsSession" }));
     expect(screen.getByRole("button", { name: "解锁凭证库" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "锁定凭证库" })).not.toBeInTheDocument();
+    act(() => statusHandler?.({ unlocked: true, reason: "manual" }));
+    await screen.findByRole("button", { name: /生产密码密码/ });
+    expect(screen.queryByRole("button", { name: "解锁凭证库" })).not.toBeInTheDocument();
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 

@@ -13,6 +13,10 @@
 
 ## Important Files
 
+- `src/components/dialogs/configurationMerge/`、`src/lib/tauri/configurationMerge.ts`：系统设置中的配置合并流程；独立步骤栏、来源目录卡片、确认列表和密码解锁子弹窗由 feature controller 编排，包含类别依赖、自动预览与即时刷新通知；不读取配置文件或持有私钥材料。
+- `src-tauri/src/application/configuration_merge/`、`domain/configuration_merge.rs`、`ports/configuration_merge.rs`：连接/分组、网络规则、凭证的合并模型、去重命名、引用映射与用例边界；设备和 Workspace 数据不参与。
+- `src-tauri/src/infrastructure/persistence/configuration_merge/`、`configuration_gate.rs`：受限文件快照、加密暂存、备份日志、提交回滚与启动恢复；三个核心 repository 共用进程内可重入事务锁，存在待恢复日志时禁止正常读写。`json_credential_vault/crypto.rs` 拥有既有凭证库的加密封装辅助函数，schema 不变。
+
 - `vite.site.config.ts`、`.github/workflows/site.yml`、`scripts/check-site.mjs`、`docs/browser-demo.md`：站点多页构建、Pages 发布、子路径资源与 desktop/demo 产物隔离检查及操作说明；不改原 Tauri 打包入口。Pages 发布由仓库变量显式启用。
 - `src/lib/runtime/environment.ts`、`@qterm/services/*`：显式 build-selected workspace/terminal service 边界，默认选择现有 Tauri adapters，仅 site 选择模拟服务；不伪造原生环境、不自动降级。
 - `src/demo/`：DemoApp/DemoWorkbench 只拥有站点外壳、主题分段控件、刷新清理和虚构连接路由；通过相同 LayoutView 与 Files/Git/Network 产品面板消费 build-selected services。demoProject 拥有按目标隔离的文件/Git 模拟后端，demoGitAdapter 映射产品 Git 快照，terminalSession/sessionRegistry 拥有终端模拟任务，featureSessions 拥有按用途与目标隔离的非终端模拟连接；networkFixtures 提供开发服务器的三类网络种子，services 适配原 typed service 契约，未支持操作明确拒绝。WorkspaceProvider 仍唯一拥有 UI runtime，不另建 Demo 功能页面。

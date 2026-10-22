@@ -409,6 +409,19 @@ describe("WorkspaceShell utility rail", () => {
     expect(screen.getByRole("button", { name: "锁定凭证库" })).toBeEnabled();
   });
 
+  it("refreshes lock controls after initialization outside the credential manager", async () => {
+    let statusHandler: ((event: { initialized: boolean; legacy: boolean; unlocked: boolean; reason: string }) => void) | undefined;
+    mocks.getVaultStatus.mockResolvedValue({ initialized: false, unlocked: false, legacy: false });
+    mocks.onVaultStatusChanged.mockImplementation(async (handler) => { statusHandler = handler; return () => undefined; });
+    render(<WorkspaceShell/>);
+    expect(await screen.findByRole("button", { name: "请先初始化凭证库" })).toBeDisabled();
+    act(() => statusHandler?.({ initialized: true, legacy: false, unlocked: true, reason: "manual" }));
+    await userEvent.click(screen.getByRole("button", { name: "锁定终端" }));
+    expect(screen.getByRole("button", { name: "锁定凭证库" })).toBeEnabled();
+    act(() => statusHandler?.({ initialized: true, legacy: false, unlocked: false, reason: "manual" }));
+    expect(screen.getByRole("button", { name: "锁定凭证库" })).toBeDisabled();
+  });
+
   it("keeps the scope dialog open and reports a vault lock failure", async () => {
     mocks.lockVault.mockRejectedValue(new Error("vault lock failed"));
     const user = userEvent.setup();

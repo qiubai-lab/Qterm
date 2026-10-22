@@ -10,3 +10,6 @@ pub mod json_update_settings_repository;
 pub mod json_workspace_repository;
 
 pub mod json_notification_settings_repository;
+
+pub(crate) mod configuration_gate;
+pub mod configuration_merge;

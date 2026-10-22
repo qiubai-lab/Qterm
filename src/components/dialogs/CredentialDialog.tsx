@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { writeText as writeClipboardText } from "@tauri-apps/plugin-clipboard-manager";
-import { cancelPrivateKeyCredential, clearVault, commitPrivateKeyCredential, createPasswordCredential, deleteCredential, getCredentialPublicKey, getVaultStatus, listCredentials, onVaultStatusChanged, prepareDroppedPrivateKeyCredential, prepareGeneratedPrivateKeyCredential, preparePrivateKeyCredential, renameCredential, revealCredentialPassword, type CredentialKind, type CredentialSummary, type GeneratedPrivateKeyAlgorithm, type PrivateKeyDraft, type VaultStatus } from "../../lib/tauri/credentials";
+import { cancelPrivateKeyCredential, clearVault, commitPrivateKeyCredential, createPasswordCredential, deleteCredential, getCredentialPublicKey, getVaultStatus, listCredentials, prepareDroppedPrivateKeyCredential, prepareGeneratedPrivateKeyCredential, preparePrivateKeyCredential, renameCredential, revealCredentialPassword, type CredentialKind, type CredentialSummary, type GeneratedPrivateKeyAlgorithm, type PrivateKeyDraft, type VaultStatus } from "../../lib/tauri/credentials";
 import { Button, IconButton, StatusBadge } from "../Button";
 import { Icon } from "../Icon";
 import { RequiredFieldLabel } from "../RequiredFieldLabel";
@@ -12,6 +12,7 @@ import { MasterPasswordDialog, type MasterPasswordMode } from "./MasterPasswordD
 import { RecoveryMasterPasswordDialog } from "./RecoveryMasterPasswordDialog";
 import { CredentialFeedbackBubble, CredentialSecurityTooltip, type CredentialFeedback, type CredentialFeedbackInput, type CredentialSecurityTooltipTarget, type FeedbackTone } from "./credential/CredentialDialogFeedback";
 import { CredentialSelectionIndicator } from "./credential/CredentialSelectionIndicator";
+import { observeCredentialVault } from "./credential/observeCredentialVault";
 import { useCredentialManagerMotion } from "./credential/useCredentialManagerMotion";
 
 type View =
@@ -283,32 +284,29 @@ export function CredentialDialog({ onClose }: { onClose: () => void }) {
   }, []);
 
   useEffect(() => {
-    let disposed = false;
-    let unlisten: (() => void) | undefined;
-    queueMicrotask(() => {
-      if (!disposed) void refresh(undefined, true).catch((error) => showManagerFeedback(errorMessage(error), "error"));
+    const stop = observeCredentialVault({
+      refreshInitial: () => refresh(undefined, true), refresh: () => refresh(),
+      onError: (error) => showManagerFeedback(errorMessage(error), "error"),
+      onLocked: (event) => {
+        clearPasswordReveal();
+        clearPublicKey();
+        setSecret("");
+        setPassphrase("");
+        setPrivateKeyDialog(null);
+        setGenerationAlgorithm("ed25519");
+        setGenerationComment("");
+        setItems([]);
+        setView({ type: "empty" });
+        setNameEdit(null);
+        setChangeRequested(false);
+        setDeleteRequested(null);
+        setStatus((current) => ({ initialized: event.initialized ?? current?.initialized ?? true, unlocked: false, legacy: event.legacy ?? current?.legacy ?? false }));
+        setMasterMode(null);
+        clearFeedback();
+      },
     });
-    void onVaultStatusChanged(() => {
-      if (disposed) return;
-      clearPasswordReveal();
-      clearPublicKey();
-      setSecret("");
-      setPassphrase("");
-      setPrivateKeyDialog(null);
-      setGenerationAlgorithm("ed25519");
-      setGenerationComment("");
-      setItems([]);
-      setView({ type: "empty" });
-      setNameEdit(null);
-      setChangeRequested(false);
-      setDeleteRequested(null);
-      setStatus((current) => ({ initialized: current?.initialized ?? true, unlocked: false, legacy: current?.legacy ?? false }));
-      setMasterMode(null);
-      clearFeedback();
-    }).then((value) => { if (disposed) value(); else unlisten = value; }).catch(() => undefined);
     return () => {
-      disposed = true;
-      unlisten?.();
+      stop();
       if (feedbackTimerRef.current !== null) window.clearTimeout(feedbackTimerRef.current);
     };
   }, [clearFeedback, clearPasswordReveal, clearPublicKey, refresh, showManagerFeedback]);

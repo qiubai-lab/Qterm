@@ -52,6 +52,11 @@ impl SettingsState {
         }
     }
 
+    pub(crate) fn configuration_merge_allowed(&self) -> bool {
+        let snapshot = self.service.snapshot();
+        snapshot.configuration_directory == snapshot.active_configuration_directory
+    }
+
     pub(crate) fn security(&self) -> SecuritySettings {
         self.service.snapshot().security
     }

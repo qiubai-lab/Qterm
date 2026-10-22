@@ -77,6 +77,7 @@ pub async fn credential_vault_initialize(
             IpcError::from(error)
         })?;
     CredentialState::schedule(&app, schedule);
+    emit_status(&app, LockReason::Manual);
     Ok(FileOperationDto { completed: true })
 }
 
@@ -92,6 +93,7 @@ pub fn credential_vault_unlock(
         .unlock(SecretText::new(input.master_password), settings.security())
         .map_err(IpcError::from)?;
     CredentialState::schedule(&app, schedule);
+    emit_status(&app, LockReason::Manual);
     Ok(())
 }
 
@@ -111,6 +113,7 @@ pub fn credential_vault_change_master_password(
         )
         .map_err(IpcError::from)?;
     CredentialState::schedule(&app, schedule);
+    emit_status(&app, LockReason::Manual);
     Ok(())
 }
 
@@ -177,6 +180,7 @@ pub async fn credential_vault_reset_master_password(
             IpcError::from(error)
         })?;
     CredentialState::schedule(&app, schedule);
+    emit_status(&app, LockReason::Manual);
     Ok(FileOperationDto { completed: true })
 }
 

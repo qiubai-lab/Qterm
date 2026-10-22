@@ -103,11 +103,19 @@ impl JsonNetworkRepository {
 
 impl NetworkRepository for JsonNetworkRepository {
     fn list(&self) -> Result<Vec<ForwardRule>, NetworkRepositoryError> {
+        let _storage = super::configuration_gate::lock();
+        if super::configuration_gate::pending(&self.path) {
+            return Err(NetworkRepositoryError::Io);
+        }
         let _guard = self.lock()?;
         self.load_unlocked()
     }
 
     fn insert(&self, rule: ForwardRule) -> Result<(), NetworkRepositoryError> {
+        let _storage = super::configuration_gate::lock();
+        if super::configuration_gate::pending(&self.path) {
+            return Err(NetworkRepositoryError::Io);
+        }
         let _guard = self.lock()?;
         let mut rules = self.load_unlocked()?;
         if rules.iter().any(|stored| stored.id() == rule.id()) {
@@ -118,6 +126,10 @@ impl NetworkRepository for JsonNetworkRepository {
     }
 
     fn update(&self, rule: ForwardRule) -> Result<(), NetworkRepositoryError> {
+        let _storage = super::configuration_gate::lock();
+        if super::configuration_gate::pending(&self.path) {
+            return Err(NetworkRepositoryError::Io);
+        }
         let _guard = self.lock()?;
         let mut rules = self.load_unlocked()?;
         let stored = rules
@@ -129,6 +141,10 @@ impl NetworkRepository for JsonNetworkRepository {
     }
 
     fn delete(&self, id: &NetworkRuleId) -> Result<(), NetworkRepositoryError> {
+        let _storage = super::configuration_gate::lock();
+        if super::configuration_gate::pending(&self.path) {
+            return Err(NetworkRepositoryError::Io);
+        }
         let _guard = self.lock()?;
         let mut rules = self.load_unlocked()?;
         let original_length = rules.len();
@@ -140,6 +156,10 @@ impl NetworkRepository for JsonNetworkRepository {
     }
 
     fn delete_by_profile(&self, profile_id: &ProfileId) -> Result<usize, NetworkRepositoryError> {
+        let _storage = super::configuration_gate::lock();
+        if super::configuration_gate::pending(&self.path) {
+            return Err(NetworkRepositoryError::Io);
+        }
         let _guard = self.lock()?;
         let mut rules = self.load_unlocked()?;
         let original_length = rules.len();
@@ -152,6 +172,10 @@ impl NetworkRepository for JsonNetworkRepository {
     }
 
     fn clear_storage(&self) -> Result<(), NetworkRepositoryError> {
+        let _storage = super::configuration_gate::lock();
+        if super::configuration_gate::pending(&self.path) {
+            return Err(NetworkRepositoryError::Io);
+        }
         let _guard = self.lock()?;
         match fs::remove_file(&self.path) {
             Ok(()) => Ok(()),

@@ -62,6 +62,17 @@ function renderSettings(onClose = vi.fn(), onTerminalSettingsChanged = vi.fn()) 
 }
 
 describe("SettingsDialog", () => {
+  it("places merge after the restart badge and disables it for a directory draft", async () => {
+    const user = userEvent.setup();
+    mocks.selectConfigurationDirectory.mockResolvedValue("D:\\other");
+    renderSettings();
+    const merge = await screen.findByRole("button", { name: "合并配置" });
+    expect(merge.previousElementSibling).toHaveTextContent("重启后切换");
+    expect(merge).toBeEnabled();
+    await user.click(screen.getByRole("button", { name: "选择 Qterm 配置目录" }));
+    expect(merge).toBeDisabled();
+    expect(screen.getByRole("note")).toHaveTextContent("请先恢复当前目录或完成重启后再合并");
+  });
   it("keeps navigation separate from the independently scrolling settings panel", async () => {
     renderSettings();
     const navigation = screen.getByRole("navigation", { name: "设置分类" });

@@ -1,0 +1,120 @@
+.configuration-merge-dialog { width: min(620px, calc(100vw - 48px)); height: min(440px, calc(100dvh - 48px)); }
+.configuration-merge-dialog .dialog-content { display: flex; flex: 1; flex-direction: column; min-height: 0; padding: 0; overflow: hidden; }
+.configuration-merge-dialog .dialog-actions { flex: none; height: 60px; padding: 12px 18px; border-top: 1px solid var(--subtle); }
+.configuration-merge-steps { display: flex; flex: none; align-items: center; margin: 0; padding: 17px 22px; list-style: none; border-bottom: 1px solid var(--subtle); background: var(--block-header-background); }
+.configuration-merge-steps li { display: flex; flex: 1; align-items: center; gap: 8px; color: var(--dim); font-size: 10px; font-weight: 600; white-space: nowrap; }
+.configuration-merge-steps li:not(:last-child)::after { content: ""; height: 1px; flex: 1; margin: 0 14px 0 6px; background: var(--border); }
+.configuration-merge-steps li:last-child { flex: none; }
+.configuration-merge-step-number { display: grid; flex: none; width: 23px; height: 23px; place-items: center; border: 1px solid var(--border); border-radius: 50%; font-size: 10px; background: var(--surface); }
+.configuration-merge-steps [data-state="current"] { color: var(--text); }
+.configuration-merge-steps [data-state="current"] .configuration-merge-step-number { color: var(--accent); background: var(--accent-bg); border-color: var(--accent); }
+.configuration-merge-steps [data-state="complete"] .configuration-merge-step-number { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); }
+.configuration-merge-scroll { flex: 1; min-height: 0; min-width: 0; }
+.configuration-merge-body { padding: 16px 18px; overflow-y: auto; overflow-x: hidden; font-size: 11px; line-height: 1.6; }
+.configuration-merge-source-stage { display: grid; gap: 10px; min-width: 0; }
+.configuration-merge-directory .settings-card-heading strong { display: flex; align-items: center; gap: 6px; }
+.configuration-merge-directory .settings-card-heading strong svg { color: var(--muted); }
+.configuration-merge-directory .settings-directory-form input { width: 100%; min-width: 0; margin: 0; color: var(--text); background: var(--control-bg); font: 10px/1.4 Consolas, monospace; }
+.configuration-merge-directory.is-source .settings-card-heading strong svg { color: var(--accent); }
+.configuration-merge-directory:not(.is-source) .settings-directory-control { grid-template-columns: minmax(0, 1fr); }
+.configuration-merge-options { border: 0; padding: 0; margin: 0; display: grid; gap: 6px; min-width: 0; }
+.configuration-merge-options legend { width: 100%; padding: 0 0 9px; font-weight: 600; font-size: 11px; color: var(--text); }
+.configuration-merge-options legend span { float: right; color: var(--dim); font-size: 9px; font-weight: 400; }
+.configuration-merge-options label { display: flex; align-items: center; gap: 10px; min-width: 0; height: 53px; margin: 0; padding: 8px 11px; background: var(--surface); border: 1px solid var(--border); border-radius: 7px; text-transform: none; letter-spacing: normal; cursor: pointer; }
+.configuration-merge-options label[data-selected="true"] { border-color: color-mix(in srgb, var(--accent) 32%, var(--border)); background: color-mix(in srgb, var(--accent) 4%, var(--surface)); }
+.configuration-merge-options label:has(input:disabled) { cursor: default; }
+.configuration-merge-option-icon { display: grid; place-items: center; flex: none; width: 27px; height: 27px; border: 1px solid var(--subtle); border-radius: 6px; color: var(--muted); }
+.configuration-merge-option-copy { display: grid; flex: 1; min-width: 0; gap: 2px; }
+.configuration-merge-option-copy strong { color: var(--text); font-size: 10.5px; }
+.configuration-merge-option-copy small { color: var(--dim); font-size: 9px; font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.configuration-merge-count { flex: none; color: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
+.configuration-merge-options input { flex: none; width: 14px; height: 14px; margin: 0; padding: 0; accent-color: var(--accent); }
+.configuration-merge-details { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; padding: 16px 18px; overflow: hidden; }
+.configuration-merge-details-heading { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; padding: 0 0 14px; }
+.configuration-merge-details-heading p { margin: 4px 0 0; color: var(--dim); font-size: 10px; }
+.configuration-merge-summary { display: flex; gap: 6px; }
+.configuration-merge-summary > span { display: flex; gap: 7px; align-items: center; padding: 4px 8px; border: 1px solid var(--subtle); border-radius: 5px; color: var(--muted); background: var(--surface); font-size: 9px; }
+.configuration-merge-summary b { color: var(--text); font-size: 11px; font-variant-numeric: tabular-nums; }
+.configuration-merge-summary [data-warning="true"] b { color: var(--warning); }
+.configuration-merge-detail-list { flex: 1; min-height: 0; overflow: hidden; border: 1px solid var(--subtle); border-radius: 8px; background: var(--surface); }
+.configuration-merge-detail-viewport { overflow-y: auto; overflow-x: hidden; }
+.configuration-merge-details-heading { flex: none; }
+.configuration-merge-empty { margin: 0; padding: 18px; color: var(--muted); font-size: 11px; }
+.configuration-merge-detail:last-child { border-bottom: 0; }
+.configuration-merge-details h3 { font-size: 11px; margin: 0; }
+.configuration-merge-details-heading > span { color: var(--muted); font-size: 9px; font-variant-numeric: tabular-nums; }
+.configuration-merge-detail { display: grid; grid-template-columns: 38px minmax(0, 1fr) 64px; align-items: center; gap: 12px; height: 60px; box-sizing: border-box; padding: 9px 12px; border-bottom: 1px solid var(--subtle); }
+.configuration-merge-detail-kind { color: var(--muted); font-size: 9px; text-align: center; border: 1px solid var(--border); border-radius: 4px; padding: 3px 0; }
+.configuration-merge-detail > div { display: grid; flex: 1; min-width: 0; gap: 4px; overflow: hidden; }
+.configuration-merge-detail strong { color: var(--text); font-size: 11px; font-weight: 600; line-height: 16px; }
+.configuration-merge-detail strong span { color: var(--muted); }
+.configuration-merge-detail small { color: var(--muted); font-size: 10px; line-height: 15px; }
+.configuration-merge-detail strong, .configuration-merge-detail small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.configuration-merge-detail:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.configuration-merge-outcome { justify-self: end; padding: 2px 6px; border-radius: 4px; background: var(--raised); color: var(--muted); font-size: 9px; text-align: right; white-space: nowrap; }
+.configuration-merge-outcome[data-outcome="added"] { color: var(--accent); }
+.configuration-merge-complete-stage { display: flex; align-items: center; justify-content: center; }
+.configuration-merge-success { display: grid; grid-template-columns: 48px auto; align-items: center; gap: 16px; width: fit-content; max-width: 100%; padding: 16px 0; }
+.configuration-merge-success-icon { display: grid; width: 48px; height: 48px; place-items: center; color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border)); background: color-mix(in srgb, var(--accent) 7%, var(--surface)); border-radius: 50%; }
+.configuration-merge-success > div { min-width: 0; }
+.configuration-merge-success strong { font-size: 16px; font-weight: 600; }
+.configuration-merge-success p { color: var(--muted); font-size: 10px; margin: 4px 0 0; }
+.configuration-merge-credential-intro { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.configuration-merge-credential-intro svg { flex: none; color: var(--accent); }
+.configuration-merge-credential-intro p { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.6; }
+.configuration-merge-password { display: block; position: relative; }
+.configuration-merge-password input { padding-right: 34px; }
+.configuration-merge-password button { position: absolute; right: 5px; top: 9px; width: 25px; height: 25px; display: grid; place-items: center; background: transparent; border: 0; color: var(--muted); cursor: pointer; }
+.settings-directory-heading-actions { display: flex; align-items: center; gap: 7px; flex-shrink: 0; }
+.settings-directory-heading-actions .settings-merge-button { height: 24px; min-height: 24px; gap: 4px; padding: 0 7px; font-size: 9px; }
+.settings-merge-button > svg { color: var(--accent); }
+
+.configuration-merge-footer-note { display: flex; flex: 1; align-items: center; gap: 5px; min-width: 0; margin: 0; color: var(--dim); font-size: 9px; line-height: 1.4; }
+.configuration-merge-footer-note svg { flex: none; }
+.dialog-frame.configuration-merge-preview-dialog { width: min(800px, calc(100vw - 48px)); height: min(480px, calc(100dvh - 48px)); }
+.configuration-merge-preview-dialog .dialog-content { display: flex; flex: 1; flex-direction: column; min-height: 0; padding: 0; overflow: hidden; }
+.configuration-merge-preview-dialog .dialog-actions { justify-content: flex-end; flex: none; padding: 12px 18px; border-top: 1px solid var(--subtle); }
+.configuration-merge-preview-dialog .configuration-merge-details { margin-top: 0; }
+
+.configuration-merge-options legend { min-height: 31px; }
+.configuration-merge-preview-trigger.ui-button { height: 22px; min-height: 22px; margin-top: -3px; padding: 0 7px; font-size: 9px; }
+
+.configuration-merge-invalid-note, .configuration-merge-outcome[data-outcome="invalid"] { color: var(--warning); }
+.configuration-merge-detail[data-outcome="invalid"] { background: color-mix(in srgb, var(--warning) 3%, var(--surface)); }
+.configuration-merge-outcome[data-outcome="invalid"] { background: color-mix(in srgb, var(--warning) 8%, var(--surface)); }
+
+.dialog-frame.configuration-merge-vault-dialog { width: min(420px, calc(100vw - 48px)); height: min(340px, calc(100dvh - 48px)); }
+.configuration-merge-vault-dialog .dialog-content { display: flex; flex: 1; flex-direction: column; min-height: 0; padding: 0; overflow: hidden; }
+.configuration-merge-vault-content { display: flex; flex: 1; flex-direction: column; min-height: 0; padding: 12px 16px; overflow-y: auto; }
+.configuration-merge-vault-context { display: grid; flex: none; gap: 4px; margin-bottom: 9px; }
+.configuration-merge-vault-context strong { font-size: 11px; }
+.configuration-merge-vault-context input { height: 28px; margin: 0; font-size: 10px; color: var(--muted); }
+.configuration-merge-vault-content > form { display: grid; flex: 1; grid-template-rows: 48px minmax(40px, 1fr) 42px; gap: 0; min-width: 0; }
+.configuration-merge-vault-content > form > label { display: grid; grid-template-rows: 12px 32px; gap: 4px; min-width: 0; margin: 0; }
+.configuration-merge-vault-content > form > label input { height: 32px; margin: 0; }
+.configuration-merge-vault-content .configuration-merge-password button { top: 3px; }
+.configuration-merge-vault-content .dialog-actions { height: 42px; margin: 0; padding-top: 12px; flex-wrap: nowrap; }
+.configuration-merge-vault-content .dialog-actions .ui-button { white-space: nowrap; }
+.configuration-merge-vault-content .dialog-actions .ui-button--primary { width: 100px; position: relative; }
+@property --merge-vault-loading-angle { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+.configuration-merge-vault-content .ui-button--primary[aria-busy="true"]::before { content: ""; position: absolute; inset: 0; padding: 2px; border-radius: inherit; background: conic-gradient(from var(--merge-vault-loading-angle), transparent 0deg 240deg, currentColor 320deg 360deg); -webkit-mask: linear-gradient(currentColor 0 0) content-box, linear-gradient(currentColor 0 0); -webkit-mask-composite: xor; mask: linear-gradient(currentColor 0 0) content-box, linear-gradient(currentColor 0 0); mask-composite: exclude; animation: merge-vault-loading 1200ms linear infinite; pointer-events: none; }
+@keyframes merge-vault-loading { to { --merge-vault-loading-angle: 360deg; } }
+.configuration-merge-vault-content .dialog-action-status { display: block; line-height: 30px; }
+
+.configuration-merge-vault-dialog .dialog-header { height: 55px; box-sizing: border-box; padding: 13px 16px; }
+.configuration-merge-vault-dialog .dialog-header-actions { width: 28px; height: 28px; }
+.configuration-merge-vault-dialog .configuration-merge-steps { padding: 10px 16px; }
+.configuration-merge-vault-dialog .configuration-merge-step-number { width: 21px; height: 21px; }
+.configuration-merge-vault-dialog .callout { min-height: 0; overflow-y: auto; margin: 0; padding: 9px 0 0; border: 0; background: none; color: var(--muted); font-size: 9px; line-height: 1.6; }
+.configuration-merge-vault-dialog .configuration-merge-credential-intro { min-height: 0; overflow-y: auto; align-items: flex-start; gap: 8px; margin: 0; padding-top: 9px; }
+.configuration-merge-vault-dialog .configuration-merge-credential-intro svg { display: block; margin-top: 1px; }
+.configuration-merge-vault-dialog .configuration-merge-credential-intro p { font-size: 9px; line-height: 16px; }
+
+.configuration-merge-vault-content[data-motion="leaving"] { animation: merge-vault-leave 90ms ease-in both; }
+.configuration-merge-vault-content[data-motion="entering"] { animation: merge-vault-enter 200ms cubic-bezier(.33, 1, .68, 1) both; }
+@keyframes merge-vault-leave { to { opacity: 0; transform: translateX(-8px); } }
+@keyframes merge-vault-enter { from { opacity: 0; transform: translateX(8px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .configuration-merge-vault-content[data-motion] { animation: none; transform: none; }
+  .configuration-merge-vault-content .ui-button--primary[aria-busy="true"]::before { animation: none; background: currentColor; opacity: .55; }
+}

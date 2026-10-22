@@ -15,3 +15,5 @@ pub mod terminal_staging_service;
 pub mod workspace_service;
 
 pub mod notification_service;
+
+pub mod configuration_merge;

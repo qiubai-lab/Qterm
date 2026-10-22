@@ -284,15 +284,22 @@ impl CredentialState {
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct VaultStatusChangedDto {
+    initialized: bool,
+    legacy: bool,
     unlocked: bool,
     reason: &'static str,
 }
 
 fn emit_status(app: &AppHandle, reason: LockReason) {
+    let Ok(status) = app.state::<CredentialState>().lifecycle.status() else {
+        return;
+    };
     let _ = app.emit(
         "credential-vault-status-changed",
         VaultStatusChangedDto {
-            unlocked: false,
+            initialized: status.initialized,
+            legacy: status.legacy,
+            unlocked: status.unlocked,
             reason: reason.as_str(),
         },
     );

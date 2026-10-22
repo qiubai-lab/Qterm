@@ -6,16 +6,20 @@ export function ConfigurationDirectorySetting({
   disabled,
   onChoose,
   onReset,
+  onMerge,
+  mergeDisabled,
 }: {
   value: string;
   disabled: boolean;
   onChoose: () => void;
   onReset: () => void;
+  onMerge: () => void;
+  mergeDisabled: boolean;
 }) {
   return <section className="settings-directory-card" role="group" aria-label="配置目录设置">
     <div className="settings-card-heading">
       <span><strong>Qterm 配置目录</strong><small>全部配置、设备状态与缓存的根目录</small></span>
-      <span className="settings-directory-badge">重启后切换</span>
+      <div className="settings-directory-heading-actions"><span className="settings-directory-badge">重启后切换</span><Button size="compact" className="settings-merge-button" disabled={disabled || mergeDisabled} onClick={onMerge}><Icon name="download" size={12}/>合并配置</Button></div>
     </div>
     <div className="settings-directory-form">
       <label className="settings-directory-label" htmlFor="qterm-configuration-directory">Qterm 配置目录</label>

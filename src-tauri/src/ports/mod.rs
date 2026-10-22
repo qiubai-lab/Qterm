@@ -12,3 +12,5 @@ pub mod terminal_staging;
 pub mod workspace_repository;
 
 pub mod notification;
+
+pub mod configuration_merge;

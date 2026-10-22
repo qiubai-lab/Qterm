@@ -14,3 +14,5 @@ pub mod shell_integration;
 pub mod terminal_staging;
 pub mod transfer;
 pub mod workspace;
+
+pub mod configuration_merge;

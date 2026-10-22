@@ -1,3 +1,7 @@
+use commands::configuration_merge::{
+    ConfigurationMergeState, configuration_merge_cancel, configuration_merge_commit,
+    configuration_merge_preview, configuration_merge_select, configuration_merge_unlock_source,
+};
 use commands::notification::{
     NotificationState, notification_body_settings_get, notification_body_settings_update,
     notification_settings_get, notification_settings_update, terminal_notification_send,
@@ -232,6 +236,9 @@ pub fn run() {
                 resolve_active_configuration(&configuration_repository, &default_configuration);
             let paths = DataPaths::from_root(active_configuration.path().to_path_buf());
             paths.initialize()?;
+            infrastructure::persistence::configuration_merge::FileConfigurationMergeStorage::recover(&paths.root).map_err(std::io::Error::other)?;
+            let credential_vault = JsonCredentialVault::new(paths.credentials.clone());
+            app.manage(ConfigurationMergeState::new(paths.root.clone(), credential_vault.clone()));
             app.manage(NotificationState::new(
                 paths.device.join("notifications.json"),
             ));
@@ -248,9 +255,7 @@ pub fn run() {
             app.manage(ProfileState::new(JsonProfileRepository::new(
                 paths.profiles,
             )));
-            app.manage(CredentialState::new(JsonCredentialVault::new(
-                paths.credentials,
-            )));
+            app.manage(CredentialState::new(credential_vault));
             app.manage(NetworkState::new(JsonNetworkRepository::new(paths.network)));
             app.manage(BrowserProxyState::new(paths.browser_profiles));
             app.manage(TransferState::new());
@@ -266,6 +271,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            configuration_merge_select, configuration_merge_preview, configuration_merge_commit, configuration_merge_cancel, configuration_merge_unlock_source,
             browser_proxy_list,
             browser_proxy_launch,
             profile_list,

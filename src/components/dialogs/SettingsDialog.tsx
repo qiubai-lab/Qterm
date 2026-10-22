@@ -22,6 +22,8 @@ import { ConfigurationPaths } from "./ConfigurationPaths";
 import { TerminalNotificationSetting } from "./TerminalNotificationSetting";
 import { DialogFrame } from "./DialogFrame";
 
+import { ConfigurationMergeDialog } from "./configurationMerge/ConfigurationMergeDialog";
+
 const credentialDurations = [300, 900, 1800, 3600, 7200, 14400, 28800, 86400];
 const terminalIdleDurations = [300, 900, 1800, 3600, 7200];
 type SettingsCategory = "general" | "appearance" | "security" | "advanced";
@@ -29,6 +31,7 @@ type SettingsCategoryDirection = "forward" | "backward";
 const settingsCategoryOrder: SettingsCategory[] = ["general", "appearance", "security", "advanced"];
 
 export function SettingsDialog({ onClose, onSecuritySettingsChanged, onTerminalSettingsChanged }: { onClose: () => void; onSecuritySettingsChanged?: (settings: SecuritySettings) => void; onTerminalSettingsChanged?: (settings: TerminalSettings) => void }) {
+  const [mergeOpen, setMergeOpen] = useState(false);
   const { persistedTheme, previewTheme, commitTheme, restoreTheme } = useAppTheme();
   const { applySettings: applyTitleSettings } = useTerminalTitlePreference();
   const [category, setCategory] = useState<SettingsCategory>("general");
@@ -158,10 +161,12 @@ export function SettingsDialog({ onClose, onSecuritySettingsChanged, onTerminalS
               <ConfigurationDirectorySetting
                 value={configurationDirectory}
                 disabled={busy}
+                onMerge={() => setMergeOpen(true)}
+                mergeDisabled={general.restartRequired || configurationDirectory !== general.activeRootDirectory}
                 onChoose={() => void chooseConfigurationDirectory()}
                 onReset={() => setConfigurationDirectory(general.defaultRootDirectory)}
               />
-              <div className="settings-storage-note" role="note"><Icon name="help" size={12}/><span>切换目录不会迁移或覆盖旧文件</span></div>
+              <div className="settings-storage-note" role="note"><Icon name="help" size={12}/><span>{general.restartRequired || configurationDirectory !== general.activeRootDirectory ? "请先恢复当前目录或完成重启后再合并" : "切换目录不会迁移或覆盖旧文件"}</span></div>
               <ConfigurationPaths rootDirectory={configurationDirectory || general.defaultRootDirectory}/>
             </div> : <p className="dialog-note">正在读取设置…</p>}
           </div> : category === "appearance" ? <div className="settings-appearance-view">
@@ -215,6 +220,7 @@ export function SettingsDialog({ onClose, onSecuritySettingsChanged, onTerminalS
       </section>
     </div>
   </DialogFrame>
+    {mergeOpen && general && <ConfigurationMergeDialog target={general.activeRootDirectory} onClose={() => setMergeOpen(false)}/>}
     {confirmRemoteIntegration && <DialogFrame compact className="settings-integration-confirmation" title="开启 OSC 7 终端目录跟踪" subtitle="本地与远程终端" onClose={() => setConfirmRemoteIntegration(false)}>
       <div className="settings-integration-confirmation-body">
         <div className="settings-integration-confirmation-intro"><span aria-hidden="true"><Icon name="terminal" size={17}/></span><p>Qterm 将跟踪 OSC 7 目录，在新建或重连时安装目录 Hook。此开关不改变 OSC 133 命令导航设置。</p></div>
