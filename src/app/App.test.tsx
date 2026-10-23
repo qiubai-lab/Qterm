@@ -284,6 +284,42 @@ describe("application shell", () => {
     expect(workspaceNavigation.querySelector("[data-drop-shift]")).toBeNull();
   });
 
+  it.each(["Enter", "blur"])("commits the current input value on %s even before the draft catches up", async (commit) => {
+    const user = userEvent.setup();
+    render(<App/>);
+    const navigation = screen.getByRole("navigation", { name: "工作区" });
+    await user.dblClick(within(navigation).getByRole("button", { name: "工作区-1" }));
+    const input = within(navigation).getByRole("textbox");
+    fireEvent.change(input, { target: { value: "Productio" } });
+
+    // Model a final DOM edit that has not yet reached the rendered draft.
+    if (commit === "Enter") fireEvent.keyDown(input, { key: "Enter", target: { value: "Production" } });
+    else fireEvent.blur(input, { target: { value: "Production" } });
+
+    expect(within(navigation).getByRole("button", { name: "Production" })).toBeInTheDocument();
+    expect(within(navigation).queryByRole("textbox")).not.toBeInTheDocument();
+  });
+
+  it("saves a rename on focus loss and discards a subsequent cancelled edit", async () => {
+    const user = userEvent.setup();
+    render(<App/>);
+    const navigation = screen.getByRole("navigation", { name: "工作区" });
+    await user.dblClick(within(navigation).getByRole("button", { name: "工作区-1" }));
+    const input = within(navigation).getByRole("textbox");
+    await user.clear(input);
+    await user.type(input, "Production");
+    await user.tab();
+    const renamed = within(navigation).getByRole("button", { name: "Production" });
+    await user.dblClick(renamed);
+    const cancelledInput = within(navigation).getByRole("textbox");
+    await user.clear(cancelledInput);
+    await user.type(cancelledInput, "Discarded{Escape}");
+    await user.click(within(navigation).getByRole("button", { name: "新建工作区" }));
+
+    expect(within(navigation).getByRole("button", { name: "Production" })).toBeInTheDocument();
+    expect(within(navigation).queryByRole("button", { name: "Discarded" })).not.toBeInTheDocument();
+  });
+
   it("edits a workspace name inside its existing tab", async () => {
     const user = userEvent.setup();
     render(<App/>);

@@ -5,7 +5,9 @@
 .configuration-merge-steps li { display: flex; flex: 1; align-items: center; gap: 8px; color: var(--dim); font-size: 10px; font-weight: 600; white-space: nowrap; }
 .configuration-merge-steps li:not(:last-child)::after { content: ""; height: 1px; flex: 1; margin: 0 14px 0 6px; background: var(--border); }
 .configuration-merge-steps li:last-child { flex: none; }
-.configuration-merge-step-number { display: grid; flex: none; width: 23px; height: 23px; place-items: center; border: 1px solid var(--border); border-radius: 50%; font-size: 10px; background: var(--surface); }
+.configuration-merge-step-number { display: flex; flex: none; width: 23px; height: 23px; align-items: center; justify-content: center; border: 1px solid var(--border); border-radius: 50%; font-size: 10px; line-height: 1; font-variant-numeric: tabular-nums; text-align: center; background: var(--surface); }
+/* Center the visible numeral, compensating for the UI font's baseline metrics. */
+.configuration-merge-step-digit { display: block; transform: translateY(-1px); }
 .configuration-merge-steps [data-state="current"] { color: var(--text); }
 .configuration-merge-steps [data-state="current"] .configuration-merge-step-number { color: var(--accent); background: var(--accent-bg); border-color: var(--accent); }
 .configuration-merge-steps [data-state="complete"] .configuration-merge-step-number { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); }

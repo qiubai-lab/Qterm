@@ -59,9 +59,10 @@ export function WorkspaceTabs({ disabled: terminalLocked, requestClose, onReorde
     workspaceTabStripRef.current?.dispatchEvent(new Event("workspace-tab-layout"));
   }, [workspaceDragVisual]);
 
-  function commitRename() {
+  function commitRename(name: string) {
     if (!renaming) return;
-    dispatch({ type: "renameWorkspace", workspaceId: renaming.id, name: renaming.value });
+    // The input is authoritative at submission, even if the rendered draft lags.
+    dispatch({ type: "renameWorkspace", workspaceId: renaming.id, name });
     setRenaming(null);
   }
 
@@ -95,7 +96,7 @@ export function WorkspaceTabs({ disabled: terminalLocked, requestClose, onReorde
           const shift = dropShift === "left" ? -(deck.layout.cards[draggedWorkspaceIndex]?.width + 3) : dropShift === "right" ? deck.layout.cards[draggedWorkspaceIndex]?.width + 3 : 0;
           const dragStyle = { "--workspace-tab-drag-x": isDragged ? `${workspaceDragVisual.offsetX}px` : undefined, "--workspace-deck-shift": `${shift}px`, ...(deck.layout.stacked ? { zIndex: isDragged ? ids.length + 1 : workspaceIndex + 1 } : {}) } as CSSProperties;
           return <div ref={(element) => { if (element) workspaceTabRefs.current.set(workspace.id, element); else workspaceTabRefs.current.delete(workspace.id); }} key={workspace.id} data-workspace-id={workspace.id} data-expanded={card.expanded || undefined} data-drop-shift={dropShift} style={dragStyle} className={`workspace-tab${workspace.id === activeWorkspace.id ? " selected" : ""}${isDragged ? " dragging" : ""}${isDropTarget ? " drop-target" : ""}`} onPointerDown={(event) => beginWorkspaceDrag(event, workspace.id)}>
-          {renaming?.id === workspace.id ? <div className="workspace-tab-rename"><Icon name="workspace" size={13}/><input autoFocus aria-label={`重命名 ${workspace.name}`} value={renaming.value} onChange={(event) => setRenaming({ ...renaming, value: event.target.value })} onBlur={commitRename} onKeyDown={(event) => { if (event.key === "Enter") commitRename(); if (event.key === "Escape") setRenaming(null); }}/></div>
+          {renaming?.id === workspace.id ? <div className="workspace-tab-rename"><Icon name="workspace" size={13}/><input autoFocus aria-label={`重命名 ${workspace.name}`} value={renaming.value} onChange={(event) => setRenaming({ ...renaming, value: event.target.value })} onBlur={(event) => commitRename(event.currentTarget.value)} onKeyDown={(event) => { if (event.key === "Enter") commitRename(event.currentTarget.value); if (event.key === "Escape") setRenaming(null); }}/></div>
             : <button className="workspace-tab-select" title={workspace.name} onClick={(event) => { if (!suppressWorkspaceDragClick(event, workspace.id)) dispatch({ type: "selectWorkspace", workspaceId: workspace.id }); }} onDoubleClick={(event) => { if (!suppressWorkspaceDragClick(event, workspace.id)) setRenaming({ id: workspace.id, value: workspace.name }); }}><Icon name="workspace" size={13}/><WorkspaceNotificationLabel workspace={workspace}/></button>}
           {document.workspaces.length > 1 && <IconButton className="workspace-tab-close" size="compact" inert={!card.expanded} aria-hidden={!card.expanded} label={`关闭 ${workspace.name}`} onClick={() => requestClose(createWorkspaceCloseRequest(workspace, () => dispatch({ type: "closeWorkspace", workspaceId: workspace.id })))}><Icon name="close" size={12}/></IconButton>}
         </div>})}
