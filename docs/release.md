@@ -9,6 +9,12 @@
 
 ## 发布前检查
 
+macOS 本地开发和发布统一使用 **macOS SDK 26.5**。`pnpm tauri dev/build` 会通过 `xcrun` 显式选择并校验该 SDK；缺失时直接报错，不会退回其他 SDK。本机可使用包含该 SDK 的 Command Line Tools，或通过 `DEVELOPER_DIR` 选择 Xcode 26.5。
+
+CI 的 macOS 构建使用 `macos-26` / `macos-26-intel`，显式选择 `/Applications/Xcode_26.5.app/Contents/Developer`，打印 Xcode 版本并隔离 SDK 缓存。发布构建还会检查最终二进制的 `LC_BUILD_VERSION`，避免缓存或工具链覆盖导致 SDK 不一致。升级 SDK 时需同步修改 `scripts/macos-sdk.mjs`、两个 workflow 和相关测试。
+
+交通灯依赖 AppKit 的原生控件尺寸；仅校验 `trafficLightPosition` 数值无法证明视觉对齐。测试打包改动时先运行 `pnpm tauri build --bundles app`，使用 `xcrun vtool -show-build src-tauri/target/release/Qterm` 确认 `sdk 26.5`，再对照开发版检查初次打开、调整窗口大小、全屏返回后的交通灯。之后可手动触发 workflow 验证两种 macOS 架构，验证完成前不要推送发布标签。
+
 1. `main` 分支最近一次 CI 全绿，尤其是四个平台的 Desktop build。
 2. 本地通过全部质量门：
 

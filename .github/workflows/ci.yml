@@ -92,12 +92,25 @@ jobs:
       fail-fast: false
       matrix:
         os:
-          - macos-14
+          - macos-26
           - ubuntu-22.04
           - windows-2025
     steps:
       - name: Check out source
         uses: actions/checkout@v7
+
+      - name: Select macOS build SDK
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          developer_dir="/Applications/Xcode_26.5.app/Contents/Developer"
+          test -d "$developer_dir"
+          export DEVELOPER_DIR="$developer_dir"
+          xcodebuild -version
+          test "$(xcrun --sdk macosx26.5 --show-sdk-version)" = "26.5"
+          echo "DEVELOPER_DIR=$developer_dir" >> "$GITHUB_ENV"
+          echo "SDKROOT=$(xcrun --sdk macosx26.5 --show-sdk-path)" >> "$GITHUB_ENV"
 
       - name: Install Linux system dependencies
         if: runner.os == 'Linux'
@@ -132,6 +145,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+          key: ${{ runner.os == 'macOS' && 'macos-sdk-26.5' || 'default' }}
 
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile

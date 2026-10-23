@@ -1,4 +1,5 @@
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { prepareMacosSdk } from "./macos-sdk.mjs";
 
 export const DEVELOPMENT_CONFIG_PATH = "src-tauri/tauri.dev.conf.json";
 export const MACOS_DEVELOPMENT_RUNNER_PATH = fileURLToPath(
@@ -36,6 +37,7 @@ export function withDevelopmentConfig(args, platform = process.platform) {
 }
 
 async function run() {
+  prepareMacosSdk(process.argv[2]);
   const { default: tauriCli } = await import("@tauri-apps/cli");
   await tauriCli.run(withDevelopmentConfig(process.argv.slice(2)), "pnpm tauri");
 }

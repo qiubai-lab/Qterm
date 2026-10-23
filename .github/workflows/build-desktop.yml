@@ -52,13 +52,13 @@ jobs:
       matrix:
         include:
           - name: macOS ARM64
-            os: macos-15
+            os: macos-26
             target: aarch64-apple-darwin
             artifactName: qterm-macos-arm64
             bundlePath: |
               src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
           - name: macOS Intel
-            os: macos-15-intel
+            os: macos-26-intel
             target: x86_64-apple-darwin
             artifactName: qterm-macos-x64
             bundlePath: |
@@ -84,6 +84,19 @@ jobs:
         uses: actions/checkout@v7
         with:
           persist-credentials: false
+
+      - name: Select macOS build SDK
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          developer_dir="/Applications/Xcode_26.5.app/Contents/Developer"
+          test -d "$developer_dir"
+          export DEVELOPER_DIR="$developer_dir"
+          xcodebuild -version
+          test "$(xcrun --sdk macosx26.5 --show-sdk-version)" = "26.5"
+          echo "DEVELOPER_DIR=$developer_dir" >> "$GITHUB_ENV"
+          echo "SDKROOT=$(xcrun --sdk macosx26.5 --show-sdk-path)" >> "$GITHUB_ENV"
 
       - name: Verify runner architecture
         shell: bash
@@ -142,12 +155,22 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+          key: ${{ runner.os == 'macOS' && 'macos-sdk-26.5' || 'default' }}
 
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Build Tauri bundles
         run: pnpm tauri build --target ${{ matrix.target }}
+
+      - name: Verify macOS executable SDK
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          executable="src-tauri/target/${{ matrix.target }}/release/Qterm"
+          xcrun vtool -show-build "$executable"
+          test "$(xcrun vtool -show-build "$executable" | awk '$1 == "sdk" { print $2 }')" = "26.5"
 
       - name: Upload desktop artifacts
         uses: actions/upload-artifact@v7
