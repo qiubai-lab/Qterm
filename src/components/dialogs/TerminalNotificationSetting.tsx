@@ -1,12 +1,14 @@
+import { useId } from "react";
 import { useTerminalNotifications } from "../../terminal/notifications/TerminalNotificationProvider";
 
 export function TerminalNotificationSetting() {
   const notifications = useTerminalNotifications();
+  const descriptionId = useId();
   return <div className="settings-notification-option">
     <div className="settings-row">
-      <span><strong>终端通知 <span className="settings-experimental-tag">实验功能</span></strong><small>接收终端程序的提醒，在终端顶部标记未读；Qterm 位于后台时发送系统通知。需要 CLI 支持或配置通知。</small></span>
+      <span><strong>终端通知 <span className="settings-experimental-tag">实验功能</span></strong><small id={descriptionId} className="settings-notification-description">接收终端程序的提醒，在终端顶部标记未读；Qterm 位于后台时发送系统通知。需要 CLI 支持或配置通知。{notifications.error ? <span className="settings-notification-warning" role="alert">{notifications.error}</span> : null}</small></span>
       <label className="settings-switch">
-        <input className="settings-switch-input" type="checkbox" role="switch" aria-label="终端通知" checked={notifications.enabled} disabled={!notifications.ready || notifications.busy} onChange={event => {
+        <input className="settings-switch-input" type="checkbox" role="switch" aria-label="终端通知" aria-describedby={descriptionId} checked={notifications.enabled} disabled={!notifications.ready || notifications.busy} onChange={event => {
           void notifications.update(event.target.checked).catch(() => undefined);
         }}/>
         <span className="settings-switch-track" aria-hidden="true"><span className="settings-switch-thumb"/></span>
@@ -19,6 +21,5 @@ export function TerminalNotificationSetting() {
         <span className="settings-switch-track" aria-hidden="true"><span className="settings-switch-thumb"/></span>
       </label>
     </div>
-    {notifications.error ? <p className="inline-message settings-message" role="alert">{notifications.error}</p> : null}
   </div>;
 }
