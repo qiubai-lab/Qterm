@@ -183,7 +183,7 @@ test("macOS traffic-light placement has one native runtime owner", async () => {
 
   assert.equal(window.titleBarStyle, "Overlay");
   assert.equal(window.decorations, true);
-  assert.deepEqual(window.trafficLightPosition, { x: 14, y: 18 });
+  assert.deepEqual(window.trafficLightPosition, { x: 14, y: 22 });
   assert.doesNotMatch(applicationRoot, /window_chrome/);
   assert.doesNotMatch(infrastructureRoot, /window_chrome/);
   assert.match(
