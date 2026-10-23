@@ -1035,7 +1035,6 @@ fn local_openssh_connects_to_a_target_through_a_jump_profile() {
                 let _ = terminal_sender.send(data);
             }),
             remote_shell_integration_enabled: false,
-            command_markers_enabled: false,
             history_free_bash_enabled: false,
         },
         Arc::new(move |event| {

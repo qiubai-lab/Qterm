@@ -141,7 +141,6 @@ pub fn session_connect(
         terminal_output,
         terminal_settings.remote_shell_integration_enabled,
     )?;
-    request.command_markers_enabled = terminal_settings.command_markers_enabled;
     request.history_free_bash_enabled = terminal_settings.history_free_bash_enabled;
     let sink = Arc::new(move |event| {
         let _ = on_event.send(SessionEventDto::from(event));
@@ -205,7 +204,6 @@ pub(crate) fn build_connect_request(
         },
         terminal_output,
         history_free_bash_enabled: false,
-        command_markers_enabled: false,
         remote_shell_integration_enabled: purpose == SessionPurpose::Terminal
             && remote_shell_integration_enabled,
     })

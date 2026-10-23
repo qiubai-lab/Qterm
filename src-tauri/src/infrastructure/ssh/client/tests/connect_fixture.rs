@@ -23,7 +23,6 @@ pub(in crate::infrastructure::ssh::client) fn connect_request(
         initial_directory: None,
         terminal_output,
         remote_shell_integration_enabled: false,
-        command_markers_enabled: false,
         history_free_bash_enabled: false,
     }
 }

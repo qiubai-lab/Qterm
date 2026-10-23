@@ -10,6 +10,7 @@ it("enables export only for selections and supports keyboard navigation to it", 
   const state = { x: 10, y: 20, placement: "below" as const, hasSelection: false };
   const view = render(<TerminalContextMenu {...props} state={state}/>);
   expect(screen.getByRole("menuitem", { name: "导出选中行为图片…" })).toBeDisabled();
+  for (const name of ["上一条命令", "下一条命令", "复制命令输出"]) expect(screen.queryByRole("menuitem", { name })).not.toBeInTheDocument();
   view.rerender(<TerminalContextMenu {...props} state={{ ...state, hasSelection: true }}/>);
   screen.getByRole("menuitem", { name: /复制/ }).focus();
   fireEvent.keyDown(screen.getByRole("menu"), { key: "ArrowDown" });

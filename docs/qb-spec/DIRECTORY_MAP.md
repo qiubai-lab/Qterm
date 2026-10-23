@@ -92,8 +92,8 @@
 - `src-tauri/src/domain/auth.rs`：短期凭据包装、可执行认证请求与稳定认证失败；不表达 profile 的 `manual` 策略，也不依赖 `russh` 或 Tauri。
 - `src-tauri/src/domain/credential.rs`、`ports/credential_vault.rs`、`application/credential_service.rs`：vault 领域语义、外部存储端口与用例边界；不依赖具体密码学文件格式或 UI。
 - `src-tauri/src/domain/settings.rs`、`ports/settings_repository.rs`、`application/settings_service.rs`：安全、外观、更新与终端集成设置的默认值、范围、注入配置根、存储端口与用例；domain 只展开/校验输入并使用组合根注入的默认目录，application snapshot 投影默认/配置/活动根，不依赖 JSON、Tauri、Cargo build mode、SSH 或 Windows API。
-- `src-tauri/src/domain/shell_integration.rs`、`domain/command_markers.rs`、`ports/remote_shell_cache.rs`：受支持远程 Shell、目标签名、固定探测输出解析、按 ShellFeatures 独立组合的当前会话 OSC 7/133 Hook（命令标记复用内嵌 Bash/Zsh 脚本）、Shell 专属初始目录字面量编码与可丢弃 cache 契约；不依赖 russh、JSON 或 Tauri。
-- `src-tauri/src/domain/history_free_shell.rs`：实验性 Bash 历史禁用的 rc 启动脚本、用户配置加载、兼容 prompt 的可选 OSC 7/133 与目录字面量；`infrastructure/shell_startup.rs` 拥有有界、按会话隔离的初始化握手，`infrastructure/ssh/client/session/history_free.rs` 与 `infrastructure/local/history_free.rs` 分别适配 SSH exec 和本地 Unix PTY。高级设置偏好复用 TerminalSettings（OSC 7/133 独立布尔配置），仅在启动时取快照；配置冲突警告、实际启动失败不降级。边界与测试方法见 `docs/history-free-bash.md`。
+- `src-tauri/src/domain/shell_integration.rs`、`ports/remote_shell_cache.rs`：受支持远程 Shell、目标签名、固定探测输出解析、当前会话 OSC 7 Hook、Shell 专属初始目录字面量编码与可丢弃 cache 契约；不依赖 russh、JSON 或 Tauri。
+- `src-tauri/src/domain/history_free_shell.rs`：实验性 Bash 历史禁用的 rc 启动脚本、用户配置加载、兼容 prompt 的可选 OSC 7 与目录字面量；`infrastructure/shell_startup.rs` 拥有有界、按会话隔离的初始化握手，`infrastructure/ssh/client/session/history_free.rs` 与 `infrastructure/local/history_free.rs` 分别适配 SSH exec 和本地 Unix PTY。高级设置偏好复用 TerminalSettings（OSC 7 布尔配置），仅在启动时取快照；配置冲突警告、实际启动失败不降级。边界与测试方法见 `docs/history-free-bash.md`。
 - `src-tauri/src/application/credential_lifecycle.rs`：统一拥有凭证解锁时间、deadline generation、锁定原因与 data-key 生命周期编排；不依赖 Tokio timer、Tauri event 或 Win32 类型。
 - `src-tauri/src/application/credential_workflow.rs`：恢复重置与私钥草稿的 opaque pending 状态、替换、完成和取消语义；secret bytes 保持 zeroizing 且不进入 DTO。
 - `src-tauri/src/application/ssh_config_import.rs`：SSH Config preview 生命周期、应用层候选模型、选择/唯一命名、凭证复用、批量 profile commit 与失败 rollback coordinator；不依赖 Tauri、infrastructure parser 类型、对话框或 command DTO。
@@ -115,11 +115,11 @@
 - `src-tauri/src/infrastructure/browser/`：共享 SOCKS5 greeting、固定 Chromium 参数和机器本地隔离 Profile，并以 Windows、macOS、Linux adapter 受限探测和无 Shell 启动 Chrome/Edge；不修改系统代理、支持沙箱化 Linux 浏览器、复用日常 Profile 或管理浏览器退出。
 - `src-tauri/src/infrastructure/persistence/json_network_repository.rs`：`network-forwards.json` schema v1 的严格、无敏感字段、原子持久化适配器。
 - `src-tauri/src/infrastructure/persistence/json_workspace_repository.rs`：`workspaces.json` schema v10 的严格、无敏感字段、原子持久化与受支持旧版本显式迁移适配器；不保存 session、Git snapshot、仓库内容或连接凭据。
-- `src-tauri/src/ports/settings_repository.rs`、`src-tauri/src/infrastructure/persistence/json_{appearance,update,terminal}_settings_repository.rs`：设备外观/更新/终端集成偏好 ports 与独立 JSON 适配器；外观/更新使用 schema v1，终端兼容 v1–v3、保存 v4，新增默认关闭的应用标题偏好并保留旧 passive 字段；只保存封闭预设或布尔偏好，不覆盖损坏/未来文件，也不修改 security settings。
+- `src-tauri/src/ports/settings_repository.rs`、`src-tauri/src/infrastructure/persistence/json_{appearance,update,terminal}_settings_repository.rs`：设备外观/更新/终端集成偏好 ports 与独立 JSON 适配器；外观/更新使用 schema v1，终端兼容 v1–v5、保存 v6，保留目录跟踪、历史策略与旧 passive 字段，读取但不再写入旧 applicationTitleEnabled/commandMarkersEnabled 字段；只保存封闭预设或布尔偏好，不覆盖损坏/未来文件，也不修改 security settings。
 - `src-tauri/src/infrastructure/persistence/json_remote_shell_cache.rs`：`cache/remote-shells.json` 的严格、原子、可丢弃适配器；只保存目标签名和 Shell 枚举，不保存探测输出、Hook、终端内容或凭据。
 - `src-tauri/src/infrastructure/ssh/forwarding.rs`：本地 listener、SOCKS5 CONNECT、Remote target 路由、有界转发任务与 TCP/SSH 双向数据泵；第三方 channel 类型不得离开 infrastructure。
 - `src-tauri/src/ports/profile_repository.rs`：应用层拥有的连接配置 repository 契约；不规定文件格式。
-- `src-tauri/src/infrastructure/local/pty.rs`：本地 PTY 创建与进程 I/O owner；在 spawn 时解析一次性工作目录并对无效/失效路径回退到规范化 home，不解释远程 Shell 语法。`infrastructure/local/shell_integration.rs` 组合普通 Unix Bash/Zsh 登录进程与输入前的关闭回显握手，复用 domain 的会话 Hook；未知 Shell 保留平台默认启动。
+- `src-tauri/src/infrastructure/local/pty.rs`：本地 PTY 创建与进程 I/O owner；在 spawn 时解析一次性工作目录并对无效/失效路径回退到规范化 home，不解释远程 Shell 语法。普通 Shell 使用平台默认启动与原生 OSC 7 集成，不注入终端输入。
 - `src-tauri/src/infrastructure/clipboard.rs`：在阻塞工作线程读取原生 file list/text/RGBA；现有文件路径只生成 Rust 内部一次性来源，RGBA 校验后流式编码到 Qterm cache root 下私有 clipboard 目录的 UUID PNG，并仅清理过期受管图片；不向 WebView 返回图片资源或字节。
 - `src-tauri/src/infrastructure/ssh/client.rs`、`client/manager_{core,control,files,ports}.rs`：稳定 `SshSessionManager` façade 与按核心会话、控制、文件/传输和端口转发分组的 manager 实现；不向 commands/application 泄漏 russh 或 SFTP 类型。
 - `src-tauri/src/infrastructure/ssh/client/session.rs`、`session/{terminal,files,git}.rs`：route 建连 façade 与 Terminal、Files、Git purpose-specific runner；Git runner 通过同一 profile-owned session 执行固定 conflict detail/side/delete/stage，并仅为有界结果写回复用内部 SFTP 原子写语义，各用途对外能力仍独立，取消、task drop 和关闭语义仍由共享 manager/session ownership 约束。
@@ -136,8 +136,6 @@
 - `src/app/`：负责顶层布局、feature 组合与应用级预设主题生命周期；不承载认证、连接或传输规则。
 - `src/workspace/`：负责工作区结构模型、布局树变换、顶部 Workspace 导航、按连接的有界 Git 仓库历史和 block runtime 编排；不读取本地文件、验证仓库有效性或实现 SSH/SFTP。
 - `src/terminal/`：负责 xterm 实例及终端 I/O 适配；不持久化 buffer 或拥有 Workspace 生命周期。`terminalView.ts` 拥有可重挂载的 xterm 视图与 addon 生命周期；`terminalOsc52.ts` 拥有有界、只写的剪贴板协议适配；`terminalClipboardShortcuts.ts` 拥有原生选区与应用复制快捷键的分流。
-- `src/terminal/terminalCommands.ts`、`terminalActivity.ts`、`terminalActivityRegistry.ts`：分别拥有普通缓冲区命令标记与输出边界、进度/标题协议与瞬时快照、视图运行时引用索引；不保存命令文本或另建 Workspace 状态。`TerminalHeaderMetadata.tsx` 组合协议入口与 `TerminalActivityStatus.tsx` 的主题化标题/独立进度标签；`useTerminalProgressPresence.ts` 只拥有进度退出动画与取消/超时生命周期。`TerminalTitleProvider.tsx` 拥有默认关闭的全局标题显示偏好，高级设置成功保存后发布快照；`terminalTitle.ts` 只拥有显示层的完整路径标题过滤，不修改协议快照或 OSC 7 目录。`TerminalCommandMenuItems.tsx` 消费命令快照并提供导航与输出复制。
-- `scripts/shell-integration/`：当前会话可加载的命令标记脚本与解释器行为检查；脚本由 domain 内嵌供本地/SSH 自动安装，不修改用户 profile 或历史策略。
 - `src/terminal/imageExport/`：负责选中完整行的固定宽度快照、系统主题采样、终端外框与图片绘制、S/M/L（1×/2×/3×）尺寸档位与像素上限、预览及导出状态；不修改 live buffer、应用主题或会话。`TerminalContextMenu.tsx` 拥有终端菜单展示和菜单键盘导航，`TerminalPanel.tsx` 只组合导出入口。
 - `src/lib/tauri/terminalImage.ts`、`src-tauri/src/commands/terminal_image.rs`、`src-tauri/src/infrastructure/terminal_image.rs`：分别负责 PNG 原始字节 IPC、原生保存路径选择与错误映射、PNG 有界校验及原子落盘；不接受前端指定的任意保存路径，不接管文件传输或终端会话。
 - `src/files/`：负责内部文件窗口展示、导航、下载反馈与瞬时预览编辑状态；不直接访问本地文件系统或 SSH infrastructure。

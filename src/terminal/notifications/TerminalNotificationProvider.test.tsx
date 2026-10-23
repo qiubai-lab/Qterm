@@ -32,6 +32,18 @@ describe("experimental terminal notification controls", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "终端协议支持" })).toHaveAttribute("data-state", "ready"));
     feed("\x07"); expect(mocks.send).toHaveBeenCalledTimes(1);
   });
+  it("keeps OSC 9 text alerts while ignoring title and progress reports", async () => {
+    mocks.get.mockResolvedValue(true);
+    mocks.getBody.mockResolvedValue(true);
+    render(<Harness/>);
+    await screen.findByRole("button", { name: "终端通知已启用（实验功能）" });
+    feed("\x1b]0;Title\x07\x1b]2;Other\x07\x1b]9;4;1;50\x07");
+    expect(mocks.send).not.toHaveBeenCalled();
+    expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+    feed("\x1b]9;任务完成\x1b\\");
+    await waitFor(() => expect(mocks.send).toHaveBeenCalledWith("本地终端 · 工作区", "任务完成"));
+    expect(screen.getByRole("button", { name: "终端有未读通知，点击查看" })).toBeInTheDocument();
+  });
   it("preserves the switch after a failed save and fails closed after a failed read", async () => {
     mocks.get.mockRejectedValue({ message: "读取失败" });
     render(<Harness/>); await screen.findByText("读取失败");

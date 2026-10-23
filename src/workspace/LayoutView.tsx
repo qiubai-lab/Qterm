@@ -1,5 +1,5 @@
 import { TerminalHeaderActions } from "../terminal/TerminalHeaderActions";
-import { TerminalHeaderMetadata } from "../terminal/TerminalHeaderMetadata";
+import { TerminalProtocolTag } from "../terminal/notifications/TerminalProtocolTag";
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 import { Icon } from "../components/Icon";
 import { BlockHeaderClose } from "./BlockHeaderClose";
@@ -320,7 +320,7 @@ function TerminalBlock(props: BlockRenderProps & { blockId: string; profileId: s
     <header data-onboarding="terminal" className="terminal-block-header" onPointerDown={(event) => props.beginDrag(event, props.blockId)}>
       <TerminalTargetPicker profiles={profiles} groups={profileGroups} recentProfileIds={document?.recentProfileIds ?? []} selectedProfileId={props.profileId} status={status} detail={detail} hideDetail={Boolean(runtime?.connectionProgress)} localAttention={props.localTerminalAttention} onSelect={(profileId) => void chooseTarget(profileId)} onManageConnections={props.onOpenConnectionManager} onRequestDisconnect={status === "connected" && props.profileId !== null ? requestDisconnect : undefined} statusAction={statusAction}/>
       <ConnectionRouteProgress progress={runtime?.connectionProgress} endpoint={endpoint} profile={profile} onRequestDisconnect={status === "connected" && props.profileId !== null ? requestDisconnect : undefined} statusAction={runtime?.connectionProgress ? statusAction : undefined}/>
-      <TerminalHeaderMetadata sessionKey={`${props.blockId}:${props.profileId ?? "local"}`} blockId={props.blockId} connected={status === "connected"} directoryState={osc7TagState} directoryMessage={osc7TagMessage}/>
+      <TerminalProtocolTag blockId={props.blockId} connected={status === "connected"} directoryState={osc7TagState} directoryMessage={osc7TagMessage}/>
       <TerminalHeaderActions
         closeDisabled={terminalBlockIds(props.workspace.layout).length === 1}
         onClose={() => props.onRequestClose(props.blockId)}

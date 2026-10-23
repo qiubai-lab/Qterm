@@ -13,7 +13,6 @@ import {
   type TerminalSettings,
 } from "../../lib/tauri/settings";
 import { useAppTheme } from "../../app/theme/AppThemeProvider";
-import { useTerminalTitlePreference } from "../../terminal/TerminalTitleProvider";
 import { Button } from "../Button";
 import { Icon } from "../Icon";
 import { OverlayScrollArea } from "../scrollbars/OverlayScrollArea";
@@ -33,7 +32,6 @@ const settingsCategoryOrder: SettingsCategory[] = ["general", "appearance", "sec
 export function SettingsDialog({ onClose, onSecuritySettingsChanged, onTerminalSettingsChanged }: { onClose: () => void; onSecuritySettingsChanged?: (settings: SecuritySettings) => void; onTerminalSettingsChanged?: (settings: TerminalSettings) => void }) {
   const [mergeOpen, setMergeOpen] = useState(false);
   const { persistedTheme, previewTheme, commitTheme, restoreTheme } = useAppTheme();
-  const { applySettings: applyTitleSettings } = useTerminalTitlePreference();
   const [category, setCategory] = useState<SettingsCategory>("general");
   const [categoryDirection, setCategoryDirection] = useState<SettingsCategoryDirection | null>(null);
   const [general, setGeneral] = useState<GeneralSettings | null>(null);
@@ -52,12 +50,11 @@ export function SettingsDialog({ onClose, onSecuritySettingsChanged, onTerminalS
     if (!preserveDirectoryDraft) setConfigurationDirectory(snapshot.general.rootDirectory);
     setSecurity(snapshot.security);
     setTerminal(snapshot.terminal);
-    applyTitleSettings(snapshot.terminal);
     if (!preserveAppearanceDraft) {
       setAppearance(snapshot.appearance);
       commitTheme(snapshot.appearance.theme);
     }
-  }, [commitTheme, applyTitleSettings]);
+  }, [commitTheme]);
 
   useEffect(() => {
     void getSettings().then((snapshot) => {
@@ -188,16 +185,8 @@ export function SettingsDialog({ onClose, onSecuritySettingsChanged, onTerminalS
             <OverlayScrollArea className="settings-advanced-scroll" viewportClassName="settings-advanced-options" density="compact" viewportProps={{ role: "region", "aria-label": "高级设置选项", tabIndex: 0 }}>
             {terminal ? <div className="settings-rows">
               <div className="settings-row">
-                <span><strong>显示应用标题</strong><small>在终端栏显示应用上报的标题，默认关闭。开启后即时生效，自动隐藏纯路径标题；不影响任务进度。</small></span>
-                <SettingsSwitch label="显示应用标题" checked={terminal.applicationTitleEnabled ?? false} disabled={busy} onChange={(enabled) => void persistTerminalSettings({ applicationTitleEnabled: enabled })}/>
-              </div>
-              <div className="settings-row">
-                <span><strong>OSC 7 终端目录跟踪</strong><small>同步终端目录并显示目录状态。新建或重连时按此配置安装目录 Hook，与 OSC 133 命令导航独立。</small></span>
+                <span><strong>OSC 7 终端目录跟踪</strong><small>同步终端目录并显示目录状态。新建或重连时按此配置安装目录 Hook。</small></span>
                 <SettingsSwitch label="OSC 7 终端目录跟踪" checked={terminal.remoteShellIntegrationEnabled} disabled={busy} onChange={changeRemoteShellIntegration}/>
-              </div>
-              <div className="settings-row">
-                <span><strong>OSC 133 命令导航</strong><small>自动配置命令导航与输出复制。支持本地 Linux/macOS 和 SSH 的 Bash 4.4+ / Zsh，含免历史 Bash；新建或重连生效，不修改启动文件。</small></span>
-                <SettingsSwitch label="OSC 133 命令导航" checked={terminal.commandMarkersEnabled} disabled={busy} onChange={(enabled) => void persistTerminalSettings({ commandMarkersEnabled: enabled })}/>
               </div>
               <div className="settings-row">
                 <span><strong>禁用 Bash 历史记录 <span className="settings-experimental-tag">实验功能</span></strong><small>仅对新建和重连的终端生效：正常加载用户 Bash 配置，不记录本会话的新命令，不清除已有历史。OSC 7 可独立开启；不影响服务器日志或嵌套 Shell。本地仅支持 Linux / macOS，远程需支持 Bash。</small></span>
@@ -223,7 +212,7 @@ export function SettingsDialog({ onClose, onSecuritySettingsChanged, onTerminalS
     {mergeOpen && general && <ConfigurationMergeDialog target={general.activeRootDirectory} onClose={() => setMergeOpen(false)}/>}
     {confirmRemoteIntegration && <DialogFrame compact className="settings-integration-confirmation" title="开启 OSC 7 终端目录跟踪" subtitle="本地与远程终端" onClose={() => setConfirmRemoteIntegration(false)}>
       <div className="settings-integration-confirmation-body">
-        <div className="settings-integration-confirmation-intro"><span aria-hidden="true"><Icon name="terminal" size={17}/></span><p>Qterm 将跟踪 OSC 7 目录，在新建或重连时安装目录 Hook。此开关不改变 OSC 133 命令导航设置。</p></div>
+        <div className="settings-integration-confirmation-intro"><span aria-hidden="true"><Icon name="terminal" size={17}/></span><p>Qterm 将跟踪 OSC 7 目录，在新建或重连时安装目录 Hook。</p></div>
         <ul>
           <li>不会修改远程 <code>.bashrc</code>、Profile 或其他文件</li>
           <li>只缓存目标标识与 Shell 类型，不保存命令输出或凭据</li>

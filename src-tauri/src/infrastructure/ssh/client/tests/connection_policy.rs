@@ -36,9 +36,6 @@ fn shell_integration_is_scoped_to_enabled_terminal_requests() {
     assert_eq!(target.port(), 22);
     assert_eq!(target.username(), "user");
 
-    request.remote_shell_integration_enabled = false;
-    request.command_markers_enabled = true;
-    assert!(shell_integration_target(&request).is_some());
     request.purpose = SessionPurpose::Files;
     assert_eq!(shell_integration_target(&request), None);
 }

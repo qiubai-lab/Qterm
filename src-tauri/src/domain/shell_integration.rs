@@ -5,24 +5,6 @@ pub const POSIX_SHELL_PROBE_COMMAND: &str = "printf '__QTERM_SHELL__'; basename 
 pub const POWERSHELL_PROBE_COMMAND: &str = "Write-Output ('__QTERM_SHELL__powershell')";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct ShellFeatures {
-    pub osc7: bool,
-    pub osc133: bool,
-}
-impl ShellFeatures {
-    pub fn any(self) -> bool {
-        self.osc7 || self.osc133
-    }
-    #[cfg(test)]
-    pub fn coupled(enabled: bool) -> Self {
-        Self {
-            osc7: enabled,
-            osc133: enabled,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RemoteShell {
     Bash,
     Zsh,
@@ -50,34 +32,8 @@ impl RemoteShell {
         }
     }
 
-    #[cfg(test)]
-    pub fn hook_command(self) -> String {
-        self.hook_with_features(ShellFeatures::coupled(true))
-    }
-
-    pub fn hook_with_features(self, features: ShellFeatures) -> String {
-        if !features.any() {
-            return String::new();
-        }
-        let installation = if features.osc133 {
-            super::command_markers::installation(self)
-        } else {
-            String::new()
-        };
-        if !features.osc7 {
-            if installation.is_empty() {
-                return String::new();
-            }
-            let cleanup = if self == Self::Bash {
-                r#"history -d "$((HISTCMD-1))" 2>/dev/null || true; "#
-            } else {
-                ""
-            };
-            return format!(
-                " stty echo 2>/dev/null; {installation}{cleanup}printf '\\033[1F\\033[2K[Qterm] OSC 133 command navigation enabled (current session only)\\r\\n'\r"
-            );
-        }
-        let base = match self {
+    pub fn hook_command(self) -> &'static str {
+        match self {
             Self::Bash => concat!(
                 r#" stty echo 2>/dev/null; __qterm_osc7(){ printf '\033]7;file://%s%s\007' "${HOSTNAME:-localhost}" "$PWD"; }; if [[ ! $(declare -p PROMPT_COMMAND 2>/dev/null) =~ declare[[:space:]]+-[^[:space:]]*r && ${__qterm_osc7_loaded-} != 1 ]]; then if (( BASH_VERSINFO[0] > 5 || (BASH_VERSINFO[0] == 5 && BASH_VERSINFO[1] >= 1) )); then PROMPT_COMMAND+=(__qterm_osc7); else PROMPT_COMMAND="${PROMPT_COMMAND-}"$'\n''__qterm_osc7'; fi; __qterm_osc7_loaded=1; fi; __qterm_osc7; history -d "$((HISTCMD-1))" 2>/dev/null || true; printf '\033[1F\033[2K[Qterm] OSC 7 enabled: syncs the remote working directory with Qterm (current session only)\r\n'"#,
                 "\r"
@@ -94,31 +50,12 @@ impl RemoteShell {
                 r#"$global:__QtermOriginalPrompt=$function:prompt; function global:prompt { $h=[System.Net.Dns]::GetHostName(); $p=(Get-Location).Path.Replace('\','/'); $u=if($p.StartsWith('/')){$p}else{'/'+$p}; Write-Host "`e]7;file://$h$u`a" -NoNewline; & $global:__QtermOriginalPrompt }; prompt"#,
                 "\r"
             ),
-        };
-        // Install after the directory hook, before the first report/notice.
-        base.replacen(
-            "; __qterm_osc7;",
-            &format!("; {installation}__qterm_osc7;"),
-            1,
-        )
-    }
-
-    #[cfg(test)]
-    pub fn initialization_command(self, initial_directory: Option<&InitialDirectory>) -> String {
-        self.initialization_with_features(initial_directory, ShellFeatures::coupled(true))
-    }
-
-    pub fn initialization_with_features(
-        self,
-        initial_directory: Option<&InitialDirectory>,
-        features: ShellFeatures,
-    ) -> String {
-        let hook = self.hook_with_features(features);
-        if hook.is_empty() {
-            return hook;
         }
+    }
+
+    pub fn initialization_command(self, initial_directory: Option<&InitialDirectory>) -> String {
         let Some(directory) = initial_directory else {
-            return hook;
+            return self.hook_command().to_owned();
         };
         let change_directory = match self {
             Self::Bash | Self::Zsh => format!(
@@ -134,11 +71,11 @@ impl RemoteShell {
                 encode_powershell_literal(directory.as_str())
             ),
         };
-        let hook_command = hook;
+        let hook_command = self.hook_command();
         match self {
             Self::Bash | Self::Zsh | Self::Fish => format!(
                 " {change_directory}{}",
-                hook_command.strip_prefix(' ').unwrap_or(&hook_command)
+                hook_command.strip_prefix(' ').unwrap_or(hook_command)
             ),
             Self::PowerShell => format!("{change_directory}{hook_command}"),
         }
@@ -316,7 +253,7 @@ mod tests {
             let report_index = command.find("]7;file://").expect("OSC 7 report");
             let notice_index = command.find(notice).expect("startup notice");
             assert!(report_index < notice_index);
-            assert_eq!(command.matches("[Qterm] OSC 7 enabled").count(), 1);
+            assert_eq!(command.matches("[Qterm]").count(), 1);
             assert!(!command.contains(r#"\033[2m"#));
         }
 

@@ -41,3 +41,13 @@ it("matches the real xterm parser on supported controls", async () => {
   expect(parse(chunks)).toEqual(events);
   terminal.dispose();
 });
+
+it("retains text notifications after retired title and progress controls at every byte split", () => {
+  const input = bytes("\x1b]0;old title\x07\x1b]2;another title\x1b\\\x1b]9;4;1;50\x07\x1b]9;4;3\x1b\\\x1b]9;完成任务\x07\x1b]9;4;0\x07\x1b]9;Done\x1b\\");
+  const expected = [
+    { protocol: "osc9", title: "", body: "完成任务" },
+    { protocol: "osc9", title: "", body: "Done" },
+  ];
+  for (let split = 0; split <= input.length; split++) expect(parse([input.slice(0, split), input.slice(split)])).toEqual(expected);
+  expect(parse(Array.from(input, byte => Uint8Array.of(byte)))).toEqual(expected);
+});

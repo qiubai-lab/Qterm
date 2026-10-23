@@ -6,11 +6,11 @@ import { SettingsDialog } from "./SettingsDialog";
 
 const mocks = vi.hoisted(() => ({ getSettings: vi.fn(), updateTerminalSettings: vi.fn() }));
 vi.mock("../../lib/tauri/settings", () => mocks);
-let terminal = { remoteShellIntegrationEnabled: false, commandMarkersEnabled: false, historyFreeBashEnabled: false };
+let terminal = { remoteShellIntegrationEnabled: false, historyFreeBashEnabled: false };
 const snapshot = () => ({ general: { rootDirectory: "/test" }, security: {}, appearance: { theme: "dark" }, terminal, warning: null });
 
 beforeEach(() => {
-  terminal = { remoteShellIntegrationEnabled: false, commandMarkersEnabled: false, historyFreeBashEnabled: false };
+  terminal = { remoteShellIntegrationEnabled: false, historyFreeBashEnabled: false };
   mocks.getSettings.mockImplementation(async () => snapshot());
   mocks.updateTerminalSettings.mockImplementation(async patch => { terminal = { ...terminal, ...patch }; return snapshot(); });
 });
@@ -25,9 +25,10 @@ async function open() {
 it("scrolls advanced options separately from the heading and feedback", async () => {
   await open();
   const viewport = screen.getByRole("region", { name: "高级设置选项" });
+  expect(screen.queryByRole("switch", { name: "显示应用标题" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("switch", { name: "OSC 133 命令导航" })).not.toBeInTheDocument();
   expect(viewport).toHaveAttribute("tabindex", "0");
   expect(viewport.parentElement).toHaveAttribute("data-density", "compact");
-  expect(viewport).toContainElement(screen.getByRole("switch", { name: "OSC 133 命令导航" }));
   expect(viewport).not.toContainElement(screen.getByRole("heading", { name: "高级" }));
   expect(viewport).not.toContainElement(screen.getByText("管理远程终端集成等进阶功能。"));
   expect(document.querySelector(".settings-content-fixed")).toContainElement(viewport);
@@ -61,21 +62,4 @@ it("keeps the saved state on failure and disables controls while saving", async 
   expect(await screen.findByRole("alert")).toHaveTextContent("无法保存终端设置");
   expect(toggle).not.toBeChecked();
   expect(toggle).toBeEnabled();
-});
-
-it("saves OSC 133 independently, restores it and preserves OSC 7 on errors", async () => {
-  await open();
-  const markers = screen.getByRole("switch", { name: "OSC 133 命令导航" });
-  const directory = screen.getByRole("switch", { name: "OSC 7 终端目录跟踪" });
-  await userEvent.click(markers);
-  await waitFor(() => expect(markers).toBeChecked());
-  expect(mocks.updateTerminalSettings).toHaveBeenLastCalledWith({ commandMarkersEnabled: true });
-  expect(directory).not.toBeChecked();
-  cleanup(); await open();
-  expect(screen.getByRole("switch", { name: "OSC 133 命令导航" })).toBeChecked();
-  mocks.updateTerminalSettings.mockRejectedValueOnce(new Error("保存失败"));
-  await userEvent.click(screen.getByRole("switch", { name: "OSC 133 命令导航" }));
-  await screen.findByRole("alert");
-  expect(screen.getByRole("switch", { name: "OSC 133 命令导航" })).toBeChecked();
-  expect(screen.getByRole("switch", { name: "OSC 7 终端目录跟踪" })).not.toBeChecked();
 });

@@ -322,7 +322,6 @@ export function TerminalPanel({ blockId, sessionKey, visible, local, osc7Enabled
       blockId,
       (data) => view.terminal.write(view.decoder.decode(data, { stream: true })),
       (reset) => {
-        view.activity.activity.reset();
         if (reset) {
           view.decoder = new TextDecoder();
           resetTerminalSession(view.terminal);
@@ -515,7 +514,7 @@ export function TerminalPanel({ blockId, sessionKey, visible, local, osc7Enabled
       </span>
       <button className="terminal-search-close" type="button" aria-label="关闭搜索" onClick={closeSearch}><Icon name="close" size={12}/></button>
     </div>}
-    {contextMenu && <TerminalContextMenu sessionKey={sessionKey} state={contextMenu} menuRef={menuRef} platform={desktopPlatform} canPaste={inputEnabled} close={closeContextMenu}
+    {contextMenu && <TerminalContextMenu state={contextMenu} menuRef={menuRef} platform={desktopPlatform} canPaste={inputEnabled} close={closeContextMenu}
       actions={{ copy: copySelection, paste: requestPaste, search: openSearch, selectAll, clear: clearBuffer, exportImage: () => { closeContextMenu(false); imageExport.open(); } }}/>}
     {imageExport.request && <TerminalImageExportDialog request={imageExport.request} onClose={imageExport.close}/>}
     {pendingPaste && createPortal(<DialogFrame compact title="确认粘贴？" subtitle="多行或较长内容可能立即执行命令" onClose={() => { setPendingPaste(null); restoreTerminalFocus(); }}>

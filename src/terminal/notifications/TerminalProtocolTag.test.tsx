@@ -35,6 +35,7 @@ it("combines enabled protocols in one compact hover tooltip and hides disabled o
   const tooltip = screen.getByRole("tooltip");
   for (const name of ["OSC 7", "OSC 8", "OSC 52", "BEL", "OSC 9", "OSC 777"]) expect(tooltip).toHaveTextContent(name);
   expect(tooltip).toHaveTextContent("同步当前目录");
+  for (const name of ["OSC 0/2", "OSC 9;4", "OSC 133"]) expect(tooltip).not.toHaveTextContent(name);
   expect(tooltip).toHaveTextContent("HTTP(S) 超链接，确认后打开");
   fireEvent.mouseLeave(screen.getByRole("button"));
   expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();

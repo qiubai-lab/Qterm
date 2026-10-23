@@ -6,7 +6,7 @@
     "src-tauri/src/infrastructure/persistence/json_workspace_repository.rs": 763,
     "src-tauri/src/infrastructure/ssh/auth.rs": 828,
     "src-tauri/src/infrastructure/ssh/client/git.rs": 1255,
-    "src-tauri/src/infrastructure/ssh/client/tests.rs": 2142,
+    "src-tauri/src/infrastructure/ssh/client/tests.rs": 2141,
     "src/app/appStyles.test.ts": 1033,
     "src/components/dialogs/aboutUpdate.css": 520,
     "src/components/dialogs/ConnectionDialog.tsx": 685,
@@ -20,7 +20,7 @@
     "src/git/styles/gitRepositoryPicker.css": 486,
     "src/git/styles/gitShell.css": 824,
     "src/terminal/TerminalPanel.test.tsx": 889,
-    "src/terminal/TerminalPanel.tsx": 579,
+    "src/terminal/TerminalPanel.tsx": 578,
     "src/workspace/LayoutView.test.tsx": 808,
     "src/workspace/LayoutView.tsx": 652,
     "src/workspace/WorkspaceShell.tsx": 598

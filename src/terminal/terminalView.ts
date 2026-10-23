@@ -1,4 +1,3 @@
-import { registerTerminalActivity } from "./terminalActivityRegistry";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { writeText as writeClipboardText } from "@qterm/services/textClipboard";
@@ -12,7 +11,6 @@ import { ensureTerminalSearch, type TerminalSearchHost } from "./terminalSearch"
 import { bindTerminalTheme, readTerminalTheme } from "./terminalTheme";
 
 export interface TerminalView extends TerminalSearchHost {
-  activity: ReturnType<typeof registerTerminalActivity>;
   decoder: TextDecoder;
   element: HTMLElement;
   input: { dispose: () => void };
@@ -66,8 +64,6 @@ export function acquireTerminalView(sessionKey: string, container: HTMLElement, 
     terminal.dispose();
     throw new Error("xterm did not create a terminal element");
   }
-  const activity = registerTerminalActivity(sessionKey);
-  terminal.loadAddon(activity.activity.addon);
   const resize: TerminalView["resize"] = { send: async () => undefined };
   fit.fit();
   const layout = createTerminalLayout(terminal, fit, (columns, rows) => resize.send(columns, rows), resizeDelayMs);
@@ -76,7 +72,6 @@ export function acquireTerminalView(sessionKey: string, container: HTMLElement, 
   const inputScheduler = createTerminalInputScheduler((data) => writeTarget.send(data));
   const view: TerminalView = {
     terminal,
-    activity,
     decoder: new TextDecoder(),
     element,
     input: { dispose: () => undefined },
@@ -128,7 +123,6 @@ export function scheduleTerminalViewDisposal(sessionKey: string, view: TerminalV
     view.layout.dispose();
     view.themeBinding.dispose();
     view.terminal.dispose();
-    view.activity.dispose();
     terminalViews.delete(sessionKey);
     view.disposeTimer = null;
   }, 0);
