@@ -67,7 +67,7 @@ describe("SettingsDialog", () => {
     mocks.selectConfigurationDirectory.mockResolvedValue("D:\\other");
     renderSettings();
     const merge = await screen.findByRole("button", { name: "合并配置" });
-    expect(merge.previousElementSibling).toHaveTextContent("重启后切换");
+    expect(merge.previousElementSibling).toHaveTextContent("重启后更新");
     expect(merge).toBeEnabled();
     await user.click(screen.getByRole("button", { name: "选择 Qterm 配置目录" }));
     expect(merge).toBeDisabled();
