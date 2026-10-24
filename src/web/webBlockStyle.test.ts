@@ -15,4 +15,5 @@ it("uses terminal chrome without feature header overrides and keeps address cont
   expect(css).toMatch(/\.web-address-loading\s*\{[^}]*width: 16px[^}]*flex: none/);
   expect(css).toContain("prefers-reduced-motion: reduce");
   expect(css).toContain("animation: none");
+  expect(css).toMatch(/\.web-browser-surface\s*\{[^}]*overflow: clip/);
 });

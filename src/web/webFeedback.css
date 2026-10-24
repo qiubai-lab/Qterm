@@ -17,7 +17,11 @@
 }
 .web-feedback-route { flex: none; color: var(--dim); }
 .web-feedback-message { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.web-feedback-metrics { margin-left: auto; flex: none; font-variant-numeric: tabular-nums; }
+.web-feedback-metrics {
+  margin-left: auto;
+  flex: none;
+  text-align: right;
+}
 .web-feedback[role="alert"] .web-feedback-message { color: var(--danger); }
 @container terminal-block (max-width: 420px) { .web-feedback-route { display: none; } }
 @container terminal-block (max-width: 230px) { .web-feedback-metrics { display: none; } }

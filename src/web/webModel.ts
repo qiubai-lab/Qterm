@@ -17,5 +17,5 @@ export function webSurfaceVisible(element: HTMLElement, visible: boolean): boole
   // A listbox describes selection semantics, not a modal that should hide native content.
   // Blocking list pickers already live inside dialogs; address suggestions use local clipping.
   return visible && !document.hidden && !element.closest('[inert], [aria-hidden="true"]')
-    && !document.querySelector('[role="dialog"], [role="menu"], .dialog-backdrop, .terminal-lock-screen, .drag-ghost');
+    && !document.querySelector('[role="dialog"]:not([data-web-native-overlay="library"]), [role="menu"], .dialog-backdrop, .terminal-lock-screen, .drag-ghost');
 }

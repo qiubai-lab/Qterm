@@ -1,11 +1,16 @@
 import type { WebPanel } from "../lib/tauri/web";
 import { webFrameColor } from "./webSurfaceFrame";
 
-export const webNativePanelSelector = '[data-web-native-overlay="address-history"]';
+export const webNativePanelSelector = '[data-web-native-overlay="address-history"], [data-web-native-overlay="library"]';
 
 /** Shared reveal geometry for native holes and the antialiased rim above the guest. */
 export function webHistoryPanel(element: HTMLElement, surface: DOMRect, style = getComputedStyle(element)): WebPanel | null {
   if (style.display === "none" || style.visibility === "hidden" || style.opacity === "0" || element.closest("[inert]")) return null;
+  // The moving drawer is clipped by its owner; its offscreen portion must never cut a neighbor.
+  if (element.dataset.webNativeOverlay === "library") {
+    const owner = element.closest(".web-browser-surface")?.getBoundingClientRect();
+    if (!owner || (["left", "top", "width", "height"] as const).some(key => Math.abs(owner[key] - surface[key]) > 0.5)) return null;
+  }
   const rect = element.getBoundingClientRect();
   const inset = /inset\(\S+\s+\S+\s+([\d.]+)(%|px)/.exec(style.clipPath);
   const hidden = inset ? Number(inset[1]) * (inset[2] === "%" ? rect.height / 100 : 1) : 0;
@@ -21,5 +26,8 @@ export function webHistoryPanel(element: HTMLElement, surface: DOMRect, style = 
 
 export function webSurfacePanels(surface: DOMRect): WebPanel[] {
   return [...document.querySelectorAll<HTMLElement>(webNativePanelSelector)]
+    // Square drawers are fully exposed by their rectangular hole. Only rounded
+    // panels need a native antialiased rim; rasterizing a drawer each frame is costly.
+    .filter(element => element.dataset.webNativeOverlay !== "library")
     .map(element => webHistoryPanel(element, surface)).filter((panel): panel is WebPanel => panel !== null).slice(0, 8);
 }

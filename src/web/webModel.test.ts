@@ -33,6 +33,11 @@ describe("web block boundaries", () => {
     stage.removeAttribute("inert");
     const dialog = document.createElement("div"); dialog.setAttribute("role", "dialog"); document.body.append(dialog);
     expect(webSurfaceVisible(surface, true)).toBe(false);
+    dialog.dataset.webNativeOverlay = "library";
+    expect(webSurfaceVisible(surface, true)).toBe(true);
+    const confirmation = document.createElement("div"); confirmation.setAttribute("role", "dialog"); document.body.append(confirmation);
+    expect(webSurfaceVisible(surface, true)).toBe(false);
+    confirmation.remove();
     dialog.remove(); stage.remove();
   });
 });

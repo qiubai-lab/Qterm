@@ -62,3 +62,26 @@ it("puts search before the compact history tabs and bookmarks the displayed page
   fireEvent.click(screen.getByRole("button", { name: "收藏 Documentation" }));
   expect(props.onUpdate).toHaveBeenCalledWith({ kind: "bookmark", url: "https://docs.internal/", title: "Documentation" });
 });
+
+it("uses a non-modal inline drawer and restores the trigger on close", () => {
+  const focus = vi.spyOn(HTMLElement.prototype, "focus");
+  const trigger = document.createElement("button");
+  document.body.append(trigger);
+  trigger.focus();
+  const close = vi.fn();
+  const props = { profileName: "AI-149", data, busy: false, error: "", onUpdate: vi.fn(async () => true), onOpen: vi.fn(), onClose: close };
+  const view = render(<WebLibraryDialog {...props} phase="entering"/>);
+  const drawer = screen.getByRole("dialog", { name: "浏览记录" });
+  expect(view.container).toContainElement(drawer);
+  expect(drawer).toHaveAttribute("aria-modal", "false");
+  expect(screen.getByRole("searchbox")).toHaveFocus();
+  expect(focus).toHaveBeenLastCalledWith({ preventScroll: true });
+  fireEvent.keyDown(window, { key: "Escape" });
+  expect(close).toHaveBeenCalledOnce();
+  view.rerender(<WebLibraryDialog {...props} phase="closing"/>);
+  expect(trigger).toHaveFocus();
+  expect(screen.queryByRole("dialog")).toBeNull();
+  view.rerender(<WebLibraryDialog {...props} phase="open"/>);
+  expect(screen.getByRole("searchbox")).toHaveFocus();
+  view.unmount(); trigger.remove(); focus.mockRestore();
+});

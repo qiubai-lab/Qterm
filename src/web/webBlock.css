@@ -15,6 +15,6 @@
 .web-address-spinner { display: block; width: 12px; height: 12px; border: 1.5px solid var(--subtle); border-top-color: currentColor; border-right-color: currentColor; border-radius: 50%; animation: web-address-spin 800ms linear infinite; }
 @keyframes web-address-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .web-address-spinner { animation: none; } }
-.web-browser-surface { flex: 1; min-width: 0; min-height: 0; overflow: hidden; position: relative; background: var(--canvas); }
+.web-browser-surface { flex: 1; min-width: 0; min-height: 0; overflow: clip; position: relative; background: var(--canvas); }
 .web-empty-state { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 16px; color: var(--muted); text-align: center; font-size: 11px; }
 .web-empty-state strong { color: var(--text); font-size: 13px; }

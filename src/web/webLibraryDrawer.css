@@ -1,0 +1,35 @@
+.web-library-drawer {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  box-sizing: border-box;
+  width: min(420px, 100%);
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 0;
+  color: var(--text);
+  background: var(--raised);
+  transform: translateX(0);
+  will-change: transform;
+  transition: transform 220ms cubic-bezier(.2,.8,.2,1);
+}
+.web-library-drawer[data-state="entering"],.web-library-drawer[data-state="closing"] { transform: translateX(100%); }
+.web-library-drawer[data-state="closing"] { transition-duration: 180ms; pointer-events: none; }
+.web-library-drawer-interior { display: flex; height: 100%; min-height: 0; min-width: 0; flex-direction: column; }
+.web-library-drawer-header { display: flex; flex: none; min-width: 0; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--subtle); }
+.web-library-drawer-header>div { flex: 1; min-width: 0; }
+.web-library-drawer-header h2 { margin: 0; font-size: 13px; font-weight: 600; }
+.web-library-drawer-header p { margin: 4px 0 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--dim); font-size: 9px; }
+.web-library-drawer-header>button { display: grid; flex: none; width: 26px; height: 26px; place-items: center; padding: 0; border: 0; border-radius: 4px; color: var(--icon); background: transparent; }
+.web-library-drawer-header>button:hover { color: var(--icon-hover); background: var(--control-hover); }
+.web-library-drawer .web-library-toolbar { flex-wrap: nowrap; gap: 7px; }
+.web-library-drawer .web-library-search { flex: 1 1 0; min-width: 0; }
+.web-library-drawer .web-library-open { display: grid; grid-template-columns: 15px minmax(0,1fr); gap: 4px 7px; padding: 8px; }
+.web-library-drawer .web-library-open>svg { grid-row: 1 / span 2; }
+.web-library-drawer .web-library-open>span,.web-library-drawer .web-library-open time { grid-column: 2; }
+.web-library-drawer .web-library-open time { display: block; font-size: 8px; }
+@media (prefers-reduced-motion: reduce) { .web-library-drawer { transition: none; } }

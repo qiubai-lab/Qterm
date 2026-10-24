@@ -5,10 +5,13 @@ import { Button } from "../components/Button";
 import { DialogFrame } from "../components/dialogs/DialogFrame";
 import { Icon } from "../components/Icon";
 import { ThemedTooltipButton } from "../components/ThemedTooltipButton";
+import { WebLibraryDrawerFrame } from "./WebLibraryDrawerFrame";
+import type { WebDrawerPhase } from "./useWebLibraryDrawer";
 import type { WebEntry, WebLibrary, WebLibraryAction } from "../lib/tauri/webLibrary";
 import "./webLibrary.css";
 
 interface Props {
+  phase?: WebDrawerPhase;
   profileName: string;
   data: WebLibrary;
   busy: boolean;
@@ -18,7 +21,7 @@ interface Props {
   onClose: () => void;
 }
 
-export function WebLibraryDialog({ profileName, data, busy, error, onUpdate, onOpen, onClose }: Props) {
+export function WebLibraryDialog({ profileName, data, busy, error, onUpdate, onOpen, onClose, phase = "open" }: Props) {
   const [tab, setTab] = useState<"history" | "bookmarks">("history");
   const [search, setSearch] = useState("");
   const [confirm, setConfirm] = useState<WebLibraryAction | null>(null);
@@ -32,8 +35,8 @@ export function WebLibraryDialog({ profileName, data, busy, error, onUpdate, onO
   const choose = (value: typeof tab) => { setTab(value); setEditing(null); };
   const bookmark = (entry: WebEntry) => void onUpdate({ kind: "bookmark", url: entry.url, title: entry.title });
 
-  return createPortal(<>
-    <DialogFrame title="浏览记录" subtitle={`${profileName} · 此连接的访问历史与收藏`} className="web-library-dialog" onClose={onClose} dismissible={!confirm} blocking={false}>
+  return <>
+    <WebLibraryDrawerFrame profileName={profileName} phase={phase} onClose={onClose} dismissible={!confirm}>
       <div className="web-library-toolbar">
         <div className="web-library-search"><Icon name="search" size={14}/><input type="search" aria-label="搜索浏览记录" placeholder="搜索名称或地址" value={search} onChange={e => setSearch(e.target.value)} data-dialog-autofocus/></div>
         <div className="web-library-tabs" role="tablist" aria-label="记录类型">
@@ -69,10 +72,10 @@ export function WebLibraryDialog({ profileName, data, busy, error, onUpdate, onO
         {error && <Button size="compact" disabled={busy} onClick={() => void onUpdate()}>重试</Button>}
         {tab === "history" && <Button size="compact" variant="danger" disabled={busy || !data.history.length} onClick={() => setConfirm({ kind: "clearHistory" })}>清空历史</Button>}
       </footer>
-    </DialogFrame>
-    {confirm && <DialogFrame title={confirm.kind === "clearHistory" ? "清空此连接的访问历史？" : "删除此访问记录？"} subtitle="仅删除访问历史，收藏不受影响。此操作无法撤销。" compact onClose={() => { if (!busy) setConfirm(null); }} dismissible={!busy}>
+    </WebLibraryDrawerFrame>
+    {confirm && createPortal(<DialogFrame title={confirm.kind === "clearHistory" ? "清空此连接的访问历史？" : "删除此访问记录？"} subtitle="仅删除访问历史，收藏不受影响。此操作无法撤销。" compact onClose={() => { if (!busy) setConfirm(null); }} dismissible={!busy}>
       <div className="dialog-actions end"><Button variant="danger" disabled={busy} onClick={() => setConfirm(null)}>取消</Button><Button variant="dangerSolid" loading={busy} onClick={() => void onUpdate(confirm).then(ok => { if (ok) setConfirm(null); })}>确认删除</Button></div>
       <p className="web-library-status" role={error ? "alert" : "status"}>{error}</p>
-    </DialogFrame>}
-  </>, document.body);
+    </DialogFrame>, document.body)}
+  </>;
 }

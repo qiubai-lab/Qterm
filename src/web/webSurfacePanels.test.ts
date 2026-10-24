@@ -2,6 +2,25 @@ import { afterEach, expect, it, vi } from "vitest";
 import { webHistoryPanel, webSurfacePanels } from "./webSurfacePanels";
 import { webSurfaceOcclusions } from "./webSurfaceOcclusion";
 afterEach(() => { document.body.innerHTML = ""; vi.restoreAllMocks(); });
+it("clips only the owning guest while the drawer slides right and retains nested modal behavior", () => {
+  const owner = document.createElement("div");
+  owner.className = "web-browser-surface";
+  const drawer = document.createElement("section");
+  drawer.dataset.webNativeOverlay = "library";
+  drawer.setAttribute("role", "dialog");
+  drawer.style.cssText = "border-radius: 0px; background: rgb(25,27,31); border: 1px solid rgb(48,52,58)";
+  owner.append(drawer); document.body.append(owner);
+  const surface = new DOMRect(10, 10, 600, 400);
+  vi.spyOn(owner, "getBoundingClientRect").mockReturnValue(surface);
+  const rect = vi.spyOn(drawer, "getBoundingClientRect").mockReturnValue(new DOMRect(400, 10, 420, 400));
+  expect(webSurfaceOcclusions(surface)).toEqual([{ x: 390, y: 0, width: 210, height: 400 }]);
+  expect(webSurfacePanels(surface)).toEqual([]);
+  expect(webSurfacePanels(new DOMRect(610, 10, 600, 400))).toEqual([]);
+  expect(webSurfaceOcclusions(new DOMRect(610, 10, 600, 400))).toEqual([]);
+  rect.mockReturnValue(new DOMRect(610, 10, 420, 400));
+  expect(webSurfaceOcclusions(surface)).toEqual([]);
+  expect(webSurfacePanels(surface)).toEqual([]);
+});
 it("never cuts out guest content for the persistent feedback footer", () => {
   const element = document.createElement("div");
   element.dataset.webNativeOverlay = "feedback";

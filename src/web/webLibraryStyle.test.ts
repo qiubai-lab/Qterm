@@ -1,9 +1,20 @@
 import { expect, it } from "vitest";
 import { readCssBundle } from "../test/css";
 
-it("uses a wider dialog and compact theme-aware tabs", () => {
+it("uses a block-local right drawer and compact theme-aware tabs", () => {
   const css = readCssBundle("src/web/webLibrary.css");
-  expect(css).toMatch(/\.dialog-frame\.web-library-dialog\s*\{[^}]*width: min\(660px/);
+  const drawer = readCssBundle("src/web/webLibraryDrawer.css");
+  expect(drawer).toContain("position: absolute");
+  expect(drawer).toContain("right: 0");
+  expect(drawer).toContain("z-index: 2");
+  expect(drawer).toContain("will-change: transform");
+  expect(drawer).toContain("width: min(420px, 100%)");
+  expect(drawer).toContain("translateX(100%)");
+  expect(drawer).toMatch(/\.web-library-toolbar\s*\{[^}]*flex-wrap: nowrap/);
+  expect(drawer).toMatch(/\.web-library-search\s*\{[^}]*flex: 1 1 0/);
+  expect(css).toMatch(/\.web-library-search>svg\s*\{[^}]*position: absolute[^}]*pointer-events: none/);
+  expect(css).toMatch(/\.web-library-search input\s*\{[^}]*padding-left: 26px/);
+  expect(drawer).toMatch(/prefers-reduced-motion: reduce[^}]*transition: none/);
   expect(css).toMatch(/\.web-library-tabs button\s*\{[^}]*width: 78px/);
   expect(css).toContain("color: var(--navigation-accent)");
   expect(css).toContain("background: var(--navigation-accent-bg)");
@@ -18,7 +29,8 @@ it("caps recent history at five fixed-height rows as further batches load", () =
 
 it("keeps the history scroller inside a growing content area with fixed toolbar and footer", () => {
   const css = readCssBundle("src/web/webLibrary.css");
-  expect(css).toMatch(/\.web-library-dialog \.dialog-content\s*\{[^}]*flex: 1[^}]*min-height: 0[^}]*overflow: hidden/);
+  const drawer = readCssBundle("src/web/webLibraryDrawer.css");
+  expect(drawer).toMatch(/\.web-library-drawer-interior\s*\{[^}]*display: flex[^}]*height: 100%[^}]*min-height: 0[^}]*flex-direction: column/);
   expect(css).toMatch(/\.web-library-scroll\s*\{[^}]*flex: 1[^}]*min-height: 0/);
   expect(css).toMatch(/\.web-library-list\s*\{[^}]*min-height: 0[^}]*overflow: auto/);
   expect(css).toMatch(/\.web-library-footer\s*\{[^}]*flex: none[^}]*height: 40px/);
