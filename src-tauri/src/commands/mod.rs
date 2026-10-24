@@ -21,3 +21,4 @@ pub mod notification;
 pub mod configuration_merge;
 
 pub mod web;
+pub mod web_library;

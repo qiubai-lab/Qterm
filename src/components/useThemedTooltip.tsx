@@ -5,10 +5,11 @@ export function isElementOverflowing(element: HTMLElement) {
   return element.scrollWidth > element.clientWidth;
 }
 
-export function useThemedTooltip<T extends HTMLElement>({ tooltip, anchorRef, shouldShow }: {
+export function useThemedTooltip<T extends HTMLElement>({ tooltip, anchorRef, shouldShow, placement = "auto" }: {
   tooltip: string;
   anchorRef?: RefObject<T | null>;
   shouldShow?: (anchor: T) => boolean;
+  placement?: "auto" | "above";
 }) {
   const localRef = useRef<T>(null);
   const anchor = anchorRef ?? localRef;
@@ -30,11 +31,11 @@ export function useThemedTooltip<T extends HTMLElement>({ tooltip, anchorRef, sh
     const bubble = surface.current;
     if (!open || !rect || !bubble) return;
     const left = Math.max(8, Math.min(rect.left + rect.width / 2 - bubble.offsetWidth / 2, window.innerWidth - bubble.offsetWidth - 8));
-    const above = rect.bottom + 6 + bubble.offsetHeight > window.innerHeight - 8;
+    const above = (placement === "above" && rect.top - bubble.offsetHeight - 6 >= 8) || rect.bottom + 6 + bubble.offsetHeight > window.innerHeight - 8;
     setPosition({ left, top: above ? Math.max(8, rect.top - bubble.offsetHeight - 6) : rect.bottom + 6,
       transformOrigin: `${Math.max(8, Math.min(rect.left + rect.width / 2 - left, bubble.offsetWidth - 8))}px ${above ? "bottom" : "top"}`,
       "--tooltip-offset": above ? "4px" : "-4px" } as CSSProperties);
-  }, [anchor, open, tooltip]);
+  }, [anchor, open, tooltip, placement]);
 
   useEffect(() => {
     if (open || !position) return;

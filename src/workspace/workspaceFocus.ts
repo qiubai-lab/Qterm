@@ -7,7 +7,8 @@ export function focusWorkspaceBlock(blockId: string): boolean {
     .find((element) => element.dataset.layoutBlock === blockId);
   // A native guest focus event selects its block while the main document is blurred.
   // Focusing the shell here would steal the first click/keystroke from that guest.
-  if (block?.classList.contains("web-block") && !globalThis.document.hasFocus()) return true;
+  if (block?.classList.contains("web-block") &&
+    (!globalThis.document.hasFocus() || block.contains(globalThis.document.activeElement))) return true;
   block?.focus();
   return Boolean(block);
 }

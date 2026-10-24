@@ -51,6 +51,6 @@ export function WebBlock({ workspaceId, node, visible, active, onClose, onConnec
     </header>
     {target.switching
       ? <div className="web-browser-surface web-empty-state" role="status">正在断开原连接…</div>
-      : <WebBrowserPane key={node.profileId ?? "unbound"} profileId={profile?.id ?? null} sessionId={connected ? runtime?.sessionId ?? null : null} connecting={sessionActive && !connected} visible={visible} supported={supported} notice={target.error || runtime?.notice || ""} onConnect={connect} onActivate={select}/>}
+      : <WebBrowserPane key={node.profileId ?? "unbound"} profileId={profile?.id ?? null} profileName={profile?.name} sessionId={connected ? runtime?.sessionId ?? null : null} connecting={sessionActive && !connected} visible={visible} supported={supported} notice={target.error || runtime?.notice || ""} onConnect={connect} onActivate={select}/>}
   </section>;
 }

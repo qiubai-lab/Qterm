@@ -20,13 +20,20 @@ pub fn trusted_handler(
 }
 
 mod frame_raster;
+#[cfg(any(target_os = "windows", test))]
+mod navigation_state;
+mod surface_raster;
 #[cfg(target_os = "windows")]
 mod windows;
 #[cfg(target_os = "windows")]
 mod windows_frame;
 #[cfg(target_os = "windows")]
+mod windows_navigation;
+#[cfg(target_os = "windows")]
 mod windows_surface;
 
+#[cfg(all(test, target_os = "windows"))]
+mod native_navigation_tests;
 #[cfg(all(test, target_os = "windows"))]
 mod native_surface_tests;
 #[cfg(all(test, target_os = "windows"))]
@@ -64,6 +71,8 @@ pub struct WebBounds {
     pub occlusions: Vec<WebClipRect>,
     #[serde(default)]
     pub frame: Option<frame_raster::WebFrame>,
+    #[serde(default)]
+    pub panels: Vec<surface_raster::WebPanel>,
 }
 
 #[derive(Clone, serde::Deserialize)]
@@ -86,6 +95,8 @@ impl WebBounds {
                 .frame
                 .as_ref()
                 .is_none_or(frame_raster::WebFrame::valid)
+            && self.panels.len() <= 8
+            && self.panels.iter().all(|panel| panel.edge.valid())
             && self.occlusions.len() <= 64
             && self.occlusions.iter().all(|rect| {
                 [rect.x, rect.y, rect.width, rect.height]
@@ -261,9 +272,18 @@ impl WebHost {
                 if !crate::domain::web::allowed_web_url(url.as_str()) {
                     return Err("仅支持不含用户名或密码的 HTTP/HTTPS 地址".into());
                 }
+                if app
+                    .get_webview("main")
+                    .and_then(|main| main.url().ok())
+                    .is_some_and(|main| main.origin() == url.origin())
+                {
+                    return Err("不能在网页 Block 中打开应用内部地址".into());
+                }
                 view.navigate(url)
             }
             "reload" => view.reload(),
+            #[cfg(target_os = "windows")]
+            "stop" => return windows_navigation::stop(&view).await,
             "back" => view.eval("history.back()"),
             "forward" => view.eval("history.forward()"),
             _ => return Err("未知网页操作".into()),

@@ -120,7 +120,7 @@ pub(super) fn rasterize(
 }
 
 #[cfg(any(windows, test))]
-fn rounded_distance(point: (f64, f64), half: (f64, f64), radius: f64) -> f64 {
+pub(super) fn rounded_distance(point: (f64, f64), half: (f64, f64), radius: f64) -> f64 {
     let q = (
         point.0.abs() - half.0 + radius,
         point.1.abs() - half.1 + radius,

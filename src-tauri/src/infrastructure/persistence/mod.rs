@@ -7,6 +7,7 @@ pub mod json_remote_shell_cache;
 pub mod json_settings_repository;
 pub mod json_terminal_settings_repository;
 pub mod json_update_settings_repository;
+pub mod json_web_library;
 pub mod json_workspace_repository;
 
 pub mod json_notification_settings_repository;

@@ -237,6 +237,9 @@ pub fn run() {
                 resolve_active_configuration(&configuration_repository, &default_configuration);
             let paths = DataPaths::from_root(active_configuration.path().to_path_buf());
             paths.initialize()?;
+            app.manage(commands::web_library::WebLibraryState::new(
+                infrastructure::persistence::json_web_library::JsonWebLibrary::new(paths.device.join("web-library.json")),
+            ));
             infrastructure::persistence::configuration_merge::FileConfigurationMergeStorage::recover(&paths.root).map_err(std::io::Error::other)?;
             let credential_vault = JsonCredentialVault::new(paths.credentials.clone());
             app.manage(ConfigurationMergeState::new(paths.root.clone(), credential_vault.clone()));
@@ -273,6 +276,7 @@ pub fn run() {
         })
         .invoke_handler(infrastructure::web::trusted_handler(tauri::generate_handler![
                 commands::web::web_open, commands::web::web_close, commands::web::web_sync, commands::web::web_action,
+            commands::web_library::web_library,
             configuration_merge_select, configuration_merge_preview, configuration_merge_commit, configuration_merge_cancel, configuration_merge_unlock_source,
             browser_proxy_list,
             browser_proxy_launch,

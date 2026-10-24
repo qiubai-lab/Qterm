@@ -110,6 +110,9 @@ if(document.cookie && !document.cookie.includes('route={name}')) fetch('/cookie-
 window.__TAURI_INTERNALS__.invoke('qa_probe').then(()=>{{document.getElementById('ipc').textContent='FAIL: IPC allowed';fetch('/ipc-allowed')}}).catch(()=>{{document.getElementById('ipc').textContent='PASS: application IPC blocked';fetch('/ipc-blocked')}});
 </script></body></html>"#
     );
+    if request.starts_with("GET /slow ") {
+        std::thread::sleep(Duration::from_secs(3));
+    }
     let body = if request.starts_with("GET /ipc-") {
         "ok"
     } else {
@@ -149,6 +152,7 @@ fn native_webview_smoke() {
     .inner_size(1000.0, 650.0)
     .build()
     .unwrap();
+    let navigation = super::native_navigation_tests::NavigationProbe::new(&app);
     let handle = app.handle().clone();
     let (tx, rx) = std::sync::mpsc::channel();
     let ports = (first.port, second.port);
@@ -208,6 +212,7 @@ fn native_webview_smoke() {
     }
     assert!(second.saw("internal.invalid:8765"));
     assert!(!first.saw("ipc-allowed") && !second.saw("ipc-allowed"));
+    navigation.verify(&mut app, &a, || first.saw("GET /stop-preserved"));
     a.navigate("file:///C:/Windows/win.ini".parse().unwrap())
         .unwrap();
     for _ in 0..30 {

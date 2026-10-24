@@ -2,10 +2,44 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { createRef } from "react";
 import { beforeEach, expect, it, vi } from "vitest";
 import { useWebBrowser } from "./useWebBrowser";
+import type { WebPageState } from "../lib/tauri/web";
 
 const ipc = vi.hoisted(() => ({ open: vi.fn(), close: vi.fn(async () => {}), sync: vi.fn(async () => {}), action: vi.fn(async () => {}), listen: vi.fn(async () => () => {}), focus: vi.fn<(receive: (label: string) => void) => Promise<() => void>>(async () => () => {}) }));
 vi.mock("../lib/tauri/web", () => ({ openWeb: ipc.open, closeWeb: ipc.close, syncWeb: ipc.sync, webAction: ipc.action, listenWebPages: ipc.listen, listenWebFocus: ipc.focus }));
 beforeEach(() => { vi.clearAllMocks(); ipc.open.mockResolvedValue(undefined); });
+
+it("records only completed live guest visits, including redirected URLs, and ignores late events", async () => {
+  let receive!: (page: WebPageState) => void;
+  ipc.listen.mockImplementationOnce(((listener: (page: WebPageState) => void) => { receive = listener; return Promise.resolve(() => {}); }) as typeof ipc.listen);
+  const visited = vi.fn();
+  const surface = createRef<HTMLDivElement>();
+  const hook = renderHook(() => useWebBrowser(surface, "ssh", "profile", true, undefined, visited));
+  await act(() => hook.result.current.navigate("https://start.internal"));
+  await waitFor(() => expect(ipc.open).toHaveBeenCalledOnce());
+  expect(visited).not.toHaveBeenCalled();
+  const label = `web-${ipc.open.mock.calls[0][0]}`;
+  act(() => receive({ label: "web-other", url: "https://other.internal/", loading: false, visited: true }));
+  act(() => receive({ label, url: "https://start.internal/", loading: true, visited: false }));
+  expect(visited).not.toHaveBeenCalled();
+  expect(hook.result.current.loading).toBe(true);
+  await act(() => hook.result.current.navigate("file:///invalid"));
+  expect(hook.result.current.loading).toBe(true);
+  await act(() => hook.result.current.action("stop"));
+  expect(ipc.action).toHaveBeenCalledWith(expect.any(String), "stop");
+  act(() => receive({ label, url: "https://start.internal/", loading: false, visited: false }));
+  expect(hook.result.current.loading).toBe(false);
+  expect(visited).not.toHaveBeenCalled();
+  expect(ipc.close).not.toHaveBeenCalled();
+  act(() => receive({ label, url: "https://final.internal/", loading: false, visited: true }));
+  expect(visited).toHaveBeenCalledExactlyOnceWith("https://final.internal/", "", false);
+  act(() => receive({ label, url: "https://final.internal/", loading: false, visited: false, metadata: true, title: "控制台" }));
+  expect(hook.result.current.title).toBe("控制台");
+  expect(visited).toHaveBeenLastCalledWith("https://final.internal/", "控制台", true);
+  visited.mockClear();
+  hook.unmount();
+  receive({ label, url: "https://late.internal/", loading: false, visited: true });
+  expect(visited).not.toHaveBeenCalled();
+});
 
 it("activates only its visible live guest on native focus and removes the listener on close", async () => {
   const element = document.createElement("div");

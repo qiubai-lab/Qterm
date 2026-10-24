@@ -1,11 +1,20 @@
 .web-block { min-width: 0; min-height: 0; }
 .web-address-bar { display: flex; height: 34px; flex: none; gap: 4px; align-items: center; padding: 4px 6px; border-bottom: 1px solid var(--subtle); min-width: 0; background: var(--file-browser-chrome-background); }
 .web-address-bar input { min-width: 0; width: 0; flex: 1; height: 25px; margin: 0; padding: 0 5px; font: 10px "SFMono-Regular", Consolas, monospace; background: transparent; color: var(--text); border: 1px solid transparent; border-radius: 4px; }
-.web-address-bar input:hover { background: var(--control-hover); }
+.web-address-bar input:hover { background: var(--control-hover); border-color: var(--subtle); box-shadow: none; }
+.web-address-bar input:focus { border-color: var(--focus); outline: none; box-shadow: none; }
+.web-address-bar input:focus-visible { border-color: var(--focus); outline: 1px solid var(--focus); outline-offset: -1px; box-shadow: none; }
 .web-address-bar button { display: grid; place-items: center; flex: none; width: 25px; height: 25px; padding: 0; color: var(--icon); background: transparent; border: 0; border-radius: 4px; }
 .web-address-bar button:hover:not(:disabled) { color: var(--icon-hover); background: var(--control-hover); }
 .web-address-bar button:disabled { opacity: .4; }
-.web-address-bar :is(input, button):focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.web-address-bar button:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.web-address-bar button[aria-pressed="true"] { color: var(--accent); }
+.web-address-bar button[aria-pressed="true"] svg { fill: var(--accent-bg); }
+.web-address-loading { display: grid; width: 16px; height: 25px; flex: none; place-items: center; color: var(--dim); }
+.web-address-loading[data-loading="true"] { color: var(--accent); }
+.web-address-spinner { display: block; width: 12px; height: 12px; border: 1.5px solid var(--subtle); border-top-color: currentColor; border-right-color: currentColor; border-radius: 50%; animation: web-address-spin 800ms linear infinite; }
+@keyframes web-address-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .web-address-spinner { animation: none; } }
 .web-browser-surface { flex: 1; min-width: 0; min-height: 0; overflow: hidden; position: relative; background: var(--canvas); }
 .web-empty-state { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 16px; color: var(--muted); text-align: center; font-size: 11px; }
 .web-empty-state strong { color: var(--text); font-size: 13px; }

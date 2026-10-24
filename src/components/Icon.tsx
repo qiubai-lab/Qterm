@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-export type IconName = "workspace" | "plus" | "terminal" | "git" | "submodule" | "mergeConflict" | "browser" | "computer" | "server" | "network" | "files" | "file" | "filePlus" | "folderPlus" | "edit" | "save" | "check" | "checkCircle" | "alertCircle" | "copy" | "upload" | "download" | "key" | "lock" | "trash" | "clear" | "back" | "forward" | "chevronDown" | "refresh" | "sync" | "search" | "disconnect" | "settings" | "help" | "splitHorizontal" | "splitVertical" | "menu" | "pin" | "windowMinimize" | "windowMaximize" | "close" | "more" | "eye" | "eyeOff";
+export type IconName = "bookmark" | "history" | "workspace" | "plus" | "terminal" | "git" | "submodule" | "mergeConflict" | "browser" | "computer" | "server" | "network" | "files" | "file" | "filePlus" | "folderPlus" | "edit" | "save" | "check" | "checkCircle" | "alertCircle" | "copy" | "upload" | "download" | "key" | "lock" | "trash" | "clear" | "back" | "forward" | "chevronDown" | "refresh" | "sync" | "search" | "disconnect" | "settings" | "help" | "splitHorizontal" | "splitVertical" | "menu" | "pin" | "windowMinimize" | "windowMaximize" | "close" | "more" | "eye" | "eyeOff";
 
 export function Icon({ name, size = 16 }: { name: IconName; size?: number }) {
   const paths: Record<IconName, ReactNode> = {
@@ -11,6 +11,8 @@ export function Icon({ name, size = 16 }: { name: IconName; size?: number }) {
     submodule: <><circle cx="7" cy="7" r="2"/><circle cx="17" cy="17" r="2"/><path d="M7 9v2.5a5.5 5.5 0 0 0 5.5 5.5H15"/></>,
     mergeConflict: <><circle cx="6" cy="5" r="1.8"/><circle cx="6" cy="19" r="1.8"/><circle cx="18" cy="12" r="1.8"/><path d="M6 7v10M8 7c0 2.8 1.8 5 8 5M12 8.5v3M12 14.8h.01"/></>,
     browser: <><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M3 9h18M7 6.5h.01M10 6.5h.01"/></>,
+    bookmark: <path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.3l-5.6 2.9 1.1-6.2L3 9.6l6.2-.9Z"/>,
+    history: <><path d="M3 4v5h5M3.6 9a8.5 8.5 0 1 1-.1 6"/><path d="M12 7v5l3 2"/></>,
     computer: <><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></>,
     server: <><rect x="4" y="3" width="16" height="7" rx="2"/><rect x="4" y="14" width="16" height="7" rx="2"/><path d="M8 6.5h.01M8 17.5h.01M12 6.5h5M12 17.5h5"/></>,
     network: <><rect x="9" y="2" width="6" height="6" rx="1.2"/><rect x="3" y="16" width="6" height="6" rx="1.2"/><rect x="15" y="16" width="6" height="6" rx="1.2"/><path d="M12 8v4M6 16v-4h12v4"/></>,

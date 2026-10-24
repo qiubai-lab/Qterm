@@ -1,8 +1,5 @@
 //! Mouse-transparent layered child owned by the guest HWND, not by the guest webpage.
-use super::{
-    WebBounds,
-    frame_raster::{FrameBitmap, rasterize},
-};
+use super::{WebBounds, frame_raster::FrameBitmap};
 use windows::{
     Win32::{
         Foundation::{COLORREF, HANDLE, HWND, POINT, SIZE},
@@ -28,12 +25,7 @@ pub(super) fn handle(parent: HWND) -> HWND {
 }
 
 pub(super) fn sync(parent: HWND, bounds: &WebBounds, scale: f64) -> Result<(), &'static str> {
-    let bitmap = bounds
-        .frame
-        .as_ref()
-        .map(|frame| rasterize(frame, bounds.width, bounds.height, scale))
-        .transpose()?
-        .flatten();
+    let bitmap = super::surface_raster::rasterize(bounds, scale)?;
     let mut overlay = handle(parent);
     let Some(bitmap) = bitmap else {
         if !overlay.is_invalid() {

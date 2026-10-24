@@ -9,4 +9,10 @@ it("uses terminal chrome without feature header overrides and keeps address cont
   expect(css).toMatch(/\.web-address-bar button\s*\{[^}]*width: 25px[^}]*height: 25px[^}]*background: transparent/);
   expect(css).toContain(":focus-visible");
   expect(css).toContain("var(--focus)");
+  expect(css).toMatch(/\.web-address-bar input:hover\s*\{[^}]*border-color: var\(--subtle\)[^}]*box-shadow: none/);
+  expect(css).toMatch(/\.web-address-bar input:focus\s*\{[^}]*box-shadow: none/);
+  expect(css).toMatch(/\.web-address-bar input:focus-visible\s*\{[^}]*outline: 1px solid var\(--focus\)/);
+  expect(css).toMatch(/\.web-address-loading\s*\{[^}]*width: 16px[^}]*flex: none/);
+  expect(css).toContain("prefers-reduced-motion: reduce");
+  expect(css).toContain("animation: none");
 });

@@ -13,9 +13,11 @@
 
 ## Important Files
 
-- `src/web/WebBlock.tsx`、`WebBrowserPane.tsx`、`useWebTargetSwitch.ts`、`useWebBrowser.ts`、`webModel.ts`、`webSurfaceOcclusion.ts`、`webSurfaceFrame.ts`、`src/lib/tauri/web.ts`：Windows Web Block 复用终端头部与连接选择器，按 profile 挂载浏览状态、切换时卸载旧网页，按代次管理原生网页生命周期、原生焦点回传、地址/可见性、提示框裁剪及主题选中边框采样规则及 IPC façade；认证和目标切换复用独立 Network runtime，地址与浏览数据不进入 Workspace 持久化。
-- `src-tauri/src/domain/web.rs`、`commands/web.rs`、`infrastructure/web/`：网页协议边界、薄 IPC、Windows WebView2 独立环境/私有代理/原生视图生命周期，以及主界面专属应用命令授权；`windows_surface.rs` 负责原生焦点事件与提示框局部裁剪；`frame_raster.rs` 和 `windows_frame.rs` 负责透明边框像素与可穿透输入的原生覆盖层，移动边框不再裁剪网页。`windows-app.manifest` 通过 build.rs 链接到应用和原生测试，声明现代 Windows 子窗口合成兼容性。客体网页不拥有应用权限。
+- `src/web/WebBlock.tsx`、`WebBrowserPane.tsx`、`WebAddressBar.tsx`、`useWebTargetSwitch.ts`、`useWebBrowser.ts`、`webModel.ts`、`webSurfaceOcclusion.ts`、`webSurfaceFrame.ts`、`src/lib/tauri/web.ts`：Windows Web Block 复用终端头部与连接选择器，按 profile 挂载浏览状态、切换时卸载旧网页，按代次管理原生网页生命周期、原生焦点回传、地址/可见性、提示框裁剪及主题选中边框采样规则及 IPC façade；认证和目标切换复用独立 Network runtime，地址与浏览数据不进入 Workspace 持久化。`WebAddressBar` 管理地址草稿、回车/输入法提交、最近五条历史的键盘选择与固定槽位的加载/停止控件；`WebAddressHistory.tsx` 管理与地址栏对齐的浮层，明确标记其原生局部遮挡区域；`workspaceFocus` 在延迟激活时保留浏览器内部已取得的焦点。
+- `src-tauri/src/domain/web.rs`、`commands/web.rs`、`infrastructure/web/`：网页协议边界、薄 IPC、Windows WebView2 独立环境/私有代理/原生视图生命周期，以及主界面专属应用命令授权；`windows_surface.rs` 负责原生焦点事件与提示框局部裁剪；`frame_raster.rs` 和 `windows_frame.rs` 负责透明边框像素与可穿透输入的原生覆盖层，移动边框不再裁剪网页。`windows-app.manifest` 通过 build.rs 链接到应用和原生测试，声明现代 Windows 子窗口合成兼容性。`windows_navigation.rs` 监听原生导航开始、SourceChanged 和完成并执行 Stop；`navigation_state.rs` 按导航 ID 管理加载状态与有效访问，覆盖单页路由、取消和过期完成事件。客体网页不拥有应用权限。
 - `src-tauri/src/infrastructure/ssh/client/web_proxy.rs`：Web 专属临时 SOCKS5 listener 与 profile/session 绑定；复用转发 adapter 和 Network session 的连接与清理语义，不创建持久化规则。
+- `src/web/WebLibraryDialog.tsx`、`useWebLibrary.ts`、`webLibraryStore.ts`、`src/lib/tauri/webLibrary.ts`：按连接隔离的访问历史和收藏 UI（共享 OverlayScrollArea 滚动条）、串行请求/多 Block 共享快照及薄 IPC；完成加载的客体事件记录访问，连接切换后忽略旧事件。
+- `src-tauri/src/domain/web_library.rs`、`application/web_library_service.rs`、`ports/web_library_repository.rs`、`infrastructure/persistence/json_web_library.rs`、`commands/web_library.rs`：历史去重/上限和收藏规则、串行事务、原子 JSON 存储及工作线程上的命令适配；文件由当前配置根注入为 `device/web-library.json`，不改变 Workspace schema 或客体网页权限。
 - `src-tauri/src/infrastructure/persistence/json_workspace_repository/records.rs`：Workspace JSON records 与领域布局的转换，包含仅保存身份/profile 的 Web variant；原 repository 继续负责迁移、校验与原子读写。
 
 - `src/components/dialogs/configurationMerge/`、`src/lib/tauri/configurationMerge.ts`：系统设置中的配置合并流程；独立步骤栏、来源目录卡片、确认列表和密码解锁子弹窗由 feature controller 编排，包含类别依赖、自动预览与即时刷新通知；不读取配置文件或持有私钥材料。
@@ -178,3 +180,6 @@
 - `src/workspace/WorkspaceUtilityRail.tsx`：共享桌面与 Demo 的工具项名称、图标、顺序及布局；桌面注入操作和状态，Demo 仅为文件、网络、Git 和终端传入 controls，其余禁用并提示尚未开放。该组件不拥有工具业务逻辑。
 
 - `src-tauri/src/infrastructure/ssh/client/tests/connect_fixture.rs`：SSH 测试共用的终端/辅助会话请求 fixture，默认不启用任一 Shell 注入协议。
+
+- `src/web/webSurfacePanels.ts` 与 `src-tauri/src/infrastructure/web/surface_raster.rs`：历史下拉的 reveal/radius/theme 采样与原生透明抗锯齿边缘合成；复用 windows_frame 的鼠标穿透窗口，避免二值裁剪圆角锯齿，不拥有导航或 guest 权限。
+- `navigation_state.rs` / `windows_navigation.rs` 同步成功页面的原生 title；`domain/web_library.rs` 负责有界标题文本与不改变访问顺序的元数据更新，旧历史/收藏在再次访问时补正标题。

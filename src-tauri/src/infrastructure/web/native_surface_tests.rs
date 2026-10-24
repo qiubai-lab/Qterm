@@ -18,7 +18,7 @@ use windows::Win32::{
 };
 
 #[allow(deprecated)]
-fn pump(app: &mut tauri::App, until: impl Fn() -> bool) {
+pub(super) fn pump(app: &mut tauri::App, until: impl Fn() -> bool) {
     let deadline = Instant::now() + Duration::from_secs(10);
     loop {
         app.run_iteration(|_, _| {});
@@ -65,6 +65,7 @@ pub(super) fn verify(app: &mut tauri::App, a: &tauri::Webview, b: &tauri::Webvie
             stroke: 1.0,
             color: [255, 255, 0, 255],
         }),
+        panels: vec![],
         occlusions: vec![WebClipRect {
             x: 20.0,
             y: 10.0,
@@ -74,6 +75,38 @@ pub(super) fn verify(app: &mut tauri::App, a: &tauri::Webview, b: &tauri::Webvie
     };
     main.eval(r##"document.body.style='background:#090a0c;color:#75e6cf;font:14px Segoe UI';document.body.innerHTML='<p style="padding:12px">Native transparent frame: bright content stays intact during movement. Click inputs to test focus.</p><div style="position:absolute;left:40px;top:90px;width:180px;height:32px;background:#153b35;color:#75e6cf;border:1px solid #75e6cf;box-sizing:border-box">Refresh webpage tooltip</div><div id="qa-frame" style="position:absolute;left:45px;top:140px;width:390px;height:350px;border:1px solid #ffff00;border-radius:8px;box-sizing:border-box;pointer-events:none"></div>'"##).unwrap();
     sync_and_check(app, a, bounds.clone(), true);
+    let mut rounded = bounds.clone();
+    rounded.frame = None;
+    rounded.panels.push(super::surface_raster::WebPanel {
+        edge: WebFrame {
+            x: 20.0,
+            y: 10.0,
+            width: 180.0,
+            height: 32.0,
+            radius: 6.0,
+            stroke: 1.0,
+            color: [48, 52, 58, 255],
+        },
+        background: [25, 27, 31, 255],
+    });
+    rounded.occlusions = vec![
+        WebClipRect {
+            x: 26.0,
+            y: 10.0,
+            width: 168.0,
+            height: 32.0,
+        },
+        WebClipRect {
+            x: 20.0,
+            y: 16.0,
+            width: 180.0,
+            height: 20.0,
+        },
+    ];
+    sync_and_check(app, a, rounded, true);
+    eprintln!(
+        "PASS: rounded panel rim uses the transparent non-activating native layer without a selection frame"
+    );
     let mut restored = bounds.clone();
     restored.occlusions.clear();
     restored.frame = None;
@@ -93,7 +126,7 @@ fn sync_and_check(app: &mut tauri::App, view: &tauri::Webview, bounds: WebBounds
     tauri::async_runtime::spawn(async move {
         windows_surface::sync(&view, &bounds).await.unwrap();
         let scale = view.window().scale_factor().unwrap();
-        let frame_visible = bounds.frame.is_some();
+        let frame_visible = bounds.frame.is_some() || !bounds.panels.is_empty();
         view.with_webview(move |native| unsafe {
             let mut container = HWND::default();
             native.controller().ParentWindow(&mut container).unwrap();
@@ -151,6 +184,7 @@ pub(super) fn animate(app: &mut tauri::App, a: &tauri::Webview, b: &tauri::Webvi
                 width: 470.0,
                 height: 500.0,
                 visible: true,
+                panels: vec![],
                 occlusions: vec![],
                 frame: Some(WebFrame {
                     x: left - x,
@@ -225,6 +259,7 @@ fn bounds_reject_unbounded_or_non_finite_occlusion_input() {
         height: 100.0,
         visible: true,
         frame: None,
+        panels: vec![],
         occlusions: vec![],
     };
     assert!(bounds.valid());

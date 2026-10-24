@@ -1,12 +1,4 @@
-use tauri::{Emitter, Manager, WebviewBuilder, WebviewUrl, webview::NewWindowResponse};
-
-#[derive(Clone, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-struct PageState {
-    label: String,
-    url: String,
-    loading: bool,
-}
+use tauri::{Manager, WebviewBuilder, WebviewUrl, webview::NewWindowResponse};
 
 pub(super) fn create(
     app: &tauri::AppHandle,
@@ -23,7 +15,13 @@ pub(super) fn create(
         .get_webview("main")
         .and_then(|view| view.url().ok())
         .map(|url| url.origin());
-    let builder = WebviewBuilder::new(label, WebviewUrl::External(url))
+    if app_origin
+        .as_ref()
+        .is_some_and(|origin| *origin == url.origin())
+    {
+        return Err("不能在网页 Block 中打开应用内部地址".into());
+    }
+    let builder = WebviewBuilder::new(label, WebviewUrl::External("about:blank".parse().unwrap()))
         .data_directory(directory.path().to_path_buf())
         .incognito(true)
         .additional_browser_args(&browser_arguments(port))
@@ -35,18 +33,7 @@ pub(super) fn create(
                     .is_none_or(|origin| *origin != url.origin())
         })
         .on_new_window(|_, _| NewWindowResponse::Deny)
-        .on_download(|_, _| false)
-        .on_page_load(|view, page| {
-            let _ = view.app_handle().emit_to(
-                "main",
-                "web-page-state",
-                PageState {
-                    label: view.label().to_owned(),
-                    url: page.url().to_string(),
-                    loading: matches!(page.event(), tauri::webview::PageLoadEvent::Started),
-                },
-            );
-        });
+        .on_download(|_, _| false);
     let view = window
         .add_child(
             builder,
@@ -59,6 +46,12 @@ pub(super) fn create(
         return Err("无法隐藏网页".into());
     }
     if let Err(error) = super::windows_surface::install_focus(&view) {
+        let _ = view.close();
+        return Err(error);
+    }
+    if let Err(error) = super::windows_navigation::install(&view)
+        .and_then(|_| view.navigate(url).map_err(|_| "无法打开网页".to_owned()))
+    {
         let _ = view.close();
         return Err(error);
     }

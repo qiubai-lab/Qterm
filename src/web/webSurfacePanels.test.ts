@@ -1,0 +1,20 @@
+import { afterEach, expect, it, vi } from "vitest";
+import { webHistoryPanel, webSurfacePanels } from "./webSurfacePanels";
+import { webSurfaceOcclusions } from "./webSurfaceOcclusion";
+afterEach(() => { document.body.innerHTML = ""; vi.restoreAllMocks(); });
+it("uses the same visible reveal boundary for native alpha chrome and the interior hole", () => {
+  const element = document.createElement("div");
+  element.dataset.webNativeOverlay = "address-history";
+  element.style.cssText = "background: rgb(25, 27, 31); border: 1px solid rgb(48, 52, 58); border-top-left-radius: 6px; clip-path: inset(0px 0px 50% 0px round 6px)";
+  document.body.append(element);
+  vi.spyOn(element, "getBoundingClientRect").mockReturnValue(new DOMRect(40, 40, 240, 200));
+  const surface = new DOMRect(10, 10, 400, 300);
+  const panel = webHistoryPanel(element, surface)!;
+  expect(panel.edge).toEqual({ x: 30, y: 30, width: 240, height: 100, radius: 6, stroke: 1, color: [48, 52, 58, 255] });
+  expect(panel.background).toEqual([25, 27, 31, 255]);
+  expect(webSurfacePanels(surface)).toEqual([panel]);
+  expect(Math.max(...webSurfaceOcclusions(surface).map(cut => cut.y + cut.height))).toBeCloseTo(panel.edge.y + panel.edge.height);
+  element.style.clipPath = "inset(0px 0px 100% 0px round 6px)";
+  expect(webSurfacePanels(surface)).toEqual([]);
+  expect(webSurfaceOcclusions(surface)).toEqual([]);
+});
