@@ -4,6 +4,7 @@ import { WebAddressBar } from "./WebAddressBar";
 import { useWebBrowser } from "./useWebBrowser";
 import { useWebLibrary } from "./useWebLibrary";
 import { WebLibraryDialog } from "./WebLibraryDialog";
+import { WebFeedback } from "./WebFeedback";
 
 interface Props {
   profileId: string | null;
@@ -37,7 +38,7 @@ export function WebBrowserPane({ profileId, profileName = "当前连接", sessio
     <div className="web-browser-surface" ref={surface}>
       {!browser.ready && <div className="web-empty-state"><Icon name="browser" size={24}/><strong>{!supported ? "目前仅支持 Windows 桌面版" : browser.loading ? "正在打开网页…" : "通过此连接访问网页"}</strong><span>输入地址后按 Enter 访问。localhost 指向远程服务器。</span></div>}
     </div>
-    <div className="web-feedback" role={feedback ? "alert" : "status"}>{feedback || (browser.loading ? "正在加载网页…" : sessionId ? "SSH 代理 · 独立浏览会话" : "连接后可访问远程网络")}</div>
+    <WebFeedback feedback={feedback} loading={browser.loading} ready={browser.ready} connected={Boolean(sessionId)} loadState={browser.loadState} metrics={browser.metrics}/>
     {libraryOpen && <WebLibraryDialog profileName={profileName} data={library.data} busy={library.busy} error={library.error} onUpdate={library.update} onOpen={navigate} onClose={() => setLibraryOpen(false)}/>}
   </>;
 }

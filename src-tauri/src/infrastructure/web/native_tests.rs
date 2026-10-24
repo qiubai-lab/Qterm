@@ -213,6 +213,18 @@ fn native_webview_smoke() {
     assert!(second.saw("internal.invalid:8765"));
     assert!(!first.saw("ipc-allowed") && !second.saw("ipc-allowed"));
     navigation.verify(&mut app, &a, || first.saw("GET /stop-preserved"));
+    super::native_metrics_tests::verify(&mut app, &a);
+    a.eval("if(getComputedStyle(document.documentElement,'::-webkit-scrollbar').width==='3px') fetch('/scrollbar-initial')").unwrap();
+    super::native_surface_tests::pump(&mut app, || first.saw("GET /scrollbar-initial"));
+    a.eval(super::scrollbars::script(Some(&[
+        [16, 32, 48, 255],
+        [48, 64, 80, 255],
+        [80, 96, 112, 255],
+    ])))
+    .unwrap();
+    a.eval("if(getComputedStyle(document.documentElement,'::-webkit-scrollbar-thumb').backgroundColor==='rgb(16, 32, 48)' && getComputedStyle(document.documentElement,'::-webkit-scrollbar-button').display==='none') fetch('/scrollbar-updated')").unwrap();
+    super::native_surface_tests::pump(&mut app, || first.saw("GET /scrollbar-updated"));
+    eprintln!("PASS: native scrollbar width, hidden arrows and live palette update");
     a.navigate("file:///C:/Windows/win.ini".parse().unwrap())
         .unwrap();
     for _ in 0..30 {

@@ -20,8 +20,12 @@ pub fn trusted_handler(
 }
 
 mod frame_raster;
+mod metrics;
+pub use metrics::WebMetrics;
 #[cfg(any(target_os = "windows", test))]
 mod navigation_state;
+#[cfg(any(target_os = "windows", test))]
+mod scrollbars;
 mod surface_raster;
 #[cfg(target_os = "windows")]
 mod windows;
@@ -32,6 +36,8 @@ mod windows_navigation;
 #[cfg(target_os = "windows")]
 mod windows_surface;
 
+#[cfg(all(test, target_os = "windows"))]
+mod native_metrics_tests;
 #[cfg(all(test, target_os = "windows"))]
 mod native_navigation_tests;
 #[cfg(all(test, target_os = "windows"))]
@@ -73,6 +79,8 @@ pub struct WebBounds {
     pub frame: Option<frame_raster::WebFrame>,
     #[serde(default)]
     pub panels: Vec<surface_raster::WebPanel>,
+    #[serde(default)]
+    pub scrollbar: Option<[[u8; 4]; 3]>,
 }
 
 #[derive(Clone, serde::Deserialize)]

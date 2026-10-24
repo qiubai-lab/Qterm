@@ -66,6 +66,7 @@ pub(super) fn verify(app: &mut tauri::App, a: &tauri::Webview, b: &tauri::Webvie
             color: [255, 255, 0, 255],
         }),
         panels: vec![],
+        scrollbar: None,
         occlusions: vec![WebClipRect {
             x: 20.0,
             y: 10.0,
@@ -185,6 +186,7 @@ pub(super) fn animate(app: &mut tauri::App, a: &tauri::Webview, b: &tauri::Webvi
                 height: 500.0,
                 visible: true,
                 panels: vec![],
+                scrollbar: None,
                 occlusions: vec![],
                 frame: Some(WebFrame {
                     x: left - x,
@@ -260,6 +262,7 @@ fn bounds_reject_unbounded_or_non_finite_occlusion_input() {
         visible: true,
         frame: None,
         panels: vec![],
+        scrollbar: None,
         occlusions: vec![],
     };
     assert!(bounds.valid());

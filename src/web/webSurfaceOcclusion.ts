@@ -1,4 +1,4 @@
-import { webHistoryPanel } from "./webSurfacePanels";
+import { webHistoryPanel, webNativePanelSelector } from "./webSurfacePanels";
 import type { WebClipRect } from "../lib/tauri/web";
 
 /** Native child windows sit above CSS. Cut out only overlapping app chrome. */
@@ -9,12 +9,12 @@ export function webSurfaceOcclusions(surface: DOMRect): WebClipRect[] {
     const width = Math.min(right, surface.right) - x, height = Math.min(bottom, surface.bottom) - y;
     if (width > 0 && height > 0) result.push({ x: x - surface.left, y: y - surface.top, width, height });
   }
-  for (const element of document.querySelectorAll<HTMLElement>('[role="tooltip"], [data-web-native-overlay="address-history"]')) {
+  for (const element of document.querySelectorAll<HTMLElement>(`[role="tooltip"], ${webNativePanelSelector}`)) {
     const style = getComputedStyle(element);
     if (style.display === "none" || style.visibility === "hidden" || style.opacity === "0" || element.closest('[inert]')) continue;
     const rect = element.getBoundingClientRect();
     if (rect.width <= 0 || rect.height <= 0) continue;
-    if (element.dataset.webNativeOverlay !== "address-history") {
+    if (!element.matches(webNativePanelSelector)) {
       add(rect.left, rect.top, rect.right, rect.bottom);
       continue;
     }

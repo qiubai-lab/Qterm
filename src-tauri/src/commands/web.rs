@@ -1,6 +1,6 @@
 use crate::{
     commands::session::SessionState,
-    infrastructure::web::{WebBounds, WebHost},
+    infrastructure::web::{WebBounds, WebHost, WebMetrics},
 };
 use tauri::{AppHandle, Manager, State};
 
@@ -54,6 +54,16 @@ pub async fn web_close(
     id: String,
 ) -> Result<(), String> {
     state.close(&app, sessions.manager(), &id).await
+}
+
+#[tauri::command]
+pub async fn web_metrics(
+    app: AppHandle,
+    state: State<'_, WebHost>,
+    sessions: State<'_, SessionState>,
+    id: String,
+) -> Result<Option<WebMetrics>, String> {
+    state.metrics(&app, sessions.manager(), &id).await
 }
 
 #[tauri::command]

@@ -1,6 +1,8 @@
 import type { WebPanel } from "../lib/tauri/web";
 import { webFrameColor } from "./webSurfaceFrame";
 
+export const webNativePanelSelector = '[data-web-native-overlay="address-history"]';
+
 /** Shared reveal geometry for native holes and the antialiased rim above the guest. */
 export function webHistoryPanel(element: HTMLElement, surface: DOMRect, style = getComputedStyle(element)): WebPanel | null {
   if (style.display === "none" || style.visibility === "hidden" || style.opacity === "0" || element.closest("[inert]")) return null;
@@ -18,6 +20,6 @@ export function webHistoryPanel(element: HTMLElement, surface: DOMRect, style = 
 }
 
 export function webSurfacePanels(surface: DOMRect): WebPanel[] {
-  return [...document.querySelectorAll<HTMLElement>('[data-web-native-overlay="address-history"]')]
+  return [...document.querySelectorAll<HTMLElement>(webNativePanelSelector)]
     .map(element => webHistoryPanel(element, surface)).filter((panel): panel is WebPanel => panel !== null).slice(0, 8);
 }

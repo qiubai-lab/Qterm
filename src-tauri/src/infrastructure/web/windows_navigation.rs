@@ -2,6 +2,7 @@
 use super::navigation_state::{NavigationState, PageState};
 use std::{cell::RefCell, rc::Rc};
 use tauri::{Emitter, Manager};
+use webview2_com::Microsoft::Web::WebView2::Win32::COREWEBVIEW2_WEB_ERROR_STATUS_OPERATION_CANCELED;
 use webview2_com::{
     DocumentTitleChangedEventHandler, NavigationCompletedEventHandler,
     NavigationStartingEventHandler, SourceChangedEventHandler, take_pwstr,
@@ -88,9 +89,16 @@ pub(super) fn install(view: &tauri::Webview) -> Result<(), String> {
                         sender.Source(&mut uri)?;
                         let url = take_pwstr(uri);
                         let mut state = state.borrow_mut();
-                        if let Some(mut snapshot) =
-                            state.complete(id, url.clone(), success.as_bool())
+                        let mut error = Default::default();
+                        args.WebErrorStatus(&mut error)?;
+                        let snapshot = if !success.as_bool()
+                            && error == COREWEBVIEW2_WEB_ERROR_STATUS_OPERATION_CANCELED
                         {
+                            state.cancel(id, url.clone())
+                        } else {
+                            state.complete(id, url.clone(), success.as_bool())
+                        };
+                        if let Some(mut snapshot) = snapshot {
                             let mut title = PWSTR::null();
                             if success.as_bool()
                                 && sender.DocumentTitle(&mut title).is_ok()

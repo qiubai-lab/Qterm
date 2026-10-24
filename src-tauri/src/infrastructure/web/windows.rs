@@ -24,6 +24,8 @@ pub(super) fn create(
     let builder = WebviewBuilder::new(label, WebviewUrl::External("about:blank".parse().unwrap()))
         .data_directory(directory.path().to_path_buf())
         .incognito(true)
+        .initialization_script(super::scrollbars::script(None))
+        .initialization_script(include_str!("metrics_script.mjs"))
         .additional_browser_args(&browser_arguments(port))
         .disable_drag_drop_handler()
         .on_navigation(move |url| {

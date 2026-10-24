@@ -5,8 +5,36 @@ import { useWebBrowser } from "./useWebBrowser";
 import type { WebPageState } from "../lib/tauri/web";
 
 const ipc = vi.hoisted(() => ({ open: vi.fn(), close: vi.fn(async () => {}), sync: vi.fn(async () => {}), action: vi.fn(async () => {}), listen: vi.fn(async () => () => {}), focus: vi.fn<(receive: (label: string) => void) => Promise<() => void>>(async () => () => {}) }));
-vi.mock("../lib/tauri/web", () => ({ openWeb: ipc.open, closeWeb: ipc.close, syncWeb: ipc.sync, webAction: ipc.action, listenWebPages: ipc.listen, listenWebFocus: ipc.focus }));
+vi.mock("../lib/tauri/web", () => ({ openWeb: ipc.open, closeWeb: ipc.close, syncWeb: ipc.sync, webAction: ipc.action, listenWebPages: ipc.listen, listenWebFocus: ipc.focus, readWebMetrics: vi.fn(async () => null) }));
 beforeEach(() => { vi.clearAllMocks(); ipc.open.mockResolvedValue(undefined); });
+
+it("resynchronizes the palette after document navigation and theme changes with unchanged viewport bounds", async () => {
+  let nextFrame!: FrameRequestCallback;
+  const frame = vi.spyOn(window, "requestAnimationFrame").mockImplementation(callback => { nextFrame = callback; return 1; });
+  let receive!: (page: WebPageState) => void;
+  ipc.listen.mockImplementationOnce(((listener: (page: WebPageState) => void) => { receive = listener; return Promise.resolve(() => {}); }) as typeof ipc.listen);
+  const element = document.createElement("div");
+  document.body.append(element);
+  vi.spyOn(element, "getBoundingClientRect").mockReturnValue(new DOMRect(10, 10, 400, 300));
+  const surface = { current: element };
+  const hook = renderHook(() => useWebBrowser(surface, "ssh", "profile", true));
+  try {
+    await act(() => hook.result.current.navigate("https://internal.invalid"));
+    await waitFor(() => expect(ipc.sync).toHaveBeenCalled());
+    const firstCount = ipc.sync.mock.calls.length;
+    await act(async () => nextFrame(0));
+    expect(ipc.sync).toHaveBeenCalledTimes(firstCount);
+    act(() => receive({ label: `web-${ipc.open.mock.calls[0][0]}`, url: "https://internal.invalid/", loading: false, visited: true }));
+    await act(async () => nextFrame(1));
+    expect(ipc.sync).toHaveBeenCalledTimes(firstCount + 1);
+    document.documentElement.style.setProperty("--terminal-scrollbar", "#102030ff");
+    await act(async () => nextFrame(2));
+    expect(ipc.sync).toHaveBeenLastCalledWith(expect.any(String), expect.objectContaining({ width: 400, height: 300, scrollbar: expect.arrayContaining([[11, 22, 34, 255]]) }));
+  } finally {
+    hook.unmount(); element.remove(); frame.mockRestore();
+    document.documentElement.style.removeProperty("--terminal-scrollbar");
+  }
+});
 
 it("records only completed live guest visits, including redirected URLs, and ignores late events", async () => {
   let receive!: (page: WebPageState) => void;

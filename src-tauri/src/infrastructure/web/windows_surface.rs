@@ -43,6 +43,7 @@ pub(super) async fn sync(view: &tauri::Webview, bounds: &WebBounds) -> Result<()
         .map_err(|_| "无法读取网页缩放")?;
     let root = view.window().hwnd().map_err(|_| "无法读取主窗口")?.0 as usize;
     let bounds = bounds.clone();
+    let scrollbar = bounds.scrollbar;
     let (send, receive) = tokio::sync::oneshot::channel();
     view.with_webview(move |native| {
         let result = (|| unsafe {
@@ -61,7 +62,9 @@ pub(super) async fn sync(view: &tauri::Webview, bounds: &WebBounds) -> Result<()
         let _ = send.send(result.map_err(str::to_owned));
     })
     .map_err(|_| "无法调整网页层级")?;
-    receive.await.map_err(|_| "网页已关闭".to_owned())?
+    receive.await.map_err(|_| "网页已关闭".to_owned())??;
+    view.eval(super::scrollbars::script(scrollbar.as_ref()))
+        .map_err(|_| "无法同步网页滚动条".to_owned())
 }
 
 unsafe fn apply_region(

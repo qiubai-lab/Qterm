@@ -4,8 +4,12 @@ import { listen } from "@tauri-apps/api/event";
 export interface WebClipRect { x: number; y: number; width: number; height: number }
 export interface WebFrame extends WebClipRect { radius: number; stroke: number; color: [number, number, number, number] }
 export interface WebPanel { edge: WebFrame; background: [number, number, number, number] }
-export interface WebBounds extends WebClipRect { visible: boolean; occlusions?: WebClipRect[]; frame?: WebFrame | null; panels?: WebPanel[] }
-export interface WebPageState { label: string; url: string; loading: boolean; visited: boolean; title?: string; metadata?: boolean }
+export type WebScrollbarTheme = [WebFrame["color"], WebFrame["color"], WebFrame["color"]];
+export interface WebBounds extends WebClipRect { visible: boolean; occlusions?: WebClipRect[]; frame?: WebFrame | null; panels?: WebPanel[]; scrollbar?: WebScrollbarTheme }
+export type WebLoadState = "idle" | "loading" | "loaded" | "failed" | "stopped";
+export interface WebMetrics { url: string; documentId: number; resources: number; loadMs: number }
+export interface WebPageState { label: string; url: string; loading: boolean; visited: boolean; title?: string; metadata?: boolean; loadState?: WebLoadState }
+export const readWebMetrics = (id: string) => invoke<WebMetrics | null>("web_metrics", { id });
 export const openWeb = (id: string, sessionId: string, profileId: string, url: string) => invoke<void>("web_open", { input: { id, sessionId, profileId, url } });
 export const closeWeb = (id: string) => invoke<void>("web_close", { id });
 export const syncWeb = (id: string, bounds: WebBounds) => invoke<void>("web_sync", { id, bounds });

@@ -10,6 +10,7 @@ it("bookmarks the current address and reopens history through authentication whe
   const connect = vi.fn();
   const props = { profileId: "a", profileName: "Jump target", sessionId: "ssh" as string | null, connecting: false, visible: true, supported: true, notice: "", onConnect: connect, onActivate: vi.fn() };
   const view = render(<WebBrowserPane {...props}/>);
+  expect(view.container.querySelector(".web-browser-surface")?.nextElementSibling).toHaveClass("web-feedback");
   fireEvent.change(screen.getByRole("combobox", { name: "网页地址" }), { target: { value: "http://draft.internal/" } });
   fireEvent.click(screen.getByRole("button", { name: "收藏当前网页" }));
   expect(mocks.update).toHaveBeenCalledWith({ kind: "bookmark", url: "http://localhost:3000/", title: "本地控制台" });

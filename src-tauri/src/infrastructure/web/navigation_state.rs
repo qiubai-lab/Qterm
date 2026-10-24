@@ -8,6 +8,7 @@ pub(super) struct PageState {
     pub visited: bool,
     pub title: String,
     pub metadata: bool,
+    pub load_state: &'static str,
 }
 
 pub(super) struct NavigationState {
@@ -16,6 +17,7 @@ pub(super) struct NavigationState {
     source: String,
     title: String,
     loaded: bool,
+    load_state: &'static str,
 }
 
 impl NavigationState {
@@ -26,6 +28,7 @@ impl NavigationState {
             source: String::new(),
             title: String::new(),
             loaded: false,
+            load_state: "idle",
         }
     }
     fn snapshot(&self, url: String, visited: bool) -> PageState {
@@ -36,12 +39,14 @@ impl NavigationState {
             visited,
             title: self.title.clone(),
             metadata: false,
+            load_state: self.load_state,
         }
     }
     pub fn start(&mut self, id: u64, url: String) -> PageState {
         self.active = Some(id);
         self.title.clear();
         self.loaded = false;
+        self.load_state = "loading";
         self.snapshot(url, false)
     }
     pub fn source(&mut self, url: String, new_document: bool) -> PageState {
@@ -68,14 +73,47 @@ impl NavigationState {
         }
         self.active = None;
         self.loaded = success;
+        self.load_state = if success { "loaded" } else { "failed" };
         self.source = url.clone();
         Some(self.snapshot(url, success))
+    }
+    pub fn cancel(&mut self, id: u64, url: String) -> Option<PageState> {
+        let mut snapshot = self.complete(id, url, false)?;
+        self.load_state = "stopped";
+        snapshot.load_state = self.load_state;
+        Some(snapshot)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn load_state_distinguishes_failure_cancellation_and_success() {
+        let mut state = NavigationState::new("web-test".into());
+        assert_eq!(state.start(1, "https://host/".into()).load_state, "loading");
+        assert_eq!(
+            state
+                .complete(1, "https://host/".into(), false)
+                .unwrap()
+                .load_state,
+            "failed"
+        );
+        state.start(2, "https://host/".into());
+        assert_eq!(
+            state.cancel(2, "https://host/".into()).unwrap().load_state,
+            "stopped"
+        );
+        state.start(3, "https://host/".into());
+        assert!(state.cancel(2, "https://host/".into()).is_none());
+        assert_eq!(
+            state
+                .complete(3, "https://host/".into(), true)
+                .unwrap()
+                .load_state,
+            "loaded"
+        );
+    }
     #[test]
     fn titles_follow_only_the_successful_current_document() {
         let mut state = NavigationState::new("web-test".into());

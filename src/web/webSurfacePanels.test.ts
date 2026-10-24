@@ -2,6 +2,23 @@ import { afterEach, expect, it, vi } from "vitest";
 import { webHistoryPanel, webSurfacePanels } from "./webSurfacePanels";
 import { webSurfaceOcclusions } from "./webSurfaceOcclusion";
 afterEach(() => { document.body.innerHTML = ""; vi.restoreAllMocks(); });
+it("never cuts out guest content for the persistent feedback footer", () => {
+  const element = document.createElement("div");
+  element.dataset.webNativeOverlay = "feedback";
+  element.style.cssText = "background: rgb(25,27,31); border: 1px solid rgb(48,52,58); border-radius: 4px";
+  document.body.append(element);
+  const bounds = vi.spyOn(element, "getBoundingClientRect");
+  const surface = new DOMRect(10, 10, 400, 300);
+  bounds.mockReturnValue(new DOMRect(10, 288, 180, 22));
+  expect(webSurfacePanels(surface)).toEqual([]);
+  bounds.mockReturnValue(new DOMRect(10, 300, 180, 22));
+  const cuts = webSurfaceOcclusions(surface);
+  expect(cuts).toEqual([]);
+  expect(webSurfaceOcclusions(new DOMRect(500, 10, 400, 300))).toEqual([]);
+  bounds.mockReturnValue(new DOMRect(10, 310, 180, 22));
+  expect(webSurfaceOcclusions(surface)).toEqual([]);
+  expect(webSurfacePanels(surface)).toEqual([]);
+});
 it("uses the same visible reveal boundary for native alpha chrome and the interior hole", () => {
   const element = document.createElement("div");
   element.dataset.webNativeOverlay = "address-history";
