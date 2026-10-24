@@ -151,8 +151,8 @@ export function WorkspaceShell() {
 
   function closeBlock(blockId: string) {
     const blockType = activeWorkspace.layout && blockId ? findBlockType(activeWorkspace, blockId) : null;
-    const title = blockType === "files" ? "关闭文件窗口？" : blockType === "network" ? "关闭网络窗口？" : "关闭终端？";
-    const detail = blockType === "files" ? "活动文件连接会同时断开。" : blockType === "network" ? "活动网络转发和 SSH 连接会同时停止。" : "活动终端会话会同时断开，终端缓冲不会保留。";
+    const title = blockType === "files" ? "关闭文件窗口？" : blockType === "network" ? "关闭网络窗口？" : blockType === "web" ? "关闭网页？" : "关闭终端？";
+    const detail = blockType === "files" ? "活动文件连接会同时断开。" : blockType === "network" ? "活动网络转发和 SSH 连接会同时停止。" : blockType === "web" ? "网页浏览会话与独立 SSH 连接会同时关闭。" : "活动终端会话会同时断开，终端缓冲不会保留。";
     requestClose({ title, detail, ids: [blockId], execute: () => dispatch({ type: "closeBlock", workspaceId: activeWorkspace.id, blockId }) });
   }
 

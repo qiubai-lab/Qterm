@@ -72,7 +72,10 @@ pub(super) async fn run_git_session(
                         }
                     }
                 }
-                Some(SessionControl::StartNetworkRule { reply, .. } | SessionControl::StopNetworkRule { reply, .. }) => {
+                Some(SessionControl::StartNetworkRule { reply, .. }) => {
+                    let _ = reply.send(Err(SessionControlError::NetworkUnavailable));
+                }
+                Some(SessionControl::StopNetworkRule { reply, .. }) => {
                     let _ = reply.send(Err(SessionControlError::NetworkUnavailable));
                 }
                 Some(SessionControl::ListDirectory { path, reply }) => {

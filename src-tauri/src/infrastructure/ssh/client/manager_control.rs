@@ -86,6 +86,18 @@ impl SshSessionManager {
         rule_profile_id: &str,
         kind: ForwardRuleKind,
     ) -> Result<(), SessionControlError> {
+        self.start_forward_listener(id, rule_id, rule_profile_id, kind)
+            .await
+            .map(|_| ())
+    }
+
+    pub(super) async fn start_forward_listener(
+        &self,
+        id: &str,
+        rule_id: String,
+        rule_profile_id: &str,
+        kind: ForwardRuleKind,
+    ) -> Result<u16, SessionControlError> {
         let entry = self.entry(id)?;
         if entry.purpose != SessionPurpose::Network {
             return Err(SessionControlError::NetworkUnavailable);

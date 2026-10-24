@@ -20,6 +20,12 @@ export interface NetworkNode {
   profileId: string | null;
 }
 
+export interface WebNode {
+  type: "web";
+  blockId: string;
+  profileId: string | null;
+}
+
 export interface GitNode {
   type: "git";
   blockId: string;
@@ -44,7 +50,7 @@ export interface SplitNode {
   second: LayoutNode;
 }
 
-export type LayoutLeaf = TerminalNode | FilesNode | NetworkNode | GitNode;
+export type LayoutLeaf = TerminalNode | FilesNode | NetworkNode | GitNode | WebNode;
 export type LayoutNode = LayoutLeaf | SplitNode;
 
 export interface Workspace {

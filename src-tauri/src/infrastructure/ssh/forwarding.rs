@@ -36,6 +36,7 @@ pub struct DirectConnection {
 }
 
 pub struct RunningListener {
+    pub port: u16,
     cancel: Option<oneshot::Sender<()>>,
 }
 
@@ -84,18 +85,23 @@ pub async fn start_listener(
         }
     };
     let listener = TcpListener::bind((bind_host.as_str(), bind_port)).await?;
+    let port = listener.local_addr()?.port();
     let rule_id = rule_id.to_owned();
     let (cancel_sender, mut cancel_receiver) = oneshot::channel();
     tauri::async_runtime::spawn(async move {
+        let mut handshakes = tokio::task::JoinSet::new();
         loop {
             tokio::select! {
                 _ = &mut cancel_receiver => break,
+                _ = handshakes.join_next(), if !handshakes.is_empty() => {},
                 accepted = listener.accept() => {
                     let Ok((stream, originator)) = accepted else { break };
+                    if handshakes.len() >= MAX_ACTIVE_FORWARD_CONNECTIONS { continue; }
                     let sender = connections.clone();
                     let target = fixed_target.clone();
                     let rule_id = rule_id.clone();
-                    tauri::async_runtime::spawn(async move {
+                    handshakes.spawn(async move {
+                      let _ = timeout(FORWARD_CONNECT_TIMEOUT, async move {
                         let connection = if socks5 {
                             prepare_socks5_connection(rule_id, stream, originator.ip().to_string(), originator.port()).await
                         } else {
@@ -112,12 +118,14 @@ pub async fn start_listener(
                         if let Some(connection) = connection {
                             let _ = sender.send(connection).await;
                         }
+                      }).await;
                     });
                 }
             }
         }
     });
     Ok(RunningListener {
+        port,
         cancel: Some(cancel_sender),
     })
 }

@@ -27,7 +27,7 @@ export function useWorkspaceRuntimeController(state: WorkspaceRuntimeState, docu
     if (connectionTargetIntents.current.has(intentKey)) return connectionTargetIntents.current.get(intentKey) === profileId;
     for (const workspace of documentRef.current.workspaces) {
       const leaf = findLeaf(workspace.layout, blockId);
-      if (!leaf || leaf.type !== owner) continue;
+      if (!leaf || (leaf.type !== owner && !(owner === "network" && leaf.type === "web"))) continue;
       if (leaf.type === "git") return leaf.target.type === "remote" && leaf.target.profileId === profileId;
       return leaf.profileId === profileId;
     }

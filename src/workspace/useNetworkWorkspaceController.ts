@@ -41,11 +41,11 @@ export function useNetworkWorkspaceController(state: WorkspaceRuntimeState, disp
 
   const closeCurrentNetworkSession = useCallback(async (blockId: string) => {
     const runtime = networkRuntimesRef.current[blockId];
-    nextEpoch(blockId);
+    const epoch = nextEpoch(blockId);
     connectionFailureHandlers.current.delete(`network:${blockId}`);
     if (runtime?.sessionId) await closeSession(runtime.sessionId).catch(() => undefined);
-    updateNetworkRuntime(blockId, () => defaultNetworkRuntime);
-  }, [connectionFailureHandlers, networkRuntimesRef, nextEpoch, updateNetworkRuntime]);
+    if (isCurrentEpoch(blockId, epoch)) updateNetworkRuntime(blockId, () => defaultNetworkRuntime);
+  }, [connectionFailureHandlers, isCurrentEpoch, networkRuntimesRef, nextEpoch, updateNetworkRuntime]);
   const disconnectNetworkBlock = useCallback(async (blockId: string) => closeCurrentNetworkSession(blockId), [closeCurrentNetworkSession]);
   const selectNetworkTarget = useCallback(async (workspaceId: string, blockId: string, profileId: string | null) => {
     connectionTargetIntents.current.set(connectionIntentKey("network", blockId), profileId);

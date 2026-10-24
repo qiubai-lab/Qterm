@@ -211,6 +211,7 @@ pub fn run() {
     );
 
     builder
+        .manage(infrastructure::web::WebHost::default())
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) = event {
                 window.state::<TransferState>().approve_drop_paths(paths);
@@ -270,7 +271,8 @@ pub fn run() {
             app.manage(GitState::new(SystemGitExecutor::discover()));
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![
+        .invoke_handler(infrastructure::web::trusted_handler(tauri::generate_handler![
+                commands::web::web_open, commands::web::web_close, commands::web::web_sync, commands::web::web_action,
             configuration_merge_select, configuration_merge_preview, configuration_merge_commit, configuration_merge_cancel, configuration_merge_unlock_source,
             browser_proxy_list,
             browser_proxy_launch,
@@ -402,7 +404,7 @@ pub fn run() {
             git_merge_branch,
             git_continue_merge,
             git_abort_merge
-        ])
+        ]))
         .run(tauri::generate_context!())
         .expect("failed to run Qterm");
 }

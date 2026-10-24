@@ -28,7 +28,8 @@ pub(super) async fn run_network_session(
             control = controls.recv() => match control {
                 Some(SessionControl::StartNetworkRule { rule_id, kind, reply }) => {
                     if rules.contains_key(&rule_id) {
-                        let _ = reply.send(Ok(()));
+                        let port = match &rules[&rule_id] { RunningNetworkRule::Listener(listener) => listener.port, RunningNetworkRule::Remote { bind_port, .. } => *bind_port };
+                        let _ = reply.send(Ok(port));
                         continue;
                     }
                     let result = match &kind {
@@ -51,7 +52,7 @@ pub(super) async fn run_network_session(
                         }
                     };
                     match result {
-                        Ok(running) => { rules.insert(rule_id, running); let _ = reply.send(Ok(())); }
+                        Ok(running) => { let port = match &running { RunningNetworkRule::Listener(listener) => listener.port, RunningNetworkRule::Remote { bind_port, .. } => *bind_port }; rules.insert(rule_id, running); let _ = reply.send(Ok(port)); }
                         Err(error) => { let _ = reply.send(Err(error)); }
                     }
                 }
@@ -136,14 +137,14 @@ pub(super) async fn run_network_session(
             }
         }
     }
-    for rule_id in runtime
+    let active_rules = runtime
         .forward_tasks
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
         .keys()
         .cloned()
-        .collect::<Vec<_>>()
-    {
+        .collect::<Vec<_>>();
+    for rule_id in active_rules {
         abort_forward_tasks(&runtime.forward_tasks, &rule_id);
     }
     runtime

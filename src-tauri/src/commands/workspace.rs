@@ -71,6 +71,10 @@ enum LayoutDto {
         profile_id: Option<String>,
         path: String,
     },
+    Web {
+        block_id: String,
+        profile_id: Option<String>,
+    },
     Network {
         block_id: String,
         profile_id: Option<String>,
@@ -236,6 +240,13 @@ impl LayoutDto {
                 profile_id: profile_id.clone(),
                 path: path.clone(),
             },
+            LayoutNode::Web {
+                block_id,
+                profile_id,
+            } => Self::Web {
+                block_id: block_id.clone(),
+                profile_id: profile_id.clone(),
+            },
             LayoutNode::Network {
                 block_id,
                 profile_id,
@@ -282,6 +293,13 @@ impl LayoutDto {
                 block_id,
                 profile_id,
                 path,
+            },
+            Self::Web {
+                block_id,
+                profile_id,
+            } => LayoutNode::Web {
+                block_id,
+                profile_id,
             },
             Self::Network {
                 block_id,

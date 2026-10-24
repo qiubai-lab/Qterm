@@ -10,6 +10,7 @@ mod session;
 mod session_lifecycle_tests;
 mod shell_integration;
 mod transfer;
+mod web_proxy;
 
 use handler::ClientHandler;
 use network::{NetworkForwardRuntime, run_network_session};
@@ -468,7 +469,7 @@ enum SessionControl {
     StartNetworkRule {
         rule_id: String,
         kind: ForwardRuleKind,
-        reply: oneshot::Sender<Result<(), SessionControlError>>,
+        reply: oneshot::Sender<Result<u16, SessionControlError>>,
     },
     StopNetworkRule {
         rule_id: String,

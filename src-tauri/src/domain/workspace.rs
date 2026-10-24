@@ -42,6 +42,10 @@ pub enum LayoutNode {
         profile_id: Option<String>,
         path: String,
     },
+    Web {
+        block_id: String,
+        profile_id: Option<String>,
+    },
     Network {
         block_id: String,
         profile_id: Option<String>,
@@ -147,7 +151,10 @@ impl WorkspaceDocument {
 fn contains_terminal(node: &LayoutNode) -> bool {
     match node {
         LayoutNode::Terminal { .. } => true,
-        LayoutNode::Files { .. } | LayoutNode::Network { .. } | LayoutNode::Git { .. } => false,
+        LayoutNode::Web { .. }
+        | LayoutNode::Files { .. }
+        | LayoutNode::Network { .. }
+        | LayoutNode::Git { .. } => false,
         LayoutNode::Split { first, second, .. } => {
             contains_terminal(first) || contains_terminal(second)
         }
@@ -202,6 +209,10 @@ fn validate_layout<'a>(
             blocks.push(block_id);
         }
         LayoutNode::Network {
+            block_id,
+            profile_id,
+        }
+        | LayoutNode::Web {
             block_id,
             profile_id,
         } => {

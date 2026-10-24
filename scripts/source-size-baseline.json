@@ -3,7 +3,6 @@
   "limits": {
     "src-tauri/src/commands/git.rs": 2031,
     "src-tauri/src/domain/git.rs": 1284,
-    "src-tauri/src/infrastructure/persistence/json_workspace_repository.rs": 763,
     "src-tauri/src/infrastructure/ssh/auth.rs": 828,
     "src-tauri/src/infrastructure/ssh/client/git.rs": 1255,
     "src-tauri/src/infrastructure/ssh/client/tests.rs": 2141,
@@ -22,7 +21,7 @@
     "src/terminal/TerminalPanel.test.tsx": 889,
     "src/terminal/TerminalPanel.tsx": 578,
     "src/workspace/LayoutView.test.tsx": 808,
-    "src/workspace/LayoutView.tsx": 652,
+    "src/workspace/LayoutView.tsx": 638,
     "src/workspace/WorkspaceShell.tsx": 598
   }
 }

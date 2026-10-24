@@ -192,7 +192,10 @@ pub(super) async fn run_terminal_session(
                         _ => { let _ = reply.send(Err(SessionControlError::FileUnavailable)); }
                     }
                 }
-                Some(SessionControl::StartNetworkRule { reply, .. }) | Some(SessionControl::StopNetworkRule { reply, .. }) => {
+                Some(SessionControl::StartNetworkRule { reply, .. }) => {
+                    let _ = reply.send(Err(SessionControlError::NetworkUnavailable));
+                }
+                Some(SessionControl::StopNetworkRule { reply, .. }) => {
                     let _ = reply.send(Err(SessionControlError::NetworkUnavailable));
                 }
                 Some(SessionControl::RunGit { reply, .. }) => {

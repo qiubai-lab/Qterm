@@ -13,6 +13,11 @@
 
 ## Important Files
 
+- `src/web/WebBlock.tsx`、`WebBrowserPane.tsx`、`useWebTargetSwitch.ts`、`useWebBrowser.ts`、`webModel.ts`、`webSurfaceOcclusion.ts`、`webSurfaceFrame.ts`、`src/lib/tauri/web.ts`：Windows Web Block 复用终端头部与连接选择器，按 profile 挂载浏览状态、切换时卸载旧网页，按代次管理原生网页生命周期、原生焦点回传、地址/可见性、提示框裁剪及主题选中边框采样规则及 IPC façade；认证和目标切换复用独立 Network runtime，地址与浏览数据不进入 Workspace 持久化。
+- `src-tauri/src/domain/web.rs`、`commands/web.rs`、`infrastructure/web/`：网页协议边界、薄 IPC、Windows WebView2 独立环境/私有代理/原生视图生命周期，以及主界面专属应用命令授权；`windows_surface.rs` 负责原生焦点事件与提示框局部裁剪；`frame_raster.rs` 和 `windows_frame.rs` 负责透明边框像素与可穿透输入的原生覆盖层，移动边框不再裁剪网页。`windows-app.manifest` 通过 build.rs 链接到应用和原生测试，声明现代 Windows 子窗口合成兼容性。客体网页不拥有应用权限。
+- `src-tauri/src/infrastructure/ssh/client/web_proxy.rs`：Web 专属临时 SOCKS5 listener 与 profile/session 绑定；复用转发 adapter 和 Network session 的连接与清理语义，不创建持久化规则。
+- `src-tauri/src/infrastructure/persistence/json_workspace_repository/records.rs`：Workspace JSON records 与领域布局的转换，包含仅保存身份/profile 的 Web variant；原 repository 继续负责迁移、校验与原子读写。
+
 - `src/components/dialogs/configurationMerge/`、`src/lib/tauri/configurationMerge.ts`：系统设置中的配置合并流程；独立步骤栏、来源目录卡片、确认列表和密码解锁子弹窗由 feature controller 编排，包含类别依赖、自动预览与即时刷新通知；不读取配置文件或持有私钥材料。
 - `src-tauri/src/application/configuration_merge/`、`domain/configuration_merge.rs`、`ports/configuration_merge.rs`：连接/分组、网络规则、凭证的合并模型、去重命名、引用映射与用例边界；设备和 Workspace 数据不参与。
 - `src-tauri/src/infrastructure/persistence/configuration_merge/`、`configuration_gate.rs`：受限文件快照、加密暂存、备份日志、提交回滚与启动恢复；三个核心 repository 共用进程内可重入事务锁，存在待恢复日志时禁止正常读写。`json_credential_vault/crypto.rs` 拥有既有凭证库的加密封装辅助函数，schema 不变。

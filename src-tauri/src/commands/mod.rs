@@ -19,3 +19,5 @@ pub mod workspace;
 pub mod notification;
 
 pub mod configuration_merge;
+
+pub mod web;

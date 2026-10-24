@@ -31,7 +31,7 @@ impl NativeNotifications for DesktopNotifications {
         #[cfg(not(target_os = "macos"))]
         {
             self.app
-                .get_webview_window("main")
+                .get_window("main")
                 .is_none_or(|window| window.is_focused().unwrap_or(true))
         }
     }

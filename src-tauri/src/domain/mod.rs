@@ -15,3 +15,5 @@ pub mod transfer;
 pub mod workspace;
 
 pub mod configuration_merge;
+
+pub mod web;

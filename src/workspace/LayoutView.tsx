@@ -1,6 +1,9 @@
+import { boundsStyle, dropPosition } from "./layoutPresentation";
+import { WebBlock } from "../web/WebBlock";
+import { supportsWebBlocks } from "../web/webModel";
 import { TerminalHeaderActions } from "../terminal/TerminalHeaderActions";
 import { TerminalProtocolTag } from "../terminal/notifications/TerminalProtocolTag";
-import { useCallback, useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { Icon } from "../components/Icon";
 import { BlockHeaderClose } from "./BlockHeaderClose";
 import { ConnectionRouteProgress } from "../components/ConnectionRouteProgress";
@@ -16,7 +19,7 @@ import { TerminalPanel } from "../terminal/TerminalPanel";
 import { OSC7_REPORT_GRACE_MS, TERMINAL_ATTENTION_MS } from "../terminal/terminalAttention";
 import { openTerminalSearch } from "../terminal/terminalViewRegistry";
 import { terminalBlockIds, type DropPosition } from "./layout";
-import { calculateLayoutGeometry, layoutScalarCss, resolveLayoutBounds, type LayoutBounds, type LayoutDividerGeometry } from "./layoutGeometry";
+import { calculateLayoutGeometry, resolveLayoutBounds, type LayoutDividerGeometry } from "./layoutGeometry";
 import { isSameGitRepository, recentGitRepositoriesForScope } from "./gitRepositoryHistory";
 import { isAbsoluteLocalPath, isValidRemotePath } from "./gitWindow";
 import type { GitRepositoryHistoryEntry, GitTarget, LayoutLeaf, Workspace } from "./model";
@@ -158,6 +161,7 @@ function BlockView(props: BlockRenderProps & { node: LayoutLeaf }) {
   if (props.node.type === "network") {
     return <NetworkBlock {...props} blockId={props.node.blockId} profileId={props.node.profileId}/>;
   }
+  if (props.node.type === "web") return <WebBlock onManageConnections={props.onOpenConnectionManager} onHeaderPointerDown={event => props.beginDrag(event, props.node.blockId)} workspaceId={props.workspace.id} node={props.node} visible={props.visible && !props.drag} active={props.workspace.activeBlockId === props.node.blockId} onClose={() => props.onRequestClose(props.node.blockId)} onConnect={(profile) => props.onRequestAuthConnection("network", props.node.blockId, profile)}/>;
   if (props.node.type === "git") {
     return <GitBlock {...props} blockId={props.node.blockId} target={props.node.target}/>;
   }
@@ -330,6 +334,7 @@ function TerminalBlock(props: BlockRenderProps & { blockId: string; profileId: s
           { label: "打开仓库管理", title: status === "connected" ? `管理终端目录仓库 ${fileBrowserPath}` : "连接终端后打开仓库管理", icon: "git", disabled: status !== "connected", onSelect: openTerminalRepository },
           { label: "打开终端文件夹", title: cwdButtonTitle, icon: "files", disabled: status !== "connected", onSelect: openTerminalDirectory },
           { label: "打开网络窗口", title: props.profileId ? "使用当前远程连接打开网络窗口" : "本地终端无法创建网络窗口", icon: "network", disabled: !props.profileId, onSelect: () => dispatch({ type: "openNetwork", workspaceId: props.workspace.id, anchorBlockId: props.blockId, profileId: props.profileId }) },
+          { label: "通过此连接打开网页", icon: "browser", disabled: !props.profileId || !supportsWebBlocks(), onSelect: () => { if (props.profileId) dispatch({ type: "openWeb", workspaceId: props.workspace.id, anchorBlockId: props.blockId, profileId: props.profileId }); } },
           { label: "左右分割", icon: "splitHorizontal", onSelect: () => splitTerminalBlock(props.workspace.id, props.blockId, "horizontal", props.remoteShellIntegrationEnabled) },
           { label: "上下分割", icon: "splitVertical", onSelect: () => splitTerminalBlock(props.workspace.id, props.blockId, "vertical", props.remoteShellIntegrationEnabled) },
         ]}
@@ -629,23 +634,4 @@ function GitBlock(props: BlockRenderProps & { blockId: string; target: GitTarget
     {runtime?.notice && <BlockNotice message={runtime.notice}/>}
     {drop && <div className={`drop-zone drop-${drop}`} />}
   </section>;
-}
-
-function dropPosition(rect: DOMRect, x: number, y: number): DropPosition {
-  const relativeX = (x - rect.left) / rect.width;
-  const relativeY = (y - rect.top) / rect.height;
-  if (relativeX < 0.25) return "left";
-  if (relativeX > 0.75) return "right";
-  if (relativeY < 0.25) return "top";
-  if (relativeY > 0.75) return "bottom";
-  return "center";
-}
-
-function boundsStyle(bounds: LayoutBounds): CSSProperties {
-  return {
-    left: layoutScalarCss(bounds.x),
-    top: layoutScalarCss(bounds.y),
-    width: layoutScalarCss(bounds.width),
-    height: layoutScalarCss(bounds.height),
-  };
 }
