@@ -4,7 +4,7 @@ use crate::infrastructure::ssh::client::SshSessionManager;
 #[cfg(windows)]
 use tauri::Manager;
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct WebSnapshot {
     url: String,
     png: String,
@@ -17,10 +17,22 @@ impl WebHost {
         sessions: &SshSessionManager,
         id: &str,
     ) -> Result<WebSnapshot, String> {
-        #[cfg(not(windows))]
+        #[cfg(not(any(windows, target_os = "macos")))]
         {
             let _ = (app, sessions, id);
             Err("当前系统不支持网页预览".into())
+        }
+        #[cfg(target_os = "macos")]
+        {
+            let label = super::label(id)?;
+            let guests = self.guests.lock().await;
+            let guest = guests.get(&label).ok_or("网页已关闭")?;
+            if !guest.visible || !guest.target.connected(sessions) {
+                return Err("网页不可预览".into());
+            }
+            let value =
+                super::macos::request(app, serde_json::json!({"op":"snapshot","id":label})).await?;
+            serde_json::from_value(value).map_err(|_| "网页预览无效".into())
         }
         #[cfg(windows)]
         {

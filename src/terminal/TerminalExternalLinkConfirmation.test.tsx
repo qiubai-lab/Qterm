@@ -113,6 +113,6 @@ it("explains unavailable internal browsing while keeping external browsing enabl
   render(<TerminalExternalLinkConfirmationHost/>);
   act(() => { requestTerminalExternalLink("http://localhost:3000", "web-link"); });
   expect(screen.getByRole("button", { name: "内部浏览器打开" })).toBeDisabled();
-  expect(screen.getByText(/仅支持 Windows/)).toBeVisible();
+  expect(screen.getByText(/Windows 或 macOS 14/)).toBeVisible();
   expect(screen.getByRole("button", { name: "外部浏览器打开" })).toBeEnabled();
 });

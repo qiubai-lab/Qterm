@@ -22,6 +22,23 @@ pub fn trusted_handler(
 #[cfg(test)]
 mod bounds_tests;
 mod clear_data;
+#[cfg(target_os = "macos")]
+mod macos;
+
+pub fn supported() -> bool {
+    #[cfg(target_os = "macos")]
+    return macos::supported();
+    #[cfg(not(target_os = "macos"))]
+    cfg!(windows)
+}
+
+pub fn remote_supported() -> bool {
+    #[cfg(target_os = "macos")]
+    return macos::remote_supported();
+    #[cfg(not(target_os = "macos"))]
+    cfg!(windows)
+}
+
 mod frame_raster;
 mod lifecycle;
 mod local_storage;
@@ -51,7 +68,7 @@ mod windows_data;
 pub use metrics::WebMetrics;
 #[cfg(any(target_os = "windows", test))]
 mod navigation_state;
-#[cfg(any(target_os = "windows", test))]
+#[cfg(any(target_os = "windows", target_os = "macos", test))]
 mod scrollbars;
 mod snapshot;
 mod surface_raster;
@@ -92,6 +109,7 @@ pub struct WebHost {
 
 struct Guest {
     target: WebTarget,
+    #[cfg(not(target_os = "macos"))]
     geometry: Option<[f64; 5]>,
     visible: bool,
     environment: String,
@@ -103,6 +121,11 @@ struct Environment {
 }
 
 impl WebHost {
+    pub async fn contains(&self, id: &str) -> bool {
+        let Ok(label) = label(id) else { return false };
+        self.guests.lock().await.contains_key(&label)
+    }
+
     pub fn new(root: std::path::PathBuf) -> Self {
         Self {
             guests: Mutex::new(HashMap::new()),
@@ -112,7 +135,7 @@ impl WebHost {
     }
 }
 
-#[derive(Clone, serde::Deserialize)]
+#[derive(Clone, serde::Deserialize, serde::Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct WebBounds {
     pub x: f64,
@@ -134,7 +157,7 @@ pub struct WebBounds {
     pub scrollbar: Option<[[u8; 4]; 3]>,
 }
 
-#[derive(Clone, serde::Deserialize)]
+#[derive(Clone, serde::Deserialize, serde::Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct WebClipRect {
     pub x: f64,
@@ -190,38 +213,49 @@ impl WebHost {
         let label = label(id)?;
         let mut guests = self.guests.lock().await;
         let guest = guests.get_mut(&label).ok_or("网页已关闭")?;
-        let view = app.get_webview(&label).ok_or("网页已关闭")?;
-        if !bounds.visible || !guest.target.connected(sessions) {
-            if guest.visible {
-                view.hide().map_err(|_| "无法隐藏网页")?;
+        #[cfg(target_os = "macos")]
+        {
+            let mut bounds = bounds;
+            bounds.visible &= guest.target.connected(sessions);
+            macos::sync(app, &label, &bounds).await?;
+            guest.visible = bounds.visible;
+            Ok(())
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            let view = app.get_webview(&label).ok_or("网页已关闭")?;
+            if !bounds.visible || !guest.target.connected(sessions) {
+                if guest.visible {
+                    view.hide().map_err(|_| "无法隐藏网页")?;
+                }
+                guest.visible = false;
+                return Ok(());
             }
-            guest.visible = false;
-            return Ok(());
+            let geometry = [
+                bounds.x,
+                bounds.y,
+                bounds.width,
+                bounds.height,
+                view.window()
+                    .scale_factor()
+                    .map_err(|_| "无法读取网页缩放")?,
+            ];
+            if guest.geometry != Some(geometry) {
+                view.set_bounds(tauri::Rect {
+                    position: tauri::LogicalPosition::new(bounds.x, bounds.y).into(),
+                    size: tauri::LogicalSize::new(bounds.width, bounds.height).into(),
+                })
+                .map_err(|_| "无法调整网页区域")?;
+                guest.geometry = Some(geometry);
+            }
+            #[cfg(target_os = "windows")]
+            windows_surface::sync(&view, &bounds).await?;
+            if !guest.visible {
+                view.show().map_err(|_| "无法显示网页")?;
+            }
+            guest.visible = true;
+            Ok(())
         }
-        let geometry = [
-            bounds.x,
-            bounds.y,
-            bounds.width,
-            bounds.height,
-            view.window()
-                .scale_factor()
-                .map_err(|_| "无法读取网页缩放")?,
-        ];
-        if guest.geometry != Some(geometry) {
-            view.set_bounds(tauri::Rect {
-                position: tauri::LogicalPosition::new(bounds.x, bounds.y).into(),
-                size: tauri::LogicalSize::new(bounds.width, bounds.height).into(),
-            })
-            .map_err(|_| "无法调整网页区域")?;
-            guest.geometry = Some(geometry);
-        }
-        #[cfg(target_os = "windows")]
-        windows_surface::sync(&view, &bounds).await?;
-        if !guest.visible {
-            view.show().map_err(|_| "无法显示网页")?;
-        }
-        guest.visible = true;
-        Ok(())
     }
 
     pub async fn action(
@@ -238,32 +272,48 @@ impl WebHost {
         if !guest.target.connected(sessions) {
             return Err("SSH 已断开，请重新连接".into());
         }
-        let view = app.get_webview(&label).ok_or("网页已关闭")?;
-        let result = match action {
-            "navigate" => {
-                let url: tauri::Url = address
-                    .ok_or("请输入网页地址")?
-                    .parse()
-                    .map_err(|_| "网页地址无效")?;
-                if !crate::domain::web::allowed_web_url(url.as_str()) {
-                    return Err("仅支持不含用户名或密码的 HTTP/HTTPS 地址".into());
-                }
-                if app
-                    .get_webview("main")
-                    .and_then(|main| main.url().ok())
-                    .is_some_and(|main| main.origin() == url.origin())
-                {
-                    return Err("不能在网页 Block 中打开应用内部地址".into());
-                }
-                view.navigate(url)
+        if action == "navigate" {
+            let url: tauri::Url = address
+                .ok_or("请输入网页地址")?
+                .parse()
+                .map_err(|_| "网页地址无效")?;
+            if !crate::domain::web::allowed_web_url(url.as_str()) {
+                return Err("仅支持不含用户名或密码的 HTTP/HTTPS 地址".into());
             }
-            "reload" => view.reload(),
-            #[cfg(target_os = "windows")]
-            "stop" => return windows_navigation::stop(&view).await,
-            "back" => view.eval("history.back()"),
-            "forward" => view.eval("history.forward()"),
-            _ => return Err("未知网页操作".into()),
-        };
-        result.map_err(|_| "网页操作失败".into())
+            if app
+                .get_webview("main")
+                .and_then(|main| main.url().ok())
+                .is_some_and(|main| main.origin() == url.origin())
+            {
+                return Err("不能在网页 Block 中打开应用内部地址".into());
+            }
+        }
+        #[cfg(target_os = "macos")]
+        return macos::request(
+            app,
+            serde_json::json!({"op":"action","id":label,"action":action,"url":address}),
+        )
+        .await
+        .map(|_| ());
+        #[cfg(not(target_os = "macos"))]
+        {
+            let view = app.get_webview(&label).ok_or("网页已关闭")?;
+            let result = match action {
+                "navigate" => {
+                    let url: tauri::Url = address
+                        .ok_or("请输入网页地址")?
+                        .parse()
+                        .map_err(|_| "网页地址无效")?;
+                    view.navigate(url)
+                }
+                "reload" => view.reload(),
+                #[cfg(target_os = "windows")]
+                "stop" => return windows_navigation::stop(&view).await,
+                "back" => view.eval("history.back()"),
+                "forward" => view.eval("history.forward()"),
+                _ => return Err("未知网页操作".into()),
+            };
+            result.map_err(|_| "网页操作失败".into())
+        }
     }
 }

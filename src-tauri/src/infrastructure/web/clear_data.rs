@@ -2,6 +2,7 @@ use super::WebHost;
 use crate::{
     domain::web_storage::ClearBrowserData, infrastructure::ssh::client::SshSessionManager,
 };
+#[cfg(not(target_os = "macos"))]
 use tauri::Manager;
 
 impl WebHost {
@@ -19,15 +20,26 @@ impl WebHost {
         if !guest.target.connected(sessions) {
             return Err("SSH 已断开".into());
         }
-        let views: Vec<_> = guests
-            .iter()
-            .filter(|(_, g)| g.environment == guest.environment)
-            .filter_map(|(label, _)| app.get_webview(label))
-            .collect();
-        clear_views(&views, selection).await
+        #[cfg(target_os = "macos")]
+        return super::macos::request(
+            app,
+            serde_json::json!({"op":"clear","id":label,"selection":selection}),
+        )
+        .await
+        .map(|_| ());
+        #[cfg(not(target_os = "macos"))]
+        {
+            let views: Vec<_> = guests
+                .iter()
+                .filter(|(_, g)| g.environment == guest.environment)
+                .filter_map(|(label, _)| app.get_webview(label))
+                .collect();
+            clear_views(&views, selection).await
+        }
     }
 }
 
+#[cfg(not(target_os = "macos"))]
 pub(super) async fn clear_views(
     views: &[tauri::Webview],
     selection: ClearBrowserData,
@@ -66,6 +78,7 @@ pub(super) async fn clear_views(
     result
 }
 
+#[cfg(not(target_os = "macos"))]
 async fn wait_blank(page: &tauri::Webview) -> Result<(), String> {
     let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(5);
     for _ in 0..30 {

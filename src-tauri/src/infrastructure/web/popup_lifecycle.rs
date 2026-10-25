@@ -11,22 +11,22 @@ impl WebHost {
         id: &str,
         request: &str,
     ) -> Result<WebTarget, String> {
-        #[cfg(windows)]
+        #[cfg(any(windows, target_os = "macos"))]
         {
             let result = self.adopt_popup(app, sessions, id, request).await;
             if result.is_err() {
-                let _ = super::windows_popups::reject(app, request).await;
+                let _ = reject_popup(app, request).await;
             }
             result
         }
-        #[cfg(not(windows))]
+        #[cfg(not(any(windows, target_os = "macos")))]
         {
             let _ = (app, sessions, id, request);
-            Err("Web Block 目前仅支持 Windows".into())
+            Err("内部浏览器需要 Windows 或 macOS 14 及以上版本".into())
         }
     }
 
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     async fn adopt_popup(
         &self,
         app: &tauri::AppHandle,
@@ -37,7 +37,17 @@ impl WebHost {
         use super::{Guest, label, profile_gateway::Route};
         use tauri::Manager;
         let label = label(id)?;
+        #[cfg(windows)]
         let source = super::windows_popups::source(app, request).await?;
+        #[cfg(target_os = "macos")]
+        let source = super::macos::request(
+            app,
+            serde_json::json!({"op":"popupSource","request":request}),
+        )
+        .await?
+        .as_str()
+        .ok_or("新窗口请求已失效")?
+        .to_owned();
         let mut guests = self.guests.lock().await;
         let source = guests.get(&source).ok_or("来源网页已关闭")?;
         if !source.target.connected(sessions) {
@@ -76,6 +86,7 @@ impl WebHost {
                 )
                 .await;
         }
+        #[cfg(windows)]
         let result = super::windows::create_popup(
             app,
             &label,
@@ -84,6 +95,13 @@ impl WebHost {
             &environment.directory,
         )
         .await;
+        #[cfg(target_os = "macos")]
+        let result = super::macos::request(
+            app,
+            serde_json::json!({"op":"adopt","id":label,"request":request}),
+        )
+        .await
+        .map(|_| ());
         if let Err(error) = result {
             if let Some(gateway) = &environment.gateway {
                 gateway.remove(&label).await;
@@ -98,6 +116,7 @@ impl WebHost {
             Guest {
                 target: target.clone(),
                 environment: key,
+                #[cfg(not(target_os = "macos"))]
                 geometry: None,
                 visible: false,
             },
@@ -107,11 +126,15 @@ impl WebHost {
 }
 
 pub async fn reject_popup(app: &tauri::AppHandle, request: &str) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    return super::macos::request(app, serde_json::json!({"op":"reject","request":request}))
+        .await
+        .map(|_| ());
     #[cfg(windows)]
     {
         super::windows_popups::reject(app, request).await
     }
-    #[cfg(not(windows))]
+    #[cfg(not(any(windows, target_os = "macos")))]
     {
         let _ = (app, request);
         Ok(())

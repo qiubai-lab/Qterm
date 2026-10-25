@@ -19,7 +19,22 @@ pub(super) struct ProfileGateway {
 }
 
 impl ProfileGateway {
+    #[cfg(any(not(target_os = "macos"), test))]
     pub async fn new(connected: Arc<dyn Fn(&str) -> bool + Send + Sync>) -> Result<Self, String> {
+        Self::create(connected, false).await
+    }
+    #[cfg(target_os = "macos")]
+    pub async fn new_mapped(
+        connected: Arc<dyn Fn(&str) -> bool + Send + Sync>,
+    ) -> Result<Self, String> {
+        Self::create(connected, true).await
+    }
+    async fn create(
+        connected: Arc<dyn Fn(&str) -> bool + Send + Sync>,
+        map_aliases: bool,
+    ) -> Result<Self, String> {
+        #[cfg(not(target_os = "macos"))]
+        let _ = map_aliases;
         let listener = TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0))
             .await
             .map_err(|_| "无法创建浏览代理入口")?;
@@ -41,6 +56,11 @@ impl ProfileGateway {
                             for route in candidates {
                                 if !connected(&route.session) { continue; }
                                 if let Ok(Ok(mut upstream)) = tokio::time::timeout(std::time::Duration::from_secs(2), TcpStream::connect((std::net::Ipv4Addr::LOCALHOST, route.port))).await {
+                                    #[cfg(target_os = "macos")]
+                                    if map_aliases {
+                                        let _ = super::macos::tunnel::copy(&mut downstream, &mut upstream).await;
+                                        break;
+                                    }
                                     let _ = tokio::io::copy_bidirectional(&mut downstream, &mut upstream).await;
                                     break;
                                 }

@@ -7,9 +7,11 @@ import { BlockHeaderClose } from "../workspace/BlockHeaderClose";
 import { ThemedTooltipButton } from "../components/ThemedTooltipButton";
 import { Icon } from "../components/Icon";
 import { ConnectionRouteProgress } from "../components/ConnectionRouteProgress";
+import { WebTunnelNotice } from "./WebTunnelNotice";
 import { WebTabs } from "./WebTabs";
 import { useWebTargetSwitch } from "./useWebTargetSwitch";
-import { supportsWebBlocks } from "./webModel";
+import { supportsWebBlocks, webSupportNotice } from "./webModel";
+import { usesTunnelAddressMapping } from "../lib/tauri/webCapabilities";
 import "./webBlock.css";
 
 interface Props {
@@ -35,7 +37,7 @@ export function WebBlock({ workspaceId, node, visible, active, onClose, onConnec
   const status = target.switching ? "closing" : local ? "connected" : runtime?.status ?? "closed";
   const connected = status === "connected";
   const sessionActive = !local && status !== "closed" && status !== "failed";
-  const supported = supportsWebBlocks();
+  const supported = supportsWebBlocks(node.profileId);
   const endpoint = profile && connected ? `${profile.username}@${profile.host}` : null;
   const progress = target.switching ? null : runtime?.connectionProgress;
   const select = () => dispatch({ type: "selectBlock", workspaceId, blockId: node.blockId });
@@ -55,12 +57,13 @@ export function WebBlock({ workspaceId, node, visible, active, onClose, onConnec
       <ConnectionRouteProgress progress={progress} endpoint={endpoint} profile={profile} onRequestDisconnect={connected ? disconnect : undefined} statusAction={progress ? statusAction : undefined}/>
       <div className="web-tabs-slot" ref={setTabHeader}/>
       <BlockHeaderClose label="关闭网页" onClose={onClose}>
+        {!local && supported && usesTunnelAddressMapping() && <WebTunnelNotice/>}
         <ThemedTooltipButton aria-label="左右分割网页" tooltip="左右分割网页" disabled={!available || !supported || target.switching} onClick={() => dispatch({ type: "openWeb", workspaceId, anchorBlockId: node.blockId, profileId: node.profileId, direction: "horizontal" })}><Icon name="splitHorizontal" size={13}/></ThemedTooltipButton>
         <ThemedTooltipButton aria-label="上下分割网页" tooltip="上下分割网页" disabled={!available || !supported || target.switching} onClick={() => dispatch({ type: "openWeb", workspaceId, anchorBlockId: node.blockId, profileId: node.profileId, direction: "vertical" })}><Icon name="splitVertical" size={13}/></ThemedTooltipButton>
       </BlockHeaderClose>
     </header>
     {hydrated === false ? <div className="web-browser-surface web-empty-state" role="status">正在恢复浏览器标签…</div> : target.switching
       ? <div className="web-browser-surface web-empty-state" role="status">正在断开原连接…</div>
-      : <WebTabs header={tabHeader} sessionStore={webTabSessions} blockId={node.blockId} onHeaderPointerDown={onHeaderPointerDown} registerOpener={available && supported ? registerOpener : undefined} key={node.profileId ?? "local"} profileId={node.profileId} profileName={profile?.name ?? (local ? "本地" : "连接已失效")} sessionId={connected && !local ? runtime?.sessionId ?? null : null} connecting={sessionActive && !connected} visible={visible} supported={supported && available} notice={target.error || (!available ? "连接已失效，请重新选择连接" : local ? "" : runtime?.notice || "")} onConnect={connect} onActivate={select}/>}
+      : <WebTabs header={tabHeader} sessionStore={webTabSessions} blockId={node.blockId} onHeaderPointerDown={onHeaderPointerDown} registerOpener={available && supported ? registerOpener : undefined} key={node.profileId ?? "local"} profileId={node.profileId} profileName={profile?.name ?? (local ? "本地" : "连接已失效")} sessionId={connected && !local ? runtime?.sessionId ?? null : null} connecting={sessionActive && !connected} visible={visible} supported={supported && available} notice={target.error || (!supported ? webSupportNotice(node.profileId) : "") || (!available ? "连接已失效，请重新选择连接" : local ? "" : runtime?.notice || "")} onConnect={connect} onActivate={select}/>}
   </section>;
 }

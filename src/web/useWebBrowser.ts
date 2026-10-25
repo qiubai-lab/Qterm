@@ -54,6 +54,7 @@ export function useWebBrowser(surface: RefObject<HTMLDivElement | null>, session
         setTitle(page.title ?? "");
         latestUrl.current = page.url;
         setLoading(page.loading);
+        if (page.error !== undefined) setError(page.error);
         setLoadState(page.loadState ?? (page.loading ? "loading" : page.visited ? "loaded" : "idle"));
         if (page.loading) metricWatcher?.reset();
         else metricWatcher?.settled();

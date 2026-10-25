@@ -1,6 +1,7 @@
 //! Read only aggregate telemetry via a fixed script; the guest cannot invoke host commands.
 use super::WebHost;
 use crate::infrastructure::ssh::client::SshSessionManager;
+#[cfg(not(target_os = "macos"))]
 use tauri::Manager;
 
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
@@ -26,6 +27,7 @@ fn parse(value: &str) -> Option<WebMetrics> {
         .then_some(metrics)
 }
 
+#[cfg(not(target_os = "macos"))]
 pub(super) async fn sample(view: &tauri::Webview) -> Result<Option<WebMetrics>, String> {
     let (send, receive) = tokio::sync::oneshot::channel();
     let send = std::sync::Mutex::new(Some(send));
@@ -50,6 +52,30 @@ impl WebHost {
         sessions: &SshSessionManager,
         id: &str,
     ) -> Result<Option<WebMetrics>, String> {
+        #[cfg(not(target_os = "macos"))]
+        let view = self.metrics_view(app, sessions, id).await?;
+        #[cfg(not(target_os = "macos"))]
+        return sample(&view).await;
+        #[cfg(target_os = "macos")]
+        {
+            let label = super::label(id)?;
+            let guests = self.guests.lock().await;
+            let guest = guests.get(&label).ok_or("网页已关闭")?;
+            if !guest.target.connected(sessions) {
+                return Err("SSH 已断开".into());
+            }
+            let value =
+                super::macos::eval(app, &label, "window.__qtermPageMetrics?.() ?? null").await?;
+            Ok(parse(&value.to_string()))
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    async fn metrics_view(
+        &self,
+        app: &tauri::AppHandle,
+        sessions: &SshSessionManager,
+        id: &str,
+    ) -> Result<tauri::Webview, String> {
         let label = super::label(id)?;
         let view = {
             let guests = self.guests.lock().await;
@@ -59,7 +85,7 @@ impl WebHost {
             }
             app.get_webview(&label).ok_or("网页已关闭")?
         };
-        sample(&view).await
+        Ok(view)
     }
 }
 

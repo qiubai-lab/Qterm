@@ -7,7 +7,7 @@ use super::{
     frame_raster::{self, FrameBitmap, rounded_distance},
 };
 
-#[derive(Clone, serde::Deserialize)]
+#[derive(Clone, serde::Deserialize, serde::Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct WebPanel {
     pub edge: WebFrame,

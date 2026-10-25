@@ -75,7 +75,7 @@ fn watch_connection(
         return;
     };
     tauri::async_runtime::spawn(async move {
-        while app.get_webview(&format!("web-{id}")).is_some() {
+        while app.state::<WebHost>().contains(&id).await {
             if !manager.web_session_connected(&session_id) {
                 let _ = app.state::<WebHost>().close(&app, &manager, &id).await;
                 break;
@@ -138,4 +138,9 @@ pub async fn web_action(
     state
         .action(&app, sessions.manager(), &id, &action, url.as_deref())
         .await
+}
+
+#[tauri::command]
+pub fn web_supported() -> serde_json::Value {
+    serde_json::json!({"local": crate::infrastructure::web::supported(), "remote": crate::infrastructure::web::remote_supported(), "tunnelAddressMapping": cfg!(target_os = "macos")})
 }

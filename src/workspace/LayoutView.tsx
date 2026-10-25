@@ -253,7 +253,7 @@ function TerminalBlock(props: BlockRenderProps & { blockId: string; profileId: s
           { label: "打开仓库管理", title: status === "connected" ? `管理终端目录仓库 ${fileBrowserPath}` : "连接终端后打开仓库管理", icon: "git", disabled: status !== "connected", onSelect: openTerminalRepository },
           { label: "打开终端文件夹", title: cwdButtonTitle, icon: "files", disabled: status !== "connected", onSelect: openTerminalDirectory },
           { label: "打开网络窗口", title: props.profileId ? "使用当前远程连接打开网络窗口" : "本地终端无法创建网络窗口", icon: "network", disabled: !props.profileId, onSelect: () => dispatch({ type: "openNetwork", workspaceId: props.workspace.id, anchorBlockId: props.blockId, profileId: props.profileId }) },
-          { label: "通过此连接打开网页", icon: "browser", disabled: !supportsWebBlocks(), onSelect: () => { dispatch({ type: "openWeb", workspaceId: props.workspace.id, anchorBlockId: props.blockId, profileId: props.profileId }); } },
+          { label: "通过此连接打开网页", icon: "browser", disabled: !supportsWebBlocks(props.profileId), onSelect: () => { dispatch({ type: "openWeb", workspaceId: props.workspace.id, anchorBlockId: props.blockId, profileId: props.profileId }); } },
           { label: "左右分割", icon: "splitHorizontal", onSelect: () => splitTerminalBlock(props.workspace.id, props.blockId, "horizontal", props.remoteShellIntegrationEnabled) },
           { label: "上下分割", icon: "splitVertical", onSelect: () => splitTerminalBlock(props.workspace.id, props.blockId, "vertical", props.remoteShellIntegrationEnabled) },
         ]}

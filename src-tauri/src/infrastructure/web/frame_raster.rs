@@ -1,5 +1,5 @@
 //! Premultiplied transparent border pixels, independent of native window ownership.
-#[derive(Clone, Debug, serde::Deserialize)]
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct WebFrame {
     pub x: f64,

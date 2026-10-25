@@ -278,7 +278,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(infrastructure::web::trusted_handler(tauri::generate_handler![
-                commands::web::web_open, commands::web::web_accept_popup, commands::web::web_reject_popup, commands::web::web_close, commands::web::web_sync, commands::web::web_action, commands::web::web_metrics, commands::web::web_snapshot, commands::web::web_clear_data,
+                commands::web::web_supported, commands::web::web_open, commands::web::web_accept_popup, commands::web::web_reject_popup, commands::web::web_close, commands::web::web_sync, commands::web::web_action, commands::web::web_metrics, commands::web::web_snapshot, commands::web::web_clear_data,
             commands::web_library::web_library,
             commands::web_tabs::web_tab_cache,
             configuration_merge_select, configuration_merge_preview, configuration_merge_commit, configuration_merge_cancel, configuration_merge_unlock_source,

@@ -54,3 +54,12 @@ test("rejects stale baseline entries", async (t) => {
   assert.equal(findings[0]?.type, "stale");
   assert.match(formatFindings(findings), /no matching source file/);
 });
+
+
+test("audits native Swift and Objective-C adapters", async (t) => {
+  const root = await fixture(Object.fromEntries(["swift", "m", "h"].map(extension => [`src/native/Policy.${extension}`, "x\n".repeat(701)])));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const findings = await auditSourceSizes({ cwd: root, roots: ["src"] });
+  assert.equal(findings.length, 3);
+  assert.ok(findings.every(finding => finding.type === "oversize"));
+});

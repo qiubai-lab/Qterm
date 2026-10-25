@@ -21,8 +21,11 @@ impl WebHost {
         if !crate::domain::web::allowed_web_url(url.as_str()) {
             return Err("仅支持不含用户名或密码的 HTTP/HTTPS 地址".into());
         }
-        if !cfg!(windows) {
-            return Err("Web Block 目前仅支持 Windows".into());
+        if !super::supported() {
+            return Err("内部浏览器需要 Windows 或 macOS 14 及以上版本".into());
+        }
+        if matches!(target, WebTarget::Remote { .. }) && !super::remote_supported() {
+            return Err("当前系统无法启用隧道网络保护".into());
         }
         let identity = match target {
             WebTarget::Local {} => None,
@@ -57,10 +60,13 @@ impl WebHost {
             .map_err(|_| "浏览环境初始化失败")??;
             let gateway = if remote {
                 let manager = sessions.clone();
-                Some(
-                    ProfileGateway::new(Arc::new(move |id| manager.web_session_connected(id)))
-                        .await?,
-                )
+                let connected: Arc<dyn Fn(&str) -> bool + Send + Sync> =
+                    Arc::new(move |id| manager.web_session_connected(id));
+                #[cfg(target_os = "macos")]
+                let gateway = ProfileGateway::new_mapped(connected).await?;
+                #[cfg(not(target_os = "macos"))]
+                let gateway = ProfileGateway::new(connected).await?;
+                Some(gateway)
             } else {
                 None
             };
@@ -93,10 +99,13 @@ impl WebHost {
         #[cfg(windows)]
         let result =
             super::windows::create_persistent(app, &label, proxy_port, url, &environment.directory);
-        #[cfg(not(windows))]
+        #[cfg(target_os = "macos")]
+        let result =
+            super::macos::create(app, &label, proxy_port, &url, &environment.directory).await;
+        #[cfg(not(any(windows, target_os = "macos")))]
         let result: Result<(), String> = {
             let _ = (app, url, &environment.directory, proxy_port);
-            Err("Web Block 目前仅支持 Windows".into())
+            Err("内部浏览器需要 Windows 或 macOS 14 及以上版本".into())
         };
         match result {
             Ok(()) => {
@@ -105,6 +114,7 @@ impl WebHost {
                     Guest {
                         target: target.clone(),
                         environment: key,
+                        #[cfg(not(target_os = "macos"))]
                         geometry: None,
                         visible: false,
                     },
@@ -137,6 +147,8 @@ impl WebHost {
     ) -> Result<(), String> {
         let label = label(id)?;
         let mut guests = self.guests.lock().await;
+        #[cfg(target_os = "macos")]
+        super::macos::close(app, &label).await?;
         if let Some(view) = app.get_webview(&label) {
             #[cfg(windows)]
             super::windows_popups::cancel_source(app, &label).await?;

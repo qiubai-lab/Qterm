@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { usesTunnelAddressMapping } from "../lib/tauri/webCapabilities";
 import { Icon } from "../components/Icon";
 import { WebAddressBar } from "./WebAddressBar";
 import { useWebBrowser } from "./useWebBrowser";
@@ -58,7 +59,7 @@ export function WebBrowserPane({ initialAddress, initialPopup, onNewWindow, onWi
   return <>
     <WebAddressBar profileName={profileName} onClearData={browser.clearData} dataDismissKey={guestInteraction} visible={visible} history={library.data.history} address={browser.address} ready={browser.ready} loading={browser.loading} disabled={!supported} connecting={connecting} bookmarked={bookmarked} bookmarkBusy={library.busy} libraryOpen={drawer.open} onNavigate={navigate} onAction={action => void browser.action(action)} onBookmark={() => void library.update(bookmarked ? { kind: "unbookmark", url: browser.address } : { kind: "bookmark", url: browser.address, title: browser.title || new URL(browser.address).host })} onLibrary={() => drawer.open ? drawer.close() : drawer.show()}/>
     <div className="web-browser-surface" ref={surface}>
-      {!browser.ready && <div className="web-empty-state"><Icon name="browser" size={24}/><strong>{!supported ? notice || "目前仅支持 Windows 桌面版" : browser.loading ? "正在打开网页…" : "通过此连接访问网页"}</strong><span>输入地址后按 Enter 访问。localhost 指向{profileId === null ? "当前电脑" : "远程服务器"}。</span></div>}
+      {!browser.ready && <div className="web-empty-state"><Icon name="browser" size={24}/><strong>{!supported ? notice || "需要 Windows 或 macOS 14 及以上桌面版" : browser.loading ? "正在打开网页…" : "通过此连接访问网页"}</strong><span>输入地址后按 Enter 访问。localhost 指向{profileId === null ? "当前电脑" : "远程服务器"}。{profileId !== null && usesTunnelAddressMapping() ? "远程 HTTP 地址将使用专用隧道域名；HTTPS localhost 和依赖原始地址的登录可能不兼容。" : ""}</span></div>}
       {drawer.present && <WebLibraryDialog phase={drawer.phase} profileName={profileName} data={library.data} busy={library.busy} error={library.error} onUpdate={library.update} onOpen={navigate} onClose={drawer.close}/>}
     </div>
     <WebFeedback feedback={feedback} loading={browser.loading} ready={browser.ready} connected={supported && (profileId === null || Boolean(sessionId))} local={profileId === null} loadState={browser.loadState} metrics={browser.metrics}/>

@@ -10,7 +10,7 @@ export interface WebSnapshot { url: string; png: string }
 export const captureWeb = (id: string) => invoke<WebSnapshot>("web_snapshot", { id });
 export type WebLoadState = "idle" | "loading" | "loaded" | "failed" | "stopped";
 export interface WebMetrics { url: string; documentId: number; resources: number; loadMs: number }
-export interface WebPageState { label: string; url: string; loading: boolean; visited: boolean; title?: string; metadata?: boolean; loadState?: WebLoadState }
+export interface WebPageState { label: string; url: string; loading: boolean; visited: boolean; title?: string; metadata?: boolean; loadState?: WebLoadState; error?: string }
 export const readWebMetrics = (id: string) => invoke<WebMetrics | null>("web_metrics", { id });
 export const openWeb = (id: string, sessionId: string | null, profileId: string | null, url: string) => {
   if (profileId !== null && !sessionId) return Promise.reject(new Error("SSH 尚未连接"));

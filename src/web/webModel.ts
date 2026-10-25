@@ -1,7 +1,13 @@
-import { isDemo } from "../lib/runtime/environment";
+import { nativeWebSupported } from "../lib/tauri/webCapabilities";
 
-export function supportsWebBlocks() {
-  return !isDemo && /Windows/i.test(navigator.userAgent) && "__TAURI_INTERNALS__" in window;
+export function supportsWebBlocks(profileId?: string | null) {
+  return nativeWebSupported(profileId != null);
+}
+
+export function webSupportNotice(profileId?: string | null) {
+  return profileId != null && nativeWebSupported() && !nativeWebSupported(true)
+    ? "当前 WebKit 无法启用隧道网络保护，请使用外部代理浏览器"
+    : "内部浏览器需要 Windows 或 macOS 14 及以上桌面版";
 }
 
 export function normalizeWebAddress(value: string): string {

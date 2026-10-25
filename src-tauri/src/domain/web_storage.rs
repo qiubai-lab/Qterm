@@ -22,7 +22,7 @@ impl BrowserProtection {
     }
 }
 
-#[derive(Clone, Copy, Debug, serde::Deserialize)]
+#[derive(Clone, Copy, Debug, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ClearBrowserData {
     pub cache: bool,

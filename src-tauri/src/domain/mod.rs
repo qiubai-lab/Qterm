@@ -21,3 +21,6 @@ pub mod web_library;
 
 pub mod web_storage;
 pub mod web_tabs;
+
+#[cfg(any(target_os = "macos", test))]
+pub mod web_tunnel;

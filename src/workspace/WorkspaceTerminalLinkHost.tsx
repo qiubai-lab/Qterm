@@ -6,7 +6,7 @@ import { useWorkspace } from "./WorkspaceProvider";
 export function WorkspaceTerminalLinkHost() {
   const { document, profiles, openTerminalWebLink } = useWorkspace();
   return <TerminalExternalLinkConfirmationHost
-    internalSupported={supportsWebBlocks()}
+    internalSupported={supportsWebBlocks}
     resolveOrigin={blockId => resolveWebLinkOrigin(document, profiles, blockId)}
     onOpenInternal={openTerminalWebLink}
   />;

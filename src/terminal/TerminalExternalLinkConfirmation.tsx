@@ -4,12 +4,13 @@ import { Button } from "../components/Button";
 import { Icon } from "../components/Icon";
 import { DialogActionStatus, DialogFrame } from "../components/dialogs/DialogFrame";
 import { openExternalHttpUrl } from "../lib/externalUrl";
+import { webSupportNotice } from "../web/webModel";
 import type { WebLinkOrigin } from "../web/webLinkOrigin";
 import { subscribeToTerminalExternalLinkRequests, type TerminalExternalLinkRequest } from "./terminalExternalLinkRequests";
 
 type Request = TerminalExternalLinkRequest & { origin: WebLinkOrigin | null };
 interface Props {
-  internalSupported?: boolean;
+  internalSupported?: boolean | ((profileId: string | null) => boolean);
   resolveOrigin?: (blockId?: string) => WebLinkOrigin | null;
   onOpenInternal?: (origin: WebLinkOrigin, uri: string) => void | Promise<void>;
 }
@@ -37,6 +38,7 @@ export function TerminalExternalLinkConfirmationHost({ internalSupported = false
   }, []);
 
   if (!request) return null;
+  const supported = typeof internalSupported === "function" ? internalSupported(request.origin?.profileId ?? null) : internalSupported;
   const close = () => {
     revision.current++;
     submitting.current = false;
@@ -52,7 +54,7 @@ export function TerminalExternalLinkConfirmationHost({ internalSupported = false
     setMessage("");
     try {
       if (destination === "internal") {
-        if (!internalSupported || !request.origin || !onOpenInternal) throw new Error("无法确定内部浏览器的连接，请重新选择终端链接");
+        if (!supported || !request.origin || !onOpenInternal) throw new Error("无法确定内部浏览器的连接，请重新选择终端链接");
         await onOpenInternal(request.origin, request.uri);
       } else if (!await openExternalHttpUrl(request.uri)) {
         throw new Error("无法调用系统浏览器，请检查系统设置后重试");
@@ -64,7 +66,7 @@ export function TerminalExternalLinkConfirmationHost({ internalSupported = false
       if (attempt === revision.current) { submitting.current = false; setBusy(null); }
     }
   };
-  const internalReason = !internalSupported ? "内部浏览器目前仅支持 Windows 桌面版" : !request.origin ? "无法确定来源终端" : "";
+  const internalReason = !supported ? webSupportNotice(request.origin?.profileId) : !request.origin ? "无法确定来源终端" : "";
 
   return <DialogFrame compact className="terminal-external-link-confirmation" title="打开链接？"
     subtitle={request.source === "osc8" ? "终端 OSC 8 链接请求" : "终端文本链接请求"} onClose={close}>

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useMemo, type Dispatch } from "react";
 import type { ConnectionProfile } from "../lib/tauri/profiles";
 import type { WebLinkOrigin } from "../web/webLinkOrigin";
-import { normalizeWebAddress, supportsWebBlocks } from "../web/webModel";
+import { normalizeWebAddress, supportsWebBlocks, webSupportNotice } from "../web/webModel";
 import { blockIds, findLeaf } from "./layout";
 import { createId, type WorkspaceDocument } from "./model";
 import type { WorkspaceAction } from "./reducer";
@@ -32,7 +32,7 @@ export function useWebOpenController(document: WorkspaceDocument, profiles: Conn
   }, []);
 
   const openTerminalWebLink = useCallback((origin: WebLinkOrigin, address: string) => {
-    if (!supportsWebBlocks()) throw new Error("内部浏览器目前仅支持 Windows 桌面版");
+    if (!supportsWebBlocks(origin.profileId)) throw new Error(webSupportNotice(origin.profileId));
     const url = normalizeWebAddress(address);
     const { document: latest, profiles: catalog } = current.current;
     const workspace = latest.workspaces.find(item => item.id === origin.workspaceId);

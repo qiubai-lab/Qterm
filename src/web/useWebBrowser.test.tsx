@@ -166,3 +166,19 @@ it("opens Local without an SSH session and never treats disconnected Remote as L
   expect(ipc.open).toHaveBeenCalledOnce();
   hook.unmount();
 });
+
+it("surfaces native compatibility errors and clears them on a subsequent navigation event", async () => {
+  let receive!: (page: WebPageState) => void;
+  ipc.listen.mockImplementationOnce(((listener: (page: WebPageState) => void) => { receive = listener; return Promise.resolve(() => {}); }) as typeof ipc.listen);
+  const surface = createRef<HTMLDivElement>();
+  const hook = renderHook(() => useWebBrowser(surface, "ssh", "profile", false));
+  try {
+    await act(() => hook.result.current.navigate("http://localhost:3000"));
+    await waitFor(() => expect(ipc.open).toHaveBeenCalled());
+    const label = `web-${ipc.open.mock.calls[0][0]}`;
+    act(() => receive({ label, url: "http://localhost.qterm-tunnel.invalid:3000/", loading: false, visited: false, error: "HTTPS localhost 不支持隧道地址映射" }));
+    expect(hook.result.current.error).toContain("HTTPS localhost");
+    act(() => receive({ label, url: "http://localhost.qterm-tunnel.invalid:3000/", loading: true, visited: false, error: "" }));
+    expect(hook.result.current.error).toBe("");
+  } finally { hook.unmount(); }
+});
