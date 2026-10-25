@@ -76,6 +76,6 @@ export function WebAddressBar(props: Props) {
     </div>
     <ThemedTooltipButton tooltipPlacement="above" type="button" tooltip={props.bookmarked ? "取消收藏" : "收藏当前网页"} aria-label={props.bookmarked ? "取消收藏当前网页" : "收藏当前网页"} aria-pressed={props.bookmarked} disabled={!props.ready || !props.address || props.bookmarkBusy || props.loading} onClick={props.onBookmark}><Icon name="bookmark" size={13}/></ThemedTooltipButton>
     <ThemedTooltipButton tooltipPlacement="above" type="button" tooltip="访问历史与收藏" aria-label="访问历史与收藏" aria-haspopup="dialog" aria-expanded={props.libraryOpen} disabled={props.disabled} onClick={moreHistory}><Icon name="history" size={13}/></ThemedTooltipButton>
-    {!props.disabled && props.visible !== false && !props.libraryOpen && <WebAddressHistory open={expanded} id={listId} anchor={field} entries={recent} selected={selected} onSelect={setSelected} onChoose={choose}/>}
+    {!props.disabled && props.visible !== false && !props.libraryOpen && <WebAddressHistory open={expanded} id={listId} anchor={field} entries={recent} selected={selected} onSelect={setSelected} onChoose={choose} onDismiss={() => setExpanded(false)}/>}
   </form>;
 }

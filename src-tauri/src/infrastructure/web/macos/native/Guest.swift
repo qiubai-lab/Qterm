@@ -20,6 +20,7 @@ final class BrowserGuest: NSObject, WKNavigationDelegate, WKUIDelegate {
     var message = ""
     var observations: [NSKeyValueObservation] = []
     var lastPalette = ""
+    var navigationGuard = NavigationGuard()
 
     init(id: String, config: WKWebViewConfiguration, window: NSWindow, appOrigin: String, store: String, remote: Bool = false) {
         self.id = id; self.store = store; self.remote = remote; self.appOrigin = appOrigin; self.window = window
@@ -53,7 +54,7 @@ final class BrowserGuest: NSObject, WKNavigationDelegate, WKUIDelegate {
     }
     func sourceChanged() {
         let next = web.url?.absoluteString ?? "about:blank"
-        let visited = source != next && activeNavigation == nil && loadState == "loaded"
+        let visited = source != next && !web.isLoading && activeNavigation == nil && loadState == "loaded"
         source = next
         if visited { navigationAddress = next }
         publish(visited: visited)
@@ -62,6 +63,14 @@ final class BrowserGuest: NSObject, WKNavigationDelegate, WKUIDelegate {
                  decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
         guard !closed, let url = action.request.url, allowed(url.absoluteString), !action.shouldPerformDownload else {
             decisionHandler(.cancel); return
+        }
+        if action.targetFrame?.isMainFrame == true {
+            guard navigationGuard.allow(url) else {
+                decisionHandler(.cancel)
+                web.stopLoading(); activeNavigation = nil; loadState = "failed"
+                message = "检测到网页循环跳转，已停止加载。请检查网站验证或登录状态，或手动重新访问。"
+                publish(visited: false); return
+            }
         }
         if remote {
             do {
@@ -87,23 +96,27 @@ final class BrowserGuest: NSObject, WKNavigationDelegate, WKUIDelegate {
         message = ""; navigationError = nil; activeNavigation = navigation; loadState = "loading"; publish(visited: false)
     }
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        guard activeNavigation === navigation else { return }
+        guard activeNavigation != nil, activeNavigation === navigation else { return }
         activeNavigation = nil; loadState = "loaded"; source = web.url?.absoluteString ?? "about:blank"
         if !lastPalette.isEmpty { web.evaluateJavaScript(lastPalette, completionHandler: nil) }
         publish(visited: true)
     }
     func failed(_ navigation: WKNavigation?, _ error: Error) {
-        guard activeNavigation === navigation else { return }
+        guard activeNavigation != nil, activeNavigation === navigation else { return }
         activeNavigation = nil; navigationError = error
+        if (error as NSError).code != NSURLErrorCancelled {
+            message = "网页加载失败（\((error as NSError).code)）：\(error.localizedDescription)"
+        }
         loadState = (error as NSError).code == NSURLErrorCancelled ? "stopped" : "failed"
         publish(visited: false)
     }
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) { failed(navigation, error) }
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) { failed(navigation, error) }
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
-        activeNavigation = nil; loadState = "failed"; publish(visited: false)
+        activeNavigation = nil; loadState = "failed"; message = "网页进程已退出，请刷新后重试"; publish(visited: false)
     }
     func action(_ input: [String: Any]) throws {
+        if ["navigate", "reload", "back", "forward"].contains(input["action"] as? String ?? "") { navigationGuard.reset() }
         switch input["action"] as? String {
         case "navigate":
             guard let address = input["url"] as? String, address != "about:blank", allowed(address), let url = URL(string: address) else { throw BrowserError("不支持的网页地址") }

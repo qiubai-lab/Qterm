@@ -13,11 +13,22 @@ interface Props {
   selected: number;
   onSelect: (index: number) => void;
   onChoose: (index: number) => void;
+  onDismiss: () => void;
 }
 
 /** Portal geometry follows its address field while workspace blocks move or resize. */
-export function WebAddressHistory({ id, open, anchor, entries, selected, onSelect, onChoose }: Props) {
+export function WebAddressHistory({ id, open, anchor, entries, selected, onSelect, onChoose, onDismiss }: Props) {
+  const panel = useRef<HTMLDivElement>(null);
   const viewport = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const dismissOutside = (event: PointerEvent) => {
+      if (event.target instanceof Node && !anchor.current?.contains(event.target) && !panel.current?.contains(event.target)) onDismiss();
+    };
+    // Native webpage interactions are mirrored as pointer input on their DOM surface.
+    document.addEventListener("pointerdown", dismissOutside, true);
+    return () => document.removeEventListener("pointerdown", dismissOutside, true);
+  }, [anchor, open, onDismiss]);
   const [page, setPage] = useState({ open, count: 5 });
   if (page.open !== open) setPage({ open, count: open ? 5 : page.count });
   const required = selected >= 0 && selected < entries.length ? Math.ceil((selected + 1) / 5) * 5 : 5;
@@ -56,7 +67,7 @@ export function WebAddressHistory({ id, open, anchor, entries, selected, onSelec
     return () => cancelAnimationFrame(frame);
   }, [anchor, present]);
   if (!present) return null;
-  return createPortal(<div id={id} role="listbox" data-app-overlay="floating" data-overlay-motion="reveal" aria-hidden={!open} data-open={open} aria-label="最近访问记录" className="web-address-history" style={bounds} onPointerDown={event => event.preventDefault()}>
+  return createPortal(<div ref={panel} id={id} role="listbox" data-app-overlay="floating" data-overlay-motion="reveal" aria-hidden={!open} data-open={open} aria-label="最近访问记录" className="web-address-history" style={bounds} onPointerDown={event => event.preventDefault()}>
     <div className="web-address-history-heading">最近访问</div>
     <OverlayScrollArea ref={viewport} className="web-address-history-scroll" viewportClassName="web-address-history-list" density="compact"
       onScroll={event => { if (event.currentTarget.scrollTop > 0) loadMore(event.currentTarget); }} viewportProps={{ onWheel: event => {

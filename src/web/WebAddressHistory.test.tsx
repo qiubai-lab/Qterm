@@ -1,6 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { WebAddressBar } from "./WebAddressBar";
+import { dispatchNativeInteraction } from "../components/overlays/nativeInteraction";
 
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllGlobals(); });
 const history = Array.from({ length: 8 }, (_, i) => ({ profileId: "a", title: `Page ${i}`, url: `http://host/${i}`, updatedAt: i }));
@@ -132,4 +133,30 @@ it("extends the rendered batch when keyboard selection reaches the sixth visit",
   fireEvent.keyDown(input, { key: "Enter" });
   expect(props.onNavigate).toHaveBeenCalledWith("http://host/2");
   expect(props.onLibrary).not.toHaveBeenCalled();
+});
+
+it("dismisses on outside pointer input even without blur, while keeping its field and history interactive", () => {
+  const { input, props } = setup();
+  fireEvent.pointerDown(input);
+  expect(screen.getByRole("listbox")).toBeVisible();
+  fireEvent.pointerDown(screen.getByText("最近访问"));
+  expect(input).toHaveAttribute("aria-expanded", "true");
+  fireEvent.pointerDown(document.body);
+  expect(input).toHaveAttribute("aria-expanded", "false");
+  expect(screen.queryByRole("listbox")).toBeNull();
+  expect(props.onNavigate).not.toHaveBeenCalled();
+  fireEvent.click(input);
+  expect(screen.getByRole("listbox")).toBeVisible();
+});
+
+it("dismisses on native-page interaction without depending on a DOM blur", () => {
+  const { input, props } = setup();
+  const surface = document.createElement("div");
+  document.body.append(surface);
+  try {
+    act(() => dispatchNativeInteraction(surface));
+    expect(input).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("listbox")).toBeNull();
+    expect(props.onNavigate).not.toHaveBeenCalled();
+  } finally { surface.remove(); }
 });

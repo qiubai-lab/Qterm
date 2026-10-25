@@ -62,3 +62,5 @@ Known compatibility limits accepted for this implementation:
 - `.localhost` subdomains remain unsupported. An SSH disconnect never changes a remote tab into local browsing.
 
 Run `python3 scripts/macos-web-smoke/fixture.py` on an interactive macOS desktop with Xcode for the real engine tests. It uses throwaway stores and local HTTP/SOCKS fixtures, with separate Rust tests protecting SOCKS destination translation. See the adjacent README for scope and remaining platform validation.
+
+On macOS, repeated main-frame document navigation to the same scheme/host/port/path is stopped on the seventh attempt within ten seconds, even when query/fragment tokens change. The UI reports the stopped loop; an explicit address submission, reload, back, forward or explicit data clearing starts a new attempt. This guard bounds runaway site navigation and does not solve or bypass a site's verification challenge. Native load failures include an error code/message. Provisional URL changes are not recorded as completed visits.

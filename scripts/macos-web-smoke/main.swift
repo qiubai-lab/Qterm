@@ -80,6 +80,8 @@ func smoke(_ window: NSWindow) async throws {
     try check(a.surface.hitTest(center) == nil, "modal locks native input")
     try a.sync(["x": 10.0, "y": 20.0, "width": 600.0, "height": 400.0, "visible": true])
     try check(a.surface.hitTest(center) != nil, "unlock restores native input")
+    try await navigationSmoke(a, origin)
+    if env["QTERM_SMOKE_NAVIGATION_ONLY"] == "1" { return }
     try await behavior(a, window, origin)
     do {
         try host.create("remote", input: ["store": UUID().uuidString, "url": origin, "port": 12345], window: window)

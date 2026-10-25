@@ -50,7 +50,7 @@ extension BrowserHost {
         guard !types.isEmpty else { throw BrowserError("请选择要清理的数据") }
         let affected = guests.values.filter { $0.store == page.store }
         let originals = affected.map { ($0, $0.web.url) }
-        for (guest, _) in originals { cancelPopups(guest.id); guest.web.stopLoading(); guest.web.loadHTMLString("", baseURL: nil) }
+        for (guest, _) in originals { cancelPopups(guest.id); guest.navigationGuard.reset(); guest.web.stopLoading(); guest.web.loadHTMLString("", baseURL: nil) }
         let deadline = Date().addingTimeInterval(5)
         func awaitBlank() {
             if originals.contains(where: { $0.0.web.isLoading || $0.0.web.url?.absoluteString != "about:blank" }) {

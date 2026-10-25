@@ -56,5 +56,6 @@ func remoteSmoke(_ window: NSWindow) async throws {
                                   "url": "http://127.0.0.1:\(local)/must-not-bypass", "tunnelScript": script])
     await pause(2)
     try check(try host.guest("remote-failed").loadState == "failed", "dead tunnel fails without local fallback")
+    try check(try host.guest("remote-failed").message.contains("网页加载失败（"), "native network failures expose an error code and message")
     host.close("remote"); host.close("remote-failed")
 }
