@@ -5,11 +5,12 @@ export function isElementOverflowing(element: HTMLElement) {
   return element.scrollWidth > element.clientWidth;
 }
 
-export function useThemedTooltip<T extends HTMLElement>({ tooltip, anchorRef, shouldShow, placement = "auto" }: {
+export function useThemedTooltip<T extends HTMLElement>({ tooltip, anchorRef, shouldShow, placement = "auto", disabled = false }: {
   tooltip: string;
   anchorRef?: RefObject<T | null>;
   shouldShow?: (anchor: T) => boolean;
   placement?: "auto" | "above";
+  disabled?: boolean;
 }) {
   const localRef = useRef<T>(null);
   const anchor = anchorRef ?? localRef;
@@ -20,11 +21,14 @@ export function useThemedTooltip<T extends HTMLElement>({ tooltip, anchorRef, sh
   const hide = () => setOpen(false);
   const show = () => {
     const element = anchor.current;
-    if (open || !element || (shouldShow && !shouldShow(element))) return;
+    if (disabled || open || !element || (shouldShow && !shouldShow(element))) return;
     const rect = element.getBoundingClientRect();
     setPosition({ left: rect.left, top: rect.bottom + 6 });
     setOpen(true);
   };
+
+  // Disabling cancels both the visible bubble and an interrupted exit.
+  if (disabled && (open || position)) { setOpen(false); setPosition(null); }
 
   useLayoutEffect(() => {
     const rect = anchor.current?.getBoundingClientRect();
@@ -55,7 +59,7 @@ export function useThemedTooltip<T extends HTMLElement>({ tooltip, anchorRef, sh
     };
   }, [open]);
 
-  return [anchor, open ? id : undefined, hide, show, position && createPortal(<div ref={surface} id={id} role="tooltip" aria-hidden={!open} data-open={open}
+  return [anchor, !disabled && open ? id : undefined, hide, show, !disabled && position && createPortal(<div ref={surface} id={id} role="tooltip" aria-hidden={!open} data-open={open}
       className="themed-tooltip themed-action-tooltip" style={position}>{tooltip}</div>, document.body),
   ] as const;
 }

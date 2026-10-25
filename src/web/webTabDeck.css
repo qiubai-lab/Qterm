@@ -1,0 +1,18 @@
+.web-tabs[data-stacked]>.web-tab-list { flex: 1; width: 0; }
+.web-deck-extent { flex: none; height: 1px; pointer-events: none; }
+.web-tabs[data-stacked] .web-tab {
+  position: absolute; top: calc(50% - 10px); left: 0;
+  width: var(--web-deck-width, 112px); min-width: 0; max-width: none;
+  transform: translate3d(var(--web-deck-x, 0px), 0, 0);
+  background: var(--chrome); border-color: var(--border);
+  box-shadow: -2px 0 5px var(--shadow-soft);
+}
+.web-tabs[data-stacked] .web-tab::before { position: absolute; z-index: -1; inset: 0; border-radius: inherit; background: var(--web-deck-fill, transparent); content: ""; pointer-events: none; }
+.web-tabs[data-stacked] .web-tab[data-expanded] { --web-deck-fill: var(--raised); }
+.web-tabs[data-stacked] .web-tab[data-selected="true"] { --web-deck-fill: var(--workspace-tab-active-background); border-color: var(--workspace-tab-active-border); box-shadow: var(--workspace-tab-active-shadow); }
+.web-tabs[data-stacked] .web-tab:hover:not([data-selected="true"]) { --web-deck-fill: var(--workspace-tab-hover-background); border-color: var(--workspace-tab-hover-border); }
+.web-tabs[data-stacked] button[role="tab"] { justify-content: flex-start; overflow: hidden; padding-left: calc(20px + var(--web-title-inset, 0px)); padding-right: var(--web-title-end, 0px); border-radius: inherit; }
+.web-tabs[data-stacked] .web-tab-close { transition: opacity 120ms ease; }
+.web-tabs[data-stacked] .web-tab:not([data-expanded]) .web-tab-close { opacity: 0; pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { .web-tabs[data-stacked] .web-tab-close { transition: none; } }
+

@@ -1,0 +1,7 @@
+.terminal-context-menu.tab-action-menu { z-index:95; width:max-content; max-width:calc(100vw - 16px); }
+.tab-action-menu button { white-space:nowrap; cursor:pointer; }
+.tab-action-menu button small { flex:none; min-width:2ch; color:var(--menu-secondary-text); font-size:9px; font-variant-numeric:tabular-nums; text-align:right; }
+.tab-action-menu button:hover:not(:disabled) small,.tab-action-menu button:focus-visible:not(:disabled) small { color:inherit; }
+.tab-action-menu button:disabled small { color:inherit; }
+.tab-action-menu:focus-visible { outline:1px solid var(--focus); }
+

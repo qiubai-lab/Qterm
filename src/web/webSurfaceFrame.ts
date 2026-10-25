@@ -3,6 +3,13 @@ import type { WebFrame } from "../lib/tauri/web";
 /** Resolve Chromium's computed sRGB forms without introducing a second theme palette. */
 export function webFrameColor(value: string, opacity: number): WebFrame["color"] | null {
   const normalized = value.trim();
+  // Computed custom properties retain authored hex tokens (unlike borderColor).
+  if (/^#(?:[\da-f]{3,4}|[\da-f]{6}|[\da-f]{8})$/i.test(normalized)) {
+    const hex = normalized.slice(1);
+    const digits = hex.length <= 4 ? [...hex].map(char => char + char).join("") : hex;
+    const channel = (start: number) => parseInt(digits.slice(start, start + 2), 16);
+    return [channel(0), channel(2), channel(4), Math.round((digits.length === 8 ? channel(6) : 255) * Math.max(0, Math.min(1, opacity)))];
+  }
   if (!/^(rgba?\(|color\(srgb\s)/.test(normalized)) return null;
   const parts = normalized.match(/[-+]?\d*\.?\d+(?:e[-+]?\d+)?%?/gi);
   if (!parts || parts.length < 3) return null;

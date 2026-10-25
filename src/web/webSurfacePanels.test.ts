@@ -1,7 +1,30 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { webHistoryPanel, webSurfacePanels } from "./webSurfacePanels";
 import { webSurfaceOcclusions } from "./webSurfaceOcclusion";
+import { webSurfaceVisible } from "./webModel";
 afterEach(() => { document.body.innerHTML = ""; vi.restoreAllMocks(); });
+it.each(["address-history", "library", "data-cleanup", "tab-menu"])("uses local clipping rather than global hiding for registered %s overlays", kind => {
+  const surface = document.createElement("div"), overlay = document.createElement("div");
+  overlay.dataset.webNativeOverlay = kind; document.body.append(surface, overlay);
+  for (const role of ["menu", "dialog"]) {
+    overlay.setAttribute("role", role);
+    expect(webSurfaceVisible(surface, true)).toBe(true);
+  }
+  overlay.dataset.webNativeOverlay = "unregistered";
+  expect(webSurfaceVisible(surface, true)).toBe(false);
+});
+it("keeps native pages visible beneath browser tab menus and clips only overlapping menu geometry", () => {
+  const surface = document.createElement("div"), menu = document.createElement("div");
+  menu.setAttribute("role", "menu"); menu.dataset.webNativeOverlay = "tab-menu";
+  menu.style.cssText = "border-radius: 7px; background: rgb(25,27,31)"; document.body.append(surface, menu);
+  vi.spyOn(menu, "getBoundingClientRect").mockReturnValue(new DOMRect(50, 30, 170, 150));
+  const rect = new DOMRect(10, 10, 600, 400);
+  expect(webSurfaceVisible(surface, true)).toBe(true);
+  expect(webSurfaceOcclusions(rect).length).toBeGreaterThan(0);
+  expect(webSurfacePanels(rect)).toHaveLength(1);
+  expect(webSurfaceOcclusions(new DOMRect(700, 10, 600, 400))).toEqual([]);
+  delete menu.dataset.webNativeOverlay; expect(webSurfaceVisible(surface, true)).toBe(false);
+});
 it("exposes the cleanup popover through rectangular clipping without native bitmap rasterization", () => {
   const popover = document.createElement("div"); popover.dataset.webNativeOverlay = "data-cleanup";
   popover.style.cssText = "background: rgb(25,27,31); border-radius: 0px"; document.body.append(popover);

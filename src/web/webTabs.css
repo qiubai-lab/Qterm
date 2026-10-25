@@ -1,16 +1,23 @@
 .web-tabs-slot { display: flex; flex: 1; min-width: 0; height: 100%; }
 .web-tabs { display: flex; align-items: center; flex: 1; min-width: 0; gap: 3px; }
-.web-tab-list { display: flex; align-items: center; min-width: 0; overflow-x: auto; scrollbar-width: none; gap: 3px; }
-.web-tab { display: flex; align-items: center; flex: 0 0 auto; height: 24px; border-radius: 4px; color: var(--dim); }
-.web-tab[data-selected="true"] { background: var(--selection-surface); color: var(--text); box-shadow: inset 0 -1px var(--selection-marker); }
-.web-tabs button { display: flex; align-items: center; justify-content: center; gap: 4px; height: 23px; padding: 0 4px; border: 0; background: transparent; color: inherit; border-radius: 3px; }
-.web-tabs button:hover { background: var(--control-hover); color: var(--text); }
-.web-tabs button:focus-visible { outline: 1px solid var(--focus); outline-offset: -1px; }
-.web-tabs button[role="tab"] { min-width: 52px; max-width: 145px; font-size: 9px; }
-.web-tabs button[role="tab"]>span:last-child { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.web-tabs button>svg,.web-tabs .web-address-spinner { flex: none; }
-.web-tabs>button { flex: none; width: 23px; color: var(--muted); }
+.web-tab-list { position: relative; display: flex; align-items: center; min-width: 0; height: 100%; overflow-x: auto; scrollbar-width: none; gap: 3px; }
+.web-tab-list::-webkit-scrollbar { display: none; }
+.web-tab { position: relative; display: flex; align-items: center; box-sizing: border-box; width: 112px; min-width: 112px; max-width: 112px; flex: 0 0 112px; height: 20px; border: 1px solid transparent; border-radius: 5px; color: var(--muted); transition: color 120ms ease, border-color 120ms ease, background-color 120ms ease; }
+.web-tab:hover:not([data-selected="true"]) { border-color: var(--workspace-tab-hover-border); background: var(--workspace-tab-hover-background); }
+.web-tab[data-selected="true"] { border-color: var(--workspace-tab-active-border); background: var(--workspace-tab-active-background); color: var(--workspace-tab-active-text); box-shadow: var(--workspace-tab-active-shadow); }
+.web-tabs button { display: flex; align-items: center; justify-content: center; box-sizing: border-box; flex: none; width: 18px; height: 18px; padding: 0; border: 0; background: transparent; color: inherit; border-radius: 3px; }
+.web-tabs button:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.web-tabs button[role="tab"] { position: relative; min-width: 0; width: 100%; height: 100%; flex: 1; padding: 0 20px; font-size: 9px; }
+.web-tabs button[role="tab"]>span:last-child { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.web-tabs button[role="tab"]>svg,.web-tabs .web-address-spinner { position: absolute; left: 5px; flex: none; }
+.web-tabs .web-address-spinner { box-sizing: border-box; width: 11px; height: 11px; }
+.web-tab[data-selected="true"] button[role="tab"]>svg { color: var(--accent); }
+.web-tab>button:not([role="tab"]) { position: absolute; top: 0; right: 0; }
+.web-tab>button:not([role="tab"]):hover { color: var(--danger); background: var(--danger-bg); }
+.web-tabs>button { width: 20px; height: 20px; color: var(--muted); }
+.web-tabs>button:hover:not(:disabled) { color: var(--icon-hover); background: var(--chrome-action-hover); }
 .web-tabs button:disabled { opacity: .4; }
+@media (prefers-reduced-motion: reduce) { .web-tab { transition: none; } }
 .web-tab-page { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; }
 .web-tab-page[hidden] { display: none; }
 .web-block .terminal-target { max-width: 220px; }

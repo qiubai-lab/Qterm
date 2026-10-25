@@ -1,4 +1,5 @@
 import { isDemo } from "../lib/runtime/environment";
+import { webNativePanelSelector } from "./webSurfacePanels";
 
 export function supportsWebBlocks() {
   return !isDemo && /Windows/i.test(navigator.userAgent) && "__TAURI_INTERNALS__" in window;
@@ -14,8 +15,10 @@ export function normalizeWebAddress(value: string): string {
 }
 
 export function webSurfaceVisible(element: HTMLElement, visible: boolean): boolean {
-  // A listbox describes selection semantics, not a modal that should hide native content.
-  // Blocking list pickers already live inside dialogs; address suggestions use local clipping.
+  // Local overlays must use the same registry as native clipping. Treating their
+  // menu/dialog roles as global blockers hides the entire WebView behind them.
+  const blockingOverlay = [...document.querySelectorAll('[role="dialog"], [role="menu"]')]
+    .some(overlay => !overlay.matches(webNativePanelSelector));
   return visible && !document.hidden && !element.closest('[inert], [aria-hidden="true"]')
-    && !document.querySelector('[role="dialog"]:not([data-web-native-overlay="library"]):not([data-web-native-overlay="data-cleanup"]), [role="menu"], .dialog-backdrop, .terminal-lock-screen, .drag-ghost');
+    && !blockingOverlay && !document.querySelector('.dialog-backdrop, .terminal-lock-screen, .drag-ghost');
 }

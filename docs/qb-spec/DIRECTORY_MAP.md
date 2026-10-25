@@ -185,5 +185,9 @@
 - `src/web/webSurfacePanels.ts` 与 `src-tauri/src/infrastructure/web/surface_raster.rs`：历史下拉的 reveal/radius/theme 采样与原生透明抗锯齿边缘合成；复用 windows_frame 的鼠标穿透窗口，避免二值裁剪圆角锯齿，不拥有导航或 guest 权限。
 - `navigation_state.rs` / `windows_navigation.rs` 同步成功页面的原生 title；`domain/web_library.rs` 负责有界标题文本与不改变访问顺序的元数据更新，旧历史/收藏在再次访问时补正标题。
 
-- `src/web/WebTabs.tsx`、`WebTabButton.tsx`、`webTabs.css`：浏览器 header 标签列表、独立页面挂载/选中/关闭与溢出标题提示；标签列表不进入 Workspace 持久化。`WebDataPopover.tsx` / `webDataPopover.css` 负责地址框内的连接级选择性清理入口和反馈，原生页只接收聚合状态。
+- `src/web/WebTabs.tsx`：浏览器页面挂载/选中/关闭与每个 block 最多 10 个标签；`WebTabStrip.tsx`、`WebTabButton.tsx`、`webTabs.css` 负责紧凑 header 与溢出标题提示，`webTabDeck.ts` / `useWebTabDeck.ts` / `webTabDeck.css` 负责窄宽度叠放、预览弹簧和滚动；标签列表不进入 Workspace 持久化。`WebDataPopover.tsx` / `webDataPopover.css` 负责地址框内的连接级选择性清理入口和反馈，原生页只接收聚合状态。
 - `domain/web_storage.rs`、`infrastructure/web/profile_storage.rs` / `profile_gateway.rs` / `lifecycle.rs`：连接与认证路由身份、原生保护模式扩展点、cache/web-profiles 持久目录、稳定 loopback 代理入口和 SSH 所有者引用；跨 block 共享环境，页面独立生命周期，不持久化浏览器令牌到配置。`clear_data.rs` / `windows_data.rs` 负责串行暂停/恢复同环境页面及 WebView2 分类清理。未来主密码迁移边界见 `docs/browser-storage.md`。
+
+- `src/components/tabDeck.ts`：主工作区与网页标签共用的纯叠放几何与临界阻尼弹簧步进；各自 feature 拥有测量、预览意图和 DOM 绘制，页面/工作区生命周期不进入共享模型。
+
+- `src/components/TabActionMenu.tsx` / `tabActionMenu.css`：工作区与网页标签共享的操作菜单、视口约束与键盘/外部关闭交互。`src/web/webTabMenu.css` 负责原生网页上方菜单的平移入场与内描边，保持不透明裁剪边缘及减少动态效果支持；`src/web/useWebTabMenu.ts` 负责右键意图、折叠锚点与原生页面聚焦关闭；`webTabClose.ts` 负责当前 block 的关闭范围和活动页回退，不操作 SSH 会话、缓存或其他 block。

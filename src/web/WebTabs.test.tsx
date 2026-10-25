@@ -8,6 +8,19 @@ vi.mock("./WebBrowserPane", () => ({ WebBrowserPane: ({ visible, onMetadata }: {
   <button onClick={() => onMetadata({ title: "已载入页面", address: "https://example.test", loading: false })}>完成页面加载</button>
 </> }));
 afterEach(cleanup);
+it("limits each browser header to ten tabs and re-enables adding after closing one", () => {
+  const header = document.createElement("div"); document.body.append(header);
+  const view = render(<WebTabs header={header} profileId="a" sessionId="ssh" connecting={false} visible supported notice="" onConnect={vi.fn()} onActivate={vi.fn()}/>);
+  const add = screen.getByRole("button", { name: "新建标签页" });
+  for (let i = 0; i < 12; i++) fireEvent.click(add);
+  expect(screen.getAllByRole("tab")).toHaveLength(10);
+  expect(add).toBeDisabled();
+  fireEvent.click(screen.getAllByRole("button", { name: /关闭标签页/ })[0]);
+  expect(add).toBeEnabled();
+  fireEvent.click(add);
+  expect(screen.getAllByRole("tab")).toHaveLength(10);
+  view.unmount(); header.remove();
+});
 it("keeps page instances and their input state across tab switching and isolates header dragging", () => {
   const header = document.createElement("div"); document.body.append(header);
   const drag = vi.fn();

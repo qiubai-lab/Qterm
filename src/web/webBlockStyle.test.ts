@@ -6,7 +6,9 @@ it("uses terminal chrome without feature header overrides and keeps address cont
   expect(css).not.toMatch(/\.web-block-header|\.web-block-title|\.web-block-status|\.terminal-block-header/);
   expect(css).toMatch(/\.web-address-bar\s*\{[^}]*height: 34px/);
   expect(css).toMatch(/\.web-address-bar input\s*\{[^}]*min-width: 0[^}]*flex: 1/);
-  expect(css).toMatch(/\.web-address-bar button\s*\{[^}]*width: 25px[^}]*height: 25px[^}]*background: transparent/);
+  expect(css).toMatch(/\.web-address-bar > button, \.web-data-control > button\s*\{[^}]*width: 25px[^}]*height: 25px[^}]*background: transparent/);
+  // Toolbar sizing must not leak into the cleanup popover's text actions.
+  expect(css).not.toMatch(/\.web-address-bar button\s*\{/);
   expect(css).toContain(":focus-visible");
   expect(css).toContain("var(--focus)");
   expect(css).toMatch(/\.web-address-bar input:hover\s*\{[^}]*border-color: var\(--subtle\)[^}]*box-shadow: none/);

@@ -147,6 +147,73 @@ fn panel_bitmap(
 mod tests {
     use super::*;
     #[test]
+    fn inset_menu_stroke_survives_native_corner_compositing() {
+        let outer = WebPanel {
+            edge: WebFrame {
+                x: 10.3,
+                y: 12.2,
+                width: 80.0,
+                height: 50.0,
+                radius: 7.0,
+                stroke: 1.0,
+                color: [25, 27, 31, 255],
+            },
+            background: [25, 27, 31, 255],
+        };
+        let inner = WebPanel {
+            edge: WebFrame {
+                x: 11.3,
+                y: 13.2,
+                width: 78.0,
+                height: 48.0,
+                radius: 6.0,
+                stroke: 1.0,
+                color: [0, 221, 235, 97],
+            },
+            background: outer.background,
+        };
+        let bounds = WebBounds {
+            x: 0.0,
+            y: 0.0,
+            width: 120.0,
+            height: 100.0,
+            visible: true,
+            frame: None,
+            scrollbar: None,
+            occlusions: vec![],
+            panels: vec![outer, inner],
+        };
+        for scale in [1.0, 1.25, 1.5, 2.0, 3.0, 4.0] {
+            let bitmap = rasterize(&bounds, scale).unwrap().unwrap();
+            for (cx, sx) in [(17.3, -1.0), (83.3, 1.0)] {
+                for (cy, sy) in [(19.2, -1.0), (55.2, 1.0)] {
+                    for degrees in [0.0_f64, 30.0, 45.0, 60.0, 90.0] {
+                        let angle = degrees.to_radians();
+                        let x = ((cx + sx * 5.5 * angle.cos()) * scale).floor() as i32 - bitmap.x;
+                        let y = ((cy + sy * 5.5 * angle.sin()) * scale).floor() as i32 - bitmap.y;
+                        let pixel = ((y * bitmap.width + x) * 4) as usize;
+                        assert!(
+                            bitmap.pixels[pixel + 1] > 27,
+                            "missing corner stroke at {scale}x/{degrees}"
+                        );
+                        assert_eq!(
+                            bitmap.pixels[pixel + 3],
+                            255,
+                            "corner stroke must retain its opaque backing"
+                        );
+                    }
+                }
+            }
+            let center = ((bitmap.height / 2 * bitmap.width + bitmap.width / 2) * 4) as usize;
+            assert_eq!(
+                bitmap.pixels[center + 3],
+                0,
+                "HTML still owns the menu interior"
+            );
+        }
+    }
+
+    #[test]
     fn rounded_rim_has_partial_alpha_and_preserves_transparent_interior() {
         let panel = WebPanel {
             edge: WebFrame {

@@ -8,6 +8,11 @@ it("resolves theme colors and opacity from Chromium computed sRGB values", () =>
   expect(webFrameColor("rgba(117, 230, 207, 0.5)", 0.5)).toEqual([117, 230, 207, 64]);
   expect(webFrameColor("color(srgb 0.2 0.4 0.8 / 0.8)", 1)).toEqual([51, 102, 204, 204]);
   expect(webFrameColor("rgb(100% 0% 50% / 50%)", 1)).toEqual([255, 0, 128, 128]);
+  expect(webFrameColor("#ffffff28", 1)).toEqual([255, 255, 255, 40]);
+  expect(webFrameColor("#30343a", 1)).toEqual([48, 52, 58, 255]);
+  expect(webFrameColor("#abc8", .5)).toEqual([170, 187, 204, 68]);
+  expect(webFrameColor("#fff", 1)).toEqual([255, 255, 255, 255]);
+  expect(webFrameColor("#invalid", 1)).toBeNull();
 });
 
 it("samples animated and reversed positions independently of webpage clipping", () => {

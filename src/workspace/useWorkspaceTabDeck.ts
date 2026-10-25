@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useCallback, useRef, useState, type RefObject, type PointerEvent, type FocusEvent } from "react";
 import { layoutWorkspaceDeck, WORKSPACE_TAB_WIDTH, type DeckCard } from "./workspaceTabDeck";
+import { stepDeckSpring } from "../components/tabDeck";
 
 interface MotionCard { x: number; width: number; expansion: number; vx: number; vw: number; ve: number }
 const paintedWidth = (card: DeckCard) => Math.min(WORKSPACE_TAB_WIDTH, card.width + (card.expanded ? 0 : 8));
@@ -84,11 +85,10 @@ export function useWorkspaceTabDeck({ ids, selectedId, lockedId, dragging, strip
         else {
           // Critically damped spring; velocities survive retargets and interrupted previews.
           for (const [key, velocity, target] of [["x", "vx", card.x], ["width", "vw", paintedWidth(card)], ["expansion", "ve", Number(card.expanded)]] as const) {
-            value[velocity] += (400 * (target - value[key]) - 40 * value[velocity]) * dt;
-            value[key] += value[velocity] * dt;
             const precision = key === "expansion" ? .001 : .1;
-            if (Math.abs(target - value[key]) < precision && Math.abs(value[velocity]) < precision * 5) { value[key] = target; value[velocity] = 0; }
-            else unsettled = true;
+            const next = stepDeckSpring(value[key], value[velocity], target, dt, precision);
+            value[key] = next.value; value[velocity] = next.velocity;
+            if (!next.settled) unsettled = true;
           }
         }
         apply(card, value);
