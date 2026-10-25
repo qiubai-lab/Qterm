@@ -184,3 +184,6 @@
 
 - `src/web/webSurfacePanels.ts` 与 `src-tauri/src/infrastructure/web/surface_raster.rs`：历史下拉的 reveal/radius/theme 采样与原生透明抗锯齿边缘合成；复用 windows_frame 的鼠标穿透窗口，避免二值裁剪圆角锯齿，不拥有导航或 guest 权限。
 - `navigation_state.rs` / `windows_navigation.rs` 同步成功页面的原生 title；`domain/web_library.rs` 负责有界标题文本与不改变访问顺序的元数据更新，旧历史/收藏在再次访问时补正标题。
+
+- `src/web/WebTabs.tsx`、`WebTabButton.tsx`、`webTabs.css`：浏览器 header 标签列表、独立页面挂载/选中/关闭与溢出标题提示；标签列表不进入 Workspace 持久化。`WebDataPopover.tsx` / `webDataPopover.css` 负责地址框内的连接级选择性清理入口和反馈，原生页只接收聚合状态。
+- `domain/web_storage.rs`、`infrastructure/web/profile_storage.rs` / `profile_gateway.rs` / `lifecycle.rs`：连接与认证路由身份、原生保护模式扩展点、cache/web-profiles 持久目录、稳定 loopback 代理入口和 SSH 所有者引用；跨 block 共享环境，页面独立生命周期，不持久化浏览器令牌到配置。`clear_data.rs` / `windows_data.rs` 负责串行暂停/恢复同环境页面及 WebView2 分类清理。未来主密码迁移边界见 `docs/browser-storage.md`。

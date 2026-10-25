@@ -23,6 +23,24 @@ impl SshSessionManager {
         .await
     }
 
+    pub fn web_browser_identity(
+        &self,
+        id: &str,
+        profile: &str,
+    ) -> Result<crate::domain::web_storage::BrowserIdentity, SessionControlError> {
+        let entry = self.entry(id)?;
+        if entry.purpose != SessionPurpose::Network
+            || entry.state() != SessionState::Connected
+            || entry.profile_id.as_deref() != Some(profile)
+        {
+            return Err(SessionControlError::SessionNotConnected);
+        }
+        entry
+            .browser_identity
+            .clone()
+            .ok_or(SessionControlError::SessionNotConnected)
+    }
+
     pub fn web_session_connected(&self, id: &str) -> bool {
         self.entry(id).is_ok_and(|entry| {
             entry.purpose == SessionPurpose::Network && entry.state() == SessionState::Connected

@@ -15,7 +15,7 @@ impl SshSessionManager {
         let (cancel_sender, cancel_receiver) = oneshot::channel();
         let (control_sender, control_receiver) = mpsc::channel(128);
         let route_length = request.route.len();
-        let entry = Arc::new(SessionEntry::new(
+        let mut entry = SessionEntry::new(
             request
                 .route
                 .last()
@@ -26,7 +26,24 @@ impl SshSessionManager {
             events,
             cancel_sender,
             control_sender,
-        ));
+        );
+        entry.browser_identity = request.profile_id.as_ref().map(|profile| {
+            crate::domain::web_storage::BrowserIdentity {
+                profile: profile.clone(),
+                route: request
+                    .route
+                    .iter()
+                    .map(|node| {
+                        (
+                            node.endpoint.host().to_owned(),
+                            node.endpoint.port(),
+                            node.username.clone(),
+                        )
+                    })
+                    .collect(),
+            }
+        });
+        let entry = Arc::new(entry);
         entry.emit(SessionEvent::StateChanged(SessionState::Connecting));
         self.sessions
             .lock()

@@ -132,6 +132,14 @@ async fn exercise() {
         .await
         .unwrap();
     assert_ne!(proxy, 0);
+    assert_eq!(
+        manager
+            .start_web_proxy(&id, "profile", "web-test")
+            .await
+            .unwrap(),
+        proxy,
+        "tabs on the same SSH session reuse its browser listener"
+    );
     let other_proxy = manager
         .start_web_proxy(&id, "profile", "web-second")
         .await

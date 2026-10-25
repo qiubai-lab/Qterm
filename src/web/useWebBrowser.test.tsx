@@ -8,6 +8,24 @@ const ipc = vi.hoisted(() => ({ open: vi.fn(), close: vi.fn(async () => {}), syn
 vi.mock("../lib/tauri/web", () => ({ openWeb: ipc.open, closeWeb: ipc.close, syncWeb: ipc.sync, webAction: ipc.action, listenWebPages: ipc.listen, listenWebFocus: ipc.focus, readWebMetrics: vi.fn(async () => null) }));
 beforeEach(() => { vi.clearAllMocks(); ipc.open.mockResolvedValue(undefined); });
 
+it("hides inactive tabs once without measuring their surface and resumes the same guest", async () => {
+  let nextFrame!: FrameRequestCallback;
+  const frame = vi.spyOn(window, "requestAnimationFrame").mockImplementation(callback => { nextFrame = callback; return 1; });
+  const element = document.createElement("div"); document.body.append(element);
+  const measure = vi.spyOn(element, "getBoundingClientRect").mockReturnValue(new DOMRect(10, 10, 400, 300));
+  const surface = { current: element };
+  const hook = renderHook(({ visible }) => useWebBrowser(surface, "ssh", "profile", visible), { initialProps: { visible: false } });
+  try {
+    await act(() => hook.result.current.navigate("https://internal.invalid"));
+    await waitFor(() => expect(ipc.sync).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ visible: false })));
+    const count = ipc.sync.mock.calls.length;
+    await act(async () => nextFrame(0)); await act(async () => nextFrame(1));
+    expect(measure).not.toHaveBeenCalled(); expect(ipc.sync).toHaveBeenCalledTimes(count);
+    hook.rerender({ visible: true }); await act(async () => nextFrame(2));
+    expect(measure).toHaveBeenCalled(); expect(ipc.open).toHaveBeenCalledOnce();
+  } finally { hook.unmount(); element.remove(); frame.mockRestore(); }
+});
+
 it("resynchronizes the palette after document navigation and theme changes with unchanged viewport bounds", async () => {
   let nextFrame!: FrameRequestCallback;
   const frame = vi.spyOn(window, "requestAnimationFrame").mockImplementation(callback => { nextFrame = callback; return 1; });

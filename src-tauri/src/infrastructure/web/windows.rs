@@ -1,5 +1,6 @@
 use tauri::{Manager, WebviewBuilder, WebviewUrl, webview::NewWindowResponse};
 
+#[cfg(test)]
 pub(super) fn create(
     app: &tauri::AppHandle,
     label: &str,
@@ -10,6 +11,17 @@ pub(super) fn create(
         .prefix("qterm-web-")
         .tempdir()
         .map_err(|_| "无法创建独立浏览会话")?;
+    create_persistent(app, label, port, url, directory.path())?;
+    Ok(directory)
+}
+
+pub(super) fn create_persistent(
+    app: &tauri::AppHandle,
+    label: &str,
+    port: u16,
+    url: tauri::Url,
+    directory: &std::path::Path,
+) -> Result<(), String> {
     let window = app.get_window("main").ok_or("主窗口不存在")?;
     let app_origin = app
         .get_webview("main")
@@ -22,14 +34,14 @@ pub(super) fn create(
         return Err("不能在网页 Block 中打开应用内部地址".into());
     }
     let builder = WebviewBuilder::new(label, WebviewUrl::External("about:blank".parse().unwrap()))
-        .data_directory(directory.path().to_path_buf())
-        .incognito(true)
+        .data_directory(directory.to_path_buf())
+        .incognito(false)
         .initialization_script(super::scrollbars::script(None))
         .initialization_script(include_str!("metrics_script.mjs"))
         .additional_browser_args(&browser_arguments(port))
         .disable_drag_drop_handler()
         .on_navigation(move |url| {
-            crate::domain::web::allowed_web_url(url.as_str())
+            (url.as_str() == "about:blank" || crate::domain::web::allowed_web_url(url.as_str()))
                 && app_origin
                     .as_ref()
                     .is_none_or(|origin| *origin != url.origin())
@@ -57,7 +69,7 @@ pub(super) fn create(
         let _ = view.close();
         return Err(error);
     }
-    Ok(directory)
+    Ok(())
 }
 
 // Wry 0.55 uses additional_browser_args instead of its generated proxy args.

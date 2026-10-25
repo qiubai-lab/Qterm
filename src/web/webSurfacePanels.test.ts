@@ -2,6 +2,14 @@ import { afterEach, expect, it, vi } from "vitest";
 import { webHistoryPanel, webSurfacePanels } from "./webSurfacePanels";
 import { webSurfaceOcclusions } from "./webSurfaceOcclusion";
 afterEach(() => { document.body.innerHTML = ""; vi.restoreAllMocks(); });
+it("exposes the cleanup popover through rectangular clipping without native bitmap rasterization", () => {
+  const popover = document.createElement("div"); popover.dataset.webNativeOverlay = "data-cleanup";
+  popover.style.cssText = "background: rgb(25,27,31); border-radius: 0px"; document.body.append(popover);
+  vi.spyOn(popover, "getBoundingClientRect").mockReturnValue(new DOMRect(50, 30, 250, 280));
+  const surface = new DOMRect(10, 10, 600, 400);
+  expect(webSurfaceOcclusions(surface)).toEqual([{ x: 40, y: 20, width: 250, height: 280 }]);
+  expect(webSurfacePanels(surface)).toEqual([]);
+});
 it("clips only the owning guest while the drawer slides right and retains nested modal behavior", () => {
   const owner = document.createElement("div");
   owner.className = "web-browser-surface";

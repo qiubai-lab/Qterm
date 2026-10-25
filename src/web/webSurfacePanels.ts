@@ -1,7 +1,7 @@
 import type { WebPanel } from "../lib/tauri/web";
 import { webFrameColor } from "./webSurfaceFrame";
 
-export const webNativePanelSelector = '[data-web-native-overlay="address-history"], [data-web-native-overlay="library"]';
+export const webNativePanelSelector = '[data-web-native-overlay="address-history"], [data-web-native-overlay="library"], [data-web-native-overlay="data-cleanup"]';
 
 /** Shared reveal geometry for native holes and the antialiased rim above the guest. */
 export function webHistoryPanel(element: HTMLElement, surface: DOMRect, style = getComputedStyle(element)): WebPanel | null {
@@ -28,6 +28,6 @@ export function webSurfacePanels(surface: DOMRect): WebPanel[] {
   return [...document.querySelectorAll<HTMLElement>(webNativePanelSelector)]
     // Square drawers are fully exposed by their rectangular hole. Only rounded
     // panels need a native antialiased rim; rasterizing a drawer each frame is costly.
-    .filter(element => element.dataset.webNativeOverlay !== "library")
+    .filter(element => element.dataset.webNativeOverlay === "address-history")
     .map(element => webHistoryPanel(element, surface)).filter((panel): panel is WebPanel => panel !== null).slice(0, 8);
 }

@@ -1,0 +1,14 @@
+.web-address-field { display: flex; position: relative; flex: 1; min-width: 0; align-items: center; border: 1px solid transparent; border-radius: 4px; }
+.web-address-field:hover { border-color: var(--subtle); background: var(--control-hover); }
+.web-address-field:focus-within { border-color: var(--focus); }
+.web-address-field input { border: 0; }
+.web-address-field input:is(:focus,:focus-visible,:hover) { border: 0; outline: none; background: transparent; }
+.web-data-control { position: relative; flex: none; }
+.web-data-popover { position: absolute; z-index: 3; right: 0; top: calc(100% + 7px); width: 290px; max-width: calc(100vw - 40px); overflow: auto; box-sizing: border-box; padding: 10px; border: 1px solid var(--border); border-radius: 0; background: var(--raised); color: var(--text); font-size: 11px; }
+.web-data-popover p { margin: 6px 0; color: var(--dim); font-size: 10px; line-height: 1.5; overflow-wrap: anywhere; }
+.web-data-popover label { display: flex; align-items: flex-start; gap: 7px; margin: 10px 0; }
+.web-data-popover input[type="checkbox"] { flex: none; width: 13px; height: 13px; padding: 0; margin: 1px 0 0; accent-color: var(--accent); }
+.web-data-popover small { display: block; margin-top: 3px; color: var(--dim); font-size: 9px; }
+.web-data-status { height: 28px; overflow: auto; overflow-wrap: anywhere; line-height: 14px; font-size: 10px; color: var(--muted); }
+.web-data-actions { display: flex; justify-content: flex-end; gap: 6px; }
+.web-data-actions .ui-button { width: auto; padding: 0 9px; border: 1px solid var(--border); }

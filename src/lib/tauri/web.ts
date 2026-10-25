@@ -16,3 +16,6 @@ export const syncWeb = (id: string, bounds: WebBounds) => invoke<void>("web_sync
 export const webAction = (id: string, action: "navigate" | "back" | "forward" | "reload" | "stop", url?: string) => invoke<void>("web_action", { id, action, url });
 export const listenWebPages = (receive: (page: WebPageState) => void) => listen<WebPageState>("web-page-state", event => receive(event.payload));
 export const listenWebFocus = (receive: (label: string) => void) => listen<string>("web-guest-focused", event => receive(event.payload));
+
+export interface WebDataSelection { cache: boolean; cookies: boolean; storage: boolean }
+export const clearWebData = (id: string, selection: WebDataSelection) => invoke<void>("web_clear_data", { id, selection });

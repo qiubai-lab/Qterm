@@ -176,6 +176,7 @@ pub enum TransferRequest {
 }
 
 struct SessionEntry {
+    browser_identity: Option<crate::domain::web_storage::BrowserIdentity>,
     target: RouteNodeMetadata,
     purpose: SessionPurpose,
     profile_id: Option<String>,
@@ -199,6 +200,7 @@ impl SessionEntry {
         control: mpsc::Sender<SessionControl>,
     ) -> Self {
         Self {
+            browser_identity: None,
             target,
             purpose,
             profile_id,

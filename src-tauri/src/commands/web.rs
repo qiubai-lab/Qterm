@@ -4,6 +4,19 @@ use crate::{
 };
 use tauri::{AppHandle, Manager, State};
 
+#[tauri::command]
+pub async fn web_clear_data(
+    app: AppHandle,
+    state: State<'_, WebHost>,
+    sessions: State<'_, SessionState>,
+    id: String,
+    selection: crate::domain::web_storage::ClearBrowserData,
+) -> Result<(), String> {
+    state
+        .clear_data(&app, sessions.manager(), &id, selection)
+        .await
+}
+
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct OpenWeb {

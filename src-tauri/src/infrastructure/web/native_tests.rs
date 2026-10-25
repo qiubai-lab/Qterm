@@ -6,7 +6,7 @@ use std::{
     io::{Read, Write},
     net::{TcpListener, TcpStream},
     sync::{
-        Mutex as StdMutex,
+        Arc, Mutex as StdMutex,
         atomic::{AtomicBool, Ordering},
     },
     time::{Duration, Instant},
@@ -203,6 +203,7 @@ fn native_webview_smoke() {
     }
     assert!(first.saw("GET /cookie-isolated") && second.saw("GET /cookie-isolated"));
     assert!(!first.saw("GET /cookie-leaked") && !second.saw("GET /cookie-leaked"));
+    super::native_profile_tests::verify(&mut app, &a, &b, _directories.0.path(), ports.0);
     a.navigate("http://127.0.0.1:8765/".parse().unwrap())
         .unwrap();
     while !first.saw("127.0.0.1:8765") {

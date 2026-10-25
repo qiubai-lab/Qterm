@@ -1,6 +1,6 @@
 //! Native guest browser lifetime. No credentials or terminal handles enter a guest.
 use crate::infrastructure::ssh::client::SshSessionManager;
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
 use tauri::{AppHandle, Manager};
 use tokio::sync::Mutex;
 
@@ -19,8 +19,18 @@ pub fn trusted_handler(
     }
 }
 
+mod clear_data;
 mod frame_raster;
+mod lifecycle;
 mod metrics;
+#[cfg(all(test, windows))]
+mod native_profile_tests;
+mod profile_gateway;
+#[cfg(test)]
+mod profile_gateway_tests;
+mod profile_storage;
+#[cfg(windows)]
+mod windows_data;
 pub use metrics::WebMetrics;
 #[cfg(any(target_os = "windows", test))]
 mod navigation_state;
@@ -47,20 +57,28 @@ mod native_tests;
 
 pub struct WebHost {
     guests: Mutex<HashMap<String, Guest>>,
+    environments: Mutex<HashMap<String, Environment>>,
+    root: std::path::PathBuf,
 }
 
 struct Guest {
     session: String,
     geometry: Option<[f64; 5]>,
     visible: bool,
-    // Keep the directory owned until the native view has closed.
-    _directory: tempfile::TempDir,
+    environment: String,
 }
 
-impl Default for WebHost {
-    fn default() -> Self {
+struct Environment {
+    directory: std::path::PathBuf,
+    gateway: profile_gateway::ProfileGateway,
+}
+
+impl WebHost {
+    pub fn new(root: std::path::PathBuf) -> Self {
         Self {
             guests: Mutex::new(HashMap::new()),
+            environments: Mutex::new(HashMap::new()),
+            root,
         }
     }
 }
@@ -125,90 +143,6 @@ pub fn label(id: &str) -> Result<String, String> {
 }
 
 impl WebHost {
-    pub async fn open(
-        &self,
-        app: &AppHandle,
-        sessions: &Arc<SshSessionManager>,
-        id: &str,
-        session: &str,
-        profile: &str,
-        address: &str,
-    ) -> Result<(), String> {
-        let label = label(id)?;
-        let url: tauri::Url = address.parse().map_err(|_| "网页地址无效")?;
-        if !crate::domain::web::allowed_web_url(url.as_str()) {
-            return Err("仅支持不含用户名或密码的 HTTP/HTTPS 地址".into());
-        }
-        if !cfg!(target_os = "windows") {
-            return Err("Web Block 目前仅支持 Windows".into());
-        }
-        let mut guests = self.guests.lock().await;
-        if guests.contains_key(&label) {
-            return Err("网页已打开".into());
-        }
-        if guests.len() >= 16 {
-            return Err("最多同时打开 16 个网页，请先关闭部分网页".into());
-        }
-        let port = sessions
-            .start_web_proxy(session, profile, &label)
-            .await
-            .map_err(|_| "无法启动网页代理，请重新连接")?;
-        let result = self.create(app, &label, port, url);
-        match result {
-            Ok(directory) => {
-                guests.insert(
-                    label,
-                    Guest {
-                        session: session.to_owned(),
-                        geometry: None,
-                        visible: false,
-                        _directory: directory,
-                    },
-                );
-                Ok(())
-            }
-            Err(error) => {
-                let _ = sessions.stop_network_rule(session, label).await;
-                Err(error)
-            }
-        }
-    }
-
-    fn create(
-        &self,
-        app: &AppHandle,
-        label: &str,
-        port: u16,
-        url: tauri::Url,
-    ) -> Result<tempfile::TempDir, String> {
-        #[cfg(target_os = "windows")]
-        {
-            windows::create(app, label, port, url)
-        }
-        #[cfg(not(target_os = "windows"))]
-        {
-            let _ = (app, label, port, url);
-            Err("Web Block 目前仅支持 Windows".into())
-        }
-    }
-
-    pub async fn close(
-        &self,
-        app: &AppHandle,
-        sessions: &SshSessionManager,
-        id: &str,
-    ) -> Result<(), String> {
-        let label = label(id)?;
-        let mut guests = self.guests.lock().await;
-        if let Some(view) = app.get_webview(&label) {
-            view.close().map_err(|_| "无法关闭网页")?;
-        }
-        if let Some(guest) = guests.remove(&label) {
-            let _ = sessions.stop_network_rule(&guest.session, label).await;
-        }
-        Ok(())
-    }
-
     pub async fn sync(
         &self,
         app: &AppHandle,

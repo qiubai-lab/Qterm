@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
-import { closeWeb, listenWebFocus, listenWebPages, openWeb, syncWeb, webAction, type WebBounds, type WebLoadState, type WebMetrics } from "../lib/tauri/web";
+import { clearWebData, type WebDataSelection, closeWeb, listenWebFocus, listenWebPages, openWeb, syncWeb, webAction, type WebBounds, type WebLoadState, type WebMetrics } from "../lib/tauri/web";
 import { normalizeWebAddress, webSurfaceVisible } from "./webModel";
 import { webSurfaceOcclusions } from "./webSurfaceOcclusion";
 import { webSurfacePanels } from "./webSurfacePanels";
@@ -36,6 +36,7 @@ export function useWebBrowser(surface: RefObject<HTMLDivElement | null>, session
     let lastBounds = "";
     let documentRevision = 0;
     let syncing = false;
+    let hidden = false;
     let metricWatcher: ReturnType<typeof watchWebMetrics> | undefined;
     current.current = id;
     setLoading(true);
@@ -72,6 +73,14 @@ export function useWebBrowser(surface: RefObject<HTMLDivElement | null>, session
         frame = requestAnimationFrame(update);
         const element = surface.current;
         if (!element || syncing) return;
+        if (!visibility.current) {
+          if (!hidden) {
+            hidden = true; lastBounds = ""; syncing = true;
+            void syncWeb(id, { x: 0, y: 0, width: 1, height: 1, visible: false }).catch(err => { hidden = false; if (!disposed) setError(String(err)); }).finally(() => { syncing = false; });
+          }
+          return;
+        }
+        hidden = false;
         const rect = element.getBoundingClientRect();
         const bounds: WebBounds = { x: Math.max(0, rect.x), y: Math.max(0, rect.y), width: Math.max(1, rect.width), height: Math.max(1, rect.height), visible: rect.width > 1 && rect.height > 1 && webSurfaceVisible(element, visibility.current), occlusions: webSurfaceOcclusions(rect), frame: webSurfaceFrame(rect), panels: webSurfacePanels(rect), scrollbar: webScrollbarTheme() };
         const key = JSON.stringify([bounds, window.devicePixelRatio, documentRevision]);
@@ -105,5 +114,9 @@ export function useWebBrowser(surface: RefObject<HTMLDivElement | null>, session
     const id = current.current;
     try { await webAction(id, action); if (current.current === id) setError(""); } catch (err) { if (current.current === id) setError(String(err)); }
   }
-  return { navigate, action, address, title, error, loading, loadState, metrics, ready: Boolean(sessionId) && ready };
+  async function clearData(selection: WebDataSelection) {
+    if (!current.current) throw new Error("请先打开网页");
+    await clearWebData(current.current, selection);
+  }
+  return { navigate, action, clearData, address, title, error, loading, loadState, metrics, ready: Boolean(sessionId) && ready };
 }
