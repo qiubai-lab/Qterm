@@ -237,6 +237,9 @@ pub fn run() {
             let paths = DataPaths::from_root(active_configuration.path().to_path_buf());
             paths.initialize()?;
             app.manage(infrastructure::web::WebHost::new(paths.cache.join("web-profiles")));
+            app.manage(commands::web_tabs::WebTabState::new(
+                infrastructure::persistence::json_web_tabs::JsonWebTabs::new(paths.cache.join("web-tabs/sessions.json")),
+            ));
             app.manage(commands::web_library::WebLibraryState::new(
                 infrastructure::persistence::json_web_library::JsonWebLibrary::new(paths.device.join("web-library.json")),
             ));
@@ -277,6 +280,7 @@ pub fn run() {
         .invoke_handler(infrastructure::web::trusted_handler(tauri::generate_handler![
                 commands::web::web_open, commands::web::web_accept_popup, commands::web::web_reject_popup, commands::web::web_close, commands::web::web_sync, commands::web::web_action, commands::web::web_metrics, commands::web::web_snapshot, commands::web::web_clear_data,
             commands::web_library::web_library,
+            commands::web_tabs::web_tab_cache,
             configuration_merge_select, configuration_merge_preview, configuration_merge_commit, configuration_merge_cancel, configuration_merge_unlock_source,
             browser_proxy_list,
             browser_proxy_launch,

@@ -240,3 +240,19 @@ supersedes: []
 验收补充对应 AC-002/AC-004：真实 Chromium 的 48 组矩阵通过，包含实际参照组件、三主题、有/无 Web Block、减少动态效果与快速重新进入；打开/关闭期间宽高和材质不发生缩放变化，移出立即释放 DOM/原生裁剪。详细前后测量、脚本和图片见 evidence README。本轮没有重新打桌面安装包，上一轮安装包不包含本次前端动效更新。
 
 本次最终验证：`$env:VITEST_MAX_WORKERS='4'; pnpm check` 通过（222 个测试文件通过、1 个跳过；1310 项测试通过、2 项跳过；21 项 Node 脚本测试、ESLint、TypeScript 和 Vite build 均通过）。首轮全量检查发现四处旧测试仍断言缩放/延迟卸载，已更新为公共动画与即时关闭后的重新进入、可访问描述行为，再次全量通过。源码体积门禁 0 reminders，`git diff --check` 与 qb change validate 通过；Vite 保留既有大 chunk 提示。
+
+
+## 后续修复：工作区拖放与浏览器分屏（2026-10-25）
+
+用户已授权实施。分析确认 `LayoutView` 的 `visible && !drag` 在公共 overlay 层之前隐藏全部 guest，是上一轮遗漏；WebBlock 未接入落点高亮、未提供双方向分屏入口，底层布局树本身接受 web leaf。
+
+本轮范围与 Behavior Delta：拖动已有 Block 时页面继续保持 visible，工作区声明 transition，复用输入阻断 → 有界快照/解码/宿主绘制 → 原生空 region 的桥接；松手恢复同一 guest。统一基于布局几何命中目标并绘制五区域预览，避免依赖原生网页上方的 DOM hit-test。pointercancel、丢失捕获、Escape、窗口失焦、工作区隐藏与卸载均取消而不提交。分隔线调整仍实时同步几何，取消恢复原比例。浏览器新增左右/上下分屏，创建同连接的空白 Web Block；旧页面、标签及会话保持。标签按钮仍独立交互，标签栏空白处可拖动整个浏览器；本轮不引入跨 Block 转移单个网页标签的状态模型。
+
+实施 owner：`useLayoutInteractions` 管理工作区指针生命周期/几何命中，`LayoutDragOverlay` 管理共享落点/过渡声明，`LayoutView` 只组合；`openWeb.direction` 复用已有布局 action，保持默认左右打开及持久化格式。现有 native surface owner 继续管理快照和原生恢复，不新增第二套 guest 生命周期。LayoutView baseline 从 638 收紧至 550。
+
+验证计划对应 AC-001/002/004/005/006：工作区真实组件回归拖放网页的五区域/多类型、保留页面实例、分屏入口；过渡期间 IPC 不发送 visible=false、快照前后及取消恢复；事件取消/窗口隐藏/卸载、分隔线取消；三主题浏览器交互截图与 native bridge smoke；最终 pnpm check 和源码体积门禁。父 spec 的实体触摸/跨显示器/逐帧原生录屏边界继续保留，不能以 DOM fixture 代替这些验收。
+
+
+本轮完成记录：拖拽/分隔线交互已抽取到独立 owner，原有各业务 drop-zone 移到公共工作区层，`visible && !drag` 已删除。真实浏览器验证还发现 Portal 标签栏不能依靠 DOM header 接收 React 冒泡，已通过显式回调连接空白区域；标签按钮保持隔离。五类型布局身份/连接保护与两方向创建测试、工作区取消/重新布局测试、公共 transition 与 native IPC 协调测试均通过。
+
+验收证据见 [evidence README](../evidence/QB-20261025-global-native-overlays/README.md)：15 组三主题真实指针拖放、浏览器空白标题区拖动/Escape/上下分屏通过；独立 Windows `native_webview_smoke` 再次通过。`pnpm check` 通过（1359 项，2 项跳过；Node 21 项；类型/构建/lint 通过），Portal 最终接入后另有 37 项定向回归与最终源码门禁。全量记录包含当前并行任务的测试，不代表本变更新增同等数量测试。Directory Map 已更新；没有改 guest 权限、存储格式、SSH 身份或本轮重打安装包。原父 spec 未覆盖的实体输入/跨显示器/逐帧原生录像验收继续保留。

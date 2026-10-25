@@ -30,3 +30,21 @@ node docs/qb-spec/evidence/QB-20261025-global-native-overlays/tooltip-motion-pro
 本机验证使用 Codex 提供的 `C:/Users/Test/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright`。移出行为以用户指定参照为准：保留入场动画，移出立即收起，不再使用之前 160ms 的缩放退场，也不采用中间尝试的静止延迟消失方案。
 
 最终前端门禁：`$env:VITEST_MAX_WORKERS='4'; pnpm check` 通过，1310 项 Vitest 测试通过、2 项跳过，21 项 Node 脚本测试通过；ESLint、TypeScript、生产构建与源码体积门禁均通过。本节动效验证使用隔离 Chromium 页面，不等同于原生窗口逐帧录屏或多显示器验收。
+
+
+## 工作区拖放与浏览器分屏
+
+2026-10-25，修复遗漏的 `visible && !drag` 隐藏路径，工作区拖拽转入公共 transition 快照桥接。所有 Block 共用布局几何命中与落点高亮；浏览器支持左右/上下新建同连接空白窗口，网页标签栏空白处显式转发 Portal 指针事件以移动整个 Block。取消不提交布局，旧页面实例保持。
+
+- `layout-drag-results.json`：真实 Edge/Chromium 指针驱动产品 WorkspaceCanvas、WebBlock、WebTabs 和公共协调器；三主题 × 五个落点，共 15 组，保持页面实例和表单草稿，拖拽期间 IPC 无 visible=false；另验证浏览器标签栏空白拖动、Escape 恢复、上下分屏。
+- `layout-drag-dark.png`、`layout-drag-light.png`、`layout-drag-cyberpunk.png`：隔离 fixture 拖拽预览与落点提示。
+- `layout-browser-split.png`：上下分屏后的两个浏览器 Block。示例网页为合成 fixture，不是用户页面。
+- `layout-drag-probe.mjs`：可复验脚本，IPC 与网页内容用隔离 fixture；它不证明 HWND 层的鼠标捕获。真实 Windows bridge 由同日再次通过的 `native_webview_smoke` 覆盖：截图解码、输入禁用、空 region、controller 可见、原 URL 恢复及同实例生命周期。
+
+```powershell
+node docs/qb-spec/evidence/QB-20261025-global-native-overlays/layout-drag-probe.mjs C:/Users/Test/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright
+```
+
+最终验证：`pnpm check` 通过（230 文件通过、1 文件跳过；1359 项测试通过、2 项跳过；21 项 Node 脚本、ESLint、TypeScript、Vite build 通过）。Portal 显式转发的最终补充由 5 文件、37 项定向测试、最终 ESLint/源码门禁及上面真实浏览器脚本验证。全量测试期间当前 checkout 含其他任务的独立测试，不将全部测试数量归因于本修复。Vitest 出现一次退出等待提示但命令最终 exit 0；Vite 保留已有大 chunk 提示。
+
+本轮不改 Rust 实现/安装配置，没有重打安装包。跨显示器 DPI、实体触摸及完整应用原生拖拽逐帧录屏仍未覆盖。

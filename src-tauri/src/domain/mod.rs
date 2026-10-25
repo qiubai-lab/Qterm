@@ -20,3 +20,4 @@ pub mod web;
 pub mod web_library;
 
 pub mod web_storage;
+pub mod web_tabs;

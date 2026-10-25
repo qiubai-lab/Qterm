@@ -28,6 +28,8 @@ it("keeps page instances and their input state across tab switching and isolates
   const first = screen.getByLabelText("当前页面内容"); fireEvent.change(first, { target: { value: "draft" } });
   fireEvent.pointerDown(screen.getByRole("button", { name: "新建标签页" }));
   expect(drag).not.toHaveBeenCalled();
+  fireEvent.pointerDown(header.querySelector(".web-tabs")!);
+  expect(drag).toHaveBeenCalledOnce();
   fireEvent.click(screen.getByRole("button", { name: "新建标签页" }));
   expect(screen.getAllByRole("tab")).toHaveLength(2);
   expect(first).toBeInTheDocument(); expect(first).not.toBeVisible();

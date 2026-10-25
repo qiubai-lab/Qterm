@@ -1,4 +1,4 @@
-import { useMemo, useRef } from "react";
+import { useMemo, useRef, type PointerEvent } from "react";
 import { Icon } from "../components/Icon";
 import { ThemedTooltipButton } from "../components/ThemedTooltipButton";
 import { WebTabButton } from "./WebTabButton";
@@ -13,9 +13,10 @@ import { webTabCloseLabels, webTabCloseTargets, type WebTabCloseAction } from ".
 interface Props {
   tabs: (WebTabMetadata & { id: string })[]; selected: string; visible: boolean;
   onSelect: (id: string) => void; onClose: (ids: string[], anchor: string) => void; onAdd: () => void; onActivate: () => void;
+  onBlankPointerDown?: (event: PointerEvent<HTMLElement>) => void;
 }
 
-export function WebTabStrip({ tabs, selected, visible, onSelect, onClose, onAdd, onActivate }: Props) {
+export function WebTabStrip({ tabs, selected, visible, onSelect, onClose, onAdd, onActivate, onBlankPointerDown }: Props) {
   const ids = useMemo(() => tabs.map(tab => tab.id), [tabs]);
   const bar = useRef<HTMLDivElement>(null);
   const strip = useRef<HTMLDivElement>(null);
@@ -23,7 +24,11 @@ export function WebTabStrip({ tabs, selected, visible, onSelect, onClose, onAdd,
   const context = useWebTabMenu(ids, visible);
   const deck = useWebTabDeck(ids, selected, bar, strip, tabRefs, context.menu?.anchorId ?? null);
   const scroll = (direction: number) => strip.current?.scrollBy({ left: direction * Math.max(112, strip.current.clientWidth * .7), behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
-  return <div ref={bar} className="web-tabs" data-stacked={deck.layout.stacked || undefined} {...deck.events} {...context.events} onPointerDown={event => { event.stopPropagation(); onActivate(); }}>
+  return <div ref={bar} className="web-tabs" data-stacked={deck.layout.stacked || undefined} {...deck.events} {...context.events} onPointerDown={event => {
+    if ((event.target as HTMLElement).closest("button, .web-tab")) event.stopPropagation();
+    else if (onBlankPointerDown) { event.stopPropagation(); onBlankPointerDown(event); }
+    onActivate();
+  }}>
     {deck.overflowing && <ThemedTooltipButton tooltip="显示左侧标签" aria-label="显示左侧标签" onClick={() => scroll(-1)}><Icon name="back" size={11}/></ThemedTooltipButton>}
     <div ref={strip} className="web-tab-list" role="tablist" aria-label="网页标签" onWheel={event => { if (deck.overflowing && !event.deltaX) event.currentTarget.scrollLeft += event.deltaY; }}>
       {deck.layout.stacked && <div className="web-deck-extent" aria-hidden="true" style={{ width: deck.layout.width + WEB_TAB_OVERLAP }}/>}

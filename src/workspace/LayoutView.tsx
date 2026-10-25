@@ -1,10 +1,9 @@
-import { boundsStyle, dropPosition } from "./layoutPresentation";
+import { boundsStyle } from "./layoutPresentation";
 import { WebBlock } from "../web/WebBlock";
 import { supportsWebBlocks } from "../web/webModel";
 import { TerminalHeaderActions } from "../terminal/TerminalHeaderActions";
 import { TerminalProtocolTag } from "../terminal/notifications/TerminalProtocolTag";
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import { Icon } from "../components/Icon";
 import { BlockHeaderClose } from "./BlockHeaderClose";
 import { ConnectionRouteProgress } from "../components/ConnectionRouteProgress";
 import { FileBrowserPane } from "../files/FileBrowserPane";
@@ -18,8 +17,9 @@ import { NetworkPane } from "../network/NetworkPane";
 import { TerminalPanel } from "../terminal/TerminalPanel";
 import { OSC7_REPORT_GRACE_MS, TERMINAL_ATTENTION_MS } from "../terminal/terminalAttention";
 import { openTerminalSearch } from "../terminal/terminalViewRegistry";
-import { terminalBlockIds, type DropPosition } from "./layout";
-import { calculateLayoutGeometry, resolveLayoutBounds, type LayoutDividerGeometry } from "./layoutGeometry";
+import { terminalBlockIds } from "./layout";
+import { useLayoutInteractions } from "./useLayoutInteractions";
+import { LayoutDragOverlay } from "./LayoutDragOverlay";
 import { isSameGitRepository, recentGitRepositoriesForScope } from "./gitRepositoryHistory";
 import { isAbsoluteLocalPath, isValidRemotePath } from "./gitWindow";
 import type { GitRepositoryHistoryEntry, GitTarget, LayoutLeaf, Workspace } from "./model";
@@ -27,93 +27,14 @@ import { TerminalTargetPicker } from "./TerminalTargetPicker";
 import { useWorkspace, type FileRuntime } from "./WorkspaceProvider";
 export type ConnectionOwner = "terminal" | "files" | "network" | "git";
 
-interface DragState {
-  sourceId: string;
-  targetId: string | null;
-  position: DropPosition | null;
-  x: number;
-  y: number;
-}
-
 function BlockNotice({ message }: { message: string }) { return <div className="block-notice" role="alert" aria-live="assertive" aria-atomic="true">{message}</div>; }
 
 export function WorkspaceCanvas({ workspace, visible, localTerminalAttention = false, remoteShellIntegrationEnabled = false, terminalSettingsReady = true, onRequestClose, onRequestDisconnect, onRequestAuthConnection, onOpenConnectionManager }: { workspace: Workspace; visible: boolean; localTerminalAttention?: boolean; remoteShellIntegrationEnabled?: boolean; terminalSettingsReady?: boolean; onRequestClose: (blockId: string) => void; onRequestDisconnect?: (owner: ConnectionOwner, blockId: string, name: string, local: boolean) => void; onRequestAuthConnection: (owner: ConnectionOwner, blockId: string, profile: ConnectionProfile) => void; onOpenConnectionManager?: () => void }) {
   const { dispatch } = useWorkspace();
-  const [drag, setDrag] = useState<DragState | null>(null);
-  const [liveRatios, setLiveRatios] = useState<Record<string, number>>({});
-  const dragRef = useRef<DragState | null>(null);
-  const layoutSurfaceRef = useRef<HTMLDivElement>(null);
-  const geometry = calculateLayoutGeometry(workspace.layout, liveRatios);
+  const { drag, geometry, layoutSurfaceRef, beginDrag, startResize } = useLayoutInteractions(workspace, visible, dispatch);
   const activeBounds = geometry.leaves.find(({ node }) => node.blockId === workspace.activeBlockId)?.bounds ?? null;
 
-  function beginDrag(event: ReactPointerEvent<HTMLElement>, blockId: string) {
-    if (event.button !== 0 || (event.target as HTMLElement).closest("button")) return;
-    const element = event.currentTarget;
-    const start = { x: event.clientX, y: event.clientY };
-    element.setPointerCapture(event.pointerId);
-    let committed = false;
-    const move = (pointer: PointerEvent) => {
-      if (!committed && Math.hypot(pointer.clientX - start.x, pointer.clientY - start.y) < 10) return;
-      committed = true;
-      const targetElement = document.elementFromPoint(pointer.clientX, pointer.clientY)?.closest<HTMLElement>("[data-layout-block]");
-      const targetId = targetElement?.dataset.layoutBlock ?? null;
-      const position = targetElement && targetId !== blockId ? dropPosition(targetElement.getBoundingClientRect(), pointer.clientX, pointer.clientY) : null;
-      const next = { sourceId: blockId, targetId, position, x: pointer.clientX, y: pointer.clientY };
-      dragRef.current = next;
-      setDrag(next);
-    };
-    const end = () => {
-      const current = dragRef.current;
-      if (current?.targetId && current.position) {
-        dispatch({ type: "moveBlock", workspaceId: workspace.id, sourceId: blockId, targetId: current.targetId, position: current.position });
-      }
-      dragRef.current = null;
-      setDrag(null);
-      element.removeEventListener("pointermove", move);
-      element.removeEventListener("pointerup", end);
-      element.removeEventListener("pointercancel", end);
-    };
-    element.addEventListener("pointermove", move);
-    element.addEventListener("pointerup", end);
-    element.addEventListener("pointercancel", end);
-  }
-
-  function startResize(event: ReactPointerEvent<HTMLDivElement>, divider: LayoutDividerGeometry) {
-    event.preventDefault();
-    const element = event.currentTarget;
-    const surface = layoutSurfaceRef.current;
-    if (!surface) return;
-    element.setPointerCapture(event.pointerId);
-    let current = divider.ratio;
-    const move = (pointer: PointerEvent) => {
-      const surfaceRect = surface.getBoundingClientRect();
-      const container = resolveLayoutBounds(divider.containerBounds, surfaceRect.width, surfaceRect.height);
-      const span = divider.direction === "horizontal" ? container.width : container.height;
-      if (span <= 0) return;
-      const offset = divider.direction === "horizontal"
-        ? pointer.clientX - surfaceRect.left - container.x
-        : pointer.clientY - surfaceRect.top - container.y;
-      current = Math.min(0.85, Math.max(0.15, offset / span));
-      setLiveRatios((ratios) => ratios[divider.id] === current ? ratios : { ...ratios, [divider.id]: current });
-    };
-    const end = () => {
-      dispatch({ type: "resizeSplit", workspaceId: workspace.id, splitId: divider.id, ratio: current });
-      setLiveRatios((ratios) => {
-        if (!(divider.id in ratios)) return ratios;
-        const next = { ...ratios };
-        delete next[divider.id];
-        return next;
-      });
-      element.removeEventListener("pointermove", move);
-      element.removeEventListener("pointerup", end);
-      element.removeEventListener("pointercancel", end);
-    };
-    element.addEventListener("pointermove", move);
-    element.addEventListener("pointerup", end);
-    element.addEventListener("pointercancel", end);
-  }
-
-  const blockProps: BlockRenderProps = { workspace, visible, localTerminalAttention, remoteShellIntegrationEnabled, terminalSettingsReady, drag, beginDrag, onRequestClose, onRequestDisconnect, onRequestAuthConnection, onOpenConnectionManager };
+  const blockProps: BlockRenderProps = { workspace, visible, localTerminalAttention, remoteShellIntegrationEnabled, terminalSettingsReady, beginDrag, onRequestClose, onRequestDisconnect, onRequestAuthConnection, onOpenConnectionManager };
   return <div className="workspace-canvas">
     <div ref={layoutSurfaceRef} className="workspace-layout-surface">
       {geometry.leaves.map(({ node, bounds }) => <div key={node.blockId} className="workspace-block-host" data-workspace-block-host={node.blockId} data-active={node.blockId === workspace.activeBlockId || undefined} style={boundsStyle(bounds)}>
@@ -132,8 +53,8 @@ export function WorkspaceCanvas({ workspace, visible, localTerminalAttention = f
         aria-hidden="true"
         style={activeBounds ? { ...boundsStyle(activeBounds), opacity: visible ? 1 : 0 } : { opacity: 0 }}
       />
+      {drag && <LayoutDragOverlay drag={drag} geometry={geometry}/>}
     </div>
-    {drag && <div data-app-overlay="floating" className="drag-ghost" style={{ transform: `translate3d(${drag.x + 12}px, ${drag.y + 12}px, 0)` }}><Icon name="terminal" /> Terminal</div>}
   </div>;
 }
 
@@ -143,7 +64,6 @@ interface BlockRenderProps {
   localTerminalAttention: boolean;
   remoteShellIntegrationEnabled: boolean;
   terminalSettingsReady: boolean;
-  drag: DragState | null;
   beginDrag: (event: ReactPointerEvent<HTMLElement>, blockId: string) => void;
   onRequestClose: (blockId: string) => void;
   onRequestDisconnect?: (owner: ConnectionOwner, blockId: string, name: string, local: boolean) => void;
@@ -161,7 +81,7 @@ function BlockView(props: BlockRenderProps & { node: LayoutLeaf }) {
   if (props.node.type === "network") {
     return <NetworkBlock {...props} blockId={props.node.blockId} profileId={props.node.profileId}/>;
   }
-  if (props.node.type === "web") return <WebBlock onManageConnections={props.onOpenConnectionManager} onHeaderPointerDown={event => props.beginDrag(event, props.node.blockId)} workspaceId={props.workspace.id} node={props.node} visible={props.visible && !props.drag} active={props.workspace.activeBlockId === props.node.blockId} onClose={() => props.onRequestClose(props.node.blockId)} onConnect={(profile) => props.onRequestAuthConnection("network", props.node.blockId, profile)}/>;
+  if (props.node.type === "web") return <WebBlock onManageConnections={props.onOpenConnectionManager} onHeaderPointerDown={event => props.beginDrag(event, props.node.blockId)} workspaceId={props.workspace.id} node={props.node} visible={props.visible} active={props.workspace.activeBlockId === props.node.blockId} onClose={() => props.onRequestClose(props.node.blockId)} onConnect={(profile) => props.onRequestAuthConnection("network", props.node.blockId, profile)}/>;
   if (props.node.type === "git") {
     return <GitBlock {...props} blockId={props.node.blockId} target={props.node.target}/>;
   }
@@ -174,7 +94,6 @@ function TerminalBlock(props: BlockRenderProps & { blockId: string; profileId: s
   const runtime = runtimes[props.blockId];
   const active = props.workspace.activeBlockId === props.blockId;
   const profile = profiles.find((item) => item.id === props.profileId);
-  const drop = props.drag?.targetId === props.blockId ? props.drag.position : null;
   const status = runtime?.status ?? "closed";
   const endpoint = profile && status === "connected" ? `${profile.username}@${profile.host}` : null;
   const detail = endpoint ?? (profile ? status : status === "connected" ? "本机" : status);
@@ -342,7 +261,6 @@ function TerminalBlock(props: BlockRenderProps & { blockId: string; profileId: s
     </header>
     <TerminalPanel key={props.profileId ?? "local"} blockId={props.blockId} sessionKey={`${props.blockId}:${props.profileId ?? "local"}`} local={props.profileId === null} visible={props.visible} osc7Enabled={props.remoteShellIntegrationEnabled} terminalSettingsReady={props.terminalSettingsReady}/>
     {runtime?.notice && <BlockNotice message={runtime.notice}/>}
-    {drop && <div className={`drop-zone drop-${drop}`} />}
   </section>;
 }
 
@@ -356,7 +274,6 @@ function FilesBlock(props: BlockRenderProps & { blockId: string; profileId: stri
   const endpoint = profile && runtime.status === "connected" ? `${profile.username}@${profile.host}` : null;
   const detail = endpoint ?? (profile ? runtime.status : "本机");
   const active = props.workspace.activeBlockId === props.blockId;
-  const drop = props.drag?.targetId === props.blockId ? props.drag.position : null;
   const requestedProfileRef = useRef<string | null>(null);
   const sessionActive = runtime.status !== "closed" && runtime.status !== "failed";
   const requestDisconnect = () => props.onRequestDisconnect?.("files", props.blockId, profile?.name ?? "远程文件", false);
@@ -401,7 +318,6 @@ function FilesBlock(props: BlockRenderProps & { blockId: string; profileId: stri
     </header>
     <FileBrowserPane key={`files:${props.profileId ?? "local"}`} initialPath={props.profileId !== null && props.path === "~" ? "." : props.path} runtime={runtime} onPathChange={updatePath}/>
     {runtime.notice && <BlockNotice message={runtime.notice}/>}
-    {drop && <div className={`drop-zone drop-${drop}`} />}
   </section>;
 }
 
@@ -410,7 +326,6 @@ function NetworkBlock(props: BlockRenderProps & { blockId: string; profileId: st
   const profile = profiles.find((item) => item.id === props.profileId);
   const runtime = networkRuntimes[props.blockId];
   const active = props.workspace.activeBlockId === props.blockId;
-  const drop = props.drag?.targetId === props.blockId ? props.drag.position : null;
   const status = runtime?.status ?? "closed";
   const endpoint = profile && status === "connected" ? `${profile.username}@${profile.host}:${profile.port}` : null;
   const detail = endpoint ?? (profile ? status : "选择 SSH 连接后管理网络规则");
@@ -469,7 +384,6 @@ function NetworkBlock(props: BlockRenderProps & { blockId: string; profileId: st
     </header>
     <NetworkPane profileId={props.profileId} profileHost={profile?.host} runtimeStates={runtime?.ruleStates} lockedRuleIds={lockedRuleIds} onStart={(rule) => void startRule(rule.id)} onStop={(rule) => void stopNetworkBlockRule(props.blockId, rule.id)}/>
     {runtime?.notice && <BlockNotice message={runtime.notice}/>}
-    {drop && <div className={`drop-zone drop-${drop}`} />}
   </section>;
 }
 
@@ -478,7 +392,6 @@ function GitBlock(props: BlockRenderProps & { blockId: string; target: GitTarget
   const { blockId, onRequestAuthConnection, target, workspace } = props;
   const workspaceId = workspace.id;
   const active = props.workspace.activeBlockId === props.blockId;
-  const drop = props.drag?.targetId === props.blockId ? props.drag.position : null;
   const profileId = props.target.type === "remote" ? props.target.profileId : null;
   const profile = profiles.find((item) => item.id === profileId);
   const runtime = gitRuntimes[props.blockId];
@@ -632,6 +545,5 @@ function GitBlock(props: BlockRenderProps & { blockId: string; target: GitTarget
       }}
     />}
     {runtime?.notice && <BlockNotice message={runtime.notice}/>}
-    {drop && <div className={`drop-zone drop-${drop}`} />}
   </section>;
 }

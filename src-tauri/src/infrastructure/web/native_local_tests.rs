@@ -245,6 +245,7 @@ pub(super) fn verify(app: &mut tauri::App, remote: &tauri::Webview) {
             "true"
         );
     }
+    super::native_scrollbar_tests::verify(app, &a);
     super::native_popup_tests::verify(app, &host, &sessions, &a, &requests);
     for id in ids {
         let (host, sessions, handle) = (host.clone(), sessions.clone(), app.handle().clone());

@@ -1,0 +1,83 @@
+{
+  "cases": [
+    {
+      "theme": "dark",
+      "position": "left",
+      "preservedGuest": true
+    },
+    {
+      "theme": "dark",
+      "position": "right",
+      "preservedGuest": true
+    },
+    {
+      "theme": "dark",
+      "position": "top",
+      "preservedGuest": true
+    },
+    {
+      "theme": "dark",
+      "position": "bottom",
+      "preservedGuest": true
+    },
+    {
+      "theme": "dark",
+      "position": "center",
+      "preservedGuest": true
+    },
+    {
+      "theme": "light",
+      "position": "left",
+      "preservedGuest": true
+    },
+    {
+      "theme": "light",
+      "position": "right",
+      "preservedGuest": true
+    },
+    {
+      "theme": "light",
+      "position": "top",
+      "preservedGuest": true
+    },
+    {
+      "theme": "light",
+      "position": "bottom",
+      "preservedGuest": true
+    },
+    {
+      "theme": "light",
+      "position": "center",
+      "preservedGuest": true
+    },
+    {
+      "theme": "cyberpunk",
+      "position": "left",
+      "preservedGuest": true
+    },
+    {
+      "theme": "cyberpunk",
+      "position": "right",
+      "preservedGuest": true
+    },
+    {
+      "theme": "cyberpunk",
+      "position": "top",
+      "preservedGuest": true
+    },
+    {
+      "theme": "cyberpunk",
+      "position": "bottom",
+      "preservedGuest": true
+    },
+    {
+      "theme": "cyberpunk",
+      "position": "center",
+      "preservedGuest": true
+    }
+  ],
+  "browserBlankHeaderDrag": true,
+  "escapeRestored": true,
+  "browserVerticalSplit": true,
+  "nativeIPC": "fixture; see separate native smoke evidence"
+}

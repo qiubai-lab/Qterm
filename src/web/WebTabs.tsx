@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useRef, useState, type ComponentProps } from "react";
+import { useCallback, useLayoutEffect, useRef, useState, type ComponentProps, type PointerEvent } from "react";
 import { createPortal } from "react-dom";
 import { WebBrowserPane } from "./WebBrowserPane";
 import { WebTabStrip } from "./WebTabStrip";
@@ -6,17 +6,21 @@ import { WEB_TAB_LIMIT } from "./webTabDeck";
 import { closeWebTabBatch } from "./webTabClose";
 import "./webTabs.css";
 import type { WebPopupRequest } from "../lib/tauri/webPopups";
+import type { WebTabSessionStore } from "./webTabSessionStore";
 
 export interface WebTabMetadata { title: string; address: string; loading: boolean }
-interface Tab extends WebTabMetadata { id: string; initialAddress?: string; initialPopup?: WebPopupRequest }
+interface Tab extends WebTabMetadata { id: string; initialAddress?: string; initialPopup?: WebPopupRequest; restored?: boolean }
 const emptyTab = (): Tab => ({ id: crypto.randomUUID(), title: "", address: "", loading: false });
-type Props = ComponentProps<typeof WebBrowserPane> & { header: HTMLElement | null; registerOpener?: (open: (url: string) => void) => () => void };
+type Props = ComponentProps<typeof WebBrowserPane> & { header: HTMLElement | null; sessionStore?: WebTabSessionStore; blockId?: string; registerOpener?: (open: (url: string) => void) => () => void; onHeaderPointerDown?: (event: PointerEvent<HTMLElement>) => void };
 
 /** Tabs own page lifetime; the connection environment owns shared browser data. */
-export function WebTabs({ header, registerOpener, ...pane }: Props) {
-  const [tabs, setTabs] = useState<Tab[]>(() => [emptyTab()]);
-  const [active, setActive] = useState<string | null>(null);
+export function WebTabs({ header, registerOpener, onHeaderPointerDown, sessionStore, blockId, ...pane }: Props) {
+  const [binding] = useState(() => blockId ? sessionStore?.bind(blockId, pane.profileId) : undefined);
+  const [tabs, setTabs] = useState<Tab[]>(() => binding?.initial?.tabs.map(tab => ({ ...tab, loading: false, initialAddress: tab.address, restored: true })) ?? [emptyTab()]);
+  const [active, setActive] = useState<string | null>(() => binding?.initial?.selectedTabId ?? null);
   const selected = active ?? tabs[0].id;
+  useLayoutEffect(() => { binding?.activate(); }, [binding]);
+  useLayoutEffect(() => { binding?.update({ tabs, selectedTabId: selected }); }, [binding, tabs, selected]);
   const latestTabs = useRef(tabs);
   useLayoutEffect(() => { latestTabs.current = tabs; }, [tabs]);
   useLayoutEffect(() => registerOpener?.(url => {
@@ -48,14 +52,19 @@ export function WebTabs({ header, registerOpener, ...pane }: Props) {
     requestAnimationFrame(() => header?.querySelector<HTMLButtonElement>('[role="tab"][aria-selected="true"]')?.focus({ preventScroll: true }));
   };
   return <>
-    {header && createPortal(<WebTabStrip tabs={tabs} selected={selected} visible={pane.visible} onSelect={setActive} onClose={close} onAdd={add} onActivate={pane.onActivate}/>, header)}
+    {header && createPortal(<WebTabStrip tabs={tabs} selected={selected} visible={pane.visible} onSelect={setActive} onClose={close} onAdd={add} onActivate={pane.onActivate} onBlankPointerDown={onHeaderPointerDown}/>, header)}
     {tabs.map(tab => <div className="web-tab-page" key={tab.id} id={`page-${tab.id}`} role="tabpanel" aria-labelledby={`tab-${tab.id}`} hidden={selected !== tab.id}>
-      <TabPage {...pane} initialAddress={tab.initialAddress} initialPopup={tab.initialPopup} onNewWindow={openPopup} onWindowClose={() => close([tab.id], tab.id)} id={tab.id} visible={pane.visible && selected === tab.id} update={update}/>
+      <TabPage {...pane} restored={tab.restored} initialAddress={tab.initialAddress} initialPopup={tab.initialPopup} onNewWindow={openPopup} onWindowClose={() => close([tab.id], tab.id)} id={tab.id} visible={pane.visible && selected === tab.id} update={update}/>
     </div>)}
   </>;
 }
 
-function TabPage({ id, update, ...props }: ComponentProps<typeof WebBrowserPane> & { id: string; update: (id: string, state: WebTabMetadata) => void }) {
-  const report = useCallback((state: WebTabMetadata) => update(id, state), [id, update]);
-  return <WebBrowserPane {...props} onMetadata={report}/>;
+function TabPage({ id, update, restored, ...props }: ComponentProps<typeof WebBrowserPane> & { id: string; restored?: boolean; update: (id: string, state: WebTabMetadata) => void }) {
+  const [started, setStarted] = useState(!restored || props.visible);
+  if (!started && props.visible) setStarted(true);
+  const report = useCallback((state: WebTabMetadata) => {
+    if (props.initialAddress && !state.address) return; // Initial empty metadata must not erase restored URLs.
+    update(id, state);
+  }, [id, update, props.initialAddress]);
+  return started ? <WebBrowserPane {...props} onMetadata={report}/> : null;
 }

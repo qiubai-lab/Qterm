@@ -38,6 +38,10 @@ mod native_popup_click_tests;
 mod native_popup_tests;
 #[cfg(all(test, windows))]
 mod native_profile_tests;
+#[cfg(all(test, windows))]
+mod native_scrollbar_drag_tests;
+#[cfg(all(test, windows))]
+mod native_scrollbar_tests;
 mod profile_gateway;
 #[cfg(test)]
 mod profile_gateway_tests;

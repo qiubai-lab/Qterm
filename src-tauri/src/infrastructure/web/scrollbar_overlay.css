@@ -1,0 +1,23 @@
+:host { all:initial!important; display:block!important; position:fixed!important; inset:0!important; width:100%!important; height:100%!important; z-index:2147483647!important; pointer-events:none!important; overflow:hidden!important; contain:strict!important; direction:ltr!important; }
+.bar { position:absolute; pointer-events:none; overflow:hidden; }
+.bar[hidden] { display:none; }
+.track { position:absolute; inset:0; pointer-events:none; }
+.track::before { content:""; position:absolute; background:transparent; border-radius:8px; }
+.hit { position:absolute; box-sizing:border-box; pointer-events:auto; touch-action:none; cursor:default; outline:none; }
+.thumb { position:absolute; border-radius:999px; background:var(--thumb); pointer-events:none; transition:transform 120ms cubic-bezier(.2,.8,.2,1),background-color 120ms ease; }
+.bar[data-axis=y] .hit { right:0; width:12px; }
+.bar[data-axis=y] .thumb { right:0; top:0; bottom:0; width:3px; transform-origin:right center; }
+.bar[data-axis=y] .track::before { top:0; bottom:0; right:0; width:9px; }
+.bar[data-axis=y][data-rtl] .thumb { left:0; right:auto; transform-origin:left center; }
+.bar[data-axis=y][data-rtl] .track::before { left:0; right:auto; }
+.bar[data-axis=x] .hit { bottom:0; height:12px; }
+.bar[data-axis=x] .thumb { left:0; right:0; bottom:0; height:3px; transform-origin:center bottom; }
+.bar[data-axis=x] .track::before { left:0; right:0; bottom:0; height:9px; }
+.bar[data-active] .thumb { background:var(--hover); }
+.bar[data-active] .track::before { background:color-mix(in srgb,var(--thumb) 12%,transparent); }
+.bar[data-active][data-axis=y] .thumb { transform:scaleX(3); }
+.bar[data-active][data-axis=x] .thumb { transform:scaleY(3); }
+.bar[data-dragging] .thumb { background:var(--pressed); transition:none; }
+.hit:focus-visible { outline:1px solid var(--hover); outline-offset:-1px; border-radius:4px; }
+@media(prefers-reduced-motion:reduce) { .thumb { transition:none; } }
+@media(forced-colors:active) { .thumb { background:CanvasText!important; } .track::before { background:Canvas!important; } }

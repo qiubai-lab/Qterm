@@ -12,10 +12,12 @@ import { useWorkspaceRuntimeController } from "./useWorkspaceRuntimeController";
 import { useWorkspaceRuntimeState } from "./useWorkspaceRuntimeState";
 import { useWebOpenController } from "./useWebOpenController";
 import type { FileRuntime, GitRuntime, NetworkRuntime, TerminalRuntime } from "./workspaceRuntime";
+import type { WebTabSessionStore } from "../web/webTabSessionStore";
 
 export type { FileRuntime, GitRuntime, HostKeyPrompt, NetworkRuntime, TerminalRuntime } from "./workspaceRuntime";
 
 interface WorkspaceContextValue extends ReturnType<typeof useWebOpenController> {
+  webTabSessions?: WebTabSessionStore;
   hydrated: boolean;
   document: WorkspaceDocument;
   dispatch: Dispatch<WorkspaceAction>;
@@ -82,6 +84,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const web = useWebOpenController(document, persistence.profiles, dispatch);
   const value = useMemo<WorkspaceContextValue>(() => ({
     hydrated: persistence.hydrated,
+    webTabSessions: persistence.webTabSessions,
     document,
     dispatch,
     profiles: persistence.profiles,
@@ -91,7 +94,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     ...web,
     storageNotice: persistence.storageNotice,
     dismissStorageNotice: persistence.dismissStorageNotice,
-  }), [document, persistence.dismissStorageNotice, persistence.hydrated, persistence.profileGroups, persistence.profiles, persistence.refreshProfiles, persistence.storageNotice, runtime, web]);
+  }), [document, persistence.dismissStorageNotice, persistence.hydrated, persistence.profileGroups, persistence.profiles, persistence.refreshProfiles, persistence.storageNotice, persistence.webTabSessions, runtime, web]);
 
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;
 }
