@@ -1,7 +1,20 @@
 // Pointer capture belongs to the visible thumb hit target, never the operating-system cursor.
 ((document, window, records, schedule) => {
   const LEAVE_DELAY_MS = 600;
-  let drag = null, hot = null, suppressed = null, leaveTimer = null;
+  let drag = null, hot = null, focused = null, suppressed = null, leaveTimer = null, scrollTimer = null;
+  const clearScrolling = () => {
+    if (scrollTimer !== null) window.clearTimeout(scrollTimer);
+    scrollTimer = null;
+    for (const record of records.values()) for (const bar of record.bars) bar.node.removeAttribute("data-scrolling");
+  };
+  const revealScroll = event => {
+    if (![document, document.scrollingElement, document.documentElement].includes(event.target)) return;
+    clearScrolling();
+    for (const record of records.values()) for (const bar of record.bars) {
+      if (bar.geometry) bar.node.setAttribute("data-scrolling", "");
+    }
+    scrollTimer = window.setTimeout(clearScrolling, LEAVE_DELAY_MS);
+  };
   const cancelLeave = () => {
     if (leaveTimer !== null) window.clearTimeout(leaveTimer);
     leaveTimer = null;
@@ -14,7 +27,7 @@
     hot?.node.setAttribute("data-active", "");
   };
   const leaveLater = () => {
-    if (!hot || leaveTimer !== null) return;
+    if (!hot || hot === focused || leaveTimer !== null) return;
     // Measure from the first exit, not every movement outside the rail.
     leaveTimer = window.setTimeout(() => { leaveTimer = null; heat(null); }, LEAVE_DELAY_MS);
   };
@@ -59,6 +72,7 @@
     else leaveLater();
   };
   const finish = event => { if (drag && event.pointerId === drag.id) end(); };
+  const blur = () => { end(); clearScrolling(); focused = null; };
   const leave = event => { if (!drag && !event.relatedTarget) { leaveLater(); suppressed = null; } };
   const attach = bar => {
     bar.hit.addEventListener("pointerdown", event => {
@@ -71,8 +85,8 @@
       bar.hit.setPointerCapture(event.pointerId);
     });
     bar.hit.addEventListener("lostpointercapture", finish);
-    bar.hit.addEventListener("focus", () => heat(bar));
-    bar.hit.addEventListener("blur", () => { if (!drag) heat(null); });
+    bar.hit.addEventListener("focus", () => { focused = bar; heat(bar); });
+    bar.hit.addEventListener("blur", () => { focused = null; if (!drag) heat(null); });
     bar.hit.addEventListener("keydown", event => {
       const g = bar.geometry;
       if (!g) return;
@@ -91,19 +105,28 @@
     }, { passive: false });
   };
   const start = () => {
+    document.addEventListener("scroll", revealScroll, true);
     document.addEventListener("pointermove", move, true);
     document.addEventListener("pointerup", finish, true);
     document.addEventListener("pointercancel", finish, true);
     document.addEventListener("pointerout", leave, true);
-    window.addEventListener("blur", end);
+    window.addEventListener("blur", blur);
   };
   const stop = () => {
-    end(); suppressed = null;
+    end(); clearScrolling(); focused = null; suppressed = null;
+    document.removeEventListener("scroll", revealScroll, true);
     document.removeEventListener("pointermove", move, true);
     document.removeEventListener("pointerup", finish, true);
     document.removeEventListener("pointercancel", finish, true);
     document.removeEventListener("pointerout", leave, true);
-    window.removeEventListener("blur", end);
+    window.removeEventListener("blur", blur);
   };
-  return { attach, start, stop, removed(bar) { if (drag?.bar === bar) end(); if (hot === bar) heat(null); if (suppressed === bar) suppressed = null; } };
+  return { attach, start, stop, removed(bar) {
+    if (drag?.bar === bar) end();
+    if (hot === bar) heat(null);
+    if (focused === bar) focused = null;
+    if (suppressed === bar) suppressed = null;
+    bar.node.removeAttribute("data-scrolling");
+    if (![...records.values()].some(record => record.bars.some(item => item.node.hasAttribute("data-scrolling")))) clearScrolling();
+  } };
 })

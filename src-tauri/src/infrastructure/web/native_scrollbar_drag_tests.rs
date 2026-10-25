@@ -33,12 +33,7 @@ pub(super) fn verify(app: &mut tauri::App, view: &tauri::Webview) {
         view,
         "window.beforeOverlayWidth=document.documentElement.clientWidth; window.beforeOverlayHeight=document.documentElement.clientHeight; window.dragTrusted=false; document.addEventListener('pointerdown', e=>{window.dragTrusted=e.isTrusted;window.dragPointer=e.pointerId;},true); true",
     );
-    for (label, axis) in [
-        ("网页纵向滚动条", "y"),
-        ("网页横向滚动条", "x"),
-        ("区域纵向滚动条", "y"),
-        ("区域横向滚动条", "x"),
-    ] {
+    for (label, axis) in [("网页纵向滚动条", "y"), ("网页横向滚动条", "x")] {
         eval(
             app,
             view,
@@ -49,7 +44,7 @@ pub(super) fn verify(app: &mut tauri::App, view: &tauri::Webview) {
             view,
             "scrollY===0 && scrollX===0 && document.querySelector('qterm-scrollbars').shadowRoot.querySelector('[aria-label=\"网页纵向滚动条\"]').getAttribute('aria-valuenow')==='0'",
         );
-        // Pump geometry for nested scroll reset too, before obtaining the hit rectangle.
+        // Pump both viewport axes before obtaining the hit rectangle.
         wait_for_page(
             app,
             view,
@@ -157,9 +152,6 @@ pub(super) fn verify(app: &mut tauri::App, view: &tauri::Webview) {
             ),
             "true"
         );
-        if label.starts_with("区域") {
-            assert_eq!(eval(app, view, "scrollX===0 && scrollY===0"), "true");
-        }
         mouse(app, view, "mouseReleased", next_x, next_y, false);
         wait_for_page(
             app,
@@ -188,6 +180,6 @@ pub(super) fn verify(app: &mut tauri::App, view: &tauri::Webview) {
     eval(app, view, "scrollTo(0,180);true");
     capture(app, view, "scrollbar-after-drag.png");
     eprintln!(
-        "PASS: trusted root/nested horizontal/vertical drags from 12px hit areas, 3-to-9px proximity, capture, release/cancel/blur and stable viewport geometry"
+        "PASS: trusted viewport horizontal/vertical drags from 12px hit areas, 3-to-9px proximity, capture, release/cancel/blur and stable viewport geometry"
     );
 }

@@ -1,9 +1,9 @@
-// A document-local overlay. Only enhanced elements lose their native scrollbar gutter.
-((document, window, geometry, attachInteraction, css) => {
+// Only the document scrolling element is enhanced. Nested containers belong to the site.
+((document, window, geometry, attachInteraction, css, visibility) => {
   const host = document.createElement("qterm-scrollbars");
   const shadow = host.attachShadow({ mode: "open" });
   const style = document.createElement("style"); style.textContent = css; shadow.append(style);
-  const records = new Map(), scans = new Set(), observed = new Set();
+  const records = new Map(), observed = new Set();
   let body = null, frame = 0, active = true;
   const schedule = () => { if (active && !frame) frame = window.requestAnimationFrame(render); };
   const interaction = attachInteraction(document, window, records, schedule);
@@ -14,8 +14,7 @@
   const register = element => {
     if (records.has(element) || element === host) return;
     const root = element === document.scrollingElement || element === document.documentElement;
-    const computed = window.getComputedStyle(element);
-    if (!root && !/(auto|scroll|overlay)/.test(`${computed.overflowX} ${computed.overflowY}`)) return;
+    if (!root) return;
     const bars = ["y", "x"].map(axis => {
       const node = document.createElement("div"); node.className = "bar"; node.dataset.axis = axis; node.hidden = true;
       const track = document.createElement("div"); track.className = "track";
@@ -32,36 +31,25 @@
     element.setAttribute("data-qterm-scroll", "");
     observeSize(element);
   };
-  const scan = element => {
-    if (!element.isConnected || element === host) return;
-    register(element);
-    for (const child of element.querySelectorAll("*")) register(child);
-  };
-  const changes = new window.MutationObserver(mutations => {
-    for (const mutation of mutations) {
-      if (mutation.type === "attributes") scans.add(mutation.target);
-      else {
-        if (mutation.target.nodeType === 1) register(mutation.target);
-        for (const added of mutation.addedNodes) if (added.nodeType === 1) scans.add(added);
-        if (records.has(mutation.target)) observeSize(mutation.target);
-      }
-    }
-    schedule();
-  });
+  // Body changes may resize the document, but never register internal scrollers.
+  const changes = new window.MutationObserver(schedule);
   function render() {
     frame = 0;
     if (!active) return;
-    for (const element of scans) scan(element);
-    scans.clear();
+    const scrolling = document.scrollingElement || document.documentElement;
+    if (scrolling) register(scrolling);
+    if (body) observeSize(body);
     for (const element of observed) if (!element.isConnected) { resize.unobserve(element); observed.delete(element); }
     for (const [element, record] of records) {
-      if (!element.isConnected) {
+      if (!element.isConnected || element !== scrolling) {
         record.bars.forEach(bar => { interaction.removed(bar); bar.node.remove(); });
+        element.removeAttribute("data-qterm-scroll");
         records.delete(element); continue;
       }
       if (!element.hasAttribute("data-qterm-scroll")) element.setAttribute("data-qterm-scroll", "");
+      const allowed = visibility(document, window, element);
       for (const bar of record.bars) {
-        const g = geometry(document, window, element, bar.axis); bar.geometry = g;
+        const g = allowed[bar.axis] ? geometry(document, window, element, bar.axis) : null; bar.geometry = g;
         bar.node.hidden = !g;
         if (!g) { interaction.removed(bar); continue; }
         bar.node.toggleAttribute("data-rtl", g.rtl);
@@ -86,8 +74,8 @@
     if (body !== document.body) {
       changes.disconnect(); body = document.body;
       if (body) {
-        scans.add(body); observeSize(body);
-        changes.observe(body, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ["class", "style", "hidden", "data-qterm-scroll"] });
+        observeSize(body);
+        changes.observe(body, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ["class", "style", "hidden"] });
       }
     }
     schedule();

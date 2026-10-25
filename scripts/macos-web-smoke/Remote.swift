@@ -13,6 +13,8 @@ func remoteSmoke(_ window: NSWindow) async throws {
                                   "url": "http://localhost:8765/", "tunnelScript": script])
     let page = try host.guest("remote")
     try await loaded(page)
+    try await userAgentSmoke(page)
+    try await popupUserAgentSmoke(page)
     try check(page.web.title == "Proxy Remote" && page.web.url?.host == "localhost.qterm-tunnel.invalid", "remote localhost navigates through a tunnel origin")
     try check(try await js(page, "typeof RTCPeerConnection") as? String == "undefined", "native WebRTC disabled in remote guest")
     try page.action(["action": "navigate", "url": "http://127.0.0.1:8765/ip"])

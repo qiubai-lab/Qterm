@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { expect, it, vi } from "vitest";
 
 const read = (name: string) => readFileSync(`src-tauri/src/infrastructure/web/scrollbar_${name}`, "utf8");
-const install = new Function("document", "window", `return (${read("overlay.mjs")})(document, window, ${read("geometry.mjs")}, ${read("interaction.mjs")}, ${JSON.stringify(read("overlay.css"))});`);
+const install = new Function("document", "window", `return (${read("overlay.mjs")})(document, window, ${read("geometry.mjs")}, ${read("interaction.mjs")}, ${JSON.stringify(read("overlay.css"))}, ${read("visibility.mjs")});`);
 
 function fixture() {
   const page = document.implementation.createHTMLDocument();
@@ -15,7 +15,7 @@ function fixture() {
     ResizeObserver: class { observe(element: Element) { observed.add(element); } unobserve(element: Element) { observed.delete(element); } disconnect() { observed.clear(); } },
     requestAnimationFrame: (callback: FrameRequestCallback) => { frames.set(++sequence, callback); return sequence; },
     cancelAnimationFrame: (id: number) => frames.delete(id),
-    getComputedStyle: (element: HTMLElement) => ({ direction: element.style.direction || "ltr", overflowX: element.style.overflowX || element.style.overflow || "visible", overflowY: element.style.overflowY || element.style.overflow || "visible" }),
+    getComputedStyle: (element: HTMLElement, pseudo?: string) => pseudo ? ({}) : ({ direction: element.style.direction || "ltr", visibility: element.style.visibility, scrollbarWidth: element.style.scrollbarWidth, overflowX: element.style.overflowX || element.style.overflow || "visible", overflowY: element.style.overflowY || element.style.overflow || "visible" }),
   });
   const dimensions = (element: HTMLElement, width: number, height: number, extentX: number, extentY: number) => {
     Object.defineProperties(element, { clientWidth: { value: width, configurable: true }, clientHeight: { value: height, configurable: true }, scrollWidth: { value: extentX, configurable: true }, scrollHeight: { value: extentY, configurable: true }, offsetWidth: { value: width }, offsetHeight: { value: height }, clientTop: { value: 0 }, clientLeft: { value: 0 } });
@@ -34,15 +34,16 @@ function fixture() {
   return { page, guest, frames, dimensions, controller, flush, host, observed };
 }
 
-it("enhances dynamically added nested scrollers and keeps them outside page layout", async () => {
+it("renders only viewport axes and leaves dynamically added nested scrollers untouched", async () => {
   const f = fixture(); await f.flush();
   expect(f.host().parentElement).toBe(f.page.documentElement);
   expect(f.host().shadowRoot!.querySelectorAll(".bar:not([hidden])")).toHaveLength(2);
   const nested = f.page.createElement("div"); nested.style.overflow = "auto";
   f.dimensions(nested, 200, 100, 600, 400); nested.textContent = "content"; f.page.body.append(nested);
   await f.flush(); await f.flush();
-  expect(nested.hasAttribute("data-qterm-scroll")).toBe(true);
-  expect(f.host().shadowRoot!.querySelectorAll(".bar:not([hidden])")).toHaveLength(4);
+  expect(nested.hasAttribute("data-qterm-scroll")).toBe(false);
+  expect(f.host().shadowRoot!.querySelectorAll(".bar:not([hidden])")).toHaveLength(2);
+  expect(nested.style.overflow).toBe("auto");
   nested.firstChild!.textContent = "dynamic text"; await f.flush();
   nested.remove(); await f.flush();
   expect(f.host().shadowRoot!.querySelectorAll(".bar:not([hidden])")).toHaveLength(2);
@@ -74,5 +75,22 @@ it("reinstalls the same overlay after host removal and retains the latest palett
   f.controller.resume(); f.controller.repair(["purple", "pink", "orange"]); await f.flush();
   expect(f.host()).toBe(original); expect(f.host().style.getPropertyValue("--thumb")).toBe("purple");
   expect(f.page.querySelectorAll("qterm-scrollbars")).toHaveLength(1);
+  f.controller.suspend();
+});
+
+it("updates viewport eligibility and keeps an inactive axis from hiding the scrolling axis", async () => {
+  const f = fixture(); await f.flush();
+  const root = f.page.documentElement;
+  f.dimensions(root, 800, 500, 800, 2000);
+  root.style.scrollbarWidth = "none";
+  f.controller.repair(["red", "green", "blue"]); await f.flush();
+  expect(f.host().shadowRoot!.querySelectorAll(".bar:not([hidden])")).toHaveLength(0);
+  root.style.scrollbarWidth = "auto";
+  f.controller.repair(["red", "green", "blue"]); await f.flush();
+  expect(f.host().shadowRoot!.querySelectorAll(".bar:not([hidden])")).toHaveLength(1);
+  f.page.dispatchEvent(new Event("scroll")); await f.flush();
+  expect(f.host().shadowRoot!.querySelector('.bar[data-axis="y"]')!.hasAttribute("data-scrolling")).toBe(true);
+  const nested = f.page.createElement("div"); f.page.body.append(nested);
+  nested.dispatchEvent(new Event("scroll", { bubbles: true })); await f.flush();
   f.controller.suspend();
 });

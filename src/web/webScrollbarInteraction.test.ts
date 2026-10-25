@@ -74,3 +74,20 @@ it("cleans delayed work immediately on blur, element removal and document suspen
     } finally { f.controller.stop(); }
   }
 });
+
+it("reveals only viewport scrolling and resets its idle deadline without stealing focus", () => {
+  const f = fixture();
+  try {
+    f.page.dispatchEvent(new Event("scroll"));
+    expect(f.bar.node.hasAttribute("data-scrolling")).toBe(true);
+    vi.advanceTimersByTime(500); f.page.dispatchEvent(new Event("scroll"));
+    vi.advanceTimersByTime(599); expect(f.bar.node.hasAttribute("data-scrolling")).toBe(true);
+    vi.advanceTimersByTime(1); expect(f.bar.node.hasAttribute("data-scrolling")).toBe(false);
+    f.bar.hit.dispatchEvent(new Event("focus"));
+    f.move(false); vi.advanceTimersByTime(1000);
+    expect(f.expanded()).toBe(true);
+    f.page.dispatchEvent(new Event("scroll")); f.controller.stop();
+    expect(f.bar.node.hasAttribute("data-scrolling")).toBe(false);
+    expect(vi.getTimerCount()).toBe(0);
+  } finally { f.controller.stop(); }
+});

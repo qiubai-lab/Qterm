@@ -3,6 +3,9 @@ import WebKit
 
 @available(macOS 14.0, *)
 final class BrowserGuest: NSObject, WKNavigationDelegate, WKUIDelegate {
+    // Desktop Edge compatibility identity; 156 is maintained independently of WebKit.
+    // Keep this on the guest so normal tabs and native popup children agree.
+    private static let edgeUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36 Edg/156.0.0.0"
     var id: String
     let store: String
     let remote: Bool
@@ -27,6 +30,7 @@ final class BrowserGuest: NSObject, WKNavigationDelegate, WKUIDelegate {
         web = WKWebView(frame: NSRect(x: 0, y: 0, width: 1, height: 1), configuration: config)
         surface = BrowserSurface(frame: web.frame)
         super.init()
+        web.customUserAgent = Self.edgeUserAgent
         surface.owner = self; surface.addSubview(web); surface.isHidden = true
         window.contentView?.addSubview(surface, positioned: .above, relativeTo: nil)
         web.navigationDelegate = self; web.uiDelegate = self

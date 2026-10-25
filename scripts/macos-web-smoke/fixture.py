@@ -6,6 +6,7 @@ import os
 import argparse
 import base64
 import hashlib
+import json
 from pathlib import Path
 import socket
 import socketserver
@@ -67,7 +68,8 @@ class Handler(socketserver.StreamRequestHandler):
                 target = "/loop-b" if path.startswith("/loop-a") else "/loop-a"
                 loop = "<script>setTimeout(()=>location.replace('" + target + "?nonce='+Date.now()), 30)</script>"
             automatic = "<script>setTimeout(()=>{window.automatic=window.open('/automatic')===null?'blocked':'opened'}, 50)</script>" if "/automatic-fixture" in first else ""
-            response = (loop + automatic + "<!doctype html><title>Proxy " + self.server.name + "</title>"
+            identity = "<script>window.fixtureUserAgent=" + json.dumps(headers.get("user-agent", "")) + ";</script>"
+            response = ("<!doctype html>" + loop + automatic + identity + "<title>Proxy " + self.server.name + "</title>"
                         "<body style='margin:0;background:#d9edff'>"
                         "<button id='popup' style='width:200px;height:80px' "
                         "onclick=\"window.child=window.open('/child','_blank')\">Popup</button>"

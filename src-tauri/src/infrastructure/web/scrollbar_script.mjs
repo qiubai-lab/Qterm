@@ -2,20 +2,12 @@
 ((palette = [[82, 161, 145, 255], [99, 196, 176, 255], [117, 230, 207, 255]], createOverlay = () => null) => {
   if (window.top !== window) return;
   const colors = palette.map(([r, g, b, a]) => `rgba(${r},${g},${b},${a / 255})`);
+  const target = ":is(:root[data-qterm-scroll], :root > body[data-qterm-scroll])";
   const css = `
-    :root, * { scrollbar-width: auto !important; scrollbar-color: auto !important; }
-    ::-webkit-scrollbar { width: 3px !important; height: 3px !important; }
-    ::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: transparent !important; }
-    ::-webkit-scrollbar-button { display: none !important; width: 0 !important; height: 0 !important; }
-    ::-webkit-scrollbar-thumb { background: ${colors[0]} !important; border: 0 !important; border-radius: 999px !important; }
-    ::-webkit-scrollbar-thumb:hover { background: ${colors[1]} !important; }
-    ::-webkit-scrollbar-thumb:active { background: ${colors[2]} !important; }
-    :root[data-qterm-scroll], [data-qterm-scroll] { scrollbar-width: none !important; }
-    [data-qterm-scroll]::-webkit-scrollbar { display: none !important; width: 0 !important; height: 0 !important; }
-    @media (forced-colors: active) {
-      :root, * { scrollbar-color: auto !important; }
-      ::-webkit-scrollbar-thumb { background: CanvasText !important; }
-    }
+    ${target} { scrollbar-width: none !important; }
+    ${target}::-webkit-scrollbar { display: none !important; width: 0 !important; height: 0 !important; }
+    ${target}::-webkit-scrollbar-button { display: none !important; }
+    ${target}::-webkit-scrollbar-thumb { background: ${colors[0]} !important; }
   `;
   const key = Symbol.for("qterm.native-scrollbars");
   if (document[key]) {
@@ -44,7 +36,7 @@
       // Keep ordinary late styles from replacing equal-specificity scrollbar rules.
       if (style.parentNode !== parent || style.nextSibling) parent.append(style);
       if (style.sheet?.disabled) style.sheet.disabled = false;
-      observer.observe(root, { childList: true });
+      observer.observe(root, { childList: true, attributes: true, attributeFilter: ["class", "style", "hidden"] });
       if (document.head) observer.observe(document.head, { childList: true, subtree: true, characterData: true });
       observer.observe(style, { childList: true, subtree: true, characterData: true,
         attributes: true, attributeFilter: ["id", "media", "type", "disabled"] });

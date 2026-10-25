@@ -11,8 +11,9 @@ const STYLED: &str = r#"(() => {
     && getComputedStyle(root, '::-webkit-scrollbar-button').display === 'none'
     && thumb.backgroundColor === 'rgb(43, 160, 129)'
     && root.scrollHeight > root.clientHeight && innerWidth - root.clientWidth === 0
-    && innerHeight - root.clientHeight === 0 && nested.offsetWidth - nested.clientWidth === 0
-    && overlay?.querySelectorAll('.bar:not([hidden])').length === 4
+    && innerHeight - root.clientHeight === 0 && !nested.hasAttribute('data-qterm-scroll')
+    && getComputedStyle(nested, '::-webkit-scrollbar').width === '11px'
+    && overlay?.querySelectorAll('.bar:not([hidden])').length === 2
     && getComputedStyle(overlay.querySelector('.thumb')).backgroundColor === 'rgb(43, 160, 129)';
 })()"#;
 
@@ -29,7 +30,7 @@ pub(super) fn verify(app: &mut tauri::App, view: &tauri::Webview) {
         app,
         view,
         r#"document.body.style.cssText='margin:0;background:#f6faf9;color:#234;font:16px Segoe UI';
-      document.body.innerHTML='<header style="padding:24px;background:#18332e;color:#bdf6e6">Qterm · Dynamic native scrollbars</header><main style="padding:24px"><p>Content expands after loading. No reload or host sync.</p><div id="nested" style="width:360px;height:90px;overflow:auto;background:#e1eeea"><div id="nested-content">Nested scroll area</div></div><div id="growth"></div></main>';
+      document.body.innerHTML='<style>#nested::-webkit-scrollbar{width:11px!important;height:11px!important}</style><header style="padding:24px;background:#18332e;color:#bdf6e6">Qterm · Dynamic native scrollbars</header><main style="padding:24px"><p>Content expands after loading. No reload or host sync.</p><div id="nested" style="width:360px;height:90px;overflow:auto;background:#e1eeea"><div id="nested-content">Nested scroll area</div></div><div id="growth"></div></main>';
       window.scrollbarDocumentProof='same document'; true"#,
     );
     // One explicit theme update before all mutations. Repairs must retain this palette.
@@ -77,7 +78,7 @@ pub(super) fn verify(app: &mut tauri::App, view: &tauri::Webview) {
     capture(app, view, "recovered-head.png");
     super::native_scrollbar_drag_tests::verify(app, view);
     eprintln!(
-        "PASS: dynamic viewport/nested zero gutters, latest palette, style/head edits and late CSS recover without reload or scroll reset"
+        "PASS: viewport zero gutters, untouched nested scrollbar styles, latest palette and style/head recovery without reload or scroll reset"
     );
     if std::env::var_os("QTERM_WEB_LIVE_SCROLLBARS").is_some() {
         verify_baidu(app, view);

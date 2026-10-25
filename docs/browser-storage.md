@@ -38,6 +38,8 @@ Automatic popups and prohibited targets are blocked. Requests have opaque single
 
 ## macOS WKWebView tunnel addresses
 
+Browser Blocks identify as desktop Edge. Windows retains WebView2's native Edge UA and Client Hints, following the installed runtime version. macOS sets `WKWebView.customUserAgent` before navigation to `Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36 Edg/156.0.0.0`. The request header and `navigator.userAgent` agree for local/remote pages and native popup children. The fixed macOS compatibility major (156) is maintained in `Guest.swift`; it does not require Edge installation or track Edge updates automatically. The engine remains WebKit, and Client Hints or Chromium-only APIs are not synthesized. Existing guests must be recreated after rebuilding/restarting Qterm to pick up this policy.
+
 The embedded browser requires macOS 14+. The rest of Qterm retains its existing deployment target. Availability is reported by the backend before the UI mounts. Local pages use normal system networking. Remote pages use an isolated `WKWebsiteDataStore` with a SOCKS proxy and failover disabled; the shared gateway only forwards through an authenticated SSH route.
 
 WebKit bypasses its proxy for raw loopback addresses. Remote HTTP/WS loopback URLs therefore use visible, reserved `.qterm-tunnel.invalid` origins. The SOCKS gateway decodes only these fixed aliases before forwarding to SSH:

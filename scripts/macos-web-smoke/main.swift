@@ -48,6 +48,8 @@ func smoke(_ window: NSWindow) async throws {
     }
     let a = try open("a", storeA, aPort), b = try open("b", storeB, bPort)
     try await loaded(a); try await loaded(b)
+    try await userAgentSmoke(a)
+    try await popupUserAgentSmoke(a)
     try check(a.web.title == "Proxy A" && b.web.title == "Proxy B", "independent native stores")
     try check(try await js(a, "typeof window.__TAURI_INTERNALS__") as? String == "undefined", "guest has no Tauri IPC")
     _ = try await js(a, "document.cookie='proof=A; SameSite=Lax'; localStorage.setItem('proof','A'); true")

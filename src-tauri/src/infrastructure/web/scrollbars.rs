@@ -1,6 +1,7 @@
 //! Fixed presentation script with a numeric-only palette supplied by the trusted UI.
 pub(super) const SCRIPT: &str = include_str!("scrollbar_script.mjs");
 const GEOMETRY: &str = include_str!("scrollbar_geometry.mjs");
+const VISIBILITY: &str = include_str!("scrollbar_visibility.mjs");
 const INTERACTION: &str = include_str!("scrollbar_interaction.mjs");
 const OVERLAY: &str = include_str!("scrollbar_overlay.mjs");
 const CSS: &str = include_str!("scrollbar_overlay.css");
@@ -11,7 +12,7 @@ pub(super) fn script(palette: Option<&[[u8; 4]; 3]>) -> String {
         .unwrap_or_else(|| "undefined".into());
     let css = serde_json::to_string(CSS).unwrap();
     format!(
-        "{SCRIPT}({argument}, (document, window) => ({OVERLAY})(document, window, {GEOMETRY}, {INTERACTION}, {css}));"
+        "{SCRIPT}({argument}, (document, window) => ({OVERLAY})(document, window, {GEOMETRY}, {INTERACTION}, {css}, {VISIBILITY}));"
     )
 }
 

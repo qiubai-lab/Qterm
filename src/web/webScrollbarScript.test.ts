@@ -30,8 +30,9 @@ function fixture() {
 it("automatically repairs removed/edited styles and replaced heads with the latest palette", async () => {
   const f = fixture();
   f.install();
-  expect(f.style()?.textContent).toContain("width: 3px");
-  expect(f.style()?.textContent).toContain("scrollbar-width: auto !important");
+  expect(f.style()?.textContent).not.toContain(":root, *");
+  expect(f.style()?.textContent).toContain(":root > body[data-qterm-scroll]");
+  expect(f.style()?.textContent).toContain("scrollbar-width: none !important");
   expect(f.style()?.textContent).toContain("::-webkit-scrollbar-button");
   f.install(palette);
   for (const change of [
