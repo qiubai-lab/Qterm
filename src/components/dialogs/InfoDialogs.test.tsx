@@ -7,9 +7,11 @@ const mocks = vi.hoisted(() => ({
   checkForUpdate: vi.fn(),
   openLatestReleasePage: vi.fn(),
   writeClipboardText: vi.fn(),
+  openExternalHttpUrl: vi.fn(),
 }));
 
 vi.mock("@tauri-apps/api/app", () => ({ getVersion: mocks.getVersion }));
+vi.mock("../../lib/externalUrl", () => ({ openExternalHttpUrl: mocks.openExternalHttpUrl }));
 vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({ writeText: mocks.writeClipboardText }));
 vi.mock("../../lib/updateCheck", () => ({ checkForUpdate: mocks.checkForUpdate, openLatestReleasePage: mocks.openLatestReleasePage, updateCheckMessage: (error: unknown) => error instanceof Error ? error.message : "无法检查更新。" }));
 
@@ -20,10 +22,24 @@ beforeEach(() => {
   mocks.checkForUpdate.mockResolvedValue({ status: "latest", currentVersion: "0.1.1" });
   mocks.openLatestReleasePage.mockResolvedValue(undefined);
   mocks.writeClipboardText.mockResolvedValue(undefined);
+  mocks.openExternalHttpUrl.mockResolvedValue(true);
 });
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
 describe("HelpDialog", () => {
+  it("opens the project explicitly and allows retry after an external browser failure", async () => {
+    const user = userEvent.setup();
+    mocks.openExternalHttpUrl.mockRejectedValueOnce(new Error("unavailable"));
+    render(<HelpDialog onClose={vi.fn()}/>);
+    const link = screen.getByRole("link", { name: "github.com/qiubai-lab/Qterm" });
+    await user.click(link);
+    expect(mocks.openExternalHttpUrl).toHaveBeenCalledExactlyOnceWith("https://github.com/qiubai-lab/Qterm");
+    expect(await screen.findByRole("alert")).toHaveTextContent("无法打开浏览器，请重试");
+    await user.click(link);
+    expect(mocks.openExternalHttpUrl).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
   it("shows project metadata and the runtime application version without shortcut guidance", async () => {
     render(<HelpDialog onClose={vi.fn()}/>);
 

@@ -41,3 +41,11 @@ it("does not activate a detected web link from a right click", () => {
   expect(event.defaultPrevented).toBe(false);
   expect(mocks.requestTerminalExternalLink).not.toHaveBeenCalled();
 });
+
+it("reports the invoking terminal after its view is remounted", () => {
+  let block = "first";
+  createTerminalWebLinksAddon(() => block);
+  block = "second";
+  mocks.handlers[0](new MouseEvent("click"), "http://localhost:3000");
+  expect(mocks.requestTerminalExternalLink).toHaveBeenCalledExactlyOnceWith("http://localhost:3000", "web-link", "second");
+});

@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { WebTabs } from "./WebTabs";
 
@@ -54,5 +54,21 @@ it("updates each tab's title and loading indicator and supports keyboard selecti
   expect(screen.getByRole("tab", { name: "已载入页面" })).toBe(first);
   expect(first.querySelector(".web-address-spinner")).toBeNull();
   expect(second).toHaveTextContent("新标签页");
+  view.unmount(); header.remove();
+});
+
+it("delivers terminal links into empty/new tabs without overwriting pages and rejects excess tabs", () => {
+  const header = document.createElement("div"); document.body.append(header);
+  let open!: (url: string) => void;
+  const register = vi.fn((handler: (url: string) => void) => { open = handler; return vi.fn(); });
+  const view = render(<WebTabs header={header} registerOpener={register} profileId={null} sessionId={null} connecting={false} visible supported notice="" onConnect={vi.fn()} onActivate={vi.fn()}/>);
+  act(() => open("http://localhost/first"));
+  expect(screen.getAllByRole("tab")).toHaveLength(1);
+  act(() => open("http://localhost/second"));
+  expect(screen.getAllByRole("tab")).toHaveLength(2);
+  for (let i = 2; i < 10; i++) act(() => open(`http://localhost/${i}`));
+  expect(() => open("http://localhost/overflow")).toThrow("10 个标签页");
+  expect(screen.getAllByRole("tab")).toHaveLength(10);
+  expect(register).toHaveBeenCalledOnce();
   view.unmount(); header.remove();
 });

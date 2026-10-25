@@ -12,7 +12,12 @@ export type WebLoadState = "idle" | "loading" | "loaded" | "failed" | "stopped";
 export interface WebMetrics { url: string; documentId: number; resources: number; loadMs: number }
 export interface WebPageState { label: string; url: string; loading: boolean; visited: boolean; title?: string; metadata?: boolean; loadState?: WebLoadState }
 export const readWebMetrics = (id: string) => invoke<WebMetrics | null>("web_metrics", { id });
-export const openWeb = (id: string, sessionId: string, profileId: string, url: string) => invoke<void>("web_open", { input: { id, sessionId, profileId, url } });
+export const openWeb = (id: string, sessionId: string | null, profileId: string | null, url: string) => {
+  if (profileId !== null && !sessionId) return Promise.reject(new Error("SSH 尚未连接"));
+  if (profileId === null && sessionId !== null) return Promise.reject(new Error("浏览连接身份无效"));
+  const target = profileId === null ? { type: "local" } : { type: "remote", sessionId, profileId };
+  return invoke<void>("web_open", { input: { id, target, url } });
+};
 export const closeWeb = (id: string) => invoke<void>("web_close", { id });
 export const syncWeb = (id: string, bounds: WebBounds) => invoke<void>("web_sync", { id, bounds });
 export const webAction = (id: string, action: "navigate" | "back" | "forward" | "reload" | "stop", url?: string) => invoke<void>("web_action", { id, action, url });

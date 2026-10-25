@@ -18,7 +18,7 @@ export type WorkspaceAction =
   | { type: "splitBlock"; workspaceId: string; blockId: string; direction: SplitDirection; newBlockId: string; splitId: string }
   | { type: "openFiles"; workspaceId: string; anchorBlockId: string; profileId: string | null; path: string }
   | { type: "openNetwork"; workspaceId: string; anchorBlockId: string; profileId: string | null }
-  | { type: "openWeb"; workspaceId: string; anchorBlockId: string; profileId: string }
+  | { type: "openWeb"; workspaceId: string; anchorBlockId: string; profileId: string | null; newBlockId?: string }
   | { type: "openGit"; workspaceId: string; anchorBlockId: string; target: GitTarget }
   | { type: "closeBlock"; workspaceId: string; blockId: string }
   | { type: "resizeSplit"; workspaceId: string; splitId: string; ratio: number }
@@ -84,7 +84,7 @@ export function workspaceReducer(state: WorkspaceDocument, action: WorkspaceActi
     });
     case "openWeb": return mapWorkspace(state, action.workspaceId, (workspace) => {
       if (!findLeaf(workspace.layout, action.anchorBlockId)) return workspace;
-      const web = { type: "web" as const, blockId: createId("web"), profileId: action.profileId };
+      const web = { type: "web" as const, blockId: action.newBlockId ?? createId("web"), profileId: action.profileId };
       return { ...workspace, activeBlockId: web.blockId, layout: splitTerminal(workspace.layout, action.anchorBlockId, "horizontal", web, createId("split")) };
     });
     case "openGit": return mapWorkspace(state, action.workspaceId, (workspace) => {

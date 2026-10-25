@@ -75,7 +75,7 @@ export function TerminalTargetPicker({ profiles, groups = [], recentProfileIds =
   const scrollbarHideTimerRef = useRef<number | null>(null);
   const suppressGroupFocusRef = useRef(false);
   const selected = profiles.find((profile) => profile.id === selectedProfileId) ?? null;
-  const name = selected?.name ?? localName;
+  const name = selected?.name ?? (selectedProfileId === null ? localName : "连接已失效");
 
   const recentProfiles = useMemo(() => recentTargetProfiles(profiles, recentProfileIds), [profiles, recentProfileIds]);
   const groupSections = useMemo(() => groupTargetProfiles(profiles, groups), [profiles, groups]);

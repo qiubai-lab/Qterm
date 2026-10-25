@@ -1,13 +1,18 @@
-import { useEffect, useRef, useState, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { clearWebData, type WebDataSelection, closeWeb, listenWebFocus, listenWebPages, openWeb, webAction, type WebLoadState, type WebMetrics } from "../lib/tauri/web";
 import { normalizeWebAddress, webSurfaceVisible } from "./webModel";
 import { registerNativeSurface } from "./surface/nativeSurfaceCoordinator";
 import { dispatchNativeInteraction } from "../components/overlays/nativeInteraction";
 import { watchWebMetrics } from "./watchWebMetrics";
+import { acceptWebPopup, rejectWebPopup, type WebPopupRequest } from "../lib/tauri/webPopups";
+import { watchWebPopups, type WebPopupOptions } from "./webPopupEvents";
 
 /** A generation owns exactly one guest; closing waits for pending creation. */
-export function useWebBrowser(surface: RefObject<HTMLDivElement | null>, sessionId: string | null, profileId: string | null, visible: boolean, onActivate?: () => void, onVisit?: (url: string, title: string, metadata: boolean) => void) {
-  const [request, setRequest] = useState<{ url: string; generation: number } | null>(null);
+export function useWebBrowser(surface: RefObject<HTMLDivElement | null>, sessionId: string | null, profileId: string | null, visible: boolean, onActivate?: () => void, onVisit?: (url: string, title: string, metadata: boolean) => void, popups?: WebPopupOptions) {
+  const [request, setRequest] = useState<{ url: string; generation: number; popup?: WebPopupRequest } | null>(() => popups?.initial ? { url: popups.initial.url, generation: 0, popup: popups.initial } : null);
+  const popupOptions = useRef(popups);
+  useLayoutEffect(() => { popupOptions.current = popups; }, [popups]);
+  const adoptedPopup = useRef(false);
   const [title, setTitle] = useState("");
   const [address, setAddress] = useState("");
   const [error, setError] = useState("");
@@ -25,7 +30,7 @@ export function useWebBrowser(surface: RefObject<HTMLDivElement | null>, session
   visited.current = onVisit;
 
   useEffect(() => {
-    if (!request || !sessionId || !profileId) { setReady(false); setLoading(false); return; }
+    if (!request || (profileId !== null && !sessionId)) { setReady(false); setLoading(false); return; }
     const id = crypto.randomUUID();
     let disposed = false;
     let unregisterSurface: (() => void) | undefined;
@@ -33,6 +38,7 @@ export function useWebBrowser(surface: RefObject<HTMLDivElement | null>, session
     let unlistenFocus: (() => void) | undefined;
     let documentRevision = 0, snapshotReady = false;
     let metricWatcher: ReturnType<typeof watchWebMetrics> | undefined;
+    let popupWatcher: ReturnType<typeof watchWebPopups> | undefined;
     current.current = id;
     setLoading(true);
     setReady(false);
@@ -61,7 +67,19 @@ export function useWebBrowser(surface: RefObject<HTMLDivElement | null>, session
         }
       });
       if (disposed) return;
-      await openWeb(id, sessionId, profileId, latestUrl.current || request.url);
+      if (popupOptions.current) {
+        popupWatcher = watchWebPopups(id, () => popupOptions.current ?? {}, reason => { if (!disposed) setError(reason); });
+        await popupWatcher.ready;
+      }
+      if (disposed) return;
+      if (request.popup && !adoptedPopup.current) {
+        await acceptWebPopup(id, request.popup.requestId);
+        adoptedPopup.current = true;
+        if (!disposed && request.popup.url === "about:blank" && !latestUrl.current) {
+          // A script may write into its new blank window without starting a navigation.
+          snapshotReady = true; setLoading(false); setLoadState("idle");
+        }
+      } else await openWeb(id, sessionId, profileId, latestUrl.current || request.url);
       if (disposed) return;
       setReady(true);
       metricWatcher = watchWebMetrics(id, () => visibility.current, value => {
@@ -76,7 +94,11 @@ export function useWebBrowser(surface: RefObject<HTMLDivElement | null>, session
       if (current.current === id) current.current = null;
       unregisterSurface?.();
       metricWatcher?.dispose();
-      void created.finally(() => { unlisten?.(); unlistenFocus?.(); void closeWeb(id).catch(() => undefined); });
+      popupWatcher?.dispose();
+      void created.finally(() => {
+        unlisten?.(); unlistenFocus?.(); void closeWeb(id).catch(() => undefined);
+        if (request.popup && !adoptedPopup.current && current.current === null) void rejectWebPopup(request.popup.requestId).catch(() => undefined);
+      });
     };
   }, [profileId, request, sessionId, surface]);
 
@@ -99,5 +121,5 @@ export function useWebBrowser(surface: RefObject<HTMLDivElement | null>, session
     if (!current.current) throw new Error("请先打开网页");
     await clearWebData(current.current, selection);
   }
-  return { navigate, action, clearData, address, title, error, loading, loadState, metrics, ready: Boolean(sessionId) && ready };
+  return { navigate, action, clearData, address, title, error, loading, loadState, metrics, ready: (profileId === null || Boolean(sessionId)) && ready };
 }

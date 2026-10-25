@@ -22,7 +22,7 @@ impl<R: WebLibraryRepository> WebLibraryService<R> {
         action: Option<WebLibraryAction>,
         now: u64,
     ) -> Result<WebLibrary, String> {
-        if uuid::Uuid::parse_str(profile).is_err() {
+        if !crate::domain::web_library::valid_scope(profile) {
             return Err("连接标识无效".into());
         }
         let repository = self.repository.lock().map_err(|_| "浏览记录暂不可用")?;

@@ -24,9 +24,35 @@ pub fn trusted_ui_label(label: &str) -> bool {
     label == "main"
 }
 
+#[cfg(any(windows, test))]
+pub fn allow_popup(url: &str, user_initiated: bool, app_origin: bool) -> Result<(), &'static str> {
+    if !user_initiated {
+        return Err("已拦截网页自动弹窗");
+    }
+    if app_origin || (url != "about:blank" && !allowed_web_url(url)) {
+        return Err("已拦截不支持的新窗口地址");
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn popup_policy_preserves_guest_boundaries_and_requires_a_gesture() {
+        assert!(allow_popup("https://example.test/", true, false).is_ok());
+        assert!(allow_popup("about:blank", true, false).is_ok());
+        assert!(allow_popup("https://example.test/", false, false).is_err());
+        assert!(allow_popup("http://localhost:1420/", true, true).is_err());
+        for url in [
+            "javascript:alert(1)",
+            "file:///secret",
+            "tauri://localhost",
+            "https://user:pass@host/",
+        ] {
+            assert!(allow_popup(url, true, false).is_err());
+        }
+    }
     #[test]
     fn rejects_privileged_and_credential_urls() {
         for url in [

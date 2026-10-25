@@ -16,7 +16,7 @@ impl WebHost {
         let label = super::label(id)?;
         let guests = self.guests.lock().await;
         let guest = guests.get(&label).ok_or("请先打开网页再清理此连接数据")?;
-        if !sessions.web_session_connected(&guest.session) {
+        if !guest.target.connected(sessions) {
             return Err("SSH 已断开".into());
         }
         let views: Vec<_> = guests

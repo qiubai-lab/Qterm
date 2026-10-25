@@ -1,6 +1,6 @@
 use crate::{
     commands::session::SessionState,
-    infrastructure::web::{WebBounds, WebHost, WebMetrics},
+    infrastructure::web::{WebBounds, WebHost, WebMetrics, WebTarget},
 };
 use tauri::{AppHandle, Manager, State};
 
@@ -21,8 +21,7 @@ pub async fn web_clear_data(
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct OpenWeb {
     id: String,
-    session_id: String,
-    profile_id: String,
+    target: WebTarget,
     url: String,
 }
 
@@ -38,25 +37,52 @@ pub async fn web_open(
             &app,
             sessions.manager(),
             &input.id,
-            &input.session_id,
-            &input.profile_id,
+            &input.target,
             &input.url,
         )
         .await?;
-    let manager = sessions.manager().clone();
+    watch_connection(app, sessions.manager().clone(), input.id, input.target);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn web_accept_popup(
+    app: AppHandle,
+    state: State<'_, WebHost>,
+    sessions: State<'_, SessionState>,
+    id: String,
+    request: String,
+) -> Result<(), String> {
+    let target = state
+        .accept_popup(&app, sessions.manager(), &id, &request)
+        .await?;
+    watch_connection(app, sessions.manager().clone(), id, target);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn web_reject_popup(app: AppHandle, request: String) -> Result<(), String> {
+    crate::infrastructure::web::reject_popup(&app, &request).await
+}
+
+fn watch_connection(
+    app: AppHandle,
+    manager: std::sync::Arc<crate::infrastructure::ssh::client::SshSessionManager>,
+    id: String,
+    target: WebTarget,
+) {
+    let Some(session_id) = target.session().map(str::to_owned) else {
+        return;
+    };
     tauri::async_runtime::spawn(async move {
-        while app.get_webview(&format!("web-{}", input.id)).is_some() {
-            if !manager.web_session_connected(&input.session_id) {
-                let _ = app
-                    .state::<WebHost>()
-                    .close(&app, &manager, &input.id)
-                    .await;
+        while app.get_webview(&format!("web-{id}")).is_some() {
+            if !manager.web_session_connected(&session_id) {
+                let _ = app.state::<WebHost>().close(&app, &manager, &id).await;
                 break;
             }
             tokio::time::sleep(std::time::Duration::from_millis(200)).await;
         }
     });
-    Ok(())
 }
 
 #[tauri::command]

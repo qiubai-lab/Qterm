@@ -2,6 +2,7 @@
 
 pub mod browser;
 pub mod clipboard;
+pub(crate) mod external_links;
 pub mod git_cli;
 pub(crate) mod git_execution;
 pub mod local;

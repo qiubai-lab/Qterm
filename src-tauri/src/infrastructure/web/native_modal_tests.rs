@@ -87,7 +87,7 @@ fn assert_native_state(app: &mut tauri::App, view: &tauri::Webview, covered: boo
     );
 }
 
-pub(super) fn verify(app: &mut tauri::App, view: &tauri::Webview) {
+pub(super) fn verify(app: &mut tauri::App, view: &tauri::Webview, evidence: &str) {
     let main = app.get_webview("main").unwrap();
     let events = Arc::new(AtomicUsize::new(0));
     let received = events.clone();
@@ -151,7 +151,8 @@ pub(super) fn verify(app: &mut tauri::App, view: &tauri::Webview) {
     let covered_png = capture(app, view);
     assert!(!covered_png.is_empty());
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../docs/qb-spec/evidence/QB-20261025-global-native-overlays");
+        .join("../docs/qb-spec/evidence")
+        .join(evidence);
     std::fs::create_dir_all(&path).unwrap();
     std::fs::write(path.join("guest-preview.png"), &bytes).unwrap();
     let host = capture(app, &main);

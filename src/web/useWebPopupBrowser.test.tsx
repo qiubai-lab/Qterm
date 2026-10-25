@@ -1,0 +1,32 @@
+import { act, renderHook, waitFor } from "@testing-library/react";
+import { createRef, StrictMode } from "react";
+import { beforeEach, expect, it, vi } from "vitest";
+import { useWebBrowser } from "./useWebBrowser";
+const ipc = vi.hoisted(() => ({ accept: vi.fn(), reject: vi.fn(async () => {}), open: vi.fn(), close: vi.fn(async () => {}), listen: vi.fn(async () => () => {}), dispose: vi.fn() }));
+vi.mock("../lib/tauri/webPopups", () => ({ acceptWebPopup: ipc.accept, rejectWebPopup: ipc.reject }));
+vi.mock("./webPopupEvents", () => ({ watchWebPopups: () => ({ ready: Promise.resolve(), dispose: ipc.dispose }) }));
+vi.mock("../lib/tauri/web", () => ({ openWeb: ipc.open, closeWeb: ipc.close, webAction: vi.fn(), listenWebPages: ipc.listen, listenWebFocus: ipc.listen, readWebMetrics: vi.fn(async () => null) }));
+beforeEach(() => { vi.clearAllMocks(); ipc.accept.mockResolvedValue(undefined); });
+const request = { label: "web-source", requestId: "request", url: "about:blank" };
+it("subscribes before native adoption, never reconstructs navigation, and closes after pending adoption", async () => {
+  let finish!: () => void;
+  ipc.accept.mockImplementation(() => new Promise<void>(resolve => { finish = resolve; }));
+  const surface = createRef<HTMLDivElement>();
+  const hook = renderHook(() => useWebBrowser(surface, null, null, true, undefined, undefined, { initial: request }));
+  await waitFor(() => expect(ipc.accept).toHaveBeenCalledOnce());
+  expect(ipc.listen).toHaveBeenCalledTimes(2); expect(ipc.open).not.toHaveBeenCalled();
+  const id = ipc.accept.mock.calls[0][0]; hook.unmount(); expect(ipc.close).not.toHaveBeenCalled();
+  await act(async () => finish());
+  expect(ipc.close).toHaveBeenCalledWith(id); expect(ipc.dispose).toHaveBeenCalledOnce();
+});
+it("consumes the initial request once under StrictMode and shows native acceptance failures", async () => {
+  const surface = createRef<HTMLDivElement>();
+  const hook = renderHook(() => useWebBrowser(surface, null, null, true, undefined, undefined, { initial: request }), { wrapper: StrictMode });
+  await waitFor(() => expect(hook.result.current.ready).toBe(true));
+  expect(hook.result.current.loading).toBe(false);
+  expect(ipc.accept).toHaveBeenCalledOnce(); expect(ipc.reject).not.toHaveBeenCalled(); hook.unmount();
+  ipc.accept.mockRejectedValueOnce(new Error("来源网页已关闭"));
+  const failed = renderHook(() => useWebBrowser(surface, null, null, true, undefined, undefined, { initial: request }));
+  await waitFor(() => expect(failed.result.current.error).toContain("来源网页已关闭"));
+  expect(failed.result.current.ready).toBe(false); failed.unmount();
+});

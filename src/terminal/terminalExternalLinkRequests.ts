@@ -5,13 +5,14 @@ export type TerminalExternalLinkSource = "web-link" | "osc8";
 export interface TerminalExternalLinkRequest {
   source: TerminalExternalLinkSource;
   uri: string;
+  blockId?: string;
 }
 
 const requestListeners = new Set<(request: TerminalExternalLinkRequest) => void>();
 
-export function requestTerminalExternalLink(uri: string, source: TerminalExternalLinkSource): boolean {
+export function requestTerminalExternalLink(uri: string, source: TerminalExternalLinkSource, blockId?: string): boolean {
   if (!isExternalHttpUrl(uri) || requestListeners.size === 0) return false;
-  requestListeners.forEach((listener) => listener({ source, uri }));
+  requestListeners.forEach((listener) => listener({ source, uri, blockId }));
   return true;
 }
 

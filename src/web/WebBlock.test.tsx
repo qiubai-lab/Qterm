@@ -3,13 +3,17 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { ConnectionProfile } from "../lib/tauri/profiles";
 import { WebBlock } from "./WebBlock";
 import { TerminalTargetPicker } from "../workspace/TerminalTargetPicker";
+import type { WebPopupEvent } from "../lib/tauri/webPopups";
 
 const mocks = vi.hoisted(() => ({
   workspace: vi.fn(), open: vi.fn<(id: string, session: string, profile: string, url: string) => Promise<void>>(async () => {}), close: vi.fn(async () => {}),
   disconnect: vi.fn(), dispatch: vi.fn(), select: vi.fn(async () => {}),
   focus: vi.fn<(receive: (label: string) => void) => Promise<() => void>>(async () => () => {}),
+  popup: vi.fn<(receive: (event: WebPopupEvent) => void) => Promise<() => void>>(async () => () => {}),
+  acceptPopup: vi.fn(async () => {}),
 }));
 vi.mock("../workspace/WorkspaceProvider", () => ({ useWorkspace: mocks.workspace }));
+vi.mock("../lib/tauri/webPopups", () => ({ listenWebPopups: mocks.popup, listenWebWindowClose: vi.fn(async () => () => {}), acceptWebPopup: mocks.acceptPopup, rejectWebPopup: vi.fn(async () => {}) }));
 vi.mock("../lib/tauri/web", () => ({ openWeb: mocks.open, closeWeb: mocks.close, syncWeb: vi.fn(async () => {}), webAction: vi.fn(async () => {}), listenWebPages: vi.fn(async () => () => {}), listenWebFocus: mocks.focus }));
 vi.mock("./webModel", async importOriginal => ({ ...await importOriginal<typeof import("./webModel")>(), supportsWebBlocks: () => true }));
 const profile: ConnectionProfile = { id: "profile", name: "Jump target", host: "target.internal", port: 22, username: "tester", authPreference: "manual", groupId: null };
@@ -17,6 +21,20 @@ const second = { ...profile, id: "second", name: "Second target", host: "second.
 const workspace = { profiles: [profile, second], networkRuntimes: {}, dispatch: mocks.dispatch, disconnectNetworkBlock: mocks.disconnect, selectNetworkTarget: mocks.select };
 beforeEach(() => { vi.clearAllMocks(); mocks.open.mockResolvedValue(); mocks.select.mockResolvedValue(); mocks.workspace.mockReturnValue(workspace); });
 afterEach(cleanup);
+
+it("hands webpage popup requests to a new same-target tab without replaying their URL", async () => {
+  mocks.workspace.mockReturnValue({ ...workspace, networkRuntimes: { web: { status: "connected", sessionId: "ssh-web" } } });
+  const view = render(<WebBlock workspaceId="workspace" node={{ type: "web", blockId: "web", profileId: profile.id }} visible active onClose={vi.fn()} onConnect={vi.fn()}/>);
+  fireEvent.change(screen.getByRole("combobox", { name: "网页地址" }), { target: { value: "http://remote.internal" } });
+  fireEvent.submit(screen.getByRole("combobox", { name: "网页地址" }).closest("form")!);
+  await waitFor(() => expect(mocks.open).toHaveBeenCalledOnce());
+  const label = `web-${mocks.open.mock.calls[0][0]}`;
+  act(() => mocks.popup.mock.calls[0][0]({ label, requestId: "native-request", url: "http://remote.internal/post", message: null }));
+  await waitFor(() => expect(mocks.acceptPopup).toHaveBeenCalledWith(expect.any(String), "native-request"));
+  expect(screen.getAllByRole("tab")).toHaveLength(2); expect(mocks.open).toHaveBeenCalledOnce();
+  expect(mocks.open).toHaveBeenCalledWith(expect.any(String), "ssh-web", profile.id, "http://remote.internal/");
+  view.unmount();
+});
 
 it("waits for profile authentication, opens the remote address, then closes its guest on disconnect", async () => {
   const connect = vi.fn();
@@ -114,4 +132,28 @@ it("closes a pending native creation after switching and never reopens it for th
   await waitFor(() => expect(mocks.close).toHaveBeenCalledWith(mocks.open.mock.calls[0][0]));
   expect(screen.getByRole("combobox", { name: "网页地址" })).toHaveValue("");
   expect(mocks.open).toHaveBeenCalledOnce();
+});
+
+it("offers Local and opens it without authentication, while missing remote profiles stay unavailable", async () => {
+  const connect = vi.fn();
+  const props = { workspaceId: "workspace", node: { type: "web" as const, blockId: "web", profileId: null as string | null }, visible: true, active: true, onClose: vi.fn(), onConnect: connect };
+  const view = render(<WebBlock {...props}/>);
+  expect(screen.getByText(/localhost 指向当前电脑/)).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: /选择网页连接/ }));
+  fireEvent.click(screen.getByRole("button", { name: /本地\s*使用本机网络/ }));
+  fireEvent.change(screen.getByRole("combobox", { name: "网页地址" }), { target: { value: "http://localhost:3000" } });
+  fireEvent.submit(screen.getByRole("combobox", { name: "网页地址" }).closest("form")!);
+  await waitFor(() => expect(mocks.open).toHaveBeenCalledWith(expect.any(String), null, null, "http://localhost:3000/"));
+  expect(connect).not.toHaveBeenCalled();
+  view.rerender(<WebBlock {...props} node={{ ...props.node, profileId: "missing" }}/>);
+  expect(screen.getByRole("combobox", { name: "网页地址" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: /选择网页连接/ })).toHaveTextContent("连接已失效");
+  expect(mocks.open).toHaveBeenCalledOnce();
+});
+
+it("can switch a remote block to Local through the shared target teardown", async () => {
+  render(<WebBlock workspaceId="workspace" node={{ type: "web", blockId: "web", profileId: profile.id }} visible active onClose={vi.fn()} onConnect={vi.fn()}/>);
+  fireEvent.click(screen.getByRole("button", { name: /选择网页连接/ }));
+  fireEvent.click(screen.getByRole("button", { name: /本地\s*使用本机网络/ }));
+  await waitFor(() => expect(mocks.select).toHaveBeenCalledWith("workspace", "web", null));
 });

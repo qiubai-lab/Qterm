@@ -11,6 +11,7 @@ import {
 import { Icon } from "../Icon";
 import { Button, IconButton } from "../Button";
 import { DialogFrame } from "./DialogFrame";
+import { openExternalHttpUrl } from "../../lib/externalUrl";
 import "./aboutUpdate.css";
 
 const PROJECT_URL = "https://github.com/qiubai-lab/Qterm";
@@ -34,6 +35,16 @@ export function HelpDialog({ onClose, autoCheckOnStartup = false, onAutoCheckOnS
   const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
   const [updatePreferenceBusy, setUpdatePreferenceBusy] = useState(false);
   const [updatePreferenceError, setUpdatePreferenceError] = useState("");
+  const [projectLinkError, setProjectLinkError] = useState("");
+
+  const openProjectPage = async () => {
+    setProjectLinkError("");
+    try {
+      await openExternalHttpUrl(PROJECT_URL);
+    } catch {
+      setProjectLinkError("无法打开浏览器，请重试");
+    }
+  };
 
   const changeAutoCheckPreference = async () => {
     if (!onAutoCheckOnStartupChange || updatePreferenceBusy) return;
@@ -97,7 +108,12 @@ export function HelpDialog({ onClose, autoCheckOnStartup = false, onAutoCheckOnS
             <div><dt>作者</dt><dd>秋白</dd></div>
             <div>
               <dt>项目地址</dt>
-              <dd><a href={PROJECT_URL} target="_blank" rel="noreferrer">github.com/qiubai-lab/Qterm</a></dd>
+              <dd><a href={PROJECT_URL} target="_blank" rel="noreferrer" onClick={(event) => {
+                event.preventDefault();
+                void openProjectPage();
+              }}>github.com/qiubai-lab/Qterm</a>
+                {projectLinkError && <span role="alert">{projectLinkError}</span>}
+              </dd>
             </div>
             <div><dt>当前版本</dt><dd>{versionLabel}</dd></div>
             <div><dt>开源许可</dt><dd>GNU GPL v3.0</dd></div>

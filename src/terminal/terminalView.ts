@@ -5,7 +5,7 @@ import { parseOsc7Cwd } from "./osc7";
 import { createTerminalLayout, type TerminalLayout } from "./terminalLayout";
 import { createTerminalInputScheduler, type TerminalInputScheduler } from "./terminalInputScheduler";
 import { createTerminalOsc52Addon } from "./terminalOsc52";
-import { terminalOsc8LinkHandler } from "./terminalOsc8Link";
+import { createTerminalOsc8LinkHandler } from "./terminalOsc8Link";
 import { createTerminalWebLinksAddon } from "./terminalWebLinks";
 import { ensureTerminalSearch, type TerminalSearchHost } from "./terminalSearch";
 import { bindTerminalTheme, readTerminalTheme } from "./terminalTheme";
@@ -43,7 +43,8 @@ export function acquireTerminalView(sessionKey: string, container: HTMLElement, 
   }
 
   const typography = terminalTypography();
-  const terminal = new Terminal({
+  const getBlockId = () => terminal.element?.closest<HTMLElement>("[data-layout-block]")?.dataset.layoutBlock;
+  const terminal: Terminal = new Terminal({
     cursorBlink: true,
     allowProposedApi: true,
     ...typography,
@@ -51,13 +52,13 @@ export function acquireTerminalView(sessionKey: string, container: HTMLElement, 
     ...(windowsPty ? { windowsPty } : {}),
     allowTransparency: true,
     overviewRuler: { width: 3 },
-    linkHandler: terminalOsc8LinkHandler,
+    linkHandler: createTerminalOsc8LinkHandler(getBlockId),
     theme: readTerminalTheme(),
   });
   const fit = new FitAddon();
   terminal.loadAddon(fit);
   terminal.loadAddon(createTerminalOsc52Addon(writeClipboardText));
-  terminal.loadAddon(createTerminalWebLinksAddon());
+  terminal.loadAddon(createTerminalWebLinksAddon(getBlockId));
   terminal.open(container);
   const element = terminal.element;
   if (!element) {

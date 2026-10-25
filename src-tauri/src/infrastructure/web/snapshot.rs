@@ -28,7 +28,7 @@ impl WebHost {
             let view = {
                 let guests = self.guests.lock().await;
                 let guest = guests.get(&label).ok_or("网页已关闭")?;
-                if !guest.visible || !sessions.web_session_connected(&guest.session) {
+                if !guest.visible || !guest.target.connected(sessions) {
                     return Err("网页不可预览".into());
                 }
                 app.get_webview(&label).ok_or("网页已关闭")?

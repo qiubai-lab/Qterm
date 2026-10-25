@@ -3,7 +3,8 @@ import type { WebLibraryAction } from "../lib/tauri/webLibrary";
 import { normalizeWebAddress } from "./webModel";
 import { webLibraryStore as store } from "./webLibraryStore";
 
-export function useWebLibrary(profile: string | null) {
+export function useWebLibrary(profileId: string | null) {
+  const profile = profileId ?? "local";
   const snapshot = useSyncExternalStore(store.subscribe, () => store.get(profile));
   useEffect(() => { if (profile) store.ensure(profile); }, [profile]);
   const update = (action?: WebLibraryAction) => profile ? store.execute(profile, action) : Promise.resolve(false);

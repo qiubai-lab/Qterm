@@ -1,6 +1,6 @@
 import { OnboardingProvider } from "../onboarding/OnboardingProvider";
 import { TerminalNotificationProvider } from "../terminal/notifications/TerminalNotificationProvider";
-import { TerminalExternalLinkConfirmationHost } from "../terminal/TerminalExternalLinkConfirmation";
+import { WorkspaceTerminalLinkHost } from "../workspace/WorkspaceTerminalLinkHost";
 import { ThemedTitleTooltipProvider } from "../components/ThemedTitleTooltipProvider";
 import { WorkspaceProvider } from "../workspace/WorkspaceProvider";
 import { WorkspaceShell } from "../workspace/WorkspaceShell";
@@ -10,5 +10,5 @@ import { useBrowserContextMenuGuard } from "./useBrowserContextMenuGuard";
 
 export default function App() {
   useBrowserContextMenuGuard();
-  return <AppThemeProvider><ThemedTitleTooltipProvider><WorkspaceProvider><OnboardingProvider mode="desktop"><TerminalNotificationProvider><WorkspaceShell/><TerminalExternalLinkConfirmationHost/></TerminalNotificationProvider></OnboardingProvider></WorkspaceProvider></ThemedTitleTooltipProvider></AppThemeProvider>;
+  return <AppThemeProvider><ThemedTitleTooltipProvider><WorkspaceProvider><OnboardingProvider mode="desktop"><TerminalNotificationProvider><WorkspaceShell/><WorkspaceTerminalLinkHost/></TerminalNotificationProvider></OnboardingProvider></WorkspaceProvider></ThemedTitleTooltipProvider></AppThemeProvider>;
 }

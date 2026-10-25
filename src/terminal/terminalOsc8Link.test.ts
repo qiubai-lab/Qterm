@@ -4,7 +4,7 @@ const mocks = vi.hoisted(() => ({ requestTerminalExternalLink: vi.fn() }));
 
 vi.mock("./terminalExternalLinkRequests", () => ({ requestTerminalExternalLink: mocks.requestTerminalExternalLink }));
 
-import { terminalOsc8LinkHandler } from "./terminalOsc8Link";
+import { createTerminalOsc8LinkHandler, terminalOsc8LinkHandler } from "./terminalOsc8Link";
 
 beforeEach(() => mocks.requestTerminalExternalLink.mockReset());
 
@@ -24,4 +24,10 @@ it("does not activate an OSC 8 link from a right click", () => {
 
   expect(event.defaultPrevented).toBe(false);
   expect(mocks.requestTerminalExternalLink).not.toHaveBeenCalled();
+});
+
+it("includes the source terminal for an OSC 8 activation", () => {
+  const handler = createTerminalOsc8LinkHandler(() => "source-terminal");
+  handler.activate(new MouseEvent("click"), "http://localhost:3000", { start: { x: 1, y: 1 }, end: { x: 4, y: 1 } });
+  expect(mocks.requestTerminalExternalLink).toHaveBeenCalledExactlyOnceWith("http://localhost:3000", "osc8", "source-terminal");
 });

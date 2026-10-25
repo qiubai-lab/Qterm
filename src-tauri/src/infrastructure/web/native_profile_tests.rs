@@ -42,7 +42,7 @@ fn open(app: &mut tauri::App, path: &std::path::Path, port: u16, label: &str) ->
         let _ = send.send(windows::create_persistent(
             &app_handle,
             &name,
-            port,
+            Some(port),
             "http://internal.invalid:8765/".parse().unwrap(),
             &path,
         ));

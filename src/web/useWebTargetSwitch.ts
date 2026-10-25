@@ -11,7 +11,7 @@ export function useWebTargetSwitch(workspaceId: string, node: WebNode, selectTar
   useEffect(() => () => { sequence.current++; }, []);
 
   async function choose(profileId: string | null) {
-    if (!profileId || (profileId === node.profileId && !switching)) return;
+    if (profileId === node.profileId && !switching) return;
     const request = ++sequence.current;
     setSwitching(true);
     setError("");

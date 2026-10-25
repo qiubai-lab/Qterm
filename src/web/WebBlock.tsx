@@ -1,4 +1,4 @@
-import { useState, type PointerEvent } from "react";
+import { useCallback, useState, type PointerEvent } from "react";
 import type { ConnectionProfile } from "../lib/tauri/profiles";
 import type { WebNode } from "../workspace/model";
 import { useWorkspace } from "../workspace/WorkspaceProvider";
@@ -23,13 +23,16 @@ interface Props {
 
 export function WebBlock({ workspaceId, node, visible, active, onClose, onConnect, onManageConnections, onHeaderPointerDown }: Props) {
   const [tabHeader, setTabHeader] = useState<HTMLDivElement | null>(null);
-  const { document, profiles, profileGroups = [], networkRuntimes, dispatch, disconnectNetworkBlock, selectNetworkTarget } = useWorkspace();
+  const { document, profiles, profileGroups = [], networkRuntimes, dispatch, disconnectNetworkBlock, selectNetworkTarget, registerWebOpener } = useWorkspace();
   const profile = profiles.find(item => item.id === node.profileId);
+  const local = node.profileId === null;
+  const available = local || Boolean(profile);
+  const registerOpener = useCallback((open: (url: string) => void) => registerWebOpener?.(node.blockId, node.profileId, open) ?? (() => {}), [node.blockId, node.profileId, registerWebOpener]);
   const runtime = networkRuntimes[node.blockId];
   const target = useWebTargetSwitch(workspaceId, node, selectNetworkTarget);
-  const status = target.switching ? "closing" : runtime?.status ?? "closed";
+  const status = target.switching ? "closing" : local ? "connected" : runtime?.status ?? "closed";
   const connected = status === "connected";
-  const sessionActive = status !== "closed" && status !== "failed";
+  const sessionActive = !local && status !== "closed" && status !== "failed";
   const supported = supportsWebBlocks();
   const endpoint = profile && connected ? `${profile.username}@${profile.host}` : null;
   const progress = target.switching ? null : runtime?.connectionProgress;
@@ -44,15 +47,15 @@ export function WebBlock({ workspaceId, node, visible, active, onClose, onConnec
     onSelect: () => sessionActive ? disconnect() : connect(),
   } : undefined;
 
-  return <section className={`terminal-block web-block${active ? " active" : ""}`} data-layout-block={node.blockId} aria-label={`网页 Block ${profile?.name ?? "未选择连接"}`} tabIndex={0} onPointerDown={select} onFocus={select}>
+  return <section className={`terminal-block web-block${active ? " active" : ""}`} data-layout-block={node.blockId} aria-label={`网页 Block ${profile?.name ?? (local ? "本地" : "连接已失效")}`} tabIndex={0} onPointerDown={select} onFocus={select}>
     <header className="terminal-block-header" onPointerDown={onHeaderPointerDown}>
-      <TerminalTargetPicker profiles={profiles} groups={profileGroups} recentProfileIds={document?.recentProfileIds ?? []} selectedProfileId={node.profileId} status={status} detail={target.switching ? "正在切换连接…" : endpoint ?? (profile ? status : "选择 SSH 连接")} hideDetail={Boolean(progress)} onSelect={id => void target.choose(id)} onManageConnections={onManageConnections} icon="browser" localName="选择连接" ariaContext="网页连接" allowLocal={false} onRequestDisconnect={connected ? disconnect : undefined} statusAction={statusAction}/>
+      <TerminalTargetPicker profiles={profiles} groups={profileGroups} recentProfileIds={document?.recentProfileIds ?? []} selectedProfileId={node.profileId} status={status} detail={target.switching ? "正在切换连接…" : local ? "使用本机网络" : endpoint ?? (profile ? status : "连接已失效")} hideDetail={Boolean(progress)} onSelect={id => void target.choose(id)} onManageConnections={onManageConnections} icon="browser" localName="本地" localDetail="使用本机网络" ariaContext="网页连接" onRequestDisconnect={connected && !local ? disconnect : undefined} statusAction={statusAction}/>
       <ConnectionRouteProgress progress={progress} endpoint={endpoint} profile={profile} onRequestDisconnect={connected ? disconnect : undefined} statusAction={progress ? statusAction : undefined}/>
       <div className="web-tabs-slot" ref={setTabHeader}/>
       <BlockHeaderClose label="关闭网页" onClose={onClose}/>
     </header>
     {target.switching
       ? <div className="web-browser-surface web-empty-state" role="status">正在断开原连接…</div>
-      : <WebTabs header={tabHeader} key={node.profileId ?? "unbound"} profileId={profile?.id ?? null} profileName={profile?.name} sessionId={connected ? runtime?.sessionId ?? null : null} connecting={sessionActive && !connected} visible={visible} supported={supported} notice={target.error || runtime?.notice || ""} onConnect={connect} onActivate={select}/>}
+      : <WebTabs header={tabHeader} registerOpener={available && supported ? registerOpener : undefined} key={node.profileId ?? "local"} profileId={node.profileId} profileName={profile?.name ?? (local ? "本地" : "连接已失效")} sessionId={connected && !local ? runtime?.sessionId ?? null : null} connecting={sessionActive && !connected} visible={visible} supported={supported && available} notice={target.error || (!available ? "连接已失效，请重新选择连接" : local ? "" : runtime?.notice || "")} onConnect={connect} onActivate={select}/>}
   </section>;
 }

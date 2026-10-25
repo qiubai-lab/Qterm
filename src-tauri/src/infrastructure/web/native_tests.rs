@@ -137,6 +137,7 @@ fn native_webview_smoke() {
     context.config_mut().app.windows.clear();
     let mut app = tauri::Builder::default()
         .any_thread()
+        .plugin(crate::infrastructure::external_links::plugin())
         .invoke_handler(trusted_handler(|invoke| {
             invoke.resolver.resolve("UNEXPECTED");
             true
@@ -240,8 +241,11 @@ fn native_webview_smoke() {
     }
     a.show().unwrap();
     b.show().unwrap();
-    super::native_modal_tests::verify(&mut app, &a);
+    super::native_modal_tests::verify(&mut app, &a, "QB-20261025-global-native-overlays");
     super::native_surface_tests::verify(&mut app, &a, &b);
+    super::native_popup_tests::verify_remote(&mut app, &a, _directories.0.path(), ports.0);
+    assert!(first.saw("remote-popup.invalid:8765") && !second.saw("remote-popup.invalid:8765"));
+    super::native_local_tests::verify(&mut app, &a);
     eprintln!(
         "PASS: two isolated proxies, remote loopback/domain, guest IPC denied, file navigation denied, native bounds/show/hide"
     );

@@ -10,11 +10,12 @@ import { workspaceReducer, type WorkspaceAction } from "./reducer";
 import { useWorkspacePersistence } from "./useWorkspacePersistence";
 import { useWorkspaceRuntimeController } from "./useWorkspaceRuntimeController";
 import { useWorkspaceRuntimeState } from "./useWorkspaceRuntimeState";
+import { useWebOpenController } from "./useWebOpenController";
 import type { FileRuntime, GitRuntime, NetworkRuntime, TerminalRuntime } from "./workspaceRuntime";
 
 export type { FileRuntime, GitRuntime, HostKeyPrompt, NetworkRuntime, TerminalRuntime } from "./workspaceRuntime";
 
-interface WorkspaceContextValue {
+interface WorkspaceContextValue extends ReturnType<typeof useWebOpenController> {
   hydrated: boolean;
   document: WorkspaceDocument;
   dispatch: Dispatch<WorkspaceAction>;
@@ -78,6 +79,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const persistence = useWorkspacePersistence(document, dispatch);
   const runtimeState = useWorkspaceRuntimeState(document, persistence.setStorageNotice);
   const runtime = useWorkspaceRuntimeController(runtimeState, document, dispatch);
+  const web = useWebOpenController(document, persistence.profiles, dispatch);
   const value = useMemo<WorkspaceContextValue>(() => ({
     hydrated: persistence.hydrated,
     document,
@@ -86,9 +88,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     profileGroups: persistence.profileGroups,
     refreshProfiles: persistence.refreshProfiles,
     ...runtime,
+    ...web,
     storageNotice: persistence.storageNotice,
     dismissStorageNotice: persistence.dismissStorageNotice,
-  }), [document, persistence.dismissStorageNotice, persistence.hydrated, persistence.profileGroups, persistence.profiles, persistence.refreshProfiles, persistence.storageNotice, runtime]);
+  }), [document, persistence.dismissStorageNotice, persistence.hydrated, persistence.profileGroups, persistence.profiles, persistence.refreshProfiles, persistence.storageNotice, runtime, web]);
 
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;
 }

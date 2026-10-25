@@ -54,7 +54,7 @@ impl WebHost {
         let view = {
             let guests = self.guests.lock().await;
             let guest = guests.get(&label).ok_or("网页已关闭")?;
-            if !sessions.web_session_connected(&guest.session) {
+            if !guest.target.connected(sessions) {
                 return Err("SSH 已断开".into());
             }
             app.get_webview(&label).ok_or("网页已关闭")?

@@ -1,5 +1,5 @@
 use super::{
-    Environment, Guest, WebHost, label,
+    Environment, Guest, WebHost, WebTarget, label,
     profile_gateway::{ProfileGateway, Route},
     profile_storage,
 };
@@ -13,8 +13,7 @@ impl WebHost {
         app: &AppHandle,
         sessions: &Arc<SshSessionManager>,
         id: &str,
-        session: &str,
-        profile: &str,
+        target: &WebTarget,
         address: &str,
     ) -> Result<(), String> {
         let label = label(id)?;
@@ -25,10 +24,21 @@ impl WebHost {
         if !cfg!(windows) {
             return Err("Web Block 目前仅支持 Windows".into());
         }
-        let identity = sessions
-            .web_browser_identity(session, profile)
-            .map_err(|_| "连接身份不匹配或已断开")?;
-        let key = serde_json::to_string(&identity).map_err(|_| "浏览连接身份无效")?;
+        let identity = match target {
+            WebTarget::Local {} => None,
+            WebTarget::Remote {
+                session_id,
+                profile_id,
+            } => Some(
+                sessions
+                    .web_browser_identity(session_id, profile_id)
+                    .map_err(|_| "连接身份不匹配或已断开")?,
+            ),
+        };
+        let key = match &identity {
+            Some(identity) => serde_json::to_string(identity).map_err(|_| "浏览连接身份无效")?,
+            None => "local".into(),
+        };
         // All lifecycle/clearing paths acquire guests before environments.
         let mut guests = self.guests.lock().await;
         if guests.contains_key(&label) {
@@ -40,41 +50,54 @@ impl WebHost {
         let mut environments = self.environments.lock().await;
         if !environments.contains_key(&key) {
             let root = self.root.clone();
-            let directory =
-                tokio::task::spawn_blocking(move || profile_storage::resolve(&root, &identity))
-                    .await
-                    .map_err(|_| "浏览环境初始化失败")??;
-            let manager = sessions.clone();
-            let gateway =
-                ProfileGateway::new(Arc::new(move |id| manager.web_session_connected(id))).await?;
+            let remote = identity.is_some();
+            let directory = tokio::task::spawn_blocking(move || match identity {
+                Some(identity) => profile_storage::resolve(&root, &identity),
+                None => super::local_storage::resolve(&root),
+            })
+            .await
+            .map_err(|_| "浏览环境初始化失败")??;
+            let gateway = if remote {
+                let manager = sessions.clone();
+                Some(
+                    ProfileGateway::new(Arc::new(move |id| manager.web_session_connected(id)))
+                        .await?,
+                )
+            } else {
+                None
+            };
             environments.insert(key.clone(), Environment { directory, gateway });
         }
         let environment = environments.get(&key).ok_or("浏览环境不存在")?;
-        let port = sessions
-            .start_web_proxy(session, profile, &proxy_owner(session))
-            .await
-            .map_err(|_| "无法启动网页代理，请重新连接")?;
-        environment
-            .gateway
-            .add(
-                label.clone(),
-                Route {
-                    session: session.into(),
-                    port,
-                },
-            )
-            .await;
+        if let WebTarget::Remote {
+            session_id,
+            profile_id,
+        } = target
+        {
+            let port = sessions
+                .start_web_proxy(session_id, profile_id, &proxy_owner(session_id))
+                .await
+                .map_err(|_| "无法启动网页代理，请重新连接")?;
+            environment
+                .gateway
+                .as_ref()
+                .ok_or("远程浏览环境无效")?
+                .add(
+                    label.clone(),
+                    Route {
+                        session: session_id.clone(),
+                        port,
+                    },
+                )
+                .await;
+        }
+        let proxy_port = environment.gateway.as_ref().map(|gateway| gateway.port);
         #[cfg(windows)]
-        let result = super::windows::create_persistent(
-            app,
-            &label,
-            environment.gateway.port,
-            url,
-            &environment.directory,
-        );
+        let result =
+            super::windows::create_persistent(app, &label, proxy_port, url, &environment.directory);
         #[cfg(not(windows))]
         let result: Result<(), String> = {
-            let _ = (app, url, &environment.directory, environment.gateway.port);
+            let _ = (app, url, &environment.directory, proxy_port);
             Err("Web Block 目前仅支持 Windows".into())
         };
         match result {
@@ -82,7 +105,7 @@ impl WebHost {
                 guests.insert(
                     label,
                     Guest {
-                        session: session.into(),
+                        target: target.clone(),
                         environment: key,
                         geometry: None,
                         visible: false,
@@ -91,8 +114,14 @@ impl WebHost {
                 Ok(())
             }
             Err(error) => {
-                environment.gateway.remove(&label).await;
-                if !guests.values().any(|guest| guest.session == session) {
+                if let Some(gateway) = &environment.gateway {
+                    gateway.remove(&label).await;
+                }
+                if let Some(session) = target.session()
+                    && !guests
+                        .values()
+                        .any(|guest| guest.target.session() == Some(session))
+                {
                     let _ = sessions
                         .stop_network_rule(session, proxy_owner(session))
                         .await;
@@ -111,17 +140,25 @@ impl WebHost {
         let label = label(id)?;
         let mut guests = self.guests.lock().await;
         if let Some(view) = app.get_webview(&label) {
+            #[cfg(windows)]
+            super::windows_popups::cancel_source(app, &label).await?;
             view.close().map_err(|_| "无法关闭网页")?;
         }
         if let Some(guest) = guests.remove(&label) {
-            if let Some(environment) = self.environments.lock().await.get(&guest.environment) {
-                environment.gateway.remove(&label).await;
+            if let Some(environment) = self.environments.lock().await.get(&guest.environment)
+                && let Some(gateway) = &environment.gateway
+            {
+                gateway.remove(&label).await;
             }
             // A shared browser connection may carry requests from another tab.
             // Retire its SSH listener only after the session's final page closes.
-            if !guests.values().any(|page| page.session == guest.session) {
+            if let Some(session) = guest.target.session()
+                && !guests
+                    .values()
+                    .any(|page| page.target.session() == Some(session))
+            {
                 let _ = sessions
-                    .stop_network_rule(&guest.session, proxy_owner(&guest.session))
+                    .stop_network_rule(session, proxy_owner(session))
                     .await;
             }
         }
@@ -129,6 +166,6 @@ impl WebHost {
     }
 }
 
-fn proxy_owner(session: &str) -> String {
+pub(super) fn proxy_owner(session: &str) -> String {
     format!("web-profile-{session}")
 }

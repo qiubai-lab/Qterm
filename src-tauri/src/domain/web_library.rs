@@ -1,6 +1,12 @@
 //! Connection-scoped browser library rules; native sessions never enter persistence.
 use serde::{Deserialize, Serialize};
 
+/// Reserved device scope cannot collide with a remote profile UUID.
+pub const LOCAL_SCOPE: &str = "local";
+pub fn valid_scope(scope: &str) -> bool {
+    scope == LOCAL_SCOPE || uuid::Uuid::parse_str(scope).is_ok()
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct WebEntry {
@@ -61,7 +67,7 @@ impl WebLibrary {
             let mut unique = std::collections::HashSet::new();
             entries.len() <= 2000
                 && entries.iter().all(|entry| {
-                    uuid::Uuid::parse_str(&entry.profile_id).is_ok()
+                    valid_scope(&entry.profile_id)
                         && super::web::allowed_web_url(&entry.url)
                         && !entry.title.is_empty()
                         && entry.title.len() <= 512
@@ -92,7 +98,7 @@ impl WebLibrary {
         action: WebLibraryAction,
         now: u64,
     ) -> Result<(), &'static str> {
-        if uuid::Uuid::parse_str(profile).is_err() {
+        if !valid_scope(profile) {
             return Err("连接标识无效");
         }
         let entry = |url: String, title: String| -> Result<WebEntry, &'static str> {

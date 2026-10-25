@@ -1,1 +1,8 @@
 .terminal-external-link-confirmation .confirm-copy{margin:0}.terminal-external-link-target{display:grid;min-width:0;gap:5px;margin-top:9px;padding:8px 9px;border:1px solid color-mix(in srgb,var(--warning) 38%,var(--border));border-radius:7px;background:var(--panel-bg)}.terminal-external-link-target>span{color:var(--warning);font-size:8px;font-weight:700}.terminal-external-link-target>code{max-height:68px;min-width:0;overflow:auto;color:var(--text);font:9px/1.45 "SFMono-Regular",Consolas,monospace;overflow-wrap:anywhere;user-select:text}
+
+.terminal-link-route { margin: 9px 0 0; min-height: 15px; color: var(--muted); font-size: 9px; line-height: 1.5; overflow-wrap: anywhere; }
+.terminal-link-actions { display: grid; min-width: 0; gap: 7px; margin-top: 8px; }
+.terminal-link-actions .dialog-action-status { min-width: 0; height: 15px; margin: 0; }
+.terminal-link-choices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; width: 100%; }
+.terminal-link-choices > .ui-button { min-width: 0; width: 100%; padding-inline: 8px; justify-content: center; }
+.terminal-link-choices > .ui-button svg { flex: none; }

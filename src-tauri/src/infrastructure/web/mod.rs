@@ -24,7 +24,18 @@ mod bounds_tests;
 mod clear_data;
 mod frame_raster;
 mod lifecycle;
+mod local_storage;
+mod popup_lifecycle;
+pub use popup_lifecycle::reject_popup;
+mod target;
+pub use target::WebTarget;
 mod metrics;
+#[cfg(all(test, windows))]
+mod native_local_tests;
+#[cfg(all(test, windows))]
+mod native_popup_click_tests;
+#[cfg(all(test, windows))]
+mod native_popup_tests;
 #[cfg(all(test, windows))]
 mod native_profile_tests;
 mod profile_gateway;
@@ -50,6 +61,10 @@ mod windows_interaction;
 #[cfg(target_os = "windows")]
 mod windows_navigation;
 #[cfg(windows)]
+mod windows_popup_pending;
+#[cfg(windows)]
+mod windows_popups;
+#[cfg(windows)]
 mod windows_snapshot;
 #[cfg(target_os = "windows")]
 mod windows_surface;
@@ -72,7 +87,7 @@ pub struct WebHost {
 }
 
 struct Guest {
-    session: String,
+    target: WebTarget,
     geometry: Option<[f64; 5]>,
     visible: bool,
     environment: String,
@@ -80,7 +95,7 @@ struct Guest {
 
 struct Environment {
     directory: std::path::PathBuf,
-    gateway: profile_gateway::ProfileGateway,
+    gateway: Option<profile_gateway::ProfileGateway>,
 }
 
 impl WebHost {
@@ -172,7 +187,7 @@ impl WebHost {
         let mut guests = self.guests.lock().await;
         let guest = guests.get_mut(&label).ok_or("网页已关闭")?;
         let view = app.get_webview(&label).ok_or("网页已关闭")?;
-        if !bounds.visible || !sessions.web_session_connected(&guest.session) {
+        if !bounds.visible || !guest.target.connected(sessions) {
             if guest.visible {
                 view.hide().map_err(|_| "无法隐藏网页")?;
             }
@@ -216,7 +231,7 @@ impl WebHost {
         let label = label(id)?;
         let guests = self.guests.lock().await;
         let guest = guests.get(&label).ok_or("网页已关闭")?;
-        if !sessions.web_session_connected(&guest.session) {
+        if !guest.target.connected(sessions) {
             return Err("SSH 已断开，请重新连接".into());
         }
         let view = app.get_webview(&label).ok_or("网页已关闭")?;

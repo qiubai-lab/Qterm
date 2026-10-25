@@ -151,3 +151,18 @@ it("reopens the latest address after reconnecting and rejects privileged URLs", 
   await waitFor(() => expect(ipc.open).toHaveBeenLastCalledWith(expect.any(String), "reconnected", "profile", "http://second.internal/"));
   hook.unmount();
 });
+
+it("opens Local without an SSH session and never treats disconnected Remote as Local", async () => {
+  const surface = createRef<HTMLDivElement>();
+  const hook = renderHook(({ profileId, sessionId }) => useWebBrowser(surface, sessionId, profileId, true), {
+    initialProps: { profileId: null as string | null, sessionId: null as string | null },
+  });
+  await act(() => hook.result.current.navigate("http://localhost:3000"));
+  await waitFor(() => expect(ipc.open).toHaveBeenCalledWith(expect.any(String), null, null, "http://localhost:3000/"));
+  expect(hook.result.current.ready).toBe(true);
+  hook.rerender({ profileId: "remote", sessionId: null });
+  await waitFor(() => expect(ipc.close).toHaveBeenCalledOnce());
+  expect(hook.result.current.ready).toBe(false);
+  expect(ipc.open).toHaveBeenCalledOnce();
+  hook.unmount();
+});

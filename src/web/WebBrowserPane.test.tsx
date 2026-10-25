@@ -65,3 +65,14 @@ it("closes the drawer on native guest focus without stealing focus back", () => 
   expect(focus).not.toHaveBeenCalled();
   focus.mockRestore(); hasFocus.mockRestore();
 });
+
+it("consumes an initial local link once without authentication", async () => {
+  mocks.navigate.mockClear();
+  const connect = vi.fn();
+  const props = { initialAddress: "http://localhost:3000/", profileId: null, sessionId: null, connecting: false, visible: true, supported: true, notice: "", onConnect: connect, onActivate: vi.fn() };
+  const view = render(<WebBrowserPane {...props}/>);
+  await waitFor(() => expect(mocks.navigate).toHaveBeenCalledExactlyOnceWith(props.initialAddress));
+  view.rerender(<WebBrowserPane {...props}/>);
+  expect(mocks.navigate).toHaveBeenCalledOnce();
+  expect(connect).not.toHaveBeenCalled();
+});
