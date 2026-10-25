@@ -16,10 +16,12 @@
 .web-library-open { display: flex; flex: 1; min-width: 0; align-items: center; gap: 9px; padding: 9px; border: 0; border-radius: 4px; background: transparent; color: var(--muted); text-align: left; }
 .web-library-open>svg { flex: none; }
 .web-library-open>span { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 4px; }
+.web-library-heading { display: flex; min-width: 0; align-items: baseline; gap: 8px; }
+.web-library-heading strong { flex: 1; }
 .web-library-open strong,.web-library-open code { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .web-library-open strong { color: var(--text); font-size: 11px; font-weight: 600; }
 .web-library-open code { color: var(--dim); font-size: 10px; }
-.web-library-open time { flex: none; color: var(--dim); font-size: 9px; }
+.web-library-open time { flex: none; color: var(--dim); font-size: 9px; white-space: nowrap; }
 .web-library-row-actions { display: flex; flex: none; gap: 2px; padding-right: 5px; }
 .web-library-row-actions button { display: grid; width: 27px; height: 27px; place-items: center; padding: 0; border: 0; border-radius: 4px; color: var(--icon); background: transparent; }
 .web-library-row-actions button:hover { background: var(--control-hover); color: var(--icon-hover); }
@@ -34,7 +36,7 @@
 .web-library-status[role="alert"] { color: var(--danger); }
 .web-library-dialog :is(button,input):focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; box-shadow: none; }
 .web-library-dialog button:disabled { opacity: .45; }
-@media (max-width: 480px) { .web-library-toolbar { flex-wrap: wrap; } .web-library-search { flex-basis: 100%; } .web-library-tabs { margin-left: auto; } .web-library-open time { display: none; } }
+@media (max-width: 480px) { .web-library-toolbar { flex-wrap: wrap; } .web-library-search { flex-basis: 100%; } .web-library-tabs { margin-left: auto; } }
 @media (prefers-reduced-motion: reduce) { .web-library-tab-indicator { transition: none; } }
 
 .web-library-footer .ui-button { min-height: 24px; height: 24px; padding: 0 7px; font-size: 9px; }

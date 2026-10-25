@@ -1,3 +1,16 @@
+pub const WEB_PAGE_LIMIT: usize = 99;
+
+/// Shared resource bound for ordinary pages and adopted popups across browser blocks.
+pub fn ensure_web_page_capacity(open_pages: usize) -> Result<(), String> {
+    if open_pages >= WEB_PAGE_LIMIT {
+        Err(format!(
+            "最多同时打开 {WEB_PAGE_LIMIT} 个网页，请先关闭部分网页"
+        ))
+    } else {
+        Ok(())
+    }
+}
+
 /// Guest pages may never enter the application's local/custom protocol origins.
 pub fn allowed_web_url(value: &str) -> bool {
     if value.len() > 8192 || value.chars().any(char::is_control) {
@@ -38,6 +51,15 @@ pub fn allow_popup(url: &str, user_initiated: bool, app_origin: bool) -> Result<
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn accepts_the_99th_page_and_rejects_the_100th() {
+        assert!(ensure_web_page_capacity(98).is_ok());
+        assert_eq!(
+            ensure_web_page_capacity(99).unwrap_err(),
+            "最多同时打开 99 个网页，请先关闭部分网页"
+        );
+    }
+
     #[test]
     fn popup_policy_preserves_guest_boundaries_and_requires_a_gesture() {
         assert!(allow_popup("https://example.test/", true, false).is_ok());

@@ -47,7 +47,7 @@ export function WebTabStrip({ tabs, selected, visible, onSelect, onClose, onAdd,
       })}
     </div>
     {deck.overflowing && <ThemedTooltipButton tooltip="显示右侧标签" aria-label="显示右侧标签" onClick={() => scroll(1)}><Icon name="forward" size={11}/></ThemedTooltipButton>}
-    <ThemedTooltipButton tooltip={tabs.length >= WEB_TAB_LIMIT ? "每个 block 最多 10 个标签" : "新建标签页"} aria-label="新建标签页" disabled={tabs.length >= WEB_TAB_LIMIT} onClick={onAdd}><Icon name="plus" size={13}/></ThemedTooltipButton>
+    <ThemedTooltipButton tooltip={tabs.length >= WEB_TAB_LIMIT ? `每个 block 最多 ${WEB_TAB_LIMIT} 个标签` : "新建标签页"} aria-label="新建标签页" disabled={tabs.length >= WEB_TAB_LIMIT} onClick={onAdd}><Icon name="plus" size={13}/></ThemedTooltipButton>
     {context.menu && <TabActionMenu {...context.menu} label="网页标签操作" keepOnInternalScroll items={(Object.keys(webTabCloseLabels) as WebTabCloseAction[]).map(id => ({ id, label: webTabCloseLabels[id], count: webTabCloseTargets(ids, context.menu!.anchorId, id).length }))} onDismiss={context.dismiss} onChoose={action => {
       if (!context.menu) return;
       const anchor = context.menu.anchorId;

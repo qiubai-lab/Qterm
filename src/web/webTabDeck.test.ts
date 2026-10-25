@@ -1,12 +1,20 @@
 import { expect, it } from "vitest";
 import { layoutWebTabDeck, WEB_TAB_LIMIT } from "./webTabDeck";
 
-const ids = Array.from({ length: WEB_TAB_LIMIT }, (_, index) => `tab-${index}`);
+const ids = Array.from({ length: 10 }, (_, index) => `tab-${index}`);
 it("keeps fixed compact widths when the header fits and restores them after folding", () => {
   const result = layoutWebTabDeck(ids, ids[0], null, 1200);
   expect(result.layout.stacked).toBe(false);
   expect(result.overflowing).toBe(false);
   expect(result.layout.cards.every(card => card.width === 112)).toBe(true);
+});
+it("keeps all 99 tabs reachable through overflow with the final tab selected", () => {
+  expect(WEB_TAB_LIMIT).toBe(99);
+  const all = Array.from({ length: WEB_TAB_LIMIT }, (_, index) => `tab-${index}`);
+  const result = layoutWebTabDeck(all, all[98], null, 450);
+  expect(result.overflowing).toBe(true);
+  expect(result.layout.cards).toHaveLength(99);
+  expect(result.layout.cards[98]).toMatchObject({ id: all[98], expanded: true, width: 112 });
 });
 it("folds neighbors while preserving selected and hovered cards and stable navigation", () => {
   for (const available of [800, 450, 220]) {

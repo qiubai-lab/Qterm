@@ -28,8 +28,6 @@
 .web-library-drawer-header>button:hover { color: var(--icon-hover); background: var(--control-hover); }
 .web-library-drawer .web-library-toolbar { flex-wrap: nowrap; gap: 7px; }
 .web-library-drawer .web-library-search { flex: 1 1 0; min-width: 0; }
-.web-library-drawer .web-library-open { display: grid; grid-template-columns: 15px minmax(0,1fr); gap: 4px 7px; padding: 8px; }
-.web-library-drawer .web-library-open>svg { grid-row: 1 / span 2; }
-.web-library-drawer .web-library-open>span,.web-library-drawer .web-library-open time { grid-column: 2; }
-.web-library-drawer .web-library-open time { display: block; font-size: 8px; }
+.web-library-drawer .web-library-open { gap: 7px; padding: 8px; }
+.web-library-drawer .web-library-open time { font-size: 8px; }
 @media (prefers-reduced-motion: reduce) { .web-library-drawer { transition: none; } }

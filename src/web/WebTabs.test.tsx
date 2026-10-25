@@ -8,17 +8,22 @@ vi.mock("./WebBrowserPane", () => ({ WebBrowserPane: ({ visible, onMetadata }: {
   <button onClick={() => onMetadata({ title: "已载入页面", address: "https://example.test", loading: false })}>完成页面加载</button>
 </> }));
 afterEach(cleanup);
-it("limits each browser header to ten tabs and re-enables adding after closing one", () => {
+it("allows 99 tabs, rejects the 100th and re-enables adding after closing one", () => {
   const header = document.createElement("div"); document.body.append(header);
   const view = render(<WebTabs header={header} profileId="a" sessionId="ssh" connecting={false} visible supported notice="" onConnect={vi.fn()} onActivate={vi.fn()}/>);
   const add = screen.getByRole("button", { name: "新建标签页" });
-  for (let i = 0; i < 12; i++) fireEvent.click(add);
-  expect(screen.getAllByRole("tab")).toHaveLength(10);
+  act(() => { for (let i = 1; i < 98; i++) fireEvent.click(add); });
+  expect(screen.getAllByRole("tab")).toHaveLength(98);
+  expect(add).toBeEnabled();
+  fireEvent.click(add);
+  expect(screen.getAllByRole("tab")).toHaveLength(99);
   expect(add).toBeDisabled();
+  fireEvent.click(add);
+  expect(screen.getAllByRole("tab")).toHaveLength(99);
   fireEvent.click(screen.getAllByRole("button", { name: /关闭标签页/ })[0]);
   expect(add).toBeEnabled();
   fireEvent.click(add);
-  expect(screen.getAllByRole("tab")).toHaveLength(10);
+  expect(screen.getAllByRole("tab")).toHaveLength(99);
   view.unmount(); header.remove();
 });
 it("keeps page instances and their input state across tab switching and isolates header dragging", () => {
@@ -68,9 +73,9 @@ it("delivers terminal links into empty/new tabs without overwriting pages and re
   expect(screen.getAllByRole("tab")).toHaveLength(1);
   act(() => open("http://localhost/second"));
   expect(screen.getAllByRole("tab")).toHaveLength(2);
-  for (let i = 2; i < 10; i++) act(() => open(`http://localhost/${i}`));
-  expect(() => open("http://localhost/overflow")).toThrow("10 个标签页");
-  expect(screen.getAllByRole("tab")).toHaveLength(10);
+  act(() => { for (let i = 2; i < 99; i++) open(`http://localhost/${i}`); });
+  expect(() => open("http://localhost/overflow")).toThrow("99 个标签页");
+  expect(screen.getAllByRole("tab")).toHaveLength(99);
   expect(register).toHaveBeenCalledOnce();
   view.unmount(); header.remove();
 });

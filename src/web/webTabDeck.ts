@@ -1,6 +1,6 @@
 import { layoutTabDeck } from "../components/tabDeck";
 
-export const WEB_TAB_LIMIT = 10;
+export const WEB_TAB_LIMIT = 99;
 export const WEB_TAB_WIDTH = 112;
 export const WEB_TAB_OVERLAP = 6;
 const size = { width: WEB_TAB_WIDTH, gap: 3, minimum: 28, reserved: 23 };

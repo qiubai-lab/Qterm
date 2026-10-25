@@ -26,7 +26,7 @@ export function WebTabs({ header, registerOpener, onHeaderPointerDown, sessionSt
   useLayoutEffect(() => registerOpener?.(url => {
     const previous = latestTabs.current;
     const empty = previous.find(tab => !tab.address && !tab.initialAddress && !tab.initialPopup && !tab.loading);
-    if (!empty && previous.length >= WEB_TAB_LIMIT) throw new Error("此浏览器已达 10 个标签页，请先关闭部分标签页");
+    if (!empty && previous.length >= WEB_TAB_LIMIT) throw new Error(`此浏览器已达 ${WEB_TAB_LIMIT} 个标签页，请先关闭部分标签页`);
     const page = { ...(empty ?? emptyTab()), address: url, initialAddress: url };
     const next = empty ? previous.map(tab => tab.id === empty.id ? page : tab) : [...previous, page];
     latestTabs.current = next;
@@ -39,7 +39,7 @@ export function WebTabs({ header, registerOpener, onHeaderPointerDown, sessionSt
   const openPopup = useCallback((request: WebPopupRequest) => {
     const previous = latestTabs.current;
     if (previous.some(tab => tab.initialPopup?.requestId === request.requestId)) return;
-    if (previous.length >= WEB_TAB_LIMIT) throw new Error("此浏览器已达 10 个标签页，请先关闭部分标签页");
+    if (previous.length >= WEB_TAB_LIMIT) throw new Error(`此浏览器已达 ${WEB_TAB_LIMIT} 个标签页，请先关闭部分标签页`);
     const page = { ...emptyTab(), initialPopup: request, address: request.url === "about:blank" ? "" : request.url, loading: true };
     const next = [...previous, page];
     latestTabs.current = next;

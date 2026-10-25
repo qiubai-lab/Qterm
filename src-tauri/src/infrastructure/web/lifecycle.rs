@@ -44,9 +44,7 @@ impl WebHost {
         if guests.contains_key(&label) {
             return Err("网页已打开".into());
         }
-        if guests.len() >= 16 {
-            return Err("最多同时打开 16 个网页，请先关闭部分网页".into());
-        }
+        crate::domain::web::ensure_web_page_capacity(guests.len())?;
         let mut environments = self.environments.lock().await;
         if !environments.contains_key(&key) {
             let root = self.root.clone();

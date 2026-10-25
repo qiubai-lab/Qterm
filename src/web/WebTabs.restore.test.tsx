@@ -11,6 +11,24 @@ vi.mock("./WebBrowserPane", () => ({ WebBrowserPane: ({ initialAddress, onMetada
 } }));
 afterEach(cleanup);
 
+it("restores all 99 saved tabs while starting only the selected page", () => {
+  const store = createWebTabSessionStore(), doc = createWorkspaceDocument();
+  doc.workspaces[0].layout = { type: "web", blockId: "a", profileId: null };
+  const saved = { blockId: "a", profileId: null, selectedTabId: "tab-98", tabs: Array.from({ length: 99 }, (_, i) => ({
+    id: `tab-${i}`, title: `Page ${i}`, address: `https://example.test/${i}`,
+  })) };
+  store.restore({ blocks: [saved] }, doc);
+  const header = document.createElement("div"); document.body.append(header);
+  const view = render(<WebTabs header={header} sessionStore={store} blockId="a" profileId={null} sessionId={null} connecting={false} visible supported notice="" onConnect={vi.fn()} onActivate={vi.fn()}/>);
+  expect(screen.getAllByRole("tab")).toHaveLength(99);
+  expect(screen.getByRole("tab", { name: "Page 98" })).toHaveAttribute("aria-selected", "true");
+  expect(screen.getAllByLabelText("已创建的页面")).toHaveLength(1);
+  expect(screen.getByLabelText("已创建的页面")).toHaveValue(saved.tabs[98].address);
+  expect(screen.getByRole("button", { name: "新建标签页" })).toBeDisabled();
+  expect(store.snapshot()?.blocks[0]).toEqual(saved);
+  view.unmount(); header.remove();
+});
+
 it("restores order/selection, leaves background guests uncreated and preserves URLs through initial metadata", () => {
   const store = createWebTabSessionStore(), doc = createWorkspaceDocument();
   doc.workspaces[0].layout = { type: "web", blockId: "a", profileId: null };

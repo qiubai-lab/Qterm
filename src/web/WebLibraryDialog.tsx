@@ -53,8 +53,12 @@ export function WebLibraryDialog({ profileName, data, busy, error, onUpdate, onO
         {items.length === 0 && <div className="web-library-empty"><Icon name={tab === "history" ? "history" : "bookmark"} size={24}/><strong>{busy && !data[tab].length ? "正在读取…" : error ? "暂时无法读取记录" : search ? "没有匹配的记录" : tab === "history" ? "暂无访问历史" : "暂无收藏"}</strong><span>{error ? "请查看下方提示并重试" : search ? "尝试其他名称或地址" : tab === "history" ? "访问的网页会按最近使用排序" : "点击地址栏星标，收藏常用网页"}</span></div>}
         {items.map(entry => <div className="web-library-row" key={entry.url}>
           <button type="button" className="web-library-open" disabled={busy || editing === entry.url} onClick={() => onOpen(entry.url)} aria-label={`打开 ${entry.title}`}>
-            <Icon name="browser" size={15}/><span><strong title={entry.title}>{entry.title}</strong><code title={entry.url}>{entry.url}</code></span>
-            {tab === "history" && <time dateTime={new Date(entry.updatedAt).toISOString()}>{new Date(entry.updatedAt).toLocaleString(undefined, { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</time>}
+            <Icon name="browser" size={15}/><span>
+              <span className="web-library-heading"><strong title={entry.title}>{entry.title}</strong>
+                {tab === "history" && <time dateTime={new Date(entry.updatedAt).toISOString()}>{new Date(entry.updatedAt).toLocaleString(undefined, { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</time>}
+              </span>
+              <code title={entry.url}>{entry.url}</code>
+            </span>
           </button>
           <div className="web-library-row-actions">
             {tab === "bookmarks" && <ThemedTooltipButton type="button" tooltip="重命名收藏" aria-label={`重命名 ${entry.title}`} disabled={busy} onClick={event => { renameTrigger.current = event.currentTarget; setEditing(entry.url); setTitle(entry.title); }}><Icon name="edit" size={13}/></ThemedTooltipButton>}

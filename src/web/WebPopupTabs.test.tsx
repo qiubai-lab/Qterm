@@ -26,11 +26,11 @@ it("keeps the source page, inherits the target, deduplicates and closes the popu
 it("reserves tab capacity synchronously for bursts and leaves existing tabs untouched on overflow", () => {
   const header = document.createElement("div"); document.body.append(header);
   const view = render(<WebTabs header={header} profileId={null} sessionId={null} connecting={false} visible supported notice="" onConnect={vi.fn()} onActivate={vi.fn()}/>);
-  act(() => { for (let i = 0; i < 9; i++) panes.get("source")!.onNewWindow!({ label: "web-source", requestId: String(i), url: "http://localhost/" }); });
-  expect(screen.getAllByRole("tab")).toHaveLength(10);
-  expect(() => panes.get("source")!.onNewWindow!({ label: "web-source", requestId: "overflow", url: "http://localhost/" })).toThrow("10 个标签页");
-  expect(screen.getAllByRole("tab")).toHaveLength(10);
+  act(() => { for (let i = 0; i < 98; i++) panes.get("source")!.onNewWindow!({ label: "web-source", requestId: String(i), url: "http://localhost/" }); });
+  expect(screen.getAllByRole("tab")).toHaveLength(99);
+  expect(() => panes.get("source")!.onNewWindow!({ label: "web-source", requestId: "overflow", url: "http://localhost/" })).toThrow("99 个标签页");
+  expect(screen.getAllByRole("tab")).toHaveLength(99);
   act(() => { panes.get("0")!.onWindowClose!(); panes.get("1")!.onWindowClose!(); });
-  expect(screen.getAllByRole("tab")).toHaveLength(8);
+  expect(screen.getAllByRole("tab")).toHaveLength(97);
   view.unmount(); header.remove();
 });

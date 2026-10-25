@@ -2,6 +2,8 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
+pub const WEB_TAB_LIMIT: usize = 99;
+
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct WebTabCache {
@@ -46,7 +48,7 @@ impl WebTabCache {
                         .as_deref()
                         .is_none_or(|id| uuid::Uuid::parse_str(id).is_ok())
                     && !block.tabs.is_empty()
-                    && block.tabs.len() <= 10
+                    && block.tabs.len() <= WEB_TAB_LIMIT
                     && block.tabs.iter().any(|tab| tab.id == block.selected_tab_id)
                     && block.tabs.iter().all(|tab| {
                         valid_id(&tab.id)

@@ -83,11 +83,11 @@ it("captures the source target at click time and presents equal peer destination
 });
 
 it("keeps internal failures retryable and Escape closes without opening externally", async () => {
-  const open = vi.fn().mockRejectedValue(new Error("此浏览器已达 10 个标签页"));
+  const open = vi.fn().mockRejectedValue(new Error("此浏览器已达 99 个标签页"));
   render(<TerminalExternalLinkConfirmationHost internalSupported resolveOrigin={() => origin} onOpenInternal={open}/>);
   act(() => { requestTerminalExternalLink("http://localhost:3000", "osc8", "terminal"); });
   fireEvent.click(screen.getByRole("button", { name: "内部浏览器打开" }));
-  expect(await screen.findByRole("alert")).toHaveTextContent("10 个标签页");
+  expect(await screen.findByRole("alert")).toHaveTextContent("99 个标签页");
   expect(screen.getByRole("button", { name: "内部浏览器打开" })).toBeEnabled();
   fireEvent.keyDown(window, { key: "Escape" });
   expect(screen.queryByRole("dialog")).toBeNull();
