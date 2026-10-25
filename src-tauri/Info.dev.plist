@@ -18,5 +18,11 @@
   <string>APPL</string>
   <key>NSHighResolutionCapable</key>
   <true/>
+  <!-- Match the release browser policy; keep non-WebView ATS protection. -->
+  <key>NSAppTransportSecurity</key>
+  <dict>
+    <key>NSAllowsArbitraryLoadsInWebContent</key>
+    <true/>
+  </dict>
 </dict>
 </plist>

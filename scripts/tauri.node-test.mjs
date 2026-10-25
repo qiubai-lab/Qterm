@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
@@ -170,6 +171,23 @@ test("macOS development bundle uses a non-reserved plist input", async () => {
 
   assert.match(development, /<string>Qterm Dev<\/string>/);
   assert.match(development, /<string>com\.qiubai\.qterm\.dev<\/string>/);
+});
+
+test("macOS app bundles allow HTTP only through the WebView ATS exception", {
+  skip: process.platform !== "darwin",
+}, async () => {
+  for (const flavor of ["tauri.conf.json", "tauri.dev.conf.json"]) {
+    const config = await readJson(`src-tauri/${flavor}`);
+    const input = config.bundle.macOS.infoPlist;
+    assert.equal(typeof input, "string", `${flavor} must wire its plist into the bundle`);
+    assert.notEqual(input, "Info.plist", "avoid Tauri's reserved embedded development plist");
+    const plist = JSON.parse(execFileSync("/usr/bin/plutil", [
+      "-convert", "json", "-o", "-", path.join("src-tauri", input),
+    ], { encoding: "utf8" }));
+    assert.deepEqual(plist.NSAppTransportSecurity, {
+      NSAllowsArbitraryLoadsInWebContent: true,
+    }, `${flavor} must preserve ATS for non-WebView clients`);
+  }
 });
 
 test("macOS traffic-light placement has one native runtime owner", async () => {
