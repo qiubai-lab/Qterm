@@ -105,8 +105,8 @@ export function HostIdentity({ profile, label = `${profile.username}@${profile.h
   const popover = open ? <div
     ref={popoverRef}
     className="host-summary-popover"
-    data-web-native-overlay="host-summary"
-    role="dialog"
+
+    role="dialog" data-app-overlay="floating"
     aria-labelledby={titleId}
     style={position ?? { top: 0, left: 0, width: POPOVER_WIDTH, visibility: "hidden" }}
     onPointerDown={(event) => event.stopPropagation()}

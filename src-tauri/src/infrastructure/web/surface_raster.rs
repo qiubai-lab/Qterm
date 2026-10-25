@@ -178,6 +178,8 @@ mod tests {
             width: 120.0,
             height: 100.0,
             visible: true,
+            input_blocked: false,
+            covered: false,
             frame: None,
             scrollbar: None,
             occlusions: vec![],

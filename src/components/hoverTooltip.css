@@ -1,0 +1,15 @@
+/* Shared with the connection-status hover bubble: short, unscaled entrance;
+   pointer leave dismisses immediately. Individual translate preserves static
+   positioning transforms such as an above-anchor translateY(-100%). */
+[data-app-overlay="floating"][data-overlay-motion="hover"] {
+  opacity: 1;
+  transition: none;
+  animation: hover-tooltip-in 130ms cubic-bezier(.16, 1, .3, 1);
+}
+@keyframes hover-tooltip-in {
+  from { translate: 0 -3px; }
+  to { translate: 0 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-app-overlay="floating"][data-overlay-motion="hover"] { animation: none; }
+}

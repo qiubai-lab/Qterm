@@ -21,7 +21,7 @@ export function WorkspaceTabStrip({ disabled, onInteractionAnchorChange, ...prop
   if (request && !busy && (disabled || !exists(request.anchorId))) setRequest(null);
   const targets = request ? state.workspaces.filter(item => request.ids.includes(item.id) && item.id !== request.anchorId) : [];
   const open = (target: EventTarget, x: number, y: number) => {
-    if (disabled || request || document.querySelector('[role="dialog"]')) return;
+    if (disabled || request || document.querySelector('[aria-modal="true"]')) return;
     if (!(target instanceof Element) || target.closest("input")) return;
     const tab = target.closest<HTMLElement>(".workspace-tab[data-workspace-id]");
     if (!tab || !exists(tab.dataset.workspaceId!)) return;

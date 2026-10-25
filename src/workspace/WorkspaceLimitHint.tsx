@@ -14,7 +14,7 @@ export function WorkspaceLimitHint({ anchor, id }: { anchor: HTMLElement | null;
     window.addEventListener("resize", update);
     return () => window.removeEventListener("resize", update);
   }, [anchor]);
-  return anchor ? createPortal(<div id={id} role="tooltip" className="workspace-limit-hint" style={position}>
+  return anchor ? createPortal(<div id={id} role="tooltip" data-app-overlay="floating" data-overlay-motion="hover" className="workspace-limit-hint" style={position}>
     <strong>最多开启 {MAX_WORKSPACES} 个工作区</strong>
     <span>关闭至 {MAX_WORKSPACES} 个以下后即可新建。</span>
   </div>, document.body) : null;

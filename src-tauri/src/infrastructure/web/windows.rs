@@ -38,6 +38,7 @@ pub(super) fn create_persistent(
         .incognito(false)
         .initialization_script(super::scrollbars::script(None))
         .initialization_script(include_str!("metrics_script.mjs"))
+        .initialization_script(super::windows_interaction::SCRIPT)
         .additional_browser_args(&browser_arguments(port))
         .disable_drag_drop_handler()
         .on_navigation(move |url| {
@@ -64,6 +65,7 @@ pub(super) fn create_persistent(
         return Err(error);
     }
     if let Err(error) = super::windows_navigation::install(&view)
+        .and_then(|_| super::windows_interaction::install(&view))
         .and_then(|_| view.navigate(url).map_err(|_| "无法打开网页".to_owned()))
     {
         let _ = view.close();

@@ -197,5 +197,5 @@ function GitChangeSelectionHint({ id, feedback }: { id: string; feedback: { id: 
   }, [feedback]);
 
   if (!position) return null;
-  return createPortal(<p id={id} className="git-change-selection-hint" data-placement={position.placement} role="status" aria-live="polite" aria-atomic="true" style={{ left: position.left, top: position.top }}>已选择，再次点击打开预览</p>, document.body);
+  return createPortal(<p id={id} data-app-overlay="floating" className="git-change-selection-hint" data-placement={position.placement} role="status" aria-live="polite" aria-atomic="true" style={{ left: position.left, top: position.top }}>已选择，再次点击打开预览</p>, document.body);
 }

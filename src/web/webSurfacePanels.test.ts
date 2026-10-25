@@ -5,30 +5,30 @@ import { webSurfaceVisible } from "./webModel";
 afterEach(() => { document.body.innerHTML = ""; vi.restoreAllMocks(); });
 it.each(["address-history", "library", "data-cleanup", "tab-menu"])("uses local clipping rather than global hiding for registered %s overlays", kind => {
   const surface = document.createElement("div"), overlay = document.createElement("div");
-  overlay.dataset.webNativeOverlay = kind; document.body.append(surface, overlay);
+  overlay.dataset.appOverlay = "floating"; overlay.dataset.testKind = kind; document.body.append(surface, overlay);
   for (const role of ["menu", "dialog"]) {
     overlay.setAttribute("role", role);
     expect(webSurfaceVisible(surface, true)).toBe(true);
   }
-  overlay.dataset.webNativeOverlay = "unregistered";
-  expect(webSurfaceVisible(surface, true)).toBe(false);
+  delete overlay.dataset.appOverlay;
+  expect(webSurfaceVisible(surface, true)).toBe(true);
 });
 it("keeps native pages visible beneath browser tab menus and clips only overlapping menu geometry", () => {
   const surface = document.createElement("div"), menu = document.createElement("div");
-  menu.setAttribute("role", "menu"); menu.dataset.webNativeOverlay = "tab-menu";
-  menu.style.cssText = "border-radius: 7px; background: rgb(25,27,31)"; document.body.append(surface, menu);
+  menu.setAttribute("role", "menu"); menu.dataset.appOverlay = "floating";
+  menu.style.cssText = "border-top-left-radius: 7px; background: rgb(25,27,31)"; document.body.append(surface, menu);
   vi.spyOn(menu, "getBoundingClientRect").mockReturnValue(new DOMRect(50, 30, 170, 150));
   const rect = new DOMRect(10, 10, 600, 400);
   expect(webSurfaceVisible(surface, true)).toBe(true);
   expect(webSurfaceOcclusions(rect).length).toBeGreaterThan(0);
   expect(webSurfacePanels(rect)).toHaveLength(1);
   expect(webSurfaceOcclusions(new DOMRect(700, 10, 600, 400))).toEqual([]);
-  delete menu.dataset.webNativeOverlay; expect(webSurfaceVisible(surface, true)).toBe(false);
+  delete menu.dataset.appOverlay; expect(webSurfaceVisible(surface, true)).toBe(true);
 });
 it("mirrors the rounded cleanup card rim while keeping its native page visible", () => {
-  const popover = document.createElement("div"); popover.dataset.webNativeOverlay = "data-cleanup";
+  const popover = document.createElement("div"); popover.dataset.appOverlay = "floating";
   popover.setAttribute("role", "dialog");
-  popover.style.cssText = "background: rgb(25,27,31); border: 1px solid rgb(25,27,31); border-radius: 9px; border-top-left-radius: 9px; --web-native-overlay-stroke: #00bbcc"; document.body.append(popover);
+  popover.style.cssText = "background: rgb(25,27,31); border: 1px solid rgb(25,27,31); border-radius: 9px; border-top-left-radius: 9px; --app-overlay-stroke: #00bbcc"; document.body.append(popover);
   vi.spyOn(popover, "getBoundingClientRect").mockReturnValue(new DOMRect(50, 30, 250, 280));
   const surface = new DOMRect(10, 10, 600, 400);
   expect(webSurfaceOcclusions(surface).length).toBeGreaterThan(1);
@@ -42,7 +42,7 @@ it("clips only the owning guest while the drawer slides right and retains nested
   const owner = document.createElement("div");
   owner.className = "web-browser-surface";
   const drawer = document.createElement("section");
-  drawer.dataset.webNativeOverlay = "library";
+  drawer.dataset.appOverlay = "floating"; drawer.dataset.overlayClip = "parent";
   drawer.setAttribute("role", "dialog");
   drawer.style.cssText = "border-radius: 0px; background: rgb(25,27,31); border: 1px solid rgb(48,52,58)";
   owner.append(drawer); document.body.append(owner);
@@ -59,7 +59,7 @@ it("clips only the owning guest while the drawer slides right and retains nested
 });
 it("never cuts out guest content for the persistent feedback footer", () => {
   const element = document.createElement("div");
-  element.dataset.webNativeOverlay = "feedback";
+  element.setAttribute("role", "status");
   element.style.cssText = "background: rgb(25,27,31); border: 1px solid rgb(48,52,58); border-radius: 4px";
   document.body.append(element);
   const bounds = vi.spyOn(element, "getBoundingClientRect");
@@ -76,7 +76,7 @@ it("never cuts out guest content for the persistent feedback footer", () => {
 });
 it("uses the same visible reveal boundary for native alpha chrome and the interior hole", () => {
   const element = document.createElement("div");
-  element.dataset.webNativeOverlay = "address-history";
+  element.dataset.appOverlay = "floating";
   element.style.cssText = "background: rgb(25, 27, 31); border: 1px solid rgb(48, 52, 58); border-top-left-radius: 6px; clip-path: inset(0px 0px 50% 0px round 6px)";
   document.body.append(element);
   vi.spyOn(element, "getBoundingClientRect").mockReturnValue(new DOMRect(40, 40, 240, 200));

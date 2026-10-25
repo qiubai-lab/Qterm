@@ -34,7 +34,7 @@ export function TerminalContextMenu({ state, menuRef, platform, canPaste, action
     } else if (event.key === "Tab") close();
   }
   const modifier = platform === "macos" ? "⌘" : platform === "windows" ? "Ctrl+" : "Ctrl+Shift+";
-  return createPortal(<div ref={menuRef} className="terminal-context-menu" data-placement={state.placement} role="menu" aria-label="终端菜单" style={{ left: state.x, top: state.y }} onContextMenu={event => event.preventDefault()} onKeyDown={handleKeyDown}>
+  return createPortal(<div ref={menuRef} className="terminal-context-menu" data-placement={state.placement} role="menu" data-app-overlay="floating" aria-label="终端菜单" style={{ left: state.x, top: state.y }} onContextMenu={event => event.preventDefault()} onKeyDown={handleKeyDown}>
     <button role="menuitem" disabled={!state.hasSelection} onClick={() => void actions.copy()}><span>复制</span><kbd>{modifier}C</kbd></button>
     <button role="menuitem" disabled={!state.hasSelection} onClick={actions.exportImage}><span>导出选中行为图片…</span></button>
     <button role="menuitem" disabled={!canPaste} onClick={() => void actions.paste()}><span>粘贴</span><kbd>{modifier}V</kbd></button>

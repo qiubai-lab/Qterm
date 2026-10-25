@@ -15,7 +15,7 @@
     "src/git/GitPane.tsx": 1138,
     "src/git/styles/gitBranchOverlays.css": 643,
     "src/git/styles/gitChangePreview.css": 574,
-    "src/git/styles/gitGraph.css": 621,
+    "src/git/styles/gitGraph.css": 615,
     "src/git/styles/gitRepositoryPicker.css": 486,
     "src/git/styles/gitShell.css": 824,
     "src/terminal/TerminalPanel.test.tsx": 889,

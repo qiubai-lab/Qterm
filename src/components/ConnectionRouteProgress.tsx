@@ -56,7 +56,7 @@ export function ConnectionRouteProgress({ progress, endpoint, profile, onRequest
     ref={tooltipRef}
     id={tooltipId}
     className={`connection-route-tooltip ${progress.phase}`}
-    role="tooltip"
+    role="tooltip" data-app-overlay="floating" data-overlay-motion="hover"
     data-placement="below"
     style={{ visibility: "hidden" }}
   >

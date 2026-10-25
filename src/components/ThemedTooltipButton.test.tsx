@@ -23,7 +23,7 @@ it("suspends tooltips without disabling the action and waits for a fresh interac
   expect(screen.getByRole("tooltip")).toBeVisible();
 });
 
-it("replaces native titles with accessible tooltips and retains interrupted exits", () => {
+it("dismisses immediately like the connection hint and starts a fresh entrance on reentry", () => {
   vi.useFakeTimers();
   render(<ThemedTooltipButton aria-label="仓库" tooltip="管理终端目录仓库 /root">Git</ThemedTooltipButton>);
   const button = screen.getByRole("button");
@@ -33,15 +33,16 @@ it("replaces native titles with accessible tooltips and retains interrupted exit
   expect(tooltip).toHaveTextContent("管理终端目录仓库 /root");
   expect(button).toHaveAccessibleDescription("管理终端目录仓库 /root");
   fireEvent.mouseLeave(button);
-  expect(tooltip).toHaveAttribute("aria-hidden", "true");
+  expect(tooltip).not.toBeInTheDocument();
   act(() => vi.advanceTimersByTime(80));
   fireEvent.focus(button);
-  expect(screen.getByRole("tooltip")).toBe(tooltip);
+  const reopened = screen.getByRole("tooltip");
+  expect(reopened).not.toBe(tooltip);
+  expect(reopened).toHaveAttribute("data-overlay-motion", "hover");
   act(() => vi.advanceTimersByTime(160));
-  expect(tooltip).toBeInTheDocument();
+  expect(reopened).toBeInTheDocument();
   fireEvent.keyDown(button, { key: "Escape" });
-  act(() => vi.advanceTimersByTime(160));
-  expect(tooltip).not.toBeInTheDocument();
+  expect(reopened).not.toBeInTheDocument();
 });
 
 it("dismisses on action and keeps the original click behavior", () => {

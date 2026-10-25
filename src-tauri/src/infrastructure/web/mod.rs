@@ -19,6 +19,8 @@ pub fn trusted_handler(
     }
 }
 
+#[cfg(test)]
+mod bounds_tests;
 mod clear_data;
 mod frame_raster;
 mod lifecycle;
@@ -36,18 +38,26 @@ pub use metrics::WebMetrics;
 mod navigation_state;
 #[cfg(any(target_os = "windows", test))]
 mod scrollbars;
+mod snapshot;
 mod surface_raster;
+pub use snapshot::WebSnapshot;
 #[cfg(target_os = "windows")]
 mod windows;
 #[cfg(target_os = "windows")]
 mod windows_frame;
+#[cfg(windows)]
+mod windows_interaction;
 #[cfg(target_os = "windows")]
 mod windows_navigation;
+#[cfg(windows)]
+mod windows_snapshot;
 #[cfg(target_os = "windows")]
 mod windows_surface;
 
 #[cfg(all(test, target_os = "windows"))]
 mod native_metrics_tests;
+#[cfg(all(test, target_os = "windows"))]
+mod native_modal_tests;
 #[cfg(all(test, target_os = "windows"))]
 mod native_navigation_tests;
 #[cfg(all(test, target_os = "windows"))]
@@ -91,6 +101,10 @@ pub struct WebBounds {
     pub width: f64,
     pub height: f64,
     pub visible: bool,
+    #[serde(default, rename = "inputBlocked")]
+    pub input_blocked: bool,
+    #[serde(default)]
+    pub covered: bool,
     #[serde(default)]
     pub occlusions: Vec<WebClipRect>,
     #[serde(default)]
@@ -117,6 +131,7 @@ impl WebBounds {
             .all(|n| n.is_finite() && *n >= 0.0 && *n <= 32768.0)
             && self.width >= 1.0
             && self.height >= 1.0
+            && (!self.covered || self.input_blocked)
             && self
                 .frame
                 .as_ref()

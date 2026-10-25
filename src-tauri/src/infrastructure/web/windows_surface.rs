@@ -6,6 +6,7 @@ use windows::{
     Win32::{
         Foundation::{HANDLE, HWND},
         Graphics::Gdi::{CombineRgn, CreateRectRgn, DeleteObject, RGN_DIFF, SetWindowRgn},
+        UI::Input::KeyboardAndMouse::{EnableWindow, GetFocus},
         UI::WindowsAndMessaging::{GetPropW, IsChild, RemovePropW, SetPropW},
     },
     core::w,
@@ -56,13 +57,21 @@ pub(super) async fn sync(view: &tauri::Webview, bounds: &WebBounds) -> Result<()
             if container.0 as usize == root || !IsChild(HWND(root as *mut _), container).as_bool() {
                 return Err("网页容器不是独立子窗口");
             }
+            let focused = GetFocus();
+            let return_focus = bounds.input_blocked
+                && (focused == container || IsChild(container, focused).as_bool());
+            let _ = EnableWindow(container, !bounds.input_blocked);
             apply_region(container, &bounds, scale)?;
-            super::windows_frame::sync(container, &bounds, scale)
+            super::windows_frame::sync(container, &bounds, scale)?;
+            Ok(return_focus)
         })();
         let _ = send.send(result.map_err(str::to_owned));
     })
     .map_err(|_| "无法调整网页层级")?;
-    receive.await.map_err(|_| "网页已关闭".to_owned())??;
+    let return_focus = receive.await.map_err(|_| "网页已关闭".to_owned())??;
+    if return_focus && let Some(main) = view.app_handle().get_webview("main") {
+        main.set_focus().map_err(|_| "无法返回应用焦点")?;
+    }
     view.eval(super::scrollbars::script(scrollbar.as_ref()))
         .map_err(|_| "无法同步网页滚动条".to_owned())
 }
@@ -74,7 +83,7 @@ unsafe fn apply_region(
 ) -> Result<(), &'static str> {
     // Outward rounding prevents a one-pixel native seam at fractional DPI scales.
     unsafe {
-        if bounds.occlusions.is_empty() {
+        if !bounds.covered && bounds.occlusions.is_empty() {
             if !GetPropW(container, w!("Qterm.WebTooltipClip")).is_invalid() {
                 if SetWindowRgn(container, None, true) == 0 {
                     return Err("无法恢复网页区域");
@@ -86,8 +95,16 @@ unsafe fn apply_region(
         let region = CreateRectRgn(
             0,
             0,
-            (bounds.width * scale).ceil() as i32,
-            (bounds.height * scale).ceil() as i32,
+            if bounds.covered {
+                0
+            } else {
+                (bounds.width * scale).ceil() as i32
+            },
+            if bounds.covered {
+                0
+            } else {
+                (bounds.height * scale).ceil() as i32
+            },
         );
         if region.is_invalid() {
             return Err("无法创建网页区域");

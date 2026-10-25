@@ -6,7 +6,7 @@ afterEach(() => { document.body.innerHTML = ""; vi.restoreAllMocks(); vi.unstubA
 function overlay(role: string, rect: DOMRect) {
   const node = document.createElement("div");
   if (role === "indicator") { node.className = "active-block-indicator"; node.style.opacity = "1"; }
-  else node.setAttribute("role", role);
+  else { node.setAttribute("role", role); if (role === "tooltip") node.dataset.appOverlay = "floating"; }
   vi.spyOn(node, "getBoundingClientRect").mockReturnValue(rect);
   document.body.append(node);
   return node;
@@ -39,21 +39,21 @@ it("does not mistake list semantics for a modal and clips only the history panel
   const surface = new DOMRect(100, 100, 400, 300);
   const list = overlay("listbox", new DOMRect(180, 80, 260, 220));
   expect(webSurfaceVisible(element, true)).toBe(true);
-  list.dataset.webNativeOverlay = "address-history";
+  list.dataset.appOverlay = "floating";
   expect(webSurfaceVisible(element, true)).toBe(true);
   expect(webSurfaceOcclusions(surface)).toEqual([{ x: 80, y: 0, width: 260, height: 200 }]);
   list.remove();
   expect(webSurfaceOcclusions(surface)).toEqual([]);
   const modal = overlay("dialog", new DOMRect(100, 100, 400, 300));
   modal.append(list);
-  expect(webSurfaceVisible(element, true)).toBe(false);
+  expect(webSurfaceVisible(element, true)).toBe(true);
 });
 
 it.each([1, 1.25, 1.5, 2, 3, 4])("preserves webpage pixels outside rounded history corners at %sx DPI", scale => {
   vi.stubGlobal("devicePixelRatio", scale);
   const surface = new DOMRect(100.2, 100.3, 400, 300);
   const list = overlay("listbox", new DOMRect(120.5, 110.6, 260, 220));
-  list.dataset.webNativeOverlay = "address-history";
+  list.dataset.appOverlay = "floating";
   list.style.borderTopLeftRadius = "6px";
   const cuts = webSurfaceOcclusions(surface).map(cut => ({
     left: Math.floor(cut.x * scale), top: Math.floor(cut.y * scale),
@@ -69,7 +69,7 @@ it.each([1, 1.25, 1.5, 2, 3, 4])("preserves webpage pixels outside rounded histo
 it("tracks the reveal edge and retains clipping for the closing accessible-hidden panel", () => {
   const surface = new DOMRect(0, 0, 400, 300);
   const list = overlay("listbox", new DOMRect(20, 20, 260, 200));
-  list.dataset.webNativeOverlay = "address-history";
+  list.dataset.appOverlay = "floating";
   list.style.borderTopLeftRadius = "6px";
   list.style.clipPath = "inset(0px 0px 50% 0px round 6px)";
   list.setAttribute("aria-hidden", "true");
@@ -82,7 +82,7 @@ it("tracks the reveal edge and retains clipping for the closing accessible-hidde
 
 it("does not create rounded cutouts for history outside a guest or a subpixel reveal", () => {
   const list = overlay("listbox", new DOMRect(20, 20, 260, 200));
-  list.dataset.webNativeOverlay = "address-history";
+  list.dataset.appOverlay = "floating";
   list.style.borderTopLeftRadius = "6px";
   expect(webSurfaceOcclusions(new DOMRect(0, 250, 400, 300))).toEqual([]);
   expect(webSurfaceOcclusions(new DOMRect(0, -300, 400, 300))).toEqual([]);

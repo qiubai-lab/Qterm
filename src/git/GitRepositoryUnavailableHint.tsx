@@ -30,5 +30,5 @@ export function GitRepositoryUnavailableHint({ id, hint }: { id: string; hint: G
     top: placement === "above" ? rect.top - 7 : rect.bottom + 7,
     placement,
   } as const;
-  return createPortal(<div id={id} className="git-repository-unavailable-hint" role="tooltip" data-placement={position.placement} style={{ left: position.left, top: position.top } as CSSProperties}><Icon name="help" size={13}/><span>{hint.message}</span></div>, document.body);
+  return createPortal(<div id={id} className="git-repository-unavailable-hint" role="tooltip" data-app-overlay="floating" data-overlay-motion="hover" data-placement={position.placement} style={{ left: position.left, top: position.top } as CSSProperties}><Icon name="help" size={13}/><span>{hint.message}</span></div>, document.body);
 }

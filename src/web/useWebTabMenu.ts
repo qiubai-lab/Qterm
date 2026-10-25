@@ -11,7 +11,7 @@ export function useWebTabMenu(ids: string[], visible: boolean) {
     if (restore) anchor.current?.focus({ preventScroll: true });
   }, []);
   const open = (target: EventTarget, x: number, y: number) => {
-    if (!visible || !(target instanceof Element) || document.querySelector('[role="dialog"]:not([data-web-native-overlay])')) return;
+    if (!visible || !(target instanceof Element) || document.querySelector('[aria-modal="true"]')) return;
     const tab = target.closest<HTMLElement>(".web-tab[data-tab-id]");
     if (!tab?.dataset.tabId || !ids.includes(tab.dataset.tabId)) return;
     anchor.current = tab.querySelector('[role="tab"]');

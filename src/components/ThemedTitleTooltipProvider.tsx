@@ -15,13 +15,14 @@ interface ActiveTitle {
 interface TooltipPresentation {
   element: HTMLElement;
   text: string;
-  open: boolean;
+  revision: number;
 }
 
 /** Converts product DOM title attributes into the shared Qterm tooltip surface. */
 export function ThemedTitleTooltipProvider({ children }: { children: ReactNode }) {
   const tooltipId = useId();
   const active = useRef<ActiveTitle | null>(null);
+  const revision = useRef(0);
   const surface = useRef<HTMLDivElement>(null);
   const [presentation, setPresentation] = useState<TooltipPresentation | null>(null);
   const [position, setPosition] = useState<CSSProperties | null>(null);
@@ -29,19 +30,11 @@ export function ThemedTitleTooltipProvider({ children }: { children: ReactNode }
   useLayoutEffect(() => {
     const anchor = presentation?.element;
     const bubble = surface.current;
-    if (!presentation?.open || !anchor || !bubble) return;
+    if (!presentation || !anchor || !bubble) return;
     const rect = anchor.getBoundingClientRect();
     const left = Math.max(8, Math.min(rect.left + rect.width / 2 - bubble.offsetWidth / 2, window.innerWidth - bubble.offsetWidth - 8));
     const above = rect.bottom + 6 + bubble.offsetHeight > window.innerHeight - 8;
-    setPosition({ left, top: above ? Math.max(8, rect.top - bubble.offsetHeight - 6) : rect.bottom + 6,
-      transformOrigin: `${Math.max(8, Math.min(rect.left + rect.width / 2 - left, bubble.offsetWidth - 8))}px ${above ? "bottom" : "top"}`,
-      "--tooltip-offset": above ? "4px" : "-4px" } as CSSProperties);
-  }, [presentation]);
-
-  useEffect(() => {
-    if (!presentation || presentation.open) return;
-    const timer = window.setTimeout(() => { setPresentation(null); setPosition(null); }, 160);
-    return () => window.clearTimeout(timer);
+    setPosition({ left, top: above ? Math.max(8, rect.top - bubble.offsetHeight - 6) : rect.bottom + 6 });
   }, [presentation]);
 
   useEffect(() => {
@@ -51,21 +44,17 @@ export function ThemedTitleTooltipProvider({ children }: { children: ReactNode }
         if (current.describedBy === null) current.element.removeAttribute("aria-describedby");
         else current.element.setAttribute("aria-describedby", current.describedBy);
       }
-      if (close && current.visible) setPresentation((value) => value ? { ...value, open: false } : value);
+      if (close && current.visible) { setPresentation(null); setPosition(null); }
     }
 
-    function dismiss(immediate = false) {
+    function dismiss() {
       const current = active.current;
       if (!current?.visible) return;
       current.visible = false;
       if (current.describedBy === null) current.element.removeAttribute("aria-describedby");
       else current.element.setAttribute("aria-describedby", current.describedBy);
-      if (immediate) {
-        setPresentation(null);
-        setPosition(null);
-      } else {
-        setPresentation((value) => value ? { ...value, open: false } : value);
-      }
+      setPresentation(null);
+      setPosition(null);
     }
 
     function titledElement(target: EventTarget | null) {
@@ -94,7 +83,7 @@ export function ThemedTitleTooltipProvider({ children }: { children: ReactNode }
         element.setAttribute("aria-describedby", [describedBy, tooltipId].filter(Boolean).join(" "));
         const rect = element.getBoundingClientRect();
         setPosition({ left: rect.left, top: rect.bottom + 6 });
-        setPresentation({ element, text: title, open: true });
+        setPresentation({ element, text: title, revision: ++revision.current });
       }
       active.current = { element, title, describedBy, pointer: source === "pointer", focus: source === "focus", visible };
     }
@@ -113,7 +102,7 @@ export function ThemedTitleTooltipProvider({ children }: { children: ReactNode }
     const onFocusIn = (event: FocusEvent) => activate(event.target, "focus");
     const onFocusOut = (event: FocusEvent) => deactivate("focus", event.relatedTarget);
     const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") dismiss(); };
-    const onActivate = () => dismiss(true);
+    const onActivate = () => dismiss();
     const onPassiveDismiss = () => dismiss();
     const onWindowBlur = () => {
       const current = active.current;
@@ -146,6 +135,6 @@ export function ThemedTitleTooltipProvider({ children }: { children: ReactNode }
     };
   }, [tooltipId]);
 
-  return <>{children}{presentation && position && createPortal(<div ref={surface} id={tooltipId} role="tooltip" aria-hidden={!presentation.open} data-open={presentation.open}
+  return <>{children}{presentation && position && createPortal(<div key={presentation.revision} ref={surface} id={tooltipId} role="tooltip" data-app-overlay="floating" data-overlay-motion="hover"
     className="themed-tooltip themed-action-tooltip" style={position}>{presentation.text}</div>, document.body)}</>;
 }

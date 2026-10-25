@@ -82,7 +82,7 @@ export function WorkspaceNotificationBubble({ notice, name, showBody, anchor, di
     document.addEventListener("scroll", update, true);
     return () => { strip?.removeEventListener("workspace-tab-layout", update); resize.disconnect(); overlays.disconnect(); window.removeEventListener("resize", update); document.removeEventListener("scroll", update, true); };
   }, [anchor, notice.revision, requestDismiss]);
-  return createPortal(<div ref={bubble} className="workspace-notification-bubble" data-state={exiting ? "closing" : "open"} style={position}
+  return createPortal(<div ref={bubble} data-app-overlay="floating" className="workspace-notification-bubble" data-state={exiting ? "closing" : "open"} style={position}
     onPointerDown={event => event.stopPropagation()} onClick={event => event.stopPropagation()}
     onMouseEnter={() => { timing.current.hovered = true; stop(); }}
     onMouseLeave={() => { timing.current.hovered = false; resume(); }}

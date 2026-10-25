@@ -25,7 +25,11 @@ pub(super) fn handle(parent: HWND) -> HWND {
 }
 
 pub(super) fn sync(parent: HWND, bounds: &WebBounds, scale: f64) -> Result<(), &'static str> {
-    let bitmap = super::surface_raster::rasterize(bounds, scale)?;
+    let bitmap = if bounds.covered {
+        None
+    } else {
+        super::surface_raster::rasterize(bounds, scale)?
+    };
     let mut overlay = handle(parent);
     let Some(bitmap) = bitmap else {
         if !overlay.is_invalid() {

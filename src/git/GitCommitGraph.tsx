@@ -114,7 +114,7 @@ export function GitCommitTooltip({ commit, fileCount, tooltipId, tooltipRef }: {
   const authorMark = Array.from(commit.author.trim())[0]?.toLocaleUpperCase() ?? "?";
   const references = commit.decorations.map(formatGitDecoration).filter(Boolean);
   const parentSummary = commit.parents.length === 0 ? "初始提交" : `${commit.parents.length} 个父提交`;
-  return <div ref={tooltipRef} id={tooltipId} className="git-commit-tooltip" role="tooltip" data-placement="below" style={{ visibility: "hidden" }}>
+  return <div ref={tooltipRef} id={tooltipId} className="git-commit-tooltip" role="tooltip" data-app-overlay="floating" data-overlay-motion="hover" data-placement="below" style={{ visibility: "hidden" }}>
     <div className="git-commit-tooltip-author">
       <span className="git-commit-tooltip-avatar" aria-hidden="true">{authorMark}</span>
       <span><strong>{commit.author}</strong>{exactTime && <time dateTime={exactTime.toISOString()}>{formatCommitDateTime(commit.timestamp)}</time>}</span>

@@ -40,8 +40,8 @@ export function DialogFrame({ title, subtitle, onClose, children, headerActions,
       previous?.focus();
     };
   }, [modal]);
-  return <div className={`dialog-scrim${blocking ? " dialog-scrim-blocking" : ""}${scrimClassName ? ` ${scrimClassName}` : ""}`} data-state={closing ? "closing" : "open"} onPointerDown={(event) => { if (dismissible && !closing && event.target === event.currentTarget) onClose(); }}>
-    <section ref={frameRef} tabIndex={-1} className={`dialog-frame${wide ? " dialog-wide" : ""}${compact ? " dialog-compact" : ""}${className ? ` ${className}` : ""}`} data-state={closing ? "closing" : "open"} role="dialog" aria-modal={modal || undefined} aria-labelledby={titleId}>
+  return <div data-app-overlay={modal ? "modal" : undefined} className={`dialog-scrim${blocking ? " dialog-scrim-blocking" : ""}${scrimClassName ? ` ${scrimClassName}` : ""}`} data-state={closing ? "closing" : "open"} onPointerDown={(event) => { if (dismissible && !closing && event.target === event.currentTarget) onClose(); }}>
+    <section ref={frameRef} tabIndex={-1} className={`dialog-frame${wide ? " dialog-wide" : ""}${compact ? " dialog-compact" : ""}${className ? ` ${className}` : ""}`} data-state={closing ? "closing" : "open"} role="dialog" data-app-overlay={modal ? undefined : "floating"} aria-modal={modal || undefined} aria-labelledby={titleId}>
       <header className="dialog-header"><div className="dialog-header-copy"><h2 id={titleId}>{title}</h2>{subtitle && <p>{subtitle}</p>}</div><div className="dialog-header-actions">{headerActions}{dismissible && <IconButton label="关闭" onClick={onClose}><Icon name="close"/></IconButton>}</div></header>
       <div className="dialog-content">{children}</div>
     </section>

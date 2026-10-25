@@ -539,7 +539,7 @@ describe("Git pane style contracts", () => {
     expect(tooltip).toContain("border: 1px solid var(--floating-border)");
     expect(tooltip).toContain("background: var(--floating-material)");
     expect(tooltip).toContain("pointer-events: none");
-    expect(tooltip).toContain("animation: git-commit-tooltip-in 140ms");
+    expect(tooltip).not.toContain("animation:");
     const reducedMotion = styles.slice(styles.indexOf("@media (prefers-reduced-motion: reduce)"));
     expect(reducedMotion).toContain(".git-commit-tooltip");
     expect(reducedMotion).toContain("animation: none");

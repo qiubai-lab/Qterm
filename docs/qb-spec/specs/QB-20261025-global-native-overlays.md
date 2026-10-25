@@ -3,7 +3,7 @@ schema: 1
 id: QB-20261025-global-native-overlays
 type: design
 tier: standard
-status: draft
+status: active
 created: 2026-10-25
 updated: 2026-10-25
 supersedes: []
@@ -11,7 +11,7 @@ supersedes: []
 
 # 全应用弹层与原生网页共存：根因与公共修复方案
 
-本次授权是分析黑屏原因并提供公共方案。本文是待实施的设计稿，不表示修复已落地；没有修改应用实现，也没有修改已有长期架构/样式规格。分析基于工作区当前代码（HEAD `0603e98` 加已有未提交修改）。
+用户已明确要求“请你落地修复”，授权实施本方案。以下根因记录来自前一轮分析；本次实现与验证记录追加于文末。
 
 ## 直接根因与证据
 
@@ -176,16 +176,67 @@ supersedes: []
 
 建议按以下顺序实施，每一步留下可单独验证的模块：
 
-- [ ] 先改写旧的“普通菜单隐藏网页”预期，补真实终端/文件跨 Block 回归与几何/预算测试。
-- [ ] 建立 registry、纯表面策略与统一测量；接入共享 tooltip/menu/dialog 基座。大文件只接线，Files/Git/Workspace 的 baseline 文件不得继续累积编排。
-- [ ] 完成原生模态/input/首帧原型，确定降级与性能上限，再接入快照状态机；这是覆盖全部弹窗的必要关口。
-- [ ] 按全量清单迁移其余弹层与输入关闭；删除白名单和旧 role 扫描，落实接入检查。
+- [x] 先改写旧的“普通菜单隐藏网页”预期，补真实终端/文件跨 Block 回归与几何/预算测试。
+- [x] 建立 registry、纯表面策略与统一测量；接入共享 tooltip/menu/dialog 基座。大文件只接线，Files/Git/Workspace 的 baseline 文件不得继续累积编排。
+- [x] 完成原生模态/input 原型、解码后宿主绘制机会及同一 compositor 恢复，确定降级与性能上限并接入快照状态机；逐帧无闪黑的显示器实测仍见下方缺口。
+- [x] 按全量清单迁移其余弹层与输入关闭；删除白名单和旧 role 扫描，落实接入检查。
 - [ ] 完成前后端与真实 Windows 矩阵验证、截图/录像及性能记录，再更新实际变化的 Directory Map。
 
 建议实现 owner：公共注册/层级在 `components/overlays`，规则与 native 同步在 `web/surface`，IPC 在 `lib/tauri/web`，平台裁剪/快照/输入在 `infrastructure/web` 的独立模块。命令只验证/转发，不把策略堆进 `WebHost::sync`。不改 SSH、profile 数据格式或网页权限。
 
-## 本次诊断验证
+## 前次诊断验证（实现前）
 
 已运行 6 个测试文件、31 项测试并全部通过，其中 7 项临时诊断用例刻画现有故障：真实终端菜单不相交仍隐藏；同一个 TabActionMenu 因是否带 `tab-menu` 标记出现不同结果；display:none / visibility:hidden / opacity:0 的非模态 dialog 仍隐藏；75 条圆角裁剪带被截为 64 条。临时用例验证的是现状，并非修复验收，运行后已删除。
 
 既有 5 个测试文件为 webModel、webSurfaceOcclusion、webConnectionOverlays、webTabMenuSurface、useWebBrowser，使用 `pnpm exec vitest run ... --maxWorkers=2`。`pnpm check:source-size` 通过且 0 ratchet reminders。没有运行全量 pnpm check、Rust 检查或桌面视觉验收，因为本次没有应用实现变更。现有 13 个未提交源码文件保持不变。
+
+## 本轮实现（2026-10-25）
+
+公共契约落在真正绘制的根节点：`data-app-overlay="floating"` 表示局部不透明覆盖，`modal` 表示该根节点矩形范围内的输入隔离/预览桥接，`transition` 可用于完整过渡覆盖。DialogFrame 在 scrim 上声明 modal，非模态组件声明 floating；无障碍 role 不再参与网页可见性判断。抽屉额外声明 `data-overlay-clip="parent"`，reveal/slide 动画使用 `data-overlay-motion` 保留原有几何跟踪。节点存在、实际可见且有尺寸时才参与；退场的 inert/aria-hidden 节点继续保留绘制遮挡。
+
+注册采用声明式 DOM 契约与一个 MutationObserver，避免给各业务引入第二套开关状态。终端、文件列表/图片/编辑器/上传、Network、Git、主机概要、连接选择、工作区菜单、共享 tooltip、管理器、提示气泡、引导卡和拖拽标签均已接入；旧七项白名单及两份业务专属 native CSS 已删除。新 JSX menu/dialog/tooltip 未声明公共属性会被 `overlayContract.test.ts` 拒绝。普通布局/header portal、列表中的原地 listbox 不登记为浮层；系统文件选择器仍使用既有 native dialog bridge。
+
+`nativeSurfaceCoordinator` 使用一个 rAF 循环，每轮共享弹层/选中边框/主题采样，再对各网页求交集。MutationObserver 缓存根节点，不再为每个 guest 扫描全部菜单/对话框；隐藏 guest 不读取布局；稳态通过完整 bounds 去重，不重复 IPC。实现选择持续帧循环以覆盖既有 CSS transform/reveal 与拖动，没有实现原建议的全量脏标记后停帧优化；后续优化必须保留动画跟踪证据。
+
+普通浮层仅挖去交集并通过原生透明边缘补齐圆角；与网页不相交时不改变可见性。64 个矩形/8 个 native panel 的传输上限继续保留，超过预算明确转为整页预览覆盖，不再静默 slice。浮层在 Web Block 存在时使用公共不透明主题底和内描边，外部阴影/真实背景模糊不作为原生合成承诺。
+
+模态状态为原生输入阻断 → 有界截图/解码 → 宿主绘制机会 → 空 HWND region。整个过程保持 WebView2 controller 可见，不执行模态 hide/show，恢复时撤销空 region 并删除预览，不 reload/重建 guest。截图只存内存，限制 1.5 秒、16 Mi 像素和 16 MiB PNG；解码也有 1.5 秒上限。失败/初始加载/导航中使用明确的主题占位，页面就绪后重取；旧文档/旧尺寸预览立即失效，锁屏/隐藏/断开/卸载清除。同步写入和截图分别串行、合并最新意图，快速关闭不等待截图，连续缩放不会并发积压截图。两次 rAF 是宿主绘制机会，不将其表述成显示器帧提交保证。
+
+原生可信 pointerdown 的固定消息与 GotFocus 进入同一表面交互入口，映射为所属 DOM surface 上的 pointerdown，复用业务的外部关闭处理；不生成 click、不传网页内容、不开放 guest IPC。原生窗口必须可见、启用且已聚焦才能转发固定消息。Git 历史气泡的外部关闭修正为不抢回触发按钮焦点，Escape/键盘关闭仍返回触发点。原有 `useNativeWebDismiss` 三个消费者保留兼容订阅，它不再决定绘制或隐藏。
+
+### 验收证据与边界
+
+| 验收 | 已执行证据 | 边界 |
+| --- | --- | --- |
+| AC-001 | `globalOverlays`、`crossFeatureOverlays` 使用真实 Terminal/FileBrowserPane/FileTextContextMenu/NetworkPane/Git history 入口；不相交与跨两页几何；真实 TabActionMenu + useWebBrowser 的 IPC/同实例回归 | 用户 SSH 页面没有代操作 |
+| AC-002 | 全源码 JSX 接入检查；退出/inert/hidden、抽屉裁切、75 条圆角区域完整保留及预算降级、CSS 公共外壳和多倍率 raster 测试 | 不是每个菜单在三个主题中的逐一截图验收 |
+| AC-003 | `surfaceSync` 覆盖延迟/失败/快速关闭/加载/导航/过期解码/锁定/连续缩放；真实 WebView2 验证预览像素、NULLREGION、EnableWindow/焦点与 controller 存活、恢复 URL 不变 | 实体触摸/滚轮、跨显示器 DPI、逐帧无裸黑画面的录屏未覆盖 |
+| AC-004 | 真实业务外部关闭与焦点测试；既有键盘/模态测试；native fixture 验证相同焦点下重复通知以及禁用后拒绝通知 | 重复通知测试直接发送固定消息，不伪称实体鼠标输入测试 |
+| AC-005 | 锁屏/隐藏/卸载单元及集成；原生代理/profile/命令拒绝、导航限制与恢复；拖拽标签改为显式局部绘制 | native 文件选择器不变，未新增实体文件选择验收 |
+| AC-006 | 两个活跃+一个隐藏 guest 共享一次测量、稳态去重；六倍率 raster 和真实 Windows region/透明边框测试；源码门禁 | 实际多显示器移动和不同缩放的显示器矩阵仍未覆盖 |
+
+真实原生截图与可复验命令见 [evidence README](../evidence/QB-20261025-global-native-overlays/README.md)。Directory Map 已同步公共 owner；没有改变 SSH、profile/Workspace 数据格式和客体权限。本轮验证不把正在并行修改的地址栏等无关改动算作本变更。
+
+所需显示器/实体输入/逐帧视觉矩阵尚未完成，因此本 spec 保持 active，不把自动化和机制截图冒充全部人工验收，也不声明所有设备上绝无瞬时闪烁。核心黑屏路径已替换并有回归保护。
+
+### 最终命令记录
+
+- `$env:VITEST_MAX_WORKERS='2'; pnpm check`：通过；222 个测试文件通过、1 个跳过，1307 项通过、2 项跳过；Node 脚本测试、ESLint、TypeScript、Vite production build 均通过。默认并发曾使已有 workspaceTabDeck 动画用例 5 秒超时，降低 worker 后通过，没有提高超时或跳过该用例。
+- 最后截图串行/合并修正：`pnpm exec vitest run src/web/surface src/web/webTabMenuSurface.test.tsx --maxWorkers=2`，3 文件 10 项通过；受影响文件 ESLint 通过。新测试中缺少必需回调和超出项目 TS lib 的数组 API 已修正，最终类型检查/构建通过。
+- `cargo fmt --manifest-path src-tauri/Cargo.toml --check` 与 `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings`：通过。
+- `cargo test --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- --test-threads=2`：356 项通过、7 项按项目配置忽略。
+- `cargo test native_webview_smoke --manifest-path src-tauri/Cargo.toml -- --ignored --nocapture --test-threads=1`：真实 WebView2 用例单独执行通过。
+- `pnpm tauri build`：最终代码生成 Windows x64 MSI 和 NSIS 安装包，未安装或发布。Vite 仍有原有大 chunk 提示，MSVC 有导入库生成信息，均不阻断构建。
+- `pnpm check:source-size`：通过、0 ratchet reminders；`git diff --check` 与 qb change validate 通过，无 trace 警告。
+
+## 后续修复：保留动画并以连接状态节点统一全局 hover（2026-10-25）
+
+用户先反馈鼠标移出后 tooltip 位置抖动/外观变化，随后明确要求保留动画，并以连接状态节点的气泡为参照统一全局 hover。根因是上一轮公共原生外壳强制 `opacity:1; transition:none`，却保留 themed tooltip 关闭态的 `translateY(-4px) scale(.97)` 和 160ms 卸载等待：关闭变成可见的瞬间跳位/缩小。
+
+最终行为以用户最后指定的参照为准：当前原生网页场景中的连接状态节点使用 130ms、3px、`cubic-bezier(.16,1,.3,1)` 入场，移出后直接卸载。所有 hover tooltip 通过 `data-overlay-motion="hover"` 委派到 `components/hoverTooltip.css`，有无 Web Block 都使用同一入场动画，不再缩放文字/描边；减少动态效果关闭位移。菜单、抽屉、模态窗的独立动画策略保持。
+
+已迁移按钮/溢出文字/DOM title、网页标签、连接状态节点、终端协议、Git 提交/远端/不可用原因、凭证安全提示与工作区数量提示。删去分散的 tooltip keyframes、无用的 transform-origin/offset 和延迟退场计时器；保留组件原有内容、尺寸、颜色、定位与键盘语义。DOM title 在直接切换目标时使用新的展示代次重新入场。源码契约检查要求每个 tooltip 接入统一 motion，避免新增组件又绕回另一套动画。Git CSS 源码 baseline 从 621 收紧至 615，没有上调门禁。
+
+验收补充对应 AC-002/AC-004：真实 Chromium 的 48 组矩阵通过，包含实际参照组件、三主题、有/无 Web Block、减少动态效果与快速重新进入；打开/关闭期间宽高和材质不发生缩放变化，移出立即释放 DOM/原生裁剪。详细前后测量、脚本和图片见 evidence README。本轮没有重新打桌面安装包，上一轮安装包不包含本次前端动效更新。
+
+本次最终验证：`$env:VITEST_MAX_WORKERS='4'; pnpm check` 通过（222 个测试文件通过、1 个跳过；1310 项测试通过、2 项跳过；21 项 Node 脚本测试、ESLint、TypeScript 和 Vite build 均通过）。首轮全量检查发现四处旧测试仍断言缩放/延迟卸载，已更新为公共动画与即时关闭后的重新进入、可访问描述行为，再次全量通过。源码体积门禁 0 reminders，`git diff --check` 与 qb change validate 通过；Vite 保留既有大 chunk 提示。

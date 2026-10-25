@@ -1,6 +1,6 @@
 .web-data-control { position: relative; flex: none; }
 .web-address-field .web-data-control > button:is(:hover, :focus-visible, [aria-expanded="true"]):not(:disabled) { color: var(--accent); background: var(--accent-bg); }
-.web-data-popover { --web-native-overlay-stroke: var(--floating-border); position: absolute; z-index: 3; left: 0; top: calc(100% + 7px); display: grid; gap: 9px; width: 300px; max-width: calc(100vw - 40px); overflow: auto; box-sizing: border-box; padding: 10px; border: 1px solid var(--raised); border-radius: 9px; background: var(--raised); box-shadow: inset 0 0 0 1px var(--web-native-overlay-stroke); color: var(--text); font-size: 11px; animation: web-data-popover-in 150ms cubic-bezier(.16, 1, .3, 1); }
+.web-data-popover { --app-overlay-stroke: var(--floating-border); position: absolute; z-index: 3; left: 0; top: calc(100% + 7px); display: grid; gap: 9px; width: 300px; max-width: calc(100vw - 40px); overflow: auto; box-sizing: border-box; padding: 10px; border: 1px solid var(--raised); border-radius: 9px; background: var(--raised); box-shadow: inset 0 0 0 1px var(--app-overlay-stroke); color: var(--text); font-size: 11px; animation: web-data-popover-in 150ms cubic-bezier(.16, 1, .3, 1); }
 .web-data-heading { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 8px; align-items: center; }
 .web-data-icon { display: grid; width: 30px; height: 30px; place-items: center; border: 1px solid color-mix(in srgb, var(--accent) 38%, var(--border)); border-radius: 7px; color: var(--accent); background: color-mix(in srgb, var(--accent) 11%, var(--panel-bg)); }
 .web-data-heading > span:last-child { display: grid; min-width: 0; gap: 2px; }
@@ -23,4 +23,4 @@
 .web-data-actions .ui-button { flex: none; }
 @keyframes web-data-popover-in { from { transform: translateY(-4px); } to { transform: translateY(0); } }
 @media (prefers-reduced-motion: reduce) { .web-data-popover { animation: none; } }
-@media (prefers-contrast: more) { .web-data-popover { --web-native-overlay-stroke: var(--border); } }
+@media (prefers-contrast: more) { .web-data-popover { --app-overlay-stroke: var(--border); } }

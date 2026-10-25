@@ -3,11 +3,11 @@ import { createPortal } from "react-dom";
 import "./tabActionMenu.css";
 
 interface Props<T extends string> {
-  x: number; y: number; label: string; className?: string; nativeOverlay?: string;
+  x: number; y: number; label: string; className?: string; keepOnInternalScroll?: boolean;
   items: { id: T; label: string; count: number }[];
   onChoose: (id: T) => void; onDismiss: (restore?: boolean) => void;
 }
-export function TabActionMenu<T extends string>({ x, y, label, className = "", nativeOverlay, items: actions, onChoose, onDismiss }: Props<T>) {
+export function TabActionMenu<T extends string>({ x, y, label, className = "", keepOnInternalScroll = false, items: actions, onChoose, onDismiss }: Props<T>) {
   const menu = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     const node = menu.current;
@@ -20,18 +20,18 @@ export function TabActionMenu<T extends string>({ x, y, label, className = "", n
     const dismiss = () => onDismiss(false);
     const scroll = (event: Event) => {
       // Native overlays are viewport-positioned; internal reveal scrolling must not dismiss them.
-      if (!nativeOverlay || event.target === window || event.target === document) dismiss();
+      if (!keepOnInternalScroll || event.target === window || event.target === document) dismiss();
     };
-    const dialogSelector = nativeOverlay ? '[role="dialog"]:not([data-web-native-overlay])' : '[role="dialog"]';
+    const dialogSelector = '[aria-modal="true"]';
     const overlays = new MutationObserver(() => { if (document.querySelector(dialogSelector)) onDismiss(false); });
-    overlays.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["role"] });
+    overlays.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["aria-modal"] });
     document.addEventListener("pointerdown", outside, true);
     window.addEventListener("resize", dismiss);
     window.addEventListener("blur", dismiss);
     window.addEventListener("scroll", scroll, true);
     return () => { overlays.disconnect(); document.removeEventListener("pointerdown", outside, true); window.removeEventListener("resize", dismiss); window.removeEventListener("blur", dismiss); window.removeEventListener("scroll", scroll, true); };
-  }, [x, y, onDismiss, nativeOverlay]);
-  return createPortal(<div ref={menu} className={`terminal-context-menu tab-action-menu ${className}`} data-web-native-overlay={nativeOverlay} role="menu" aria-label={label} tabIndex={-1} style={{ left: x, top: y }}
+  }, [x, y, onDismiss, keepOnInternalScroll]);
+  return createPortal(<div ref={menu} className={`terminal-context-menu tab-action-menu ${className}`} role="menu" data-app-overlay="floating" aria-label={label} tabIndex={-1} style={{ left: x, top: y }}
     onPointerDown={event => event.stopPropagation()} onClick={event => event.stopPropagation()} onContextMenu={event => { event.preventDefault(); event.stopPropagation(); }}
     onKeyDown={event => {
       event.stopPropagation();

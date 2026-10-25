@@ -182,7 +182,7 @@
 
 - `src-tauri/src/infrastructure/ssh/client/tests/connect_fixture.rs`：SSH 测试共用的终端/辅助会话请求 fixture，默认不启用任一 Shell 注入协议。
 
-- `src/web/webSurfacePanels.ts` 与 `src-tauri/src/infrastructure/web/surface_raster.rs`：历史下拉的 reveal/radius/theme 采样与原生透明抗锯齿边缘合成；复用 windows_frame 的鼠标穿透窗口，避免二值裁剪圆角锯齿，不拥有导航或 guest 权限。
+- `src/web/webSurfacePanels.ts`、`webSurfaceOcclusion.ts` 与 `src-tauri/src/infrastructure/web/surface_raster.rs`：消费公共弹层测量，生成局部裁剪与圆角、reveal、父级裁切、主题描边；复用 windows_frame 的鼠标穿透窗口合成抗锯齿边缘，不拥有导航或 guest 权限。超过 64 个区域或 8 个边缘面板时由协调器完整覆盖，禁止截断部分弹层。
 - `navigation_state.rs` / `windows_navigation.rs` 同步成功页面的原生 title；`domain/web_library.rs` 负责有界标题文本与不改变访问顺序的元数据更新，旧历史/收藏在再次访问时补正标题。
 
 - `src/web/WebTabs.tsx`：浏览器页面挂载/选中/关闭与每个 block 最多 10 个标签；`WebTabStrip.tsx`、`WebTabButton.tsx`、`webTabs.css` 负责紧凑 header 与溢出标题提示，`webTabDeck.ts` / `useWebTabDeck.ts` / `webTabDeck.css` 负责窄宽度叠放、预览弹簧和滚动；标签列表不进入 Workspace 持久化。`WebDataPopover.tsx` / `webDataPopover.css` 负责地址框内的连接级选择性清理入口和反馈，原生页只接收聚合状态。
@@ -190,6 +190,10 @@
 
 - `src/components/tabDeck.ts`：主工作区与网页标签共用的纯叠放几何与临界阻尼弹簧步进；各自 feature 拥有测量、预览意图和 DOM 绘制，页面/工作区生命周期不进入共享模型。
 
-- `src/components/TabActionMenu.tsx` / `tabActionMenu.css`：工作区与网页标签共享的操作菜单、视口约束与键盘/外部关闭交互。`src/web/webTabMenu.css` 负责原生网页上方菜单的平移入场与内描边，保持不透明裁剪边缘及减少动态效果支持；`src/web/useWebTabMenu.ts` 负责右键意图、折叠锚点与原生页面聚焦关闭；`webTabClose.ts` 负责当前 block 的关闭范围和活动页回退，不操作 SSH 会话、缓存或其他 block。
+- `src/components/TabActionMenu.tsx` / `tabActionMenu.css`：工作区与网页标签共享的操作菜单、视口约束与键盘/外部关闭交互，原生兼容外观委派公共 overlays 层；`src/web/useWebTabMenu.ts` 负责右键意图、折叠锚点与原生页面聚焦关闭；`webTabClose.ts` 负责当前 block 的关闭范围和活动页回退，不操作 SSH 会话、缓存或其他 block。
 
-- `src/components/useNativeWebDismiss.ts`：共享原生网页聚焦关闭浮层的订阅生命周期，供标签菜单、主机概要和连接选择器使用，不夺回网页焦点；`src/web/webNativePopovers.css` 负责连接浮层在 Web Block 存在时的不透明背景、原生内描边镜像与平移动画。`src/workspace/terminalTargetModel.ts` 负责连接选择器的最近连接、分组与搜索列表派生。
+- `src/components/useNativeWebDismiss.ts`：保留标签菜单、主机概要和连接选择器的原生聚焦关闭兼容订阅，不拥有绘制策略、不夺回网页焦点。`src/workspace/terminalTargetModel.ts` 负责连接选择器的最近连接、分组与搜索列表派生。
+- `src/components/overlays/overlayRegistry.ts` / `nativeOverlay.css`：全应用浮层的声明式绘制契约 `data-app-overlay="floating|modal|transition"`、DOM 生命周期登记、实际绘制测量及公共不透明外壳；ARIA role 不决定原生可见性。`nativeInteraction.ts` 将原生交互定位到所属 DOM surface，复用业务外部 pointerdown 关闭逻辑；`overlayContract.test.ts` 检查 JSX menu/dialog/tooltip 入口没有漏接公共契约。
+- `src/components/hoverTooltip.css`：统一所有 hover 气泡的 `data-overlay-motion="hover"` 契约，按连接状态节点参照执行 130ms/3px 入场、移出立即卸载与减少动态效果。按钮/文本/协议等组件只拥有内容、定位和 hover/focus 生命周期；移除各业务自己的缩放动画和退场计时器，源码接入检查要求所有 tooltip 使用公共动效。
+- `src/web/surface/nativeSurfaceCoordinator.ts`：唯一原生表面帧循环，共享弹层、选中边框和主题测量，按交集选择局部裁剪或完整覆盖；`surfaceSync.ts` 拥有串行 IPC、最新意图合并、文档/尺寸代次与取消，`surfaceCover.ts` 拥有短期预览 DOM 和解码/绘制时序。`useWebBrowser.ts` 只接入 guest 生命周期、页面事件和表面注册；锁屏/隐藏/卸载清除预览，不新增持久化状态。
+- `src-tauri/src/infrastructure/web/snapshot.rs` / `windows_snapshot.rs`：验证 guest/连接可见性，执行 1.5 秒、16 Mi 像素/16 MiB PNG 上限的内存预览；`windows_surface.rs` 负责原生输入阻断、焦点交还与空 region 覆盖，保留可见的 WebView2 compositor；`windows_interaction.rs` 只转发已聚焦且可交互 guest 的固定交互通知，不增加客体 IPC 权限。`native_modal_tests.rs` 在隔离 WebView2 fixture 中验证覆盖/恢复、快照和输入状态。

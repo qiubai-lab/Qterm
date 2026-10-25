@@ -45,16 +45,16 @@ describe("GitRepositoryHistoryPopover", () => {
     expect(trigger).toHaveFocus();
   });
 
-  it("supports arrow navigation, Enter selection, Escape, and outside-pointer focus restore", async () => {
+  it("restores keyboard dismissals and preserves the outside pointer target's focus", async () => {
     const user = userEvent.setup();
     const onSelect = vi.fn();
-    render(<GitRepositoryHistoryPopover
+    render(<><button>外部目标</button><GitRepositoryHistoryPopover
       repositories={repositories}
       currentRepository={null}
       triggerLabel="打开本机仓库"
       onSelect={onSelect}
       onBrowse={vi.fn()}
-    />);
+    /></>);
     const trigger = screen.getByRole("button", { name: "打开本机仓库" });
 
     await user.click(trigger);
@@ -73,9 +73,10 @@ describe("GitRepositoryHistoryPopover", () => {
     expect(trigger).toHaveFocus();
 
     await user.click(trigger);
-    fireEvent.pointerDown(document.body);
+    const outside = screen.getByRole("button", { name: "外部目标" });
+    outside.focus(); fireEvent.pointerDown(outside);
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "打开仓库" })).not.toBeInTheDocument());
-    expect(trigger).toHaveFocus();
+    expect(outside).toHaveFocus();
   });
 
   it("keeps browsing available in the empty state and respects disabled triggers", async () => {

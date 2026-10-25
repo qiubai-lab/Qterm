@@ -77,13 +77,14 @@ it("tracks routes while preserving a draft until Escape or blur and never discar
   expect(input).toHaveValue("http://localhost/route#hash");
 });
 
-it("swaps refresh for Stop and removes loading feedback without closing the page", () => {
+it("swaps refresh for Stop without duplicating the tab's loading indicator", () => {
   const props = properties(); const view = render(<WebAddressBar {...props}/>);
   expect(screen.queryByRole("progressbar")).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "刷新网页" }));
   expect(props.onAction).toHaveBeenCalledWith("reload");
   view.rerender(<WebAddressBar {...props} loading/>);
-  expect(screen.getByRole("progressbar", { name: "网页加载中" })).toBeVisible();
+  expect(screen.queryByRole("progressbar")).toBeNull();
+  expect(view.container.querySelector(".web-address-spinner, [data-icon='browser']")).toBeNull();
   expect(screen.queryByRole("button", { name: "刷新网页" })).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "停止加载" }));
   expect(props.onAction).toHaveBeenLastCalledWith("stop");

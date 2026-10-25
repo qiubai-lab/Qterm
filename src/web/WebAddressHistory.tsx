@@ -56,7 +56,7 @@ export function WebAddressHistory({ id, open, anchor, entries, selected, onSelec
     return () => cancelAnimationFrame(frame);
   }, [anchor, present]);
   if (!present) return null;
-  return createPortal(<div id={id} role="listbox" aria-hidden={!open} data-open={open} aria-label="最近访问记录" data-web-native-overlay="address-history" className="web-address-history" style={bounds} onPointerDown={event => event.preventDefault()}>
+  return createPortal(<div id={id} role="listbox" data-app-overlay="floating" data-overlay-motion="reveal" aria-hidden={!open} data-open={open} aria-label="最近访问记录" className="web-address-history" style={bounds} onPointerDown={event => event.preventDefault()}>
     <div className="web-address-history-heading">最近访问</div>
     <OverlayScrollArea ref={viewport} className="web-address-history-scroll" viewportClassName="web-address-history-list" density="compact"
       onScroll={event => { if (event.currentTarget.scrollTop > 0) loadMore(event.currentTarget); }} viewportProps={{ onWheel: event => {

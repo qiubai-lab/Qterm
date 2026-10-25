@@ -1,5 +1,4 @@
 import { isDemo } from "../lib/runtime/environment";
-import { webNativePanelSelector } from "./webSurfacePanels";
 
 export function supportsWebBlocks() {
   return !isDemo && /Windows/i.test(navigator.userAgent) && "__TAURI_INTERNALS__" in window;
@@ -15,10 +14,8 @@ export function normalizeWebAddress(value: string): string {
 }
 
 export function webSurfaceVisible(element: HTMLElement, visible: boolean): boolean {
-  // Local overlays must use the same registry as native clipping. Treating their
-  // menu/dialog roles as global blockers hides the entire WebView behind them.
-  const blockingOverlay = [...document.querySelectorAll('[role="dialog"], [role="menu"]')]
-    .some(overlay => !overlay.matches(webNativePanelSelector));
+  // Visibility belongs to the guest lifecycle. Overlays have a separate paint
+  // and input plan; ARIA roles must never hide unrelated native windows.
   return visible && !document.hidden && !element.closest('[inert], [aria-hidden="true"]')
-    && !blockingOverlay && !document.querySelector('.dialog-backdrop, .terminal-lock-screen, .drag-ghost');
+    && !document.querySelector('.terminal-lock-screen');
 }

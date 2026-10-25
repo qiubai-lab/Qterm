@@ -42,5 +42,5 @@ export function GitRemoteConfigurationHint({ active, children }: { active: boole
     onPointerLeave={() => setVisible(false)}
     onFocus={() => active && setVisible(true)}
     onBlur={() => setVisible(false)}
-  >{children}</span>{showTooltip && createPortal(<div ref={tooltipRef} id={tooltipId} className="git-remote-configuration-tooltip" role="tooltip" data-placement="above" style={{ visibility: "hidden" }}>{gitRemoteConfigurationHint}</div>, document.body)}</>;
+  >{children}</span>{showTooltip && createPortal(<div ref={tooltipRef} id={tooltipId} className="git-remote-configuration-tooltip" role="tooltip" data-app-overlay="floating" data-overlay-motion="hover" data-placement="above" style={{ visibility: "hidden" }}>{gitRemoteConfigurationHint}</div>, document.body)}</>;
 }

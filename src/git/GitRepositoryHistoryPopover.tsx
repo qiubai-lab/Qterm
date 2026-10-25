@@ -80,7 +80,7 @@ export function GitRepositoryHistoryPopover({
     });
     const onOutsidePointer = (event: PointerEvent) => {
       const node = event.target as Node;
-      if (!popoverRef.current?.contains(node) && !triggerRef.current?.contains(node)) close();
+      if (!popoverRef.current?.contains(node) && !triggerRef.current?.contains(node)) close(false);
     };
     const onEscape = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
@@ -138,7 +138,7 @@ export function GitRepositoryHistoryPopover({
     {visiblePosition && createPortal(<div
       ref={popoverRef}
       className="git-repository-history-popover"
-      role="dialog"
+      role="dialog" data-app-overlay="floating"
       aria-labelledby={headingId}
       data-placement={visiblePosition.placement}
       style={{ left: visiblePosition.left, top: visiblePosition.top }}

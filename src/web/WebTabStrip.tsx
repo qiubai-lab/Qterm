@@ -6,7 +6,6 @@ import type { WebTabMetadata } from "./WebTabs";
 import { useWebTabDeck } from "./useWebTabDeck";
 import { WEB_TAB_LIMIT, WEB_TAB_OVERLAP } from "./webTabDeck";
 import "./webTabDeck.css";
-import "./webTabMenu.css";
 import { TabActionMenu } from "../components/TabActionMenu";
 import { useWebTabMenu } from "./useWebTabMenu";
 import { webTabCloseLabels, webTabCloseTargets, type WebTabCloseAction } from "./webTabClose";
@@ -38,13 +37,13 @@ export function WebTabStrip({ tabs, selected, visible, onSelect, onClose, onAdd,
               const next = event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : (index + (event.key === "ArrowRight" ? 1 : tabs.length - 1)) % tabs.length;
               onSelect(tabs[next].id); document.getElementById(`tab-${tabs[next].id}`)?.focus({ preventScroll: true });
             }}/>
-          <ThemedTooltipButton className="web-tab-close" tooltip="关闭标签页" aria-label={`关闭标签页 ${tab.title || tab.address || "新标签页"}`} tabIndex={expanded ? 0 : -1} aria-hidden={!expanded || undefined} onClick={() => onClose([tab.id], tab.id)}><Icon name="close" size={11}/></ThemedTooltipButton>
+          <button type="button" className="web-tab-close" aria-label={`关闭标签页 ${tab.title || tab.address || "新标签页"}`} tabIndex={expanded ? 0 : -1} aria-hidden={!expanded || undefined} onClick={() => onClose([tab.id], tab.id)}><Icon name="close" size={11}/></button>
         </div>;
       })}
     </div>
     {deck.overflowing && <ThemedTooltipButton tooltip="显示右侧标签" aria-label="显示右侧标签" onClick={() => scroll(1)}><Icon name="forward" size={11}/></ThemedTooltipButton>}
     <ThemedTooltipButton tooltip={tabs.length >= WEB_TAB_LIMIT ? "每个 block 最多 10 个标签" : "新建标签页"} aria-label="新建标签页" disabled={tabs.length >= WEB_TAB_LIMIT} onClick={onAdd}><Icon name="plus" size={13}/></ThemedTooltipButton>
-    {context.menu && <TabActionMenu {...context.menu} label="网页标签操作" nativeOverlay="tab-menu" items={(Object.keys(webTabCloseLabels) as WebTabCloseAction[]).map(id => ({ id, label: webTabCloseLabels[id], count: webTabCloseTargets(ids, context.menu!.anchorId, id).length }))} onDismiss={context.dismiss} onChoose={action => {
+    {context.menu && <TabActionMenu {...context.menu} label="网页标签操作" keepOnInternalScroll items={(Object.keys(webTabCloseLabels) as WebTabCloseAction[]).map(id => ({ id, label: webTabCloseLabels[id], count: webTabCloseTargets(ids, context.menu!.anchorId, id).length }))} onDismiss={context.dismiss} onChoose={action => {
       if (!context.menu) return;
       const anchor = context.menu.anchorId;
       const targets = webTabCloseTargets(ids, anchor, action);

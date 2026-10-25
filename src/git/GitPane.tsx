@@ -1095,7 +1095,7 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
         : Promise.resolve(false)}
       onConfirmMerge={() => void confirmMergeOperation()}
     />
-    {visible && changeMenu && createPortal(<div ref={changeMenuRef} className="git-repository-popover git-repository-action-popover git-commit-context-menu git-change-context-menu" role="menu" aria-label="Git 更改操作" data-placement={changeMenu.placement} style={{ left: changeMenu.left, top: changeMenu.top }} onKeyDown={navigateRepositoryMenu} onContextMenu={(event) => event.preventDefault()}>
+    {visible && changeMenu && createPortal(<div ref={changeMenuRef} className="git-repository-popover git-repository-action-popover git-commit-context-menu git-change-context-menu" role="menu" data-app-overlay="floating" aria-label="Git 更改操作" data-placement={changeMenu.placement} style={{ left: changeMenu.left, top: changeMenu.top }} onKeyDown={navigateRepositoryMenu} onContextMenu={(event) => event.preventDefault()}>
       {changeMenu.scope === "unstaged"
         ? <button type="button" className="git-repository-action-item" role="menuitem" disabled={disabled || !changeMenu.canStage} title={changeMenu.canStage ? undefined : "子仓库内部修改不会改变父仓库 gitlink"} onClick={() => runChangeMenuAction("stage")}><Icon name="plus" size={12}/><span>{changeMenu.paths.length === 1 ? "添加到暂存区" : `将 ${changeMenu.paths.length} 个文件添加到暂存区`}</span></button>
         : <button type="button" className="git-repository-action-item" role="menuitem" disabled={disabled} onClick={() => runChangeMenuAction("unstage")}><Icon name="clear" size={12}/><span>{changeMenu.paths.length === 1 ? "取消暂存" : `取消暂存 ${changeMenu.paths.length} 个文件`}</span></button>}

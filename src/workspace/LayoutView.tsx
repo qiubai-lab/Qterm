@@ -133,7 +133,7 @@ export function WorkspaceCanvas({ workspace, visible, localTerminalAttention = f
         style={activeBounds ? { ...boundsStyle(activeBounds), opacity: visible ? 1 : 0 } : { opacity: 0 }}
       />
     </div>
-    {drag && <div className="drag-ghost" style={{ transform: `translate3d(${drag.x + 12}px, ${drag.y + 12}px, 0)` }}><Icon name="terminal" /> Terminal</div>}
+    {drag && <div data-app-overlay="floating" className="drag-ghost" style={{ transform: `translate3d(${drag.x + 12}px, ${drag.y + 12}px, 0)` }}><Icon name="terminal" /> Terminal</div>}
   </div>;
 }
 

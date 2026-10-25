@@ -119,7 +119,7 @@ export function TerminalHeaderActions({ actions: requestedActions, closeDisabled
       ref={menuRef}
       className="terminal-header-menu"
       data-placement={menuPosition.placement}
-      role="menu"
+      role="menu" data-app-overlay="floating"
       aria-label="终端更多操作"
       style={{ left: menuPosition.left, top: menuPosition.top }}
       onContextMenu={(event) => event.preventDefault()}

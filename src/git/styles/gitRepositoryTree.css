@@ -126,7 +126,6 @@
   font-weight: 600;
   line-height: 1.5;
   pointer-events: none;
-  animation: git-repository-unavailable-hint-in 120ms ease-out;
 }
 
 .git-repository-unavailable-hint[data-placement="above"] {
@@ -136,11 +135,6 @@
 .git-repository-unavailable-hint > svg {
   flex: none;
   margin-top: 1px;
-}
-
-@keyframes git-repository-unavailable-hint-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
 }
 
 .git-repository-tree-toggle {

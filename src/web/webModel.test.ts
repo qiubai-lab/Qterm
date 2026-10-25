@@ -23,7 +23,7 @@ describe("web block boundaries", () => {
     expect(findLeaf(switched.workspaces[0].layout, original.activeBlockId)).toEqual(original.layout);
     expect(workspaceReducer(added, { type: "closeBlock", workspaceId: workspace.id, blockId: workspace.activeBlockId }).workspaces[0].layout).toEqual(original.layout);
   });
-  it("hides native content behind dialogs, menus, lock and inactive workspaces", () => {
+  it("limits visibility to lifecycle and lock state, independently of overlay roles", () => {
     const stage = document.createElement("div");
     const surface = document.createElement("div");
     stage.append(surface); document.body.append(stage);
@@ -32,10 +32,12 @@ describe("web block boundaries", () => {
     stage.setAttribute("inert", ""); expect(webSurfaceVisible(surface, true)).toBe(false);
     stage.removeAttribute("inert");
     const dialog = document.createElement("div"); dialog.setAttribute("role", "dialog"); document.body.append(dialog);
-    expect(webSurfaceVisible(surface, true)).toBe(false);
-    dialog.dataset.webNativeOverlay = "library";
+    expect(webSurfaceVisible(surface, true)).toBe(true);
+    dialog.dataset.appOverlay = "floating";
     expect(webSurfaceVisible(surface, true)).toBe(true);
     const confirmation = document.createElement("div"); confirmation.setAttribute("role", "dialog"); document.body.append(confirmation);
+    expect(webSurfaceVisible(surface, true)).toBe(true);
+    confirmation.className = "terminal-lock-screen";
     expect(webSurfaceVisible(surface, true)).toBe(false);
     confirmation.remove();
     dialog.remove(); stage.remove();

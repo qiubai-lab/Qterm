@@ -26,22 +26,22 @@ export function WebLibraryDrawerFrame({ profileName, phase, dismissible, onClose
     wasClosing.current = closing;
     const keydown = (event: KeyboardEvent) => {
       if (event.key !== "Escape" || event.defaultPrevented || closing || !dismissible || !frame.current?.contains(document.activeElement)) return;
-      if (document.querySelector('[role="dialog"]:not([data-web-native-overlay="library"])')) return;
+      if (document.querySelector('[aria-modal="true"]')) return;
       event.preventDefault();
       onClose();
     };
     const outside = (event: PointerEvent) => {
       const element = frame.current;
       if (closing || !dismissible || !(event.target instanceof Node) || element?.contains(event.target)) return;
-      if (document.querySelector('[role="dialog"]:not([data-web-native-overlay="library"])')) return;
+      if (document.querySelector('[aria-modal="true"]')) return;
       if (element?.closest(".web-browser-surface")?.contains(event.target)) onClose();
     };
     window.addEventListener("keydown", keydown);
     window.addEventListener("pointerdown", outside);
     return () => { window.removeEventListener("keydown", keydown); window.removeEventListener("pointerdown", outside); };
   }, [closing, dismissible, onClose]);
-  return <section ref={frame} className="web-library-dialog web-library-drawer" role="dialog" aria-modal="false" aria-labelledby={title}
-    aria-hidden={closing || undefined} data-state={phase} data-web-native-overlay="library" tabIndex={-1}>
+  return <section ref={frame} className="web-library-dialog web-library-drawer" role="dialog" data-app-overlay="floating" data-overlay-clip="parent" data-overlay-motion="slide" aria-modal="false" aria-labelledby={title}
+    aria-hidden={closing || undefined} data-state={phase} tabIndex={-1}>
     <div className="web-library-drawer-interior" inert={closing || undefined}>
       <header className="web-library-drawer-header">
         <div><h2 id={title}>浏览记录</h2><p>{profileName} · 此连接的访问历史与收藏</p></div>

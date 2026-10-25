@@ -19,19 +19,26 @@ export function webFrameColor(value: string, opacity: number): WebFrame["color"]
   return [channels[0], channels[1], channels[2], Math.round(255 * Math.max(0, Math.min(1, alpha * opacity)))];
 }
 
-/** Mirror only the visible stroke into a transparent native overlay; never cut the guest. */
-export function webSurfaceFrame(surface: DOMRect): WebFrame | null {
+/** One viewport-space measurement shared by all native surfaces in a frame. */
+export function measureWebSurfaceFrames(): WebFrame[] {
+  const frames: WebFrame[] = [];
   for (const element of document.querySelectorAll<HTMLElement>(".active-block-indicator")) {
     const style = getComputedStyle(element);
     if (style.display === "none" || style.visibility === "hidden" || style.opacity === "0" || element.closest("[inert]")) continue;
     const rect = element.getBoundingClientRect();
-    if (rect.width <= 0 || rect.height <= 0 || rect.right <= surface.left || rect.left >= surface.right || rect.bottom <= surface.top || rect.top >= surface.bottom) continue;
+    if (rect.width <= 0 || rect.height <= 0) continue;
     const color = webFrameColor(style.borderTopColor, Number(style.opacity || 1));
     if (!color || color[3] === 0) continue;
-    return {
-      x: rect.left - surface.left, y: rect.top - surface.top, width: rect.width, height: rect.height,
+    frames.push({
+      x: rect.left, y: rect.top, width: rect.width, height: rect.height,
       radius: parseFloat(style.borderTopLeftRadius) || 0, stroke: parseFloat(style.borderTopWidth) || 1, color,
-    };
+    });
   }
-  return null;
+  return frames;
+}
+
+/** Mirror only the visible stroke into a transparent native overlay; never cut the guest. */
+export function webSurfaceFrame(surface: DOMRect, frames = measureWebSurfaceFrames()): WebFrame | null {
+  const frame = frames.find(edge => edge.x + edge.width > surface.left && edge.x < surface.right && edge.y + edge.height > surface.top && edge.y < surface.bottom);
+  return frame ? { ...frame, x: frame.x - surface.left, y: frame.y - surface.top } : null;
 }

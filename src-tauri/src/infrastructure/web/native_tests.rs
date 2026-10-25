@@ -240,6 +240,7 @@ fn native_webview_smoke() {
     }
     a.show().unwrap();
     b.show().unwrap();
+    super::native_modal_tests::verify(&mut app, &a);
     super::native_surface_tests::verify(&mut app, &a, &b);
     eprintln!(
         "PASS: two isolated proxies, remote loopback/domain, guest IPC denied, file navigation denied, native bounds/show/hide"

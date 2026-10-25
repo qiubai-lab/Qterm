@@ -6,7 +6,7 @@ vi.mock("./TerminalNotificationProvider", () => ({ useTerminalNotifications: () 
 vi.mock("../terminalViewRegistry", () => ({ focusTerminalBlock: state.focus }));
 beforeEach(() => { state.enabled = true; state.unread = false; vi.clearAllMocks(); });
 afterEach(() => { cleanup(); vi.useRealTimers(); });
-it("retains the bubble during exit and reverses an interrupted close without remounting", () => {
+it("uses the shared entrance and dismisses immediately without a delayed exit", () => {
   vi.useFakeTimers();
   render(<TerminalProtocolTag blockId="b" connected directoryState="ready"/>);
   const tag = screen.getByRole("button");
@@ -14,17 +14,16 @@ it("retains the bubble during exit and reverses an interrupted close without rem
   const bubble = screen.getByRole("tooltip");
   expect(bubble).toHaveTextContent("OSC 7");
   fireEvent.mouseLeave(tag);
-  expect(bubble).toBeInTheDocument();
-  expect(bubble).toHaveAttribute("data-open", "false");
+  expect(bubble).not.toBeInTheDocument();
   expect(tag).not.toHaveAttribute("aria-describedby");
   act(() => vi.advanceTimersByTime(80));
   fireEvent.mouseEnter(tag);
-  expect(screen.getByRole("tooltip")).toBe(bubble);
+  const reopened = screen.getByRole("tooltip");
+  expect(reopened).not.toBe(bubble);
   act(() => vi.advanceTimersByTime(160));
-  expect(bubble).toHaveAttribute("data-open", "true");
+  expect(reopened).toHaveAttribute("data-overlay-motion", "hover");
   fireEvent.keyDown(tag, { key: "Escape" });
-  act(() => vi.advanceTimersByTime(160));
-  expect(bubble).not.toBeInTheDocument();
+  expect(reopened).not.toBeInTheDocument();
 });
 it("combines enabled protocols in one compact hover tooltip and hides disabled ones", () => {
   const view = render(<TerminalProtocolTag blockId="b" connected directoryState="ready"/>);

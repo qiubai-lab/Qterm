@@ -609,7 +609,7 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
     {contextMenu && <div
       ref={contextMenuRef}
       className="connection-context-menu"
-      role="menu"
+      role="menu" data-app-overlay="floating"
       aria-label={contextGroup ? `${contextGroup.name} 分组菜单` : contextProfiles.length > 1 ? `${contextProfiles.length} 个已选连接菜单` : `${contextProfile?.name ?? "连接"} 连接菜单`}
       style={{ left: contextMenu.x, top: contextMenu.y }}
       onContextMenu={(event) => event.preventDefault()}

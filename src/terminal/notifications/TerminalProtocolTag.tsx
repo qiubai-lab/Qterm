@@ -23,7 +23,7 @@ export function TerminalProtocolTag({ blockId, connected, directoryState, direct
   const message = notifications.enabled
     ? unread ? "终端有未读通知，点击查看" : "终端通知已启用（实验功能）"
     : (directoryState ? directoryMessage : undefined) ?? "终端协议支持";
-  const hide = () => setOpen(false);
+  const hide = () => { setOpen(false); setPosition(null); };
   const show = () => {
     if (open) return;
     const rect = trigger.current?.getBoundingClientRect();
@@ -39,16 +39,8 @@ export function TerminalProtocolTag({ blockId, connected, directoryState, direct
     const height = surface.offsetHeight;
     const above = anchor.bottom + 6 + height > window.innerHeight - 8;
     const left = Math.max(8, Math.min(anchor.left, window.innerWidth - surface.offsetWidth - 8));
-    setPosition({ left, top: above ? Math.max(8, anchor.top - height - 6) : anchor.bottom + 6,
-      transformOrigin: `${Math.max(12, Math.min(anchor.left + anchor.width / 2 - left, surface.offsetWidth - 12))}px ${above ? "bottom" : "top"}`,
-      "--tooltip-offset": above ? "4px" : "-4px" } as CSSProperties);
+    setPosition({ left, top: above ? Math.max(8, anchor.top - height - 6) : anchor.bottom + 6 });
   }, [open, directoryState, notifications.enabled]);
-  useEffect(() => {
-    if (open || !position) return;
-    // Retain the surface for its exit; reopening cancels this removal.
-    const timer = window.setTimeout(() => setPosition(null), 160);
-    return () => window.clearTimeout(timer);
-  }, [open, position]);
   useEffect(() => {
     if (!position) return;
     window.addEventListener("resize", hide);
@@ -65,7 +57,7 @@ export function TerminalProtocolTag({ blockId, connected, directoryState, direct
       onKeyDown={event => { if (event.key === "Escape") { event.stopPropagation(); hide(); } }}
       onPointerDown={event => event.stopPropagation()}
       onClick={() => { if (unread) focusTerminalBlock(blockId); }}><span aria-hidden="true">osc</span></button>
-    {position && createPortal(<div ref={bubble} id={id} role="tooltip" aria-hidden={!open} data-open={open} className="themed-tooltip terminal-protocol-tooltip" style={position}>
+    {open && position && createPortal(<div ref={bubble} id={id} role="tooltip" data-app-overlay="floating" data-overlay-motion="hover" className="themed-tooltip terminal-protocol-tooltip" style={position}>
       {directoryState && <p className="terminal-protocol-directory"><strong>OSC 7</strong><span>同步当前目录 · <small data-state={directoryState}>{directoryStatus}</small></span></p>}
       <div className="terminal-protocol-notifications">
         <p><strong>OSC 52</strong><span>应用复制到本机剪贴板 · 只写，不读取</span></p>

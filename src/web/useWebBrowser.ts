@@ -1,10 +1,8 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
-import { clearWebData, type WebDataSelection, closeWeb, listenWebFocus, listenWebPages, openWeb, syncWeb, webAction, type WebBounds, type WebLoadState, type WebMetrics } from "../lib/tauri/web";
+import { clearWebData, type WebDataSelection, closeWeb, listenWebFocus, listenWebPages, openWeb, webAction, type WebLoadState, type WebMetrics } from "../lib/tauri/web";
 import { normalizeWebAddress, webSurfaceVisible } from "./webModel";
-import { webSurfaceOcclusions } from "./webSurfaceOcclusion";
-import { webSurfacePanels } from "./webSurfacePanels";
-import { webSurfaceFrame } from "./webSurfaceFrame";
-import { webScrollbarTheme } from "./webScrollbarTheme";
+import { registerNativeSurface } from "./surface/nativeSurfaceCoordinator";
+import { dispatchNativeInteraction } from "../components/overlays/nativeInteraction";
 import { watchWebMetrics } from "./watchWebMetrics";
 
 /** A generation owns exactly one guest; closing waits for pending creation. */
@@ -30,13 +28,10 @@ export function useWebBrowser(surface: RefObject<HTMLDivElement | null>, session
     if (!request || !sessionId || !profileId) { setReady(false); setLoading(false); return; }
     const id = crypto.randomUUID();
     let disposed = false;
-    let frame = 0;
+    let unregisterSurface: (() => void) | undefined;
     let unlisten: (() => void) | undefined;
     let unlistenFocus: (() => void) | undefined;
-    let lastBounds = "";
-    let documentRevision = 0;
-    let syncing = false;
-    let hidden = false;
+    let documentRevision = 0, snapshotReady = false;
     let metricWatcher: ReturnType<typeof watchWebMetrics> | undefined;
     current.current = id;
     setLoading(true);
@@ -47,7 +42,8 @@ export function useWebBrowser(surface: RefObject<HTMLDivElement | null>, session
     const created = (async () => {
       unlisten = await listenWebPages(page => {
         if (disposed || page.label !== `web-${id}`) return;
-        if (!page.loading && !page.metadata) documentRevision++;
+        if (!page.metadata) documentRevision++;
+        snapshotReady = !page.loading;
         setAddress(page.url);
         setTitle(page.title ?? "");
         latestUrl.current = page.url;
@@ -59,7 +55,10 @@ export function useWebBrowser(surface: RefObject<HTMLDivElement | null>, session
       });
       if (disposed) return;
       unlistenFocus = await listenWebFocus(label => {
-        if (!disposed && label === `web-${id}` && surface.current && webSurfaceVisible(surface.current, visibility.current)) activate.current?.();
+        if (!disposed && label === `web-${id}` && surface.current && webSurfaceVisible(surface.current, visibility.current)) {
+          dispatchNativeInteraction(surface.current);
+          activate.current?.();
+        }
       });
       if (disposed) return;
       await openWeb(id, sessionId, profileId, latestUrl.current || request.url);
@@ -68,32 +67,14 @@ export function useWebBrowser(surface: RefObject<HTMLDivElement | null>, session
       metricWatcher = watchWebMetrics(id, () => visibility.current, value => {
         if (!disposed && (!value || value.url === latestUrl.current)) setMetrics(value);
       });
-      const update = () => {
-        if (disposed) return;
-        frame = requestAnimationFrame(update);
-        const element = surface.current;
-        if (!element || syncing) return;
-        if (!visibility.current) {
-          if (!hidden) {
-            hidden = true; lastBounds = ""; syncing = true;
-            void syncWeb(id, { x: 0, y: 0, width: 1, height: 1, visible: false }).catch(err => { hidden = false; if (!disposed) setError(String(err)); }).finally(() => { syncing = false; });
-          }
-          return;
-        }
-        hidden = false;
-        const rect = element.getBoundingClientRect();
-        const bounds: WebBounds = { x: Math.max(0, rect.x), y: Math.max(0, rect.y), width: Math.max(1, rect.width), height: Math.max(1, rect.height), visible: rect.width > 1 && rect.height > 1 && webSurfaceVisible(element, visibility.current), occlusions: webSurfaceOcclusions(rect), frame: webSurfaceFrame(rect), panels: webSurfacePanels(rect), scrollbar: webScrollbarTheme() };
-        const key = JSON.stringify([bounds, window.devicePixelRatio, documentRevision]);
-        if (key === lastBounds) return;
-        syncing = true;
-        void syncWeb(id, bounds).then(() => { lastBounds = key; }, err => { if (!disposed) setError(String(err)); }).finally(() => { syncing = false; });
-      };
-      update();
+      if (surface.current) unregisterSurface = registerNativeSurface({ id, element: surface.current,
+        visible: () => visibility.current, revision: () => documentRevision, url: () => latestUrl.current, snapshotReady: () => snapshotReady,
+        onError: reason => { if (!disposed) setError(reason); } });
     })().catch(err => { if (!disposed) { setLoading(false); setError(String(err)); } });
     return () => {
       disposed = true;
       if (current.current === id) current.current = null;
-      cancelAnimationFrame(frame);
+      unregisterSurface?.();
       metricWatcher?.dispose();
       void created.finally(() => { unlisten?.(); unlistenFocus?.(); void closeWeb(id).catch(() => undefined); });
     };

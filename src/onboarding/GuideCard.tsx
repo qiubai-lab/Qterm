@@ -33,7 +33,7 @@ export function GuideCard({ title, text, target, index, count, onNext, onBack, o
   }, [onSkip]);
   return createPortal(<>
     {highlight && <div className="onboarding-highlight" data-demo-theme={theme} style={highlight} aria-hidden="true"/>}
-    <section className="onboarding-card" data-demo-theme={theme} style={{ transform: position ? `translate3d(${position.left}px, ${position.top}px, 0)` : undefined, visibility: position ? "visible" : "hidden" }} ref={card} role="dialog" aria-modal="false" aria-label="使用引导" tabIndex={-1}>
+    <section className="onboarding-card" data-demo-theme={theme} style={{ transform: position ? `translate3d(${position.left}px, ${position.top}px, 0)` : undefined, visibility: position ? "visible" : "hidden" }} ref={card} role="dialog" data-app-overlay="floating" aria-modal="false" aria-label="使用引导" tabIndex={-1}>
       <div className="onboarding-progress">使用引导 · {index + 1} / {count}</div>
       <div aria-live="polite"><h2>{title}</h2><p>{text}</p></div>
       {!rect && target && <p className="onboarding-hint">当前布局未显示此入口，可在宽屏工作台中查看。</p>}

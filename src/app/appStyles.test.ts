@@ -712,7 +712,7 @@ describe("application layout styles", () => {
     expect(declarations(".credential-security-tag")).toContain("flex:none");
     expect(declarations(".credential-security-tooltip")).toContain("position:fixed");
     expect(declarations(".credential-security-tooltip")).toContain("pointer-events:none");
-    expect(declarations('.credential-security-tooltip[data-placement="above"]')).toContain("--credential-security-tooltip-enter-y:-3px");
+    expect(declarations(".credential-security-tooltip")).not.toContain("animation:");
     expect(declarations(".credential-feedback-bubble")).toContain("position:fixed");
     expect(declarations(".credential-feedback-bubble")).toContain("pointer-events:none");
     expect(declarations(".credential-feedback-bubble")).toContain("var(--navigation-accent)");

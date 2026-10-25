@@ -1,0 +1,24 @@
+/* HWND holes cannot sample guest pixels through a DOM blur or fade. The
+   shared shell supplies opaque pixels and a matching antialiased native rim. */
+body:has(.web-browser-surface) [data-app-overlay="floating"] {
+  --app-overlay-stroke: var(--floating-border);
+  background: var(--raised);
+  border: 1px solid var(--raised);
+  box-shadow: inset 0 0 0 1px var(--app-overlay-stroke);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  opacity: 1;
+}
+body:has(.web-browser-surface) [data-app-overlay="floating"]:not([data-overlay-motion]) {
+  animation: app-overlay-in 130ms cubic-bezier(.16, 1, .3, 1);
+  transition: none;
+}
+@keyframes app-overlay-in { from { translate: 0 -3px; } to { translate: 0 0; } }
+@media (prefers-reduced-motion: reduce) {
+  body:has(.web-browser-surface) [data-app-overlay="floating"]:not([data-overlay-motion]) { animation: none; }
+}
+@media (prefers-contrast: more) {
+  body:has(.web-browser-surface) [data-app-overlay="floating"] { --app-overlay-stroke: var(--border); }
+}
+.web-surface-cover { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; object-fit: fill; }
+.web-surface-cover-fallback { display: grid; place-items: center; color: var(--muted); background: var(--canvas); font-size: 11px; }

@@ -17,7 +17,7 @@ const surface = new DOMRect(0, 80, 700, 500);
 afterEach(() => { cleanup(); native.listeners.clear(); vi.restoreAllMocks(); });
 
 function geometry(node: HTMLElement, rect: DOMRect) {
-  node.style.cssText = "border:1px solid rgb(25,27,31);border-top-left-radius:8px;background:rgb(25,27,31);--web-native-overlay-stroke:rgba(0,221,235,.38)";
+  node.style.cssText = "border:1px solid rgb(25,27,31);border-top-left-radius:8px;background:rgb(25,27,31);--app-overlay-stroke:rgba(0,221,235,.38)";
   vi.spyOn(node, "getBoundingClientRect").mockReturnValue(rect);
 }
 async function focusPage() {
@@ -56,7 +56,7 @@ it("clips the real connection picker and group submenu locally while retaining g
   expect(cuts.some(cut => cut.x >= 340)).toBe(true);
   expect(cuts.every(cut => cut.x + cut.width <= 600 && cut.y + cut.height <= 280)).toBe(true);
   const modal = document.createElement("div"); modal.setAttribute("role", "dialog"); document.body.append(modal);
-  expect(webSurfaceVisible(document.body, true)).toBe(false);
+  expect(webSurfaceVisible(document.body, true)).toBe(true);
   modal.remove();
   expect(webSurfaceVisible(document.body, true)).toBe(true);
   await focusPage();

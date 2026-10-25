@@ -80,6 +80,16 @@ pub async fn web_metrics(
 }
 
 #[tauri::command]
+pub async fn web_snapshot(
+    app: AppHandle,
+    state: State<'_, WebHost>,
+    sessions: State<'_, SessionState>,
+    id: String,
+) -> Result<crate::infrastructure::web::WebSnapshot, String> {
+    state.snapshot(&app, sessions.manager(), &id).await
+}
+
+#[tauri::command]
 pub async fn web_sync(
     app: AppHandle,
     state: State<'_, WebHost>,

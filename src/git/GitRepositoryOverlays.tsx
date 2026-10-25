@@ -96,7 +96,7 @@ export function GitCommitContextMenu({ menu, menuRef, disabled, onNavigateMenu, 
     ref={menuRef}
     className="git-repository-popover git-repository-action-popover git-commit-context-menu"
     data-placement={menu.placement}
-    role="menu"
+    role="menu" data-app-overlay="floating"
     aria-label={`${menu.commit.subject} 提交菜单`}
     style={{ left: menu.left, top: menu.top }}
     onContextMenu={(event) => event.preventDefault()}
@@ -148,7 +148,7 @@ function GitRepositoryOverlayContent(props: GitRepositoryOverlaysProps) {
   };
 
   if (repositoryOverlay.kind === "branches") {
-    return <div ref={overlayRef} className="git-repository-popover git-branch-popover" role="dialog" aria-label="切换分支" onKeyDown={onNavigateMenu} {...common}>
+    return <div ref={overlayRef} className="git-repository-popover git-branch-popover" role="dialog" data-app-overlay="floating" aria-label="切换分支" onKeyDown={onNavigateMenu} {...common}>
       <div className="git-branch-search-shell"><Icon name="search" size={12}/><ExactTextInput className="git-branch-search" type="search" role="searchbox" aria-label="筛选分支" value={branchQuery} placeholder="筛选要签出的分支" onChange={(event) => onBranchQueryChange(event.target.value)}/></div>
       <div className="git-branch-actions"><button type="button" onClick={() => onOpenOverlay("createBranch")}><Icon name="plus" size={12}/><span>创建新分支…</span></button></div>
       <OverlayScrollArea className="git-branch-list-scroll-area" viewportClassName="git-branch-list" density="compact" trackInsets={{ top: 3, right: 2, bottom: 3 }} viewportProps={{ role: "listbox", "aria-label": "选择分支" }}>
@@ -160,7 +160,7 @@ function GitRepositoryOverlayContent(props: GitRepositoryOverlaysProps) {
   }
 
   if (repositoryOverlay.kind === "createBranch") {
-    return <form ref={overlayRef} className="git-repository-popover git-branch-create-popover" role="dialog" aria-label="新建分支" onSubmit={async (event) => {
+    return <form ref={overlayRef} className="git-repository-popover git-branch-create-popover" role="dialog" data-app-overlay="floating" aria-label="新建分支" onSubmit={async (event) => {
       event.preventDefault();
       const name = newBranch.trim();
       if (!root || !name) return;
@@ -179,7 +179,7 @@ function GitRepositoryOverlayContent(props: GitRepositoryOverlaysProps) {
     const remoteConfigurationRequired = Boolean(snapshot && snapshot.remotes.length === 0);
     const submodule = repositoryNode?.submodule;
     const checkoutReason = submodule?.trackedModified || submodule?.untrackedContent ? "请先在子模块中处理未提交内容" : submodule ? gitSubmoduleUnavailableReason(submodule) : undefined;
-    return <><div ref={overlayRef} className="git-repository-popover git-repository-action-popover" role="menu" aria-label="存储库操作" onKeyDown={onNavigateMenu} {...common}>
+    return <><div ref={overlayRef} className="git-repository-popover git-repository-action-popover" role="menu" data-app-overlay="floating" aria-label="存储库操作" onKeyDown={onNavigateMenu} {...common}>
       <div className="git-repository-popover-title"><Icon name="git" size={13}/><strong>存储库操作</strong></div>
       <GitRemoteConfigurationHint active={remoteConfigurationRequired}><button type="button" className="git-repository-action-item" role="menuitem" data-remote-configuration-required={remoteConfigurationRequired || undefined} aria-disabled={disabled || mergeInProgress || !tracked || undefined} disabled={disabled || mergeInProgress || !tracked && !remoteConfigurationRequired} title={remoteConfigurationRequired ? gitRemoteConfigurationHint : undefined} onPointerEnter={onDismissBranchSubmenu} onClick={() => tracked && onPull()}><Icon name="download" size={12}/><span>拉取</span></button></GitRemoteConfigurationHint>
       {tracked
@@ -197,7 +197,7 @@ function GitRepositoryOverlayContent(props: GitRepositoryOverlaysProps) {
       }} onClick={() => onOpenBranchSubmenu(true)}><Icon name="settings" size={12}/><span>本地分支管理…</span><small className="git-repository-submenu-indicator" aria-hidden="true">›</small></button>
       <button type="button" className="git-repository-action-item" role="menuitem" aria-label="操作记录" onPointerEnter={onDismissBranchSubmenu} onClick={() => onOpenOverlay("operationLog")}><Icon name="menu" size={12}/><span>操作记录</span><small>{operations.length}</small></button>
     </div>
-    {repositorySubmenu && <div ref={(node) => { repositorySubmenuRef.current = node; }} id={repositorySubmenuId} className="git-repository-popover git-repository-action-popover git-repository-submenu" data-side={repositorySubmenu.side} style={{ left: repositorySubmenu.left, top: repositorySubmenu.top }} role="menu" aria-label="本地分支管理" onKeyDown={(event) => {
+    {repositorySubmenu && <div ref={(node) => { repositorySubmenuRef.current = node; }} id={repositorySubmenuId} className="git-repository-popover git-repository-action-popover git-repository-submenu" data-side={repositorySubmenu.side} style={{ left: repositorySubmenu.left, top: repositorySubmenu.top }} role="menu" data-app-overlay="floating" aria-label="本地分支管理" onKeyDown={(event) => {
       if (event.key === "ArrowLeft") {
         event.preventDefault();
         event.stopPropagation();
@@ -214,7 +214,7 @@ function GitRepositoryOverlayContent(props: GitRepositoryOverlaysProps) {
   }
 
   if (repositoryOverlay.kind === "operationLog") {
-    return <div ref={overlayRef} className="git-repository-popover git-operation-popover" role="dialog" aria-label="Git 操作记录" {...common}>
+    return <div ref={overlayRef} className="git-repository-popover git-operation-popover" role="dialog" data-app-overlay="floating" aria-label="Git 操作记录" {...common}>
       <div className="git-repository-popover-title"><Icon name="menu" size={13}/><strong>Git 操作记录</strong><span>{operations.length}/20</span></div>
       <div className="git-operation-list" role="list">
         {operations.map((record) => <div className="git-operation-row" data-status={record.status} role="listitem" key={record.id}>
@@ -230,7 +230,7 @@ function GitRepositoryOverlayContent(props: GitRepositoryOverlaysProps) {
   if (repositoryOverlay.kind === "mergeBranch") {
     const localSources = mergeSourceOptions.filter((branch) => branch.kind === "local");
     const remoteSources = mergeSourceOptions.filter((branch) => branch.kind === "remote");
-    return <form ref={overlayRef} className="git-repository-popover git-branch-management-popover git-merge-popover" role="dialog" aria-label="合并分支" aria-hidden={mergeConfirmation ? true : undefined} inert={mergeConfirmation ? true : undefined} onSubmit={(event) => {
+    return <form ref={overlayRef} className="git-repository-popover git-branch-management-popover git-merge-popover" role="dialog" data-app-overlay="floating" aria-label="合并分支" aria-hidden={mergeConfirmation ? true : undefined} inert={mergeConfirmation ? true : undefined} onSubmit={(event) => {
       event.preventDefault();
       if (!root || !mergeSourceRef || !selectedMergeSource || !mergeWorktreeClean || mergeInProgress) return;
       onMergeConfirmationChange({ sourceRef: mergeSourceRef, sourceName: selectedMergeSource.name, targetName: branchLabel });
@@ -259,7 +259,7 @@ function GitRepositoryOverlayContent(props: GitRepositoryOverlaysProps) {
   }
 
   if (repositoryOverlay.kind === "abortMerge") {
-    return <form ref={overlayRef} className="git-repository-popover git-branch-management-popover git-merge-abort-popover" role="dialog" aria-label="中止合并" onSubmit={async (event) => {
+    return <form ref={overlayRef} className="git-repository-popover git-branch-management-popover git-merge-abort-popover" role="dialog" data-app-overlay="floating" aria-label="中止合并" onSubmit={async (event) => {
       event.preventDefault();
       if (!root || !mergeInProgress) return;
       if (await onAbortMerge()) onCloseOverlay(true);
@@ -281,7 +281,7 @@ function GitRepositoryOverlayContent(props: GitRepositoryOverlaysProps) {
         ? "安全删除本地分支"
         : "发布分支";
   const isDelete = repositoryOverlay.kind === "deleteBranch";
-  return <form ref={overlayRef} className="git-repository-popover git-branch-management-popover" role="dialog" aria-label={formTitle} onSubmit={async (event) => {
+  return <form ref={overlayRef} className="git-repository-popover git-branch-management-popover" role="dialog" data-app-overlay="floating" aria-label={formTitle} onSubmit={async (event) => {
     event.preventDefault();
     if (!root) return;
     let succeeded: boolean;

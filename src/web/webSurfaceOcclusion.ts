@@ -1,31 +1,28 @@
-import { webHistoryPanel, webNativePanelSelector } from "./webSurfacePanels";
+import { webHistoryPanel } from "./webSurfacePanels";
 import type { WebClipRect } from "../lib/tauri/web";
+import { measureAppOverlays } from "../components/overlays/overlayRegistry";
 
 /** Native child windows sit above CSS. Cut out only overlapping app chrome. */
-export function webSurfaceOcclusions(surface: DOMRect): WebClipRect[] {
+export function webSurfaceOcclusions(surface: DOMRect, overlays = measureAppOverlays()): WebClipRect[] {
   const result: WebClipRect[] = [];
   function add(left: number, top: number, right: number, bottom: number) {
     const x = Math.max(left, surface.left), y = Math.max(top, surface.top);
     const width = Math.min(right, surface.right) - x, height = Math.min(bottom, surface.bottom) - y;
     if (width > 0 && height > 0) result.push({ x: x - surface.left, y: y - surface.top, width, height });
   }
-  for (const element of document.querySelectorAll<HTMLElement>(`[role="tooltip"], ${webNativePanelSelector}`)) {
-    const style = getComputedStyle(element);
-    if (style.display === "none" || style.visibility === "hidden" || style.opacity === "0" || element.closest('[inert]')) continue;
-    const rect = element.getBoundingClientRect();
-    if (rect.width <= 0 || rect.height <= 0) continue;
-    if (!element.matches(webNativePanelSelector)) {
-      add(rect.left, rect.top, rect.right, rect.bottom);
-      continue;
-    }
-    const panel = webHistoryPanel(element, surface, style);
+  for (const { element, kind, style, rect, clip } of overlays) {
+    if (kind !== "floating") continue;
+    const panel = webHistoryPanel(element, surface, style, rect, clip);
     if (!panel) continue;
     const { height, radius } = panel.edge;
-    if (!radius) { add(rect.left, rect.top, rect.right, rect.top + height); continue; }
-    addRounded(rect.left, rect.top, rect.right, rect.top + height, radius);
+    const left = surface.left + panel.edge.x, top = surface.top + panel.edge.y;
+    if (!radius) { add(left, top, left + panel.edge.width, top + height); continue; }
+    addRounded(left, top, left + panel.edge.width, top + height, radius);
 
   }
-  return result.slice(0, 64);
+  // The coordinator handles an exceeded IPC budget with a complete cover.
+  // Silently dropping the tail leaves native content above later menu items.
+  return result;
 
   function addRounded(left: number, top: number, right: number, bottom: number, radius: number) {
     const scale = window.devicePixelRatio || 1;

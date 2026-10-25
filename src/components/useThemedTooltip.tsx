@@ -18,7 +18,7 @@ export function useThemedTooltip<T extends HTMLElement>({ tooltip, anchorRef, sh
   const id = useId();
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState<CSSProperties | null>(null);
-  const hide = () => setOpen(false);
+  const hide = () => { setOpen(false); setPosition(null); };
   const show = () => {
     const element = anchor.current;
     if (disabled || open || !element || (shouldShow && !shouldShow(element))) return;
@@ -27,7 +27,7 @@ export function useThemedTooltip<T extends HTMLElement>({ tooltip, anchorRef, sh
     setOpen(true);
   };
 
-  // Disabling cancels both the visible bubble and an interrupted exit.
+  // Re-enabling requires a fresh interaction instead of reviving a stale bubble.
   if (disabled && (open || position)) { setOpen(false); setPosition(null); }
 
   useLayoutEffect(() => {
@@ -36,16 +36,8 @@ export function useThemedTooltip<T extends HTMLElement>({ tooltip, anchorRef, sh
     if (!open || !rect || !bubble) return;
     const left = Math.max(8, Math.min(rect.left + rect.width / 2 - bubble.offsetWidth / 2, window.innerWidth - bubble.offsetWidth - 8));
     const above = (placement === "above" && rect.top - bubble.offsetHeight - 6 >= 8) || rect.bottom + 6 + bubble.offsetHeight > window.innerHeight - 8;
-    setPosition({ left, top: above ? Math.max(8, rect.top - bubble.offsetHeight - 6) : rect.bottom + 6,
-      transformOrigin: `${Math.max(8, Math.min(rect.left + rect.width / 2 - left, bubble.offsetWidth - 8))}px ${above ? "bottom" : "top"}`,
-      "--tooltip-offset": above ? "4px" : "-4px" } as CSSProperties);
+    setPosition({ left, top: above ? Math.max(8, rect.top - bubble.offsetHeight - 6) : rect.bottom + 6 });
   }, [anchor, open, tooltip, placement]);
-
-  useEffect(() => {
-    if (open || !position) return;
-    const timer = window.setTimeout(() => setPosition(null), 160);
-    return () => window.clearTimeout(timer);
-  }, [open, position]);
 
   useEffect(() => {
     if (!open) return;
@@ -59,7 +51,7 @@ export function useThemedTooltip<T extends HTMLElement>({ tooltip, anchorRef, sh
     };
   }, [open]);
 
-  return [anchor, !disabled && open ? id : undefined, hide, show, !disabled && position && createPortal(<div ref={surface} id={id} role="tooltip" aria-hidden={!open} data-open={open}
+  return [anchor, !disabled && open ? id : undefined, hide, show, !disabled && open && position && createPortal(<div ref={surface} id={id} role="tooltip" data-app-overlay="floating" data-overlay-motion="hover"
       className="themed-tooltip themed-action-tooltip" style={position}>{tooltip}</div>, document.body),
   ] as const;
 }

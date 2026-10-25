@@ -17,7 +17,7 @@ describe("ThemedTitleTooltipProvider", () => {
 
     fireEvent.pointerOut(button);
     expect(button).toHaveAttribute("title", "刷新目录");
-    expect(screen.getByRole("tooltip", { hidden: true })).toHaveAttribute("aria-hidden", "true");
+    expect(screen.queryByRole("tooltip", { hidden: true })).not.toBeInTheDocument();
   });
 
   it("only shows matching visible text when it is truncated", () => {
@@ -51,7 +51,7 @@ describe("ThemedTitleTooltipProvider", () => {
     expect(screen.getByRole("tooltip")).toHaveTextContent("创建文件");
     expect(button.getAttribute("aria-describedby")).toContain("existing-help");
     fireEvent.keyDown(document, { key: "Escape" });
-    expect(screen.getByRole("tooltip", { hidden: true })).toHaveAttribute("aria-hidden", "true");
+    expect(screen.queryByRole("tooltip", { hidden: true })).not.toBeInTheDocument();
     expect(button).not.toHaveAttribute("title");
     fireEvent.focusOut(button);
     expect(button).toHaveAttribute("title", "创建文件");
@@ -64,7 +64,7 @@ describe("ThemedTitleTooltipProvider", () => {
 
     fireEvent.pointerOver(button);
     fireEvent.scroll(document);
-    expect(screen.getByRole("tooltip", { hidden: true })).toHaveAttribute("aria-hidden", "true");
+    expect(screen.queryByRole("tooltip", { hidden: true })).not.toBeInTheDocument();
     expect(button).not.toHaveAttribute("title");
     fireEvent.pointerOut(button);
     expect(button).toHaveAttribute("title", "查看完整状态");
@@ -79,5 +79,16 @@ describe("ThemedTitleTooltipProvider", () => {
     fireEvent.pointerDown(button);
     expect(screen.queryByRole("tooltip", { hidden: true })).not.toBeInTheDocument();
     expect(button).not.toHaveAttribute("title");
+  });
+
+  it("restarts the shared entrance when moving directly to another titled target", () => {
+    render(<ThemedTitleTooltipProvider><button title="第一个提示">一</button><button title="第二个提示">二</button></ThemedTitleTooltipProvider>);
+    fireEvent.pointerOver(screen.getByRole("button", { name: "一" }));
+    const first = screen.getByRole("tooltip");
+    fireEvent.pointerOver(screen.getByRole("button", { name: "二" }));
+    const next = screen.getByRole("tooltip");
+    expect(next).not.toBe(first);
+    expect(next).toHaveTextContent("第二个提示");
+    expect(next).toHaveAttribute("data-overlay-motion", "hover");
   });
 });

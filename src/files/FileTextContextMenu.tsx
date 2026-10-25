@@ -71,7 +71,7 @@ export function FileTextContextMenu({ anchor, label, groups, className, focusOnO
     ref={menuRef}
     className={`file-context-menu file-text-context-menu${className ? ` ${className}` : ""}`}
     data-placement={position.placement}
-    role="menu"
+    role="menu" data-app-overlay="floating"
     aria-label={label}
     style={{ left: position.x, top: position.y }}
     onContextMenu={(event) => event.preventDefault()}

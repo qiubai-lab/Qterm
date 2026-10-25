@@ -38,7 +38,7 @@ export function CredentialFeedbackBubble({ feedback, getTarget }: { feedback: Cr
   if (!position) return null;
   return createPortal(
     <p
-      className={`credential-feedback-bubble ${feedback.scope} ${feedback.tone}`}
+      data-app-overlay="floating" className={`credential-feedback-bubble ${feedback.scope} ${feedback.tone}`}
       data-feedback-for={feedback.scope === "item" ? feedback.itemId : undefined}
       role={feedback.tone === "error" ? "alert" : "status"}
       aria-atomic="true"
@@ -86,7 +86,7 @@ export function CredentialSecurityTooltip({ id, target }: { id: string; target: 
       ref={tooltipRef}
       id={id}
       className="credential-security-tooltip"
-      role="tooltip"
+      role="tooltip" data-app-overlay="floating" data-overlay-motion="hover"
       data-placement={position?.placement ?? "below"}
       style={position ? { left: position.left, top: position.top } : { visibility: "hidden" }}
     >

@@ -308,8 +308,8 @@ export function TerminalTargetPicker({ profiles, groups = [], recentProfileIds =
   const popover = open && position ? <div
     ref={popoverRef}
     className="terminal-target-menu"
-    data-web-native-overlay="connection-picker"
-    role="dialog"
+
+    role="dialog" data-app-overlay="floating"
     aria-label={`选择${ariaContext}`}
     data-placement={position.placement}
     style={position.style}
@@ -368,8 +368,8 @@ export function TerminalTargetPicker({ profiles, groups = [], recentProfileIds =
   const submenu = popover && activeGroup && submenuPosition ? <div
     ref={submenuRef}
     className="terminal-target-submenu"
-    data-web-native-overlay="connection-group"
-    role="dialog"
+
+    role="dialog" data-app-overlay="floating"
     aria-label={`${activeGroup.name}连接`}
     data-placement={submenuPosition.placement}
     style={submenuPosition.style}

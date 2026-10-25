@@ -303,7 +303,6 @@
 }
 
 .git-commit-tooltip {
-  --git-commit-tooltip-enter-y: 3px;
   position: fixed;
   z-index: 130;
   display: grid;
@@ -321,11 +320,6 @@
   backdrop-filter: blur(16px) saturate(120%);
   -webkit-backdrop-filter: blur(16px) saturate(120%);
   pointer-events: none;
-  animation: git-commit-tooltip-in 140ms cubic-bezier(.2, .8, .2, 1);
-}
-
-.git-commit-tooltip[data-placement="above"] {
-  --git-commit-tooltip-enter-y: -3px;
 }
 
 .git-commit-tooltip-author {

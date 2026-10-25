@@ -18,7 +18,7 @@ export function FileUploadMenu({ menuRef, position, onPointerDownCapture, onBlur
     ref={menuRef}
     className="file-context-menu file-upload-menu"
     data-placement={position.placement}
-    role="menu"
+    role="menu" data-app-overlay="floating"
     aria-label="选择上传内容"
     style={{ left: position.x, top: position.y }}
     onPointerDownCapture={onPointerDownCapture}

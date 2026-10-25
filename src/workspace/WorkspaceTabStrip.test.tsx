@@ -98,7 +98,7 @@ it("abandons the dialog if its retained workspace disappears", () => {
 });
 it("closes a menu when a modal appears asynchronously", async () => {
   render(<Harness/>); open();
-  const dialog = document.createElement("div"); dialog.setAttribute("role", "dialog");
+  const dialog = document.createElement("div"); dialog.setAttribute("role", "dialog"); dialog.setAttribute("aria-modal", "true");
   await act(async () => document.body.append(dialog));
   expect(screen.queryByRole("menu")).not.toBeInTheDocument();
   dialog.remove();

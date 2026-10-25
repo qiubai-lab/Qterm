@@ -33,7 +33,7 @@ export function ConnectionSaveFeedbackBubble({ feedback, getTarget }: { feedback
 
   if (!position) return null;
   return createPortal(
-    <p className="connection-save-feedback-bubble" data-feedback-for={feedback.profileId} role="status" aria-atomic="true" style={position}>
+    <p data-app-overlay="floating" className="connection-save-feedback-bubble" data-feedback-for={feedback.profileId} role="status" aria-atomic="true" style={position}>
       连接配置已保存
     </p>,
     document.body,

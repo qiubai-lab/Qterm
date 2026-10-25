@@ -109,7 +109,7 @@ export function GitPrimaryActionButton({ action, onAction }: {
       id={menuId}
       className="git-primary-action-menu"
       data-placement={menuPosition.placement}
-      role="menu"
+      role="menu" data-app-overlay="floating"
       aria-label="其他提交操作"
       style={{ left: menuPosition.left, top: menuPosition.top }}
       onKeyDown={(event) => {

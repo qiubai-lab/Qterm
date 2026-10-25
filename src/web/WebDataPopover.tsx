@@ -39,7 +39,7 @@ export function WebDataPopover({ disabled, profileName, onClear, dismissKey }: {
   }, [open, busy]);
   return <div className="web-data-control" ref={root}>
     <ThemedTooltipButton anchorRef={trigger} tooltipPlacement="above" tooltipDisabled={open} type="button" tooltip="清理浏览数据" aria-label="清理浏览数据" aria-haspopup="dialog" aria-expanded={open} disabled={disabled || busy} onClick={() => { setMessage(""); setOpen(value => !value); }}><Icon name="lock" size={12}/></ThemedTooltipButton>
-    {open && <div ref={panel} className="web-data-popover" role="dialog" aria-modal="false" aria-label="清理浏览数据" data-web-native-overlay="data-cleanup" onKeyDown={event => { if (event.key === "Enter" && event.target instanceof HTMLInputElement) event.preventDefault(); }}>
+    {open && <div ref={panel} className="web-data-popover" role="dialog" data-app-overlay="floating" aria-modal="false" aria-label="清理浏览数据" onKeyDown={event => { if (event.key === "Enter" && event.target instanceof HTMLInputElement) event.preventDefault(); }}>
       <div className="web-data-heading">
         <span className="web-data-icon" aria-hidden="true"><Icon name="lock" size={13}/></span>
         <span><strong>清理浏览数据</strong><small>当前连接：{profileName}</small></span>

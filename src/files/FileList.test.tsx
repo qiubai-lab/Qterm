@@ -35,11 +35,12 @@ describe("FileList responsive column markers", () => {
     expect(tooltip).toHaveTextContent("long-file-name.txt");
     expect(row).toHaveAccessibleDescription("long-file-name.txt");
     fireEvent.mouseLeave(name);
-    expect(tooltip).toHaveAttribute("aria-hidden", "true");
+    expect(tooltip).not.toBeInTheDocument();
     fireEvent.focus(row);
-    expect(screen.getByRole("tooltip")).toBe(tooltip);
+    expect(screen.getByRole("tooltip")).not.toBe(tooltip);
+    expect(row).toHaveAccessibleDescription("long-file-name.txt");
     fireEvent.keyDown(row, { key: "Escape" });
-    expect(tooltip).toHaveAttribute("aria-hidden", "true");
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
   });
 
   it("does not show a tooltip for a fully visible file name", () => {

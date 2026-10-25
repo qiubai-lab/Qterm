@@ -18,11 +18,12 @@ describe("GitFeedback overflow tooltip", () => {
     expect(tooltip).toHaveTextContent(detail);
     expect(detailText).toHaveAccessibleDescription(detail);
     fireEvent.mouseLeave(detailText);
-    expect(tooltip).toHaveAttribute("aria-hidden", "true");
+    expect(tooltip).not.toBeInTheDocument();
     fireEvent.focus(detailText);
-    expect(screen.getByRole("tooltip")).toBe(tooltip);
+    expect(screen.getByRole("tooltip")).not.toBe(tooltip);
+    expect(detailText).toHaveAccessibleDescription(detail);
     fireEvent.keyDown(detailText, { key: "Escape" });
-    expect(tooltip).toHaveAttribute("aria-hidden", "true");
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
   });
 
   it("does not show a tooltip when the detail is fully visible", () => {

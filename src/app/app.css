@@ -31,3 +31,5 @@
 
 @import "../workspace/workspaceTabDeck.css";
 @import "../components/themedTooltip.css";
+@import "../components/hoverTooltip.css";
+@import "../components/overlays/nativeOverlay.css";
