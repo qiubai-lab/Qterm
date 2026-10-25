@@ -8,14 +8,14 @@ import "./webAddressHistory.css";
 interface Props {
   id: string;
   open: boolean;
-  anchor: RefObject<HTMLInputElement | null>;
+  anchor: RefObject<HTMLElement | null>;
   entries: WebEntry[];
   selected: number;
   onSelect: (index: number) => void;
   onChoose: (index: number) => void;
 }
 
-/** Portal geometry follows its address input while workspace blocks move or resize. */
+/** Portal geometry follows its address field while workspace blocks move or resize. */
 export function WebAddressHistory({ id, open, anchor, entries, selected, onSelect, onChoose }: Props) {
   const viewport = useRef<HTMLDivElement>(null);
   const [page, setPage] = useState({ open, count: 5 });

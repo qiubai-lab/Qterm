@@ -4,6 +4,25 @@ import { ThemedTooltipButton } from "./ThemedTooltipButton";
 
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); });
 
+it("suspends tooltips without disabling the action and waits for a fresh interaction on resume", () => {
+  const click = vi.fn();
+  const view = render(<ThemedTooltipButton tooltip="提示" onClick={click}>操作</ThemedTooltipButton>);
+  const button = screen.getByRole("button");
+  fireEvent.mouseEnter(button);
+  expect(screen.getByRole("tooltip")).toBeVisible();
+  view.rerender(<ThemedTooltipButton tooltip="提示" tooltipDisabled onClick={click}>操作</ThemedTooltipButton>);
+  fireEvent.focus(button);
+  fireEvent.click(button);
+  expect(click).toHaveBeenCalledOnce();
+  expect(button).toBeEnabled();
+  expect(button).not.toHaveAttribute("tooltipDisabled");
+  expect(screen.queryByRole("tooltip", { hidden: true })).toBeNull();
+  view.rerender(<ThemedTooltipButton tooltip="提示" onClick={click}>操作</ThemedTooltipButton>);
+  expect(screen.queryByRole("tooltip", { hidden: true })).toBeNull();
+  fireEvent.mouseEnter(button);
+  expect(screen.getByRole("tooltip")).toBeVisible();
+});
+
 it("replaces native titles with accessible tooltips and retains interrupted exits", () => {
   vi.useFakeTimers();
   render(<ThemedTooltipButton aria-label="仓库" tooltip="管理终端目录仓库 /root">Git</ThemedTooltipButton>);

@@ -29,3 +29,24 @@ it("installs one native-scrollbar stylesheet, updates its palette and reinstalls
   install();
   expect(document.getElementById("qterm-native-scrollbars")).not.toBeNull();
 });
+
+it("styles a newly parsed root before DOMContentLoaded, including the next refreshed document", async () => {
+  const script = readFileSync("src-tauri/src/infrastructure/web/scrollbar_script.mjs", "utf8");
+  const start = new Function("document", `(${script})();`);
+  for (let navigation = 0; navigation < 2; navigation++) {
+    const page = document.implementation.createHTMLDocument();
+    page.documentElement.remove();
+    let loaded = false;
+    page.addEventListener("DOMContentLoaded", () => { loaded = true; });
+    start(page);
+    expect(page.getElementById("qterm-native-scrollbars")).toBeNull();
+    const root = page.createElement("html");
+    page.append(root);
+    await Promise.resolve(); // MutationObserver checkpoint before the first paint.
+    expect(loaded).toBe(false);
+    expect(page.getElementById("qterm-native-scrollbars")?.textContent).toContain("width: 3px");
+    root.append(page.createElement("head"), page.createElement("body"));
+    page.dispatchEvent(new Event("DOMContentLoaded"));
+    expect(page.querySelectorAll("#qterm-native-scrollbars")).toHaveLength(1);
+  }
+});

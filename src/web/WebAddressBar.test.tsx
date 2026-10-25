@@ -1,8 +1,46 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { WebAddressBar } from "./WebAddressBar";
+import { readCssBundle } from "../test/css";
 afterEach(cleanup);
 const properties = () => ({ address: "http://localhost/", ready: true, loading: false, disabled: false, connecting: false, bookmarked: false, bookmarkBusy: false, libraryOpen: false, onNavigate: vi.fn(async () => true), onAction: vi.fn(), onBookmark: vi.fn(), onLibrary: vi.fn() });
+
+it("highlights the address editor for its own focus but not cleanup option interactions", () => {
+  const css = readCssBundle("src/web/webBlock.css");
+  const focusSelector = css.match(/(\.web-address-field[^{}]+)\{[^}]*border-color: var\(--focus\)/)![1].trim();
+  render(<WebAddressBar {...properties()} onClearData={vi.fn(async () => {})}/>);
+  const input = screen.getByRole("combobox", { name: "网页地址" });
+  const field = input.closest(".web-address-field")!;
+  act(() => input.focus());
+  expect(field.matches(focusSelector)).toBe(true);
+  fireEvent.click(screen.getByRole("button", { name: "清理浏览数据" }));
+  for (const checkbox of screen.getAllByRole("checkbox")) {
+    act(() => checkbox.focus());
+    fireEvent.click(checkbox);
+    expect(field.matches(focusSelector)).toBe(false);
+  }
+  fireEvent.keyDown(window, { key: "Escape" });
+  act(() => input.focus());
+  expect(field.matches(focusSelector)).toBe(true);
+});
+
+it("embeds the cleanup lock before the address and opens its dialog without navigating", () => {
+  const props = properties();
+  const clear = vi.fn(async () => {});
+  render(<WebAddressBar {...props} onClearData={clear}/>);
+  const input = screen.getByRole("combobox", { name: "网页地址" });
+  const button = screen.getByRole("button", { name: "清理浏览数据" });
+  expect(input.previousElementSibling).toContainElement(button);
+  expect(button.querySelector('[data-icon="lock"]')).not.toBeNull();
+  fireEvent.click(button);
+  expect(screen.getByRole("dialog", { name: "清理浏览数据" })).toBeVisible();
+  expect(button).toHaveAttribute("aria-expanded", "true");
+  expect(props.onNavigate).not.toHaveBeenCalled();
+  expect(clear).not.toHaveBeenCalled();
+  fireEvent.keyDown(window, { key: "Escape" });
+  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(button).toHaveFocus();
+});
 
 it("uses form Enter submission without an open button and suppresses IME composition", async () => {
   const props = properties(); render(<WebAddressBar {...props}/>);

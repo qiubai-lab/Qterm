@@ -28,7 +28,7 @@ export function webSurfacePanels(surface: DOMRect): WebPanel[] {
   return [...document.querySelectorAll<HTMLElement>(webNativePanelSelector)]
     // Square drawers are fully exposed by their rectangular hole. Only rounded
     // panels need a native antialiased rim; rasterizing a drawer each frame is costly.
-    .filter(element => !["library", "data-cleanup"].includes(element.dataset.webNativeOverlay ?? ""))
+    .filter(element => element.dataset.webNativeOverlay !== "library")
     .flatMap(element => {
       const style = getComputedStyle(element);
       const outer = webHistoryPanel(element, surface, style);

@@ -1,14 +1,26 @@
-.web-address-field { display: flex; position: relative; flex: 1; min-width: 0; align-items: center; border: 1px solid transparent; border-radius: 4px; }
-.web-address-field:hover { border-color: var(--subtle); background: var(--control-hover); }
-.web-address-field:focus-within { border-color: var(--focus); }
-.web-address-field input { border: 0; }
-.web-address-field input:is(:focus,:focus-visible,:hover) { border: 0; outline: none; background: transparent; }
 .web-data-control { position: relative; flex: none; }
-.web-data-popover { position: absolute; z-index: 3; right: 0; top: calc(100% + 7px); width: 290px; max-width: calc(100vw - 40px); overflow: auto; box-sizing: border-box; padding: 10px; border: 1px solid var(--border); border-radius: 0; background: var(--raised); color: var(--text); font-size: 11px; }
-.web-data-popover p { margin: 6px 0; color: var(--dim); font-size: 10px; line-height: 1.5; overflow-wrap: anywhere; }
-.web-data-popover label { display: flex; align-items: flex-start; gap: 7px; margin: 10px 0; }
-.web-data-popover input[type="checkbox"] { flex: none; width: 13px; height: 13px; padding: 0; margin: 1px 0 0; accent-color: var(--accent); }
-.web-data-popover small { display: block; margin-top: 3px; color: var(--dim); font-size: 9px; }
-.web-data-status { height: 28px; overflow: auto; overflow-wrap: anywhere; line-height: 14px; font-size: 10px; color: var(--muted); }
-.web-data-actions { display: flex; justify-content: flex-end; gap: 6px; }
-.web-data-actions .ui-button { width: auto; padding: 0 9px; border: 1px solid var(--border); }
+.web-address-field .web-data-control > button:is(:hover, :focus-visible, [aria-expanded="true"]):not(:disabled) { color: var(--accent); background: var(--accent-bg); }
+.web-data-popover { --web-native-overlay-stroke: var(--floating-border); position: absolute; z-index: 3; left: 0; top: calc(100% + 7px); display: grid; gap: 9px; width: 300px; max-width: calc(100vw - 40px); overflow: auto; box-sizing: border-box; padding: 10px; border: 1px solid var(--raised); border-radius: 9px; background: var(--raised); box-shadow: inset 0 0 0 1px var(--web-native-overlay-stroke); color: var(--text); font-size: 11px; animation: web-data-popover-in 150ms cubic-bezier(.16, 1, .3, 1); }
+.web-data-heading { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 8px; align-items: center; }
+.web-data-icon { display: grid; width: 30px; height: 30px; place-items: center; border: 1px solid color-mix(in srgb, var(--accent) 38%, var(--border)); border-radius: 7px; color: var(--accent); background: color-mix(in srgb, var(--accent) 11%, var(--panel-bg)); }
+.web-data-heading > span:last-child { display: grid; min-width: 0; gap: 2px; }
+.web-data-heading strong { color: var(--text-strong); font-size: 11px; }
+.web-data-heading small { color: var(--muted); font-size: 8.5px; overflow-wrap: anywhere; }
+.web-data-options { overflow: hidden; border: 1px solid var(--border); border-radius: 7px; background: var(--panel-bg); }
+.web-data-options label { display: flex; align-items: flex-start; gap: 7px; margin: 0; padding: 6px 8px; font-weight: 500; line-height: 14px; letter-spacing: normal; text-transform: none; cursor: pointer; }
+.web-data-options label + label { border-top: 1px solid var(--subtle); }
+.web-data-options label:hover { background: var(--control-hover); }
+.web-data-options label[data-selected="true"] { background: var(--accent-bg); }
+.web-data-options label:has(input:disabled) { cursor: default; opacity: .6; }
+.web-data-options label:has(input:focus-visible) { outline: 1px solid var(--focus); outline-offset: -2px; }
+.web-data-options input[type="checkbox"] { flex: none; width: 13px; height: 13px; padding: 0; margin: 1px 0 0; accent-color: var(--accent); }
+.web-data-options label > span { min-width: 0; color: var(--text); font-size: 10px; }
+.web-data-options small { display: block; margin-top: 1px; color: var(--muted); font-size: 9px; font-weight: 400; line-height: 12px; overflow-wrap: anywhere; }
+.web-data-scope { margin: 0; color: var(--dim); font-size: 9px; line-height: 1.5; overflow-wrap: anywhere; }
+.web-data-footer { display: grid; min-width: 0; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.web-data-status { height: 28px; overflow: auto; overflow-wrap: anywhere; line-height: 14px; font-size: 9px; color: var(--muted); }
+.web-data-actions { display: flex; gap: 6px; }
+.web-data-actions .ui-button { flex: none; }
+@keyframes web-data-popover-in { from { transform: translateY(-4px); } to { transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .web-data-popover { animation: none; } }
+@media (prefers-contrast: more) { .web-data-popover { --web-native-overlay-stroke: var(--border); } }

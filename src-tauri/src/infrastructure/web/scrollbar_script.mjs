@@ -27,5 +27,15 @@
     if (style.textContent !== css) style.textContent = css;
   };
   if (document.documentElement) install();
-  else document.addEventListener("DOMContentLoaded", install, { once: true });
+  else {
+    // WebView2 runs this before <html> exists. DOMContentLoaded is too late:
+    // streamed HTML can already paint with platform scrollbars while parsing.
+    // Mutation callbacks run before rendering, so install on the first root.
+    const observer = new MutationObserver(() => {
+      if (!document.documentElement) return;
+      observer.disconnect();
+      install();
+    });
+    observer.observe(document, { childList: true });
+  }
 })

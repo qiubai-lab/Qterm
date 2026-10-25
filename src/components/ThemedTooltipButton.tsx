@@ -6,11 +6,12 @@ interface Props extends ButtonHTMLAttributes<HTMLButtonElement> {
   tooltip: string;
   anchorRef?: RefObject<HTMLButtonElement | null>;
   tooltipPlacement?: "auto" | "above";
+  tooltipDisabled?: boolean;
 }
 
 /** Shared action button with an application-themed, viewport-bound tooltip. */
-export function ThemedTooltipButton({ tooltip, anchorRef, tooltipPlacement, children, onClick, onMouseEnter, onMouseLeave, onFocus, onBlur, onKeyDown, ...props }: Props) {
-  const [tooltipAnchorRef, descriptionId, hideTooltip, showTooltip, tooltipSurface] = useThemedTooltip<HTMLButtonElement>({ tooltip, anchorRef, placement: tooltipPlacement });
+export function ThemedTooltipButton({ tooltip, anchorRef, tooltipPlacement, tooltipDisabled, children, onClick, onMouseEnter, onMouseLeave, onFocus, onBlur, onKeyDown, ...props }: Props) {
+  const [tooltipAnchorRef, descriptionId, hideTooltip, showTooltip, tooltipSurface] = useThemedTooltip<HTMLButtonElement>({ tooltip, anchorRef, placement: tooltipPlacement, disabled: tooltipDisabled });
   return <>
     <button {...props} ref={tooltipAnchorRef} type={props.type ?? "button"} aria-describedby={descriptionId}
       onMouseEnter={event => { showTooltip(); onMouseEnter?.(event); }} onMouseLeave={event => { hideTooltip(); onMouseLeave?.(event); }}

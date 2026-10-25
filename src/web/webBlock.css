@@ -1,10 +1,13 @@
 @import "./webNativePopovers.css";
 .web-block { min-width: 0; min-height: 0; }
 .web-address-bar { display: flex; height: 34px; flex: none; gap: 4px; align-items: center; padding: 4px 6px; border-bottom: 1px solid var(--subtle); min-width: 0; background: var(--file-browser-chrome-background); }
-.web-address-bar input { min-width: 0; width: 0; flex: 1; height: 25px; margin: 0; padding: 0 5px; font: 10px "SFMono-Regular", Consolas, monospace; background: transparent; color: var(--text); border: 1px solid transparent; border-radius: 4px; }
-.web-address-bar input:hover { background: var(--control-hover); border-color: var(--subtle); box-shadow: none; }
-.web-address-bar input:focus { border-color: var(--focus); outline: none; box-shadow: none; }
-.web-address-bar input:focus-visible { border-color: var(--focus); outline: 1px solid var(--focus); outline-offset: -1px; box-shadow: none; }
+.web-address-field { display: flex; position: relative; flex: 1; min-width: 0; align-items: center; border: 1px solid transparent; border-radius: 4px; }
+/* The nested cleanup dialog must not activate the address editor's chrome. */
+.web-address-field:has(> input:hover, > .web-data-control > button:hover) { border-color: var(--subtle); background: var(--control-hover); }
+.web-address-field:has(> input:focus, > .web-data-control > button:focus-visible) { border-color: var(--focus); }
+/* The shell owns the border in every state; changing the editor border shifts its text. */
+.web-address-field > input { box-sizing: border-box; min-width: 0; width: 0; flex: 1; height: 25px; margin: 0; padding: 0 5px; font: 10px "SFMono-Regular", Consolas, monospace; background: transparent; color: var(--text); border: 0; border-radius: 4px; outline: none; box-shadow: none; }
+.web-address-field > input:is(:hover, :focus, :focus-visible) { border: 0; outline: none; box-shadow: none; background: transparent; }
 .web-address-bar > button, .web-data-control > button { display: grid; place-items: center; flex: none; width: 25px; height: 25px; padding: 0; color: var(--icon); background: transparent; border: 0; border-radius: 4px; }
 .web-address-bar > button:hover:not(:disabled), .web-data-control > button:hover:not(:disabled) { color: var(--icon-hover); background: var(--control-hover); }
 .web-address-bar > button:disabled, .web-data-control > button:disabled { opacity: .4; }
