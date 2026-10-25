@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { Button } from "./Button";
 import { Icon } from "./Icon";
 import { ThemedTooltipButton } from "./ThemedTooltipButton";
+import { useNativeWebDismiss } from "./useNativeWebDismiss";
 
 export interface HostIdentitySummary {
   name: string;
@@ -35,6 +36,7 @@ export function HostIdentity({ profile, label = `${profile.username}@${profile.h
   const popoverRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
   const endpoint = `${profile.username}@${profile.host}:${profile.port}`;
+  useNativeWebDismiss(open, () => setOpen(false));
 
   const updatePosition = useCallback(() => {
     const trigger = triggerRef.current;
@@ -103,6 +105,7 @@ export function HostIdentity({ profile, label = `${profile.username}@${profile.h
   const popover = open ? <div
     ref={popoverRef}
     className="host-summary-popover"
+    data-web-native-overlay="host-summary"
     role="dialog"
     aria-labelledby={titleId}
     style={position ?? { top: 0, left: 0, width: POPOVER_WIDTH, visibility: "hidden" }}

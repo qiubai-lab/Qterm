@@ -5,6 +5,8 @@ import { Icon, type IconName } from "../components/Icon";
 import { ThemedTooltipButton } from "../components/ThemedTooltipButton";
 import { HostIdentity } from "../components/HostIdentity";
 import { ExactTextInput } from "../components/ExactTextInput";
+import { useNativeWebDismiss } from "../components/useNativeWebDismiss";
+import { groupTargetProfiles, recentTargetProfiles, searchTargetProfiles } from "./terminalTargetModel";
 import type { ConnectionProfile, ProfileGroup } from "../lib/tauri/profiles";
 import type { SessionState } from "../lib/tauri/sessions";
 
@@ -37,12 +39,6 @@ interface TerminalTargetPickerProps {
 interface PickerPosition {
   placement: "above" | "below";
   style: CSSProperties;
-}
-
-interface GroupSection {
-  id: string;
-  name: string;
-  profiles: ConnectionProfile[];
 }
 
 interface SubmenuPosition {
@@ -81,30 +77,9 @@ export function TerminalTargetPicker({ profiles, groups = [], recentProfileIds =
   const selected = profiles.find((profile) => profile.id === selectedProfileId) ?? null;
   const name = selected?.name ?? localName;
 
-  const recentProfiles = useMemo(() => recentProfileIds
-    .map((id) => profiles.find((profile) => profile.id === id))
-    .filter((profile): profile is ConnectionProfile => Boolean(profile))
-    .slice(0, 6), [profiles, recentProfileIds]);
-
-  const groupSections = useMemo<GroupSection[]>(() => {
-    const knownGroupIds = new Set(groups.map((group) => group.id));
-    const grouped = groups.map((group) => ({
-      id: group.id,
-      name: group.name,
-      profiles: profiles.filter((profile) => profile.groupId === group.id),
-    }));
-    const ungrouped = profiles.filter((profile) => !profile.groupId || !knownGroupIds.has(profile.groupId));
-    return [
-      ...grouped.filter((section) => section.profiles.length > 0),
-      ...(ungrouped.length > 0 ? [{ id: "__ungrouped__", name: "未分组", profiles: ungrouped }] : []),
-    ];
-  }, [groups, profiles]);
-
-  const searchResults = useMemo(() => {
-    const normalizedQuery = query.trim().toLocaleLowerCase();
-    if (!normalizedQuery) return [];
-    return profiles.filter((profile) => `${profile.name}\n${profile.host}\n${profile.username}`.toLocaleLowerCase().includes(normalizedQuery));
-  }, [profiles, query]);
+  const recentProfiles = useMemo(() => recentTargetProfiles(profiles, recentProfileIds), [profiles, recentProfileIds]);
+  const groupSections = useMemo(() => groupTargetProfiles(profiles, groups), [profiles, groups]);
+  const searchResults = useMemo(() => searchTargetProfiles(profiles, query), [profiles, query]);
 
   const activeGroup = groupSections.find((section) => section.id === activeGroupId) ?? null;
 
@@ -166,6 +141,8 @@ export function TerminalTargetPicker({ profiles, groups = [], recentProfileIds =
     setActiveGroupId(null);
     setSubmenuPosition(null);
   }, [clearGroupTimers]);
+
+  useNativeWebDismiss(open, closePicker);
 
   useLayoutEffect(() => {
     if (!open) return;
@@ -331,6 +308,7 @@ export function TerminalTargetPicker({ profiles, groups = [], recentProfileIds =
   const popover = open && position ? <div
     ref={popoverRef}
     className="terminal-target-menu"
+    data-web-native-overlay="connection-picker"
     role="dialog"
     aria-label={`选择${ariaContext}`}
     data-placement={position.placement}
@@ -390,6 +368,7 @@ export function TerminalTargetPicker({ profiles, groups = [], recentProfileIds =
   const submenu = popover && activeGroup && submenuPosition ? <div
     ref={submenuRef}
     className="terminal-target-submenu"
+    data-web-native-overlay="connection-group"
     role="dialog"
     aria-label={`${activeGroup.name}连接`}
     data-placement={submenuPosition.placement}

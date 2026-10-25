@@ -1,0 +1,21 @@
+/* A windowed page cannot show through a DOM blur/fade. Use the same opaque,
+   inset-stroke surface as the browser tab menu whenever Web Blocks exist. */
+body:has(.web-browser-surface) :is([data-web-native-overlay="host-summary"], [data-web-native-overlay="connection-picker"], [data-web-native-overlay="connection-group"]) {
+  --web-native-overlay-stroke: var(--floating-border);
+  background: var(--raised);
+  border: 1px solid var(--raised);
+  box-shadow: inset 0 0 0 1px var(--web-native-overlay-stroke);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  animation: web-connection-popover-in 150ms cubic-bezier(.16, 1, .3, 1);
+}
+@keyframes web-connection-popover-in {
+  from { transform: translateY(-4px); }
+  to { transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  body:has(.web-browser-surface) :is([data-web-native-overlay="host-summary"], [data-web-native-overlay="connection-picker"], [data-web-native-overlay="connection-group"]) { animation: none; }
+}
+@media (prefers-contrast: more) {
+  body:has(.web-browser-surface) :is([data-web-native-overlay="host-summary"], [data-web-native-overlay="connection-picker"], [data-web-native-overlay="connection-group"]) { --web-native-overlay-stroke: var(--border); }
+}

@@ -8,7 +8,7 @@ it.each([1, 1.25, 1.5, 2, 3, 4])("exposes the inset menu stroke throughout trans
   vi.stubGlobal("devicePixelRatio", scale);
   const surface = new DOMRect(30.3, 100.2, 600, 400);
   const menu = document.createElement("div"); menu.dataset.webNativeOverlay = "tab-menu";
-  menu.style.cssText = "border:1px solid rgb(25,27,31);border-radius:7px;border-top-left-radius:7px;background:rgb(25,27,31);--web-tab-menu-stroke:rgba(0,221,235,.38)";
+  menu.style.cssText = "border:1px solid rgb(25,27,31);border-radius:7px;border-top-left-radius:7px;background:rgb(25,27,31);--web-native-overlay-stroke:rgba(0,221,235,.38)";
   document.body.append(menu);
   const measure = vi.spyOn(menu, "getBoundingClientRect");
   for (const offset of [-4, -2.5, -1, 0]) {

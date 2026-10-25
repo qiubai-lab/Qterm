@@ -191,3 +191,5 @@
 - `src/components/tabDeck.ts`：主工作区与网页标签共用的纯叠放几何与临界阻尼弹簧步进；各自 feature 拥有测量、预览意图和 DOM 绘制，页面/工作区生命周期不进入共享模型。
 
 - `src/components/TabActionMenu.tsx` / `tabActionMenu.css`：工作区与网页标签共享的操作菜单、视口约束与键盘/外部关闭交互。`src/web/webTabMenu.css` 负责原生网页上方菜单的平移入场与内描边，保持不透明裁剪边缘及减少动态效果支持；`src/web/useWebTabMenu.ts` 负责右键意图、折叠锚点与原生页面聚焦关闭；`webTabClose.ts` 负责当前 block 的关闭范围和活动页回退，不操作 SSH 会话、缓存或其他 block。
+
+- `src/components/useNativeWebDismiss.ts`：共享原生网页聚焦关闭浮层的订阅生命周期，供标签菜单、主机概要和连接选择器使用，不夺回网页焦点；`src/web/webNativePopovers.css` 负责连接浮层在 Web Block 存在时的不透明背景、原生内描边镜像与平移动画。`src/workspace/terminalTargetModel.ts` 负责连接选择器的最近连接、分组与搜索列表派生。
