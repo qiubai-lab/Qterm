@@ -51,3 +51,13 @@ export function registerNativeSurface(surface: Surface) {
     if (!surfaces.size) { cancelAnimationFrame(frame); frame = 0; registry?.dispose(); registry = null; }
   };
 }
+
+/** Resolve only a live, visible native guest; stale events cannot close another block. */
+export function nativeSurfaceBlockId(label: string): string | null {
+  for (const surface of surfaces.keys()) {
+    if (`web-${surface.id}` === label && surface.element.isConnected && webSurfaceVisible(surface.element, surface.visible())) {
+      return surface.element.closest<HTMLElement>("[data-layout-block]")?.dataset.layoutBlock ?? null;
+    }
+  }
+  return null;
+}

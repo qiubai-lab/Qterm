@@ -41,6 +41,8 @@ unsafe extern "C" fn event(name: *const c_char, data: *const c_char) {
         return;
     };
     if ![
+        "qterm-close-block",
+        "qterm-close-web-tab",
         "web-page-state",
         "web-guest-focused",
         "web-popup",

@@ -203,6 +203,10 @@ pub fn run() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(infrastructure::external_links::plugin());
+    #[cfg(target_os = "macos")]
+    let builder = builder
+        .menu(infrastructure::macos_menu::build)
+        .on_menu_event(infrastructure::macos_menu::handle);
     #[cfg(desktop)]
     let builder = builder.plugin(
         tauri_plugin_window_state::Builder::default()

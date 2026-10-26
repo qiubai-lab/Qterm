@@ -14,3 +14,6 @@ pub(crate) mod terminal_image;
 pub mod notifications;
 
 pub mod web;
+
+#[cfg(target_os = "macos")]
+pub(crate) mod macos_menu;

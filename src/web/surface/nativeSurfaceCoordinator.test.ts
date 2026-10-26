@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from "vitest";
 import type { WebBounds } from "../../lib/tauri/web";
-import { registerNativeSurface } from "./nativeSurfaceCoordinator";
+import { nativeSurfaceBlockId, registerNativeSurface } from "./nativeSurfaceCoordinator";
 
 const ipc = vi.hoisted(() => ({ sync: vi.fn<(id: string, bounds: WebBounds) => Promise<void>>(async () => {}) }));
 vi.mock("../../lib/tauri/web", () => ({ syncWeb: ipc.sync, captureWeb: vi.fn(() => new Promise(() => {})) }));
@@ -35,4 +35,27 @@ it("measures one overlay snapshot across guests, skips hidden geometry and dedup
   tick(3); await flush();
   expect(ipc.sync.mock.calls.filter(call => call[0] === "0").pop()?.[1].inputBlocked).toBe(true);
   expect(ipc.sync.mock.calls.filter(call => call[0] === "1").pop()?.[1].inputBlocked).toBe(false);
+});
+
+it("resolves block ownership only for connected visible guest generations", () => {
+  vi.spyOn(window, "requestAnimationFrame").mockReturnValue(1);
+  const block = document.createElement("section"); block.dataset.layoutBlock = "browser";
+  const element = document.createElement("div"); block.append(element); document.body.append(block);
+  let visible = true;
+  const stop = registerNativeSurface({ id: "current", element, visible: () => visible,
+    revision: () => 0, url: () => "about:blank", snapshotReady: () => false, onError: vi.fn() });
+  dispose.push(stop);
+  expect(nativeSurfaceBlockId("web-current")).toBe("browser");
+  expect(nativeSurfaceBlockId("web-old")).toBeNull();
+  visible = false;
+  expect(nativeSurfaceBlockId("web-current")).toBeNull();
+  visible = true;
+  block.setAttribute("inert", "");
+  expect(nativeSurfaceBlockId("web-current")).toBeNull();
+  block.removeAttribute("inert");
+  block.remove();
+  expect(nativeSurfaceBlockId("web-current")).toBeNull();
+  document.body.append(block);
+  stop();
+  expect(nativeSurfaceBlockId("web-current")).toBeNull();
 });

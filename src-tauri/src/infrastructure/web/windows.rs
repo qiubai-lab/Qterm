@@ -134,6 +134,7 @@ fn mount(
         .hide()
         .map_err(|_| "无法隐藏网页".to_owned())
         .and_then(|_| super::windows_surface::install_focus(&view))
+        .and_then(|_| super::windows_shortcuts::install(&view))
         .and_then(|_| super::windows_navigation::install(&view))
         .and_then(|_| super::windows_interaction::install(&view))
         .and_then(|_| super::windows_popups::install(&view));

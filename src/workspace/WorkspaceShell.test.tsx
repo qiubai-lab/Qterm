@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ConnectionProfile } from "../lib/tauri/profiles";
-import type { Workspace } from "./model";
+import type { LayoutLeaf, Workspace } from "./model";
 import { defaultRuntime, type TerminalRuntime } from "./workspaceRuntime";
 
 const mocks = vi.hoisted(() => ({
@@ -24,7 +24,11 @@ const mocks = vi.hoisted(() => ({
   updateTerminalSettings: vi.fn(),
   updateUpdateSettings: vi.fn(),
   checkForUpdateOnStartupOnce: vi.fn(),
+  currentDesktopPlatform: vi.fn(() => "windows"),
+  nativeBlockClose: vi.fn<(receive: (source: string | null) => void) => () => void>(() => () => undefined),
   closeCurrentWindow: vi.fn(),
+  connectedCount: vi.fn().mockReturnValue(0),
+  closeSessions: vi.fn().mockResolvedValue(undefined),
   minimizeCurrentWindow: vi.fn(),
   isCurrentWindowAlwaysOnTop: vi.fn().mockResolvedValue(false),
   setCurrentWindowAlwaysOnTop: vi.fn().mockResolvedValue(undefined),
@@ -51,7 +55,7 @@ vi.mock("./WorkspaceProvider", () => ({ useWorkspace: () => ({
   hydrated: true, document: { schemaVersion: 10, activeWorkspaceId: workspace.id, recentProfileIds: [], recentGitRepositories: [], workspaces }, activeWorkspace: workspace,
   dispatch: mocks.dispatch, runtimes: terminalRuntimes, fileRuntimes: {}, networkRuntimes: {}, gitRuntimes: {}, clearTerminalOsc7State: mocks.clearTerminalOsc7State, splitTerminalBlock: mocks.splitTerminalBlock, connectBlock: mocks.connectBlock, connectFileBlock: mocks.connectFileBlock, connectNetworkBlock: mocks.connectNetworkBlock, connectGitBlock: mocks.connectGitBlock, disconnectBlock: mocks.disconnectBlock, disconnectFileBlock: mocks.disconnectFileBlock, disconnectNetworkBlock: mocks.disconnectNetworkBlock, disconnectGitBlock: mocks.disconnectGitBlock,
   isConnectionTargetCurrent: mocks.isConnectionTargetCurrent,
-  connectedCount: vi.fn().mockReturnValue(0), closeSessions: vi.fn().mockResolvedValue(undefined), blocksForWorkspace: vi.fn().mockReturnValue(["block-1"]),
+  connectedCount: mocks.connectedCount, closeSessions: mocks.closeSessions, blocksForWorkspace: vi.fn().mockReturnValue(["block-1"]),
   acceptBlockHostKey: vi.fn(), rejectBlockHostKey: vi.fn(), acceptFileHostKey: vi.fn(), rejectFileHostKey: vi.fn(), acceptNetworkHostKey: vi.fn(), rejectNetworkHostKey: vi.fn(), acceptGitHostKey: vi.fn(), rejectGitHostKey: vi.fn(), storageNotice: "", dismissStorageNotice: vi.fn(),
 }) }));
 vi.mock("../components/dialogs/ConnectionAuthDialog", () => ({ ConnectionAuthDialog: ({ profile: item }: { profile: typeof connectionProfile }) => <div role="dialog" aria-label={`认证 ${item.name}`}/> }));
@@ -67,7 +71,8 @@ vi.mock("../lib/updateCheck", () => ({
   openLatestReleasePage: vi.fn(),
   updateCheckMessage: () => "无法检查更新。",
 }));
-vi.mock("../lib/tauri/window", () => ({ closeCurrentWindow: mocks.closeCurrentWindow, currentDesktopPlatform: () => "windows", isCurrentWindowAlwaysOnTop: mocks.isCurrentWindowAlwaysOnTop, minimizeCurrentWindow: mocks.minimizeCurrentWindow, setCurrentWindowAlwaysOnTop: mocks.setCurrentWindowAlwaysOnTop, startDraggingCurrentWindow: vi.fn(), toggleMaximizeCurrentWindow: mocks.toggleMaximizeCurrentWindow }));
+vi.mock("../lib/tauri/blockClose", () => ({ hasNativeBlockClose: () => false, subscribeNativeBlockClose: mocks.nativeBlockClose }));
+vi.mock("../lib/tauri/window", () => ({ closeCurrentWindow: mocks.closeCurrentWindow, currentDesktopPlatform: mocks.currentDesktopPlatform, isCurrentWindowAlwaysOnTop: mocks.isCurrentWindowAlwaysOnTop, minimizeCurrentWindow: mocks.minimizeCurrentWindow, setCurrentWindowAlwaysOnTop: mocks.setCurrentWindowAlwaysOnTop, startDraggingCurrentWindow: vi.fn(), toggleMaximizeCurrentWindow: mocks.toggleMaximizeCurrentWindow }));
 vi.mock("../terminal/terminalViewRegistry", () => ({ focusTerminalBlock: mocks.focusTerminalBlock, openTerminalSearch: mocks.openTerminalSearch }));
 
 import { WorkspaceShell } from "./WorkspaceShell";
@@ -76,6 +81,8 @@ beforeEach(() => {
   workspace = initialWorkspace;
   workspaces = [initialWorkspace];
   terminalRuntimes = {};
+  mocks.currentDesktopPlatform.mockReturnValue("windows");
+  mocks.connectedCount.mockReturnValue(0);
   mocks.splitTerminalBlock.mockClear();
   mocks.clearTerminalOsc7State.mockClear();
   mocks.getVaultStatus.mockResolvedValue({ initialized: true, unlocked: true });
@@ -569,6 +576,60 @@ describe("WorkspaceShell utility rail", () => {
     expect(mocks.splitTerminalBlock).not.toHaveBeenCalled();
     fireEvent.keyDown(terminalInput, { key: "f", ctrlKey: true, shiftKey: true });
     expect(mocks.openTerminalSearch).toHaveBeenCalledWith("block-1");
+  });
+
+  const closeTargets: { leaf: LayoutLeaf; title: string }[] = [
+    { leaf: { type: "terminal", blockId: "block-2", profileId: null, restoreDirectory: null }, title: "关闭终端？" },
+    { leaf: { type: "files", blockId: "block-2", profileId: null, path: "~" }, title: "关闭文件窗口？" },
+    { leaf: { type: "network", blockId: "block-2", profileId: null }, title: "关闭网络窗口？" },
+    { leaf: { type: "git", blockId: "block-2", target: { type: "local", path: "/repo" } }, title: "关闭 Git 窗口？" },
+    { leaf: { type: "web", blockId: "block-2", profileId: null }, title: "关闭网页？" },
+  ];
+  it.each(closeTargets.flatMap(target => [false, true].flatMap(connected => [false, true].map(native => ({ ...target, connected, native })))))("closes only active $leaf.type (connected: $connected, native: $native)", async ({ leaf, title, connected, native }) => {
+    if (native || leaf.type === "web") mocks.currentDesktopPlatform.mockReturnValue("macos");
+    workspace = {
+      ...initialWorkspace, activeBlockId: "block-2",
+      layout: { type: "split", id: "split-1", direction: "horizontal", ratio: 0.5,
+        first: initialWorkspace.layout,
+        second: leaf },
+    };
+    workspaces = [workspace];
+    mocks.connectedCount.mockReturnValue(connected ? 1 : 0);
+    const user = userEvent.setup();
+    render(<WorkspaceShell/>);
+    await waitFor(() => expect(screen.getByTestId("workspace-canvas-workspace-1")).toHaveAttribute("data-terminal-settings-ready", "true"));
+    mocks.dispatch.mockClear();
+    const input = screen.getByRole("textbox", { name: "终端输入" });
+    const receivedByTerminal = vi.fn();
+    input.addEventListener("keydown", receivedByTerminal);
+    const close = () => {
+      if (native) act(() => mocks.nativeBlockClose.mock.calls[0][0](null));
+      else expect(fireEvent.keyDown(input, { key: "w", ctrlKey: leaf.type !== "web", metaKey: leaf.type === "web" })).toBe(false);
+    };
+    close();
+    expect(receivedByTerminal).not.toHaveBeenCalled();
+    if (connected || leaf.type === "web") {
+      expect(screen.getByRole("dialog", { name: title })).toBeInTheDocument();
+      if (leaf.type === "web") expect(screen.getByRole("dialog", { name: title })).toHaveTextContent("关闭后标签不会保留");
+      expect(mocks.closeSessions).not.toHaveBeenCalled();
+      await user.click(screen.getByRole("button", { name: "取消" }));
+      expect(mocks.dispatch).not.toHaveBeenCalled();
+      close();
+      await user.click(screen.getByRole("button", { name: connected ? "关闭并断开" : "确认关闭" }));
+    }
+    await waitFor(() => expect(mocks.dispatch).toHaveBeenCalledWith({ type: "closeBlock", workspaceId: "workspace-1", blockId: "block-2" }));
+    expect(mocks.closeSessions).toHaveBeenCalledExactlyOnceWith(["block-2"]);
+    expect(mocks.closeCurrentWindow).not.toHaveBeenCalled();
+  });
+
+  it("consumes Ctrl+W without disconnecting the last terminal", async () => {
+    render(<WorkspaceShell/>);
+    await waitFor(() => expect(screen.getByTestId("workspace-canvas-workspace-1")).toHaveAttribute("data-terminal-settings-ready", "true"));
+    mocks.dispatch.mockClear();
+    expect(fireEvent.keyDown(screen.getByRole("textbox", { name: "终端输入" }), { key: "w", ctrlKey: true })).toBe(false);
+    expect(mocks.closeSessions).not.toHaveBeenCalled();
+    expect(mocks.dispatch).not.toHaveBeenCalled();
+    expect(mocks.closeCurrentWindow).not.toHaveBeenCalled();
   });
 
   it("moves terminal focus when the active block changes", async () => {

@@ -1,6 +1,6 @@
 import { MAX_WORKSPACES } from "./workspaceLimits";
-import { closeWorkspaceBatch } from "./workspaceClose";
-import { blockIds, clearTerminalRestoreDirectories, closeTerminal, findLeaf, moveTerminal, setFilesPath, setFilesProfile, setGitTarget, setNetworkProfile, setTerminalProfile, setTerminalRestoreDirectory, splitTerminal, terminalBlockIds, updateSplitRatio, type DropPosition } from "./layout";
+import { canCloseBlock, closeWorkspaceBatch } from "./workspaceClose";
+import { blockIds, clearTerminalRestoreDirectories, closeTerminal, findLeaf, moveTerminal, setFilesPath, setFilesProfile, setGitTarget, setNetworkProfile, setTerminalProfile, setTerminalRestoreDirectory, splitTerminal, updateSplitRatio, type DropPosition } from "./layout";
 import { recordRecentGitRepository } from "./gitRepositoryHistory";
 import { createFilesNode, createGitNode, createId, createNetworkNode, createTerminalNode, createWorkspace, isValidTerminalRestoreDirectory, type GitRepositoryHistoryEntry, type GitTarget, type SplitDirection, type Workspace, type WorkspaceDocument } from "./model";
 
@@ -92,8 +92,7 @@ export function workspaceReducer(state: WorkspaceDocument, action: WorkspaceActi
       return { ...workspace, activeBlockId: git.blockId, layout: splitTerminal(workspace.layout, action.anchorBlockId, "horizontal", git, createId("split")) };
     });
     case "closeBlock": return mapWorkspace(state, action.workspaceId, (workspace) => {
-      if (blockIds(workspace.layout).length === 1) return workspace;
-      if (findLeaf(workspace.layout, action.blockId)?.type === "terminal" && terminalBlockIds(workspace.layout).length === 1) return workspace;
+      if (!canCloseBlock(workspace, action.blockId)) return workspace;
       const layout = closeTerminal(workspace.layout, action.blockId);
       if (!layout) return workspace;
       const remaining = blockIds(layout);

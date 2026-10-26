@@ -1,10 +1,10 @@
 import { WorkspaceToolRail } from "./WorkspaceToolRail";
 import { WorkspaceTabs } from "./WorkspaceTabs";
-import { type CloseRequest } from "./workspaceClose";
-import { focusWorkspaceBlock, findBlockType } from "./workspaceFocus";
+import { createBlockCloseRequest, type CloseRequest } from "./workspaceClose";
+import { focusWorkspaceBlock } from "./workspaceFocus";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 
-import { resolveAppShortcut } from "../app/shortcuts";
+import { isEditableOutsideTerminal, useWorkspaceShortcuts } from "./useWorkspaceShortcuts";
 import { Icon } from "../components/Icon";
 import { ConnectionDialog } from "../components/dialogs/ConnectionDialog";
 import { CredentialDialog } from "../components/dialogs/CredentialDialog";
@@ -20,7 +20,6 @@ import { getSettings, updateUpdateSettings, type SecuritySettings, type Terminal
 import { checkForUpdateOnStartupOnce } from "../lib/updateCheck";
 import { closeCurrentWindow, currentDesktopPlatform, isCurrentWindowAlwaysOnTop, minimizeCurrentWindow, setCurrentWindowAlwaysOnTop, startDraggingCurrentWindow, toggleMaximizeCurrentWindow } from "../lib/tauri/window";
 import { TERMINAL_ATTENTION_MS } from "../terminal/terminalAttention";
-import { openTerminalSearch } from "../terminal/terminalViewRegistry";
 import { WorkspaceCanvas, type ConnectionOwner } from "./LayoutView";
 import { resolveConfiguredAuth } from "./configuredAuth";
 import type { LayoutNode } from "./model";
@@ -139,7 +138,7 @@ export function WorkspaceShell() {
   }, [activeWorkspace.id, document.workspaces, workspaceOrder]);
 
   function requestClose(request: CloseRequest) {
-    if (connectedCount(request.ids) === 0) {
+    if (!request.confirmationRequired && connectedCount(request.ids) === 0) {
       void closeSessions(request.ids).then(request.execute);
     } else {
       setCloseRequest(request);
@@ -147,10 +146,8 @@ export function WorkspaceShell() {
   }
 
   function closeBlock(blockId: string) {
-    const blockType = activeWorkspace.layout && blockId ? findBlockType(activeWorkspace, blockId) : null;
-    const title = blockType === "files" ? "关闭文件窗口？" : blockType === "network" ? "关闭网络窗口？" : blockType === "web" ? "关闭网页？" : "关闭终端？";
-    const detail = blockType === "files" ? "活动文件连接会同时断开。" : blockType === "network" ? "活动网络转发和 SSH 连接会同时停止。" : blockType === "web" ? "网页浏览会话与独立 SSH 连接会同时关闭。" : "活动终端会话会同时断开，终端缓冲不会保留。";
-    requestClose({ title, detail, ids: [blockId], execute: () => dispatch({ type: "closeBlock", workspaceId: activeWorkspace.id, blockId }) });
+    const request = createBlockCloseRequest(activeWorkspace, blockId, () => dispatch({ type: "closeBlock", workspaceId: activeWorkspace.id, blockId }));
+    if (request) requestClose(request);
   }
 
   function beginWindowDrag(event: ReactPointerEvent<HTMLElement>) {
@@ -375,31 +372,12 @@ export function WorkspaceShell() {
     };
   }, [applyLockScope, securitySettings?.terminalAutoLockAfterSeconds, terminalLocked, vaultStatus?.initialized, vaultStatus?.legacy]);
 
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.repeat || isEditableOutsideTerminal(event.target)) return;
-      const command = resolveAppShortcut(event, desktopPlatform);
-      if (!command) return;
-      const modalOpen = Boolean(tool || authRequest || vaultUnlockRequest || lockChoiceOpen || closeRequest || disconnectRequest || hostPromptOpen);
-      if (modalOpen || globalThis.document.querySelector('.workspace-batch-close-dialog, [role="menu"]')) return;
-      const allowedWhileLocked = command.type === "selectWorkspace";
-      if (terminalLocked && !allowedWhileLocked) return;
-
-      let handled = true;
-      if (command.type === "searchTerminal") handled = openTerminalSearch(activeWorkspace.activeBlockId);
-      else {
-        const workspace = document.workspaces[command.index];
-        if (workspace) dispatch({ type: "selectWorkspace", workspaceId: workspace.id });
-        else handled = false;
-      }
-      if (handled) {
-        event.preventDefault();
-        event.stopPropagation();
-      }
-    };
-    window.addEventListener("keydown", onKeyDown, true);
-    return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [activeWorkspace.activeBlockId, authRequest, closeRequest, desktopPlatform, disconnectRequest, dispatch, document.workspaces, hostPromptOpen, lockChoiceOpen, terminalLocked, tool, vaultUnlockRequest]);
+  useWorkspaceShortcuts({
+    platform: desktopPlatform, activeWorkspace, workspaces: document.workspaces, terminalLocked,
+    modalOpen: Boolean(tool || authRequest || vaultUnlockRequest || lockChoiceOpen || closeRequest || disconnectRequest || hostPromptOpen),
+    onCloseBlock: closeBlock,
+    onSelectWorkspace: (workspaceId) => dispatch({ type: "selectWorkspace", workspaceId }),
+  });
 
   useEffect(() => {
     if (terminalLocked || globalThis.document.querySelector('[role="dialog"]')) return;
@@ -555,7 +533,7 @@ export function WorkspaceShell() {
       onAutoCheckOnStartupChange={updateSettings ? changeAutoUpdateCheck : undefined}
     />}
     {lockChoiceOpen && <TerminalLockChoiceDialog vaultUnlocked={Boolean(vaultStatus?.unlocked)} busy={vaultLockBusy} message={vaultLockError} onClose={() => { setLockChoiceOpen(false); setVaultLockError(""); }} onLockVault={() => void applyLockScope("vault")} onLockTerminalAndVault={() => void applyLockScope("terminalAndVault")}/>}
-    {closeRequest && <DialogFrame title={closeRequest.title} subtitle="未保存的终端输出无法恢复" onClose={() => setCloseRequest(null)}><p className="confirm-copy">{closeRequest.detail}</p><p className="callout">将断开 {connectedCount(closeRequest.ids)} 个活动会话。</p><footer className="dialog-actions end"><button className="secondary-button" onClick={() => setCloseRequest(null)}>取消</button><button className="danger-button filled" onClick={() => void confirmClose()}>关闭并断开</button></footer></DialogFrame>}
+    {closeRequest && <DialogFrame title={closeRequest.title} subtitle={closeRequest.subtitle ?? "未保存的终端输出无法恢复"} onClose={() => setCloseRequest(null)}><p className="confirm-copy">{closeRequest.detail}</p>{connectedCount(closeRequest.ids) > 0 && <p className="callout">将断开 {connectedCount(closeRequest.ids)} 个活动会话。</p>}<footer className="dialog-actions end"><button className="secondary-button" onClick={() => setCloseRequest(null)}>取消</button><button className="danger-button filled" onClick={() => void confirmClose()}>{connectedCount(closeRequest.ids) > 0 ? "关闭并断开" : "确认关闭"}</button></footer></DialogFrame>}
     {disconnectRequest && <DialogFrame compact title={disconnectRequest.local ? "停止本地终端？" : `断开“${disconnectRequest.name}”？`} subtitle={disconnectRequest.owner === "files" ? "文件窗口和当前路径将保留" : disconnectRequest.owner === "network" ? "网络窗口和规则配置将保留" : disconnectRequest.owner === "git" ? "Git 窗口、目标路径和最后快照将保留" : "终端 Block 和当前输出将保留"} onClose={() => setDisconnectRequest(null)}><p className="confirm-copy">{disconnectRequest.local ? "正在运行的本地 Shell 和前台进程将停止。" : disconnectRequest.owner === "files" ? "当前 SFTP 会话将结束，之后可以从状态旁重新连接。" : disconnectRequest.owner === "network" ? "当前 SSH 会话及运行中的网络规则将结束，之后可以从状态旁重新连接。" : disconnectRequest.owner === "git" ? "独立的远程 Git 会话将结束，仓库不会被修改；重新连接后会刷新真实状态。" : "当前 SSH 会话和其中运行的前台进程将结束，之后可以从状态旁重新连接。"}</p><footer className="dialog-actions end"><button className="secondary-button" onClick={() => setDisconnectRequest(null)}>取消</button><button className="danger-button filled" onClick={() => void confirmDisconnect()}>{disconnectRequest.local ? "停止终端" : "断开连接"}</button></footer></DialogFrame>}
     {hostPrompt && <DialogFrame title="确认主机身份" subtitle={`${hostPrompt.prompt.node.role === "jump" ? "跳板" : "目标"}“${hostPrompt.prompt.node.name}” · ${hostPrompt.prompt.node.host}:${hostPrompt.prompt.node.port}`} onClose={() => void rejectPromptHostKey(hostPrompt.owner, hostPrompt.blockId)}><p className="confirm-copy">请通过可信渠道核对当前节点的主机密钥指纹：</p><code className="fingerprint">{hostPrompt.prompt.algorithm}<br/>{hostPrompt.prompt.fingerprint}</code><footer className="dialog-actions end"><button className="danger-button" onClick={() => void rejectPromptHostKey(hostPrompt.owner, hostPrompt.blockId)}>拒绝</button><button className="primary-button" onClick={() => void acceptPromptHostKey(hostPrompt.owner, hostPrompt.blockId)}>信任并继续</button></footer></DialogFrame>}
     {storageNotice && <div data-app-overlay="floating" className="global-notice" role="status"><span>{storageNotice}</span><button aria-label="关闭提示" onClick={dismissStorageNotice}><Icon name="close" size={13}/></button></div>}
@@ -576,12 +554,6 @@ function isInteractiveTitlebarTarget(target: EventTarget): boolean {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
-}
-
-function isEditableOutsideTerminal(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false;
-  if (target.closest(".terminal-surface")) return false;
-  return Boolean(target.closest("input,textarea,select,[contenteditable=true]"));
 }
 
 function hasLocalTerminal(node: LayoutNode): boolean {

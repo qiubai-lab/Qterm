@@ -85,6 +85,8 @@ mod windows_navigation;
 mod windows_popup_pending;
 #[cfg(windows)]
 mod windows_popups;
+#[cfg(target_os = "windows")]
+mod windows_shortcuts;
 #[cfg(windows)]
 mod windows_snapshot;
 #[cfg(target_os = "windows")]

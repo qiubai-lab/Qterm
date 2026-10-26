@@ -21,6 +21,7 @@ final class BrowserGuest: NSObject, WKNavigationDelegate, WKUIDelegate {
     var loadState = "idle"
     var navigationError: Error?
     var message = ""
+    var closeShortcutMonitor: Any?
     var observations: [NSKeyValueObservation] = []
     var lastPalette = ""
     var navigationGuard = NavigationGuard()
@@ -30,6 +31,7 @@ final class BrowserGuest: NSObject, WKNavigationDelegate, WKUIDelegate {
         web = WKWebView(frame: NSRect(x: 0, y: 0, width: 1, height: 1), configuration: config)
         surface = BrowserSurface(frame: web.frame)
         super.init()
+        installBlockCloseShortcut()
         web.customUserAgent = Self.edgeUserAgent
         surface.owner = self; surface.addSubview(web); surface.isHidden = true
         window.contentView?.addSubview(surface, positioned: .above, relativeTo: nil)
@@ -154,6 +156,7 @@ final class BrowserGuest: NSObject, WKNavigationDelegate, WKUIDelegate {
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) { reply.fail("网页预览超时") }
     }
     func dispose() {
+        if let monitor = closeShortcutMonitor { NSEvent.removeMonitor(monitor); closeShortcutMonitor = nil }
         closed = true; observations.removeAll(); web.stopLoading()
         web.navigationDelegate = nil; web.uiDelegate = nil; surface.removeFromSuperview()
     }

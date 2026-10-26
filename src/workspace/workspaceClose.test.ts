@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createWorkspace, createWorkspaceDocument } from "./model";
 import { workspaceReducer } from "./reducer";
-import { workspaceCloseTargets } from "./workspaceClose";
+import { canCloseBlock, createBlockCloseRequest, workspaceCloseTargets } from "./workspaceClose";
 const workspaces = ["a", "b", "c", "d"].map(id => ({ ...createWorkspace(id), id }));
 describe("workspace batch closing", () => {
   it("uses visible ordering and excludes the anchor for each side", () => {
@@ -20,4 +20,11 @@ describe("workspace batch closing", () => {
     expect(preserved.activeWorkspaceId).toBe("d");
     expect(workspaceReducer(initial, { type: "closeWorkspaces", workspaceIds: ["a", "b", "c", "d"], anchorId: "missing" })).toBe(initial);
   });
+});
+
+it("never creates a close request for a missing or protected last terminal", () => {
+  const workspace = createWorkspace("protected");
+  expect(canCloseBlock(workspace, workspace.activeBlockId)).toBe(false);
+  expect(createBlockCloseRequest(workspace, workspace.activeBlockId, () => {})).toBeNull();
+  expect(createBlockCloseRequest(workspace, "missing", () => {})).toBeNull();
 });
