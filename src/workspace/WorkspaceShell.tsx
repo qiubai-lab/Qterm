@@ -1,4 +1,4 @@
-import { WorkspaceUtilityRail } from "./WorkspaceUtilityRail";
+import { WorkspaceToolRail } from "./WorkspaceToolRail";
 import { WorkspaceTabs } from "./WorkspaceTabs";
 import { type CloseRequest } from "./workspaceClose";
 import { focusWorkspaceBlock, findBlockType } from "./workspaceFocus";
@@ -23,10 +23,7 @@ import { TERMINAL_ATTENTION_MS } from "../terminal/terminalAttention";
 import { openTerminalSearch } from "../terminal/terminalViewRegistry";
 import { WorkspaceCanvas, type ConnectionOwner } from "./LayoutView";
 import { resolveConfiguredAuth } from "./configuredAuth";
-import { openFileWindowAction } from "./fileWindow";
-import { openGitWindowAction } from "./gitWindow";
 import type { LayoutNode } from "./model";
-import { openNetworkWindowAction } from "./networkWindow";
 import { useWorkspace } from "./WorkspaceProvider";
 
 type Tool = "connections" | "credentials" | "settings" | "help";
@@ -42,7 +39,7 @@ const TITLEBAR_DOUBLE_CLICK_MS = 350;
 export function WorkspaceShell() {
   const desktopPlatform = currentDesktopPlatform();
   const usesNativeWindowControls = desktopPlatform === "macos";
-  const { hydrated, document, activeWorkspace, dispatch, runtimes, fileRuntimes, networkRuntimes, gitRuntimes, clearTerminalOsc7State, splitTerminalBlock, connectBlock, connectFileBlock, connectNetworkBlock, connectGitBlock, disconnectBlock, disconnectFileBlock, disconnectNetworkBlock, disconnectGitBlock, isConnectionTargetCurrent, connectedCount, closeSessions, acceptBlockHostKey, rejectBlockHostKey, acceptFileHostKey, rejectFileHostKey, acceptNetworkHostKey, rejectNetworkHostKey, acceptGitHostKey, rejectGitHostKey, storageNotice, dismissStorageNotice } = useWorkspace();
+  const { hydrated, document, activeWorkspace, dispatch, runtimes, fileRuntimes, networkRuntimes, gitRuntimes, clearTerminalOsc7State, connectBlock, connectFileBlock, connectNetworkBlock, connectGitBlock, disconnectBlock, disconnectFileBlock, disconnectNetworkBlock, disconnectGitBlock, isConnectionTargetCurrent, connectedCount, closeSessions, acceptBlockHostKey, rejectBlockHostKey, acceptFileHostKey, rejectFileHostKey, acceptNetworkHostKey, rejectNetworkHostKey, acceptGitHostKey, rejectGitHostKey, storageNotice, dismissStorageNotice } = useWorkspace();
   const [tool, setTool] = useState<Tool | null>(null);
   const [closeRequest, setCloseRequest] = useState<CloseRequest | null>(null);
   const [disconnectRequest, setDisconnectRequest] = useState<DisconnectRequest | null>(null);
@@ -516,13 +513,9 @@ export function WorkspaceShell() {
             return <div key={workspace.id} className={`workspace-canvas-stage${visible ? " visible" : ""}${transitionDirection ? ` workspace-transition-${transitionDirection}` : ""}`} aria-hidden={!visible}><WorkspaceCanvas workspace={workspace} visible={visible} localTerminalAttention={localTerminalAttentionWorkspaceId === workspace.id} remoteShellIntegrationEnabled={remoteShellIntegrationEnabled} terminalSettingsReady={terminalSettingsReady} onRequestClose={closeBlock} onRequestDisconnect={(owner, blockId, name, local) => setDisconnectRequest({ owner, blockId, name, local })} onRequestAuthConnection={(owner, blockId, profile) => void requestConfiguredConnection(owner, blockId, profile)} onOpenConnectionManager={() => setTool("connections")}/></div>;
           })}
         </div>
-        <WorkspaceUtilityRail controls={{
+        <WorkspaceToolRail remoteShellIntegrationEnabled={remoteShellIntegrationEnabled} controls={{
           connections: { active: tool === "connections", onClick: () => setTool(tool === "connections" ? null : "connections") },
           credentials: { active: tool === "credentials", onClick: () => setTool(tool === "credentials" ? null : "credentials") },
-          files: { onClick: () => dispatch(openFileWindowAction(activeWorkspace, runtimes, remoteShellIntegrationEnabled)) },
-          network: { onClick: () => dispatch(openNetworkWindowAction(activeWorkspace)) },
-          git: { onClick: () => dispatch(openGitWindowAction(activeWorkspace, runtimes)) },
-          terminal: { onClick: () => splitTerminalBlock(activeWorkspace.id, activeWorkspace.activeBlockId, "horizontal", remoteShellIntegrationEnabled) },
           lock: { accessibleLabel: terminalLockLabel, title: terminalLockLabel, disabled: !vaultStatus?.initialized || vaultStatus.legacy || vaultLockBusy, onClick: () => { setVaultLockError(""); setLockChoiceOpen(true); } },
           settings: { active: tool === "settings", onClick: () => setTool(tool === "settings" ? null : "settings") },
           help: { active: tool === "help", notice: availableUpdateVersion ? `发现新版本 v${availableUpdateVersion}` : undefined, onClick: () => { setAvailableUpdateVersion(null); setTool(tool === "help" ? null : "help"); } },

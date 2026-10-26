@@ -188,6 +188,7 @@
 - `scripts/tauri-dev-runner.mjs`：macOS 开发 bundle 构造、完整 ad-hoc 签名及进程启动；签名 identity 与 Info.dev.plist 一致，保证原生通知服务识别真实应用身份。
 
 - `src/workspace/WorkspaceUtilityRail.tsx`：共享桌面与 Demo 的工具项名称、图标、顺序及布局；桌面注入操作和状态，Demo 仅为文件、网络、Git 和终端传入 controls，其余禁用并提示尚未开放。该组件不拥有工具业务逻辑。
+- `src/workspace/WorkspaceToolRail.tsx`：桌面工具栏的 Block 打开入口，组合文件、网络、Git、终端和本地浏览器操作及浏览器能力判断；复用 Workspace action，不拥有弹窗、锁定、会话或持久化状态。
 
 - `src-tauri/src/infrastructure/ssh/client/tests/connect_fixture.rs`：SSH 测试共用的终端/辅助会话请求 fixture，默认不启用任一 Shell 注入协议。
 

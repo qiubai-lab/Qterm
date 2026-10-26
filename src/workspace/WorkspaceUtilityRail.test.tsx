@@ -17,7 +17,7 @@ it("shows the shared hover tooltip for unavailable demo tools", () => {
 it("renders the product tools as display-only buttons without controls", () => {
   render(<WorkspaceUtilityRail unavailableTitle="暂未开放演示"/>);
   expect(screen.getAllByRole("button").map(button => button.textContent)).toEqual([
-    "连接管理", "凭证管理", "文件管理", "网络管理", "Git 管理", "打开终端", "锁定终端", "系统设置", "关于",
+    "连接管理", "凭证管理", "文件管理", "网络管理", "Git 管理", "打开终端", "浏览器", "锁定终端", "系统设置", "关于",
   ]);
   for (const button of screen.getAllByRole("button")) {
     expect(button).toBeDisabled();

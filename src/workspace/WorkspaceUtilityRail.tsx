@@ -8,6 +8,7 @@ const entries = [
   ["network", "network", "网络管理"],
   ["git", "git", "Git 管理"],
   ["terminal", "terminal", "打开终端"],
+  ["browser", "browser", "浏览器"],
   ["lock", "lock", "锁定终端"],
   ["settings", "settings", "系统设置"],
   ["help", "help", "关于"],
