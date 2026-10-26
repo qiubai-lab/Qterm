@@ -1,5 +1,5 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { EditorView } from "@codemirror/view";
 
 const { readClipboardText, writeClipboardText } = vi.hoisted(() => ({
@@ -21,10 +21,6 @@ function GuardedEditor() {
 }
 
 describe("CodeEditor context menu", () => {
-  beforeAll(() => {
-    Object.defineProperty(Range.prototype, "getClientRects", { configurable: true, value: () => [] });
-    Object.defineProperty(Range.prototype, "getBoundingClientRect", { configurable: true, value: () => ({ x: 0, y: 0, left: 0, right: 0, top: 0, bottom: 0, width: 0, height: 0, toJSON: () => ({}) }) });
-  });
   afterEach(() => {
     cleanup();
     vi.useRealTimers();

@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { FilePreviewDocument, type FilePreviewState } from "./FilePreviewDocument";
 
@@ -16,11 +16,6 @@ const basePreview: FilePreviewState = {
 };
 
 describe("FilePreviewDocument search", () => {
-  beforeAll(() => {
-    Object.defineProperty(Range.prototype, "getClientRects", { configurable: true, value: () => [] });
-    Object.defineProperty(Range.prototype, "getBoundingClientRect", { configurable: true, value: () => ({ x: 0, y: 0, left: 0, right: 0, top: 0, bottom: 0, width: 0, height: 0, toJSON: () => ({}) }) });
-  });
-
   afterEach(cleanup);
 
   it("opens one controlled search UI from Ctrl+F and cycles matches", async () => {
