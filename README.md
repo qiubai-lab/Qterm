@@ -137,6 +137,10 @@ pnpm tauri dev
 
 `pnpm tauri dev` 自动使用 `Qterm Dev` / `com.qiubai.qterm.dev` 开发身份，可与已安装的正式版同时运行。`pnpm dev` 仅启动浏览器界面，不包含 Tauri IPC，无法建立真实 SSH/SFTP 连接。各平台依赖、测试和构建命令见[开发指引](docs/DEVELOPMENT.md)。
 
+安装 GNU Make 后，也可用 `make install` 安装依赖、`make dev` 启动桌面应用、`make check` 执行前后端检查。直接运行 `make` 查看全部命令；平台要求和参数示例见[开发指引](docs/DEVELOPMENT.md#统一命令入口makefile)。
+
+如需把当前源码作为标准应用安装到本机测试，退出 Qterm 后运行 `make install-local`（PowerShell 可用 `pnpm install:local`）。它先构建再覆盖安装，保持应用名、用户设置的版本号和现有配置。仅生成安装包可用 `make package`，或在对应系统使用 `make package-macos`、`make package-windows`、`make package-linux`。详见[本地安装与更新](docs/DEVELOPMENT.md#从本地源码安装和更新)。
+
 ## 📚 文档索引
 
 | 文档 | 内容 |

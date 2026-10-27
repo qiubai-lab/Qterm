@@ -13,7 +13,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint src vite.config.ts vite.site.config.ts --max-warnings 0",
     "check:source-size": "node scripts/check-source-size.mjs",
-    "test": "vitest run && node --test scripts/tauri.node-test.mjs scripts/macos-sdk.node-test.mjs scripts/check-source-size.node-test.mjs scripts/conpty-ordered-probe-consumer.node-test.mjs",
+    "test": "vitest run && node --test scripts/tauri.node-test.mjs scripts/macos-sdk.node-test.mjs scripts/check-source-size.node-test.mjs scripts/conpty-ordered-probe-consumer.node-test.mjs scripts/desktop-package.node-test.mjs scripts/install-local.node-test.mjs",
     "test:watch": "vitest",
     "check": "pnpm check:source-size && pnpm lint && pnpm test && pnpm build",
     "audit:rust": "cd src-tauri && cargo audit",
@@ -23,7 +23,9 @@
     "build:site": "tsc --noEmit && vite build --config vite.site.config.ts",
     "preview:site": "vite preview --config vite.site.config.ts",
     "test:demo": "vitest run --config vite.site.config.ts",
-    "check:site": "node scripts/check-site.mjs"
+    "check:site": "node scripts/check-site.mjs",
+    "package:desktop": "node scripts/desktop-package.mjs",
+    "install:local": "node scripts/desktop-package.mjs --install"
   },
   "dependencies": {
     "@codemirror/commands": "6.11.0",

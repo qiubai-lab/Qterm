@@ -13,6 +13,9 @@
 
 ## Important Files
 
+- `Makefile`：开发命令的薄入口，聚合 pnpm/Cargo 检查并提供帮助与参数转发；底层命令以 `package.json`、`scripts/tauri.mjs` 和 Cargo 为准，不复制 SDK/开发身份策略或自动发布。
+- `scripts/desktop-package.mjs`：标准包的宿主平台检查、格式选择、构建后本机安装编排；使用现有版本与 Tauri build，不生成特殊开发身份。`scripts/install-local.mjs`：macOS 应用标识/运行状态检查、签名校验、暂存替换与失败恢复；仅替换应用，不读取或修改 Qterm 用户配置。Windows/Linux 交由原生安装向导或系统包管理器。
+
 - `src-tauri/src/infrastructure/external_links.rs`：应用和原生 smoke 共用的 opener 插件配置，关闭全 WebView 自动点击拦截，保留可信主界面的显式外部打开能力；原生网页链接继续交由 Web Block 接管，不扩大客体权限。`native_popup_click_tests.rs` 覆盖真实鼠标点击、默认行为未被取消和客体 opener 拒绝。
 
 - `src-tauri/src/infrastructure/web/macos/`：Rust async C/JSON bridge 与稳定 WebKit store UUID；`native/Bridge.swift` 分派主线程命令，`Store.swift` 拥有环境/代理/分类清理，`Guest.swift` 拥有导航/事件/预览及普通页与弹出页共用的桌面 Edge UA，`NavigationGuard.swift` 限制重复主文档跳转并允许显式导航重试，`BrowserWebView.swift` 将标准编辑组合键与菜单所属的 Cmd+W 交回 AppKit，其他组合键保留 WebKit 分发；`Surface.swift` 拥有遮挡/输入/焦点，`Popups.swift` 拥有同步原生子页和异步接管。`Tunnel.swift` / `tunnel_script.mjs` 映射远程 HTTP/WS 回环地址并阻断未映射请求；`WebKitPolicy.m` 封装禁用远程 WebRTC 的受检 SPI；`domain/web_tunnel.rs` 定义固定别名规则，`macos/tunnel.rs` 仅改写 SOCKS 目标并继续经 SSH。`build_macos_web.rs` 编译链接 Swift/Objective-C 静态 adapter；`scripts/macos-web-smoke/` 用真实 WKWebView 验证路由/隔离/交互；`src-tauri/examples/macos_web_edit.rs` 在真实 Tauri 窗口中验证原生编辑快捷键及焦点边界，fixture 位于 `examples/support/web_edit_fixture.rs`；`scripts/macos-web-smoke/native-edit.mjs` 另接入真实 xterm 与生产剪贴板 adapter，验证终端原生粘贴和全选；客体无应用 IPC。
