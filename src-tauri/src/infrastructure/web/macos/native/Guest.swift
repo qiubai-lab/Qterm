@@ -28,7 +28,7 @@ final class BrowserGuest: NSObject, WKNavigationDelegate, WKUIDelegate {
 
     init(id: String, config: WKWebViewConfiguration, window: NSWindow, appOrigin: String, store: String, remote: Bool = false) {
         self.id = id; self.store = store; self.remote = remote; self.appOrigin = appOrigin; self.window = window
-        web = WKWebView(frame: NSRect(x: 0, y: 0, width: 1, height: 1), configuration: config)
+        web = BrowserWebView(frame: NSRect(x: 0, y: 0, width: 1, height: 1), configuration: config)
         surface = BrowserSurface(frame: web.frame)
         super.init()
         installBlockCloseShortcut()

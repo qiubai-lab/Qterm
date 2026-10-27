@@ -15,7 +15,7 @@
 
 - `src-tauri/src/infrastructure/external_links.rs`：应用和原生 smoke 共用的 opener 插件配置，关闭全 WebView 自动点击拦截，保留可信主界面的显式外部打开能力；原生网页链接继续交由 Web Block 接管，不扩大客体权限。`native_popup_click_tests.rs` 覆盖真实鼠标点击、默认行为未被取消和客体 opener 拒绝。
 
-- `src-tauri/src/infrastructure/web/macos/`：Rust async C/JSON bridge 与稳定 WebKit store UUID；`native/Bridge.swift` 分派主线程命令，`Store.swift` 拥有环境/代理/分类清理，`Guest.swift` 拥有导航/事件/预览及普通页与弹出页共用的桌面 Edge UA，`NavigationGuard.swift` 限制重复主文档跳转并允许显式导航重试，`Surface.swift` 拥有遮挡/输入/焦点，`Popups.swift` 拥有同步原生子页和异步接管。`Tunnel.swift` / `tunnel_script.mjs` 映射远程 HTTP/WS 回环地址并阻断未映射请求；`WebKitPolicy.m` 封装禁用远程 WebRTC 的受检 SPI；`domain/web_tunnel.rs` 定义固定别名规则，`macos/tunnel.rs` 仅改写 SOCKS 目标并继续经 SSH。`build_macos_web.rs` 编译链接 Swift/Objective-C 静态 adapter；`scripts/macos-web-smoke/` 用真实 WKWebView 验证路由/隔离/交互，客体无应用 IPC。
+- `src-tauri/src/infrastructure/web/macos/`：Rust async C/JSON bridge 与稳定 WebKit store UUID；`native/Bridge.swift` 分派主线程命令，`Store.swift` 拥有环境/代理/分类清理，`Guest.swift` 拥有导航/事件/预览及普通页与弹出页共用的桌面 Edge UA，`NavigationGuard.swift` 限制重复主文档跳转并允许显式导航重试，`BrowserWebView.swift` 将标准编辑组合键与菜单所属的 Cmd+W 交回 AppKit，其他组合键保留 WebKit 分发；`Surface.swift` 拥有遮挡/输入/焦点，`Popups.swift` 拥有同步原生子页和异步接管。`Tunnel.swift` / `tunnel_script.mjs` 映射远程 HTTP/WS 回环地址并阻断未映射请求；`WebKitPolicy.m` 封装禁用远程 WebRTC 的受检 SPI；`domain/web_tunnel.rs` 定义固定别名规则，`macos/tunnel.rs` 仅改写 SOCKS 目标并继续经 SSH。`build_macos_web.rs` 编译链接 Swift/Objective-C 静态 adapter；`scripts/macos-web-smoke/` 用真实 WKWebView 验证路由/隔离/交互；`src-tauri/examples/macos_web_edit.rs` 在真实 Tauri 窗口中验证原生编辑快捷键及焦点边界，fixture 位于 `examples/support/web_edit_fixture.rs`；`scripts/macos-web-smoke/native-edit.mjs` 另接入真实 xterm 与生产剪贴板 adapter，验证终端原生粘贴和全选；客体无应用 IPC。
 - `src/lib/tauri/webCapabilities.ts`：React 挂载前读取后端本地/远程能力与隧道映射模式；`webModel.ts` 按目标控制入口，`WebBlock` / `WebBrowserPane` 显示地址映射兼容范围，不根据 UA 推断原生授权。
 - `src-tauri/src/infrastructure/web/windows_popups.rs`、`windows_popup_pending.rs`、`popup_lifecycle.rs`：网页原生新窗口事件、仅限 UI 线程的 COM deferral 和有界一次性请求、来源 guest/环境继承与异步子 WebView 接管；保留 POST/opener 语义，来源导航/关闭及超时释放请求，不向客体开放 IPC。`src/lib/tauri/webPopups.ts` 是窄传输边界，`src/web/webPopupEvents.ts` 按 guest 代次订阅和去重，`WebTabs` 拥有同 Block 新标签容量，`useWebBrowser` 在导航监听就绪后接管请求；native popup tests 覆盖真实环境与代理继承。
 - `src/workspace/WorkspaceTerminalLinkHost.tsx`、`useWebOpenController.ts`、`src/web/webLinkOrigin.ts`：终端链接来源快照、同工作区同目标浏览器复用与一次性新页命令；Provider 仅组合 controller，WebTabs 拥有标签和初始地址消费。普通 HTTP(S)/OSC 8 适配器报告实际来源 block，确认框提供内部/外部选择；内部跟随来源本地或 SSH 目标，外部委托共享系统浏览器边界，不持久化待打开 URL。
@@ -62,7 +62,7 @@
 - `src/workspace/WorkspaceTabs.tsx`、`workspaceTabDeck.ts`、`useWorkspaceTabDeck.ts`、`useWorkspaceTabDrag.ts`：工作区导航、窄窗口堆叠几何、稳定悬停/键盘展开、可中断弹簧、可见区域拖拽；只拥有导航展示状态，复用 Workspace Context，不持久化堆叠状态。
 - `src/web/useWebTabCloseShortcut.ts`：仅活动可见浏览器的 Ctrl+W 主界面/原生 guest 路由与门禁；WebTabs 继续拥有选中标签、关闭回退和恢复投影，快捷键层不维护第二份标签状态。
 - `src/workspace/workspaceClose.ts`：Block 关闭资格和按类型确认文案的纯规则，供 reducer 与关闭编排共用；不操作会话或存储。`src/web/surface/nativeSurfaceCoordinator.ts` 同时从现有 surface 登记解析可见 guest 的 Block 归属；`web/windows_shortcuts.rs` 与 `web/macos/native/BlockCloseShortcut.swift` 转发可信原生关闭按键，不向客体页面开放 IPC。
-- `src-tauri/src/infrastructure/macos_menu.rs`、`src/lib/tauri/blockClose.ts`：macOS 原生菜单与主窗口定向 block/tab-close 事件的 transport/订阅生命周期；不直接断开会话或修改布局，关闭规则委托工作区快捷键 controller。
+- `src-tauri/src/infrastructure/macos_menu.rs`、`src/lib/tauri/blockClose.ts`：macOS 原生菜单与主窗口定向 block/tab-close 事件的 transport/订阅生命周期；不直接断开会话或修改布局，关闭规则委托工作区快捷键 controller。`macos_menu/select_all.rs` 将主 WebView 中的终端全选交给可取消 DOM 事件，其余焦点回落 AppKit 响应链。
 - `src/workspace/useWorkspaceShortcuts.ts`：应用快捷键的捕获、弹窗/锁屏门禁和所有活动 Block 的关闭路由；复用 Shell 关闭确认与现有会话清理，不持有会话或持久化状态。
 - `src/workspace/WorkspaceShell.tsx`：组合顶部 Workspace 导航、工具轨、Terminal/Files/Network/Git 认证路由、route 凭证库解锁、关闭编排、快捷键与一次性启动更新提示入口；不请求任意更新地址、解析跳板图、布局树或 SSH 协议。
 - `src/workspace/model.ts`、`layout.ts`、`reducer.ts`、`gitRepositoryHistory.ts`：schema v10 可持久化工作区契约、Git `Unbound | Local | Remote` target、按本机或 profile 隔离的有界 Git 仓库 MRU、使用调用方提供稳定 ID 的纯布局树变换与低频结构状态；不持有 session、xterm、Git 快照、远程命令、一次性启动目录或凭据。
@@ -156,7 +156,7 @@
 - `.agents/skills/`：负责把长期工程与界面规范转成可执行的 agent 决策流程；不替代 qb-spec change、测试、linter 或源码门禁。
 - `src/app/`：负责顶层布局、feature 组合与应用级预设主题生命周期；不承载认证、连接或传输规则。
 - `src/workspace/`：负责工作区结构模型、布局树变换、顶部 Workspace 导航、按连接的有界 Git 仓库历史和 block runtime 编排；不读取本地文件、验证仓库有效性或实现 SSH/SFTP。
-- `src/terminal/`：负责 xterm 实例及终端 I/O 适配；不持久化 buffer 或拥有 Workspace 生命周期。`terminalView.ts` 拥有可重挂载的 xterm 视图与 addon 生命周期；`terminalOsc52.ts` 拥有有界、只写的剪贴板协议适配；`terminalClipboardShortcuts.ts` 拥有原生选区与应用复制快捷键的分流。
+- `src/terminal/`：负责 xterm 实例及终端 I/O 适配；不持久化 buffer 或拥有 Workspace 生命周期。`terminalView.ts` 拥有可重挂载的 xterm 视图与 addon 生命周期；`terminalOsc52.ts` 拥有有界、只写的剪贴板协议适配；`terminalClipboardShortcuts.ts` 拥有复制/粘贴快捷键与原生编辑事件分流；`useTerminalInputBindings.ts` 拥有视图绑定生命周期、搜索与词导航接线。macOS/Windows 的原生 paste 在 xterm 处理前接入既有暂存/确认流程；Linux 保持 PRIMARY 选区粘贴语义。`TerminalInput.test.tsx` 保护输入和上传行为，`terminalPanelTestFixture.ts` 提供测试专用 xterm/IPC fixture。
 - `src/terminal/imageExport/`：负责选中完整行的固定宽度快照、系统主题采样、终端外框与图片绘制、S/M/L（1×/2×/3×）尺寸档位与像素上限、预览及导出状态；不修改 live buffer、应用主题或会话。`TerminalContextMenu.tsx` 拥有终端菜单展示和菜单键盘导航，`TerminalPanel.tsx` 只组合导出入口。
 - `src/lib/tauri/terminalImage.ts`、`src-tauri/src/commands/terminal_image.rs`、`src-tauri/src/infrastructure/terminal_image.rs`：分别负责 PNG 原始字节 IPC、原生保存路径选择与错误映射、PNG 有界校验及原子落盘；不接受前端指定的任意保存路径，不接管文件传输或终端会话。
 - `src/files/`：负责内部文件窗口展示、导航、下载反馈与瞬时预览编辑状态；不直接访问本地文件系统或 SSH infrastructure。

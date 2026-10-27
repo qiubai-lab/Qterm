@@ -6,6 +6,10 @@ use tauri::{
 
 const CLOSE_BLOCK: &str = "qterm-close-block";
 const CLOSE_EVENT: &str = "qterm-close-block";
+const SELECT_ALL: &str = "qterm-select-all";
+
+#[path = "macos_menu/select_all.rs"]
+mod select_all;
 
 pub(crate) fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     let package = app.package_info();
@@ -62,7 +66,7 @@ pub(crate) fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
                     &Item::cut(app, None)?,
                     &Item::copy(app, None)?,
                     &Item::paste(app, None)?,
-                    &Item::select_all(app, None)?,
+                    &MenuItem::with_id(app, SELECT_ALL, "Select All", true, Some("Cmd+A"))?,
                 ],
             )?,
             &Submenu::with_items(app, "View", true, &[&Item::fullscreen(app, None)?])?,
@@ -79,6 +83,10 @@ pub(crate) fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
 }
 
 pub(crate) fn handle<R: Runtime>(app: &AppHandle<R>, event: tauri::menu::MenuEvent) {
+    if event.id().as_ref() == SELECT_ALL {
+        select_all::dispatch(app);
+        return;
+    }
     if event.id().as_ref() != CLOSE_BLOCK || is_repeated_key_event() {
         return;
     }

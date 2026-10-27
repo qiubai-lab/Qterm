@@ -7,9 +7,25 @@ const shortcuts: [ClipboardPlatform, KeyboardEventInit][] = [
   ["windows", { ctrlKey: true, shiftKey: true }],
   ["linux", { ctrlKey: true, shiftKey: true }],
   ["mac", { metaKey: true }],
+  ["mac", { metaKey: true, shiftKey: true }],
 ];
 
 describe("terminal clipboard shortcut ownership", () => {
+  it.each(["windows", "mac", "linux"] as const)("leaves terminal controls and unrelated app commands alone on %s", (platform) => {
+    const terminal = { hasSelection: () => false } as Terminal;
+    const paste = vi.fn();
+    const copy = vi.fn();
+    for (const key of ["a", "c", "z", "w", "f", "1"]) {
+      const event = new KeyboardEvent("keydown", { key, ctrlKey: true, cancelable: true });
+      expect(handleClipboardShortcut(event, platform, terminal, true, copy, paste)).toBe(true);
+      expect(event.defaultPrevented).toBe(false);
+    }
+    for (const modifiers of [{ ctrlKey: true, altKey: true }, { metaKey: true, ctrlKey: true }, { metaKey: true, altKey: true }]) {
+      expect(handleClipboardShortcut(new KeyboardEvent("keydown", { key: "v", ...modifiers }), platform, terminal, true, copy, paste)).toBe(true);
+    }
+    expect(paste).not.toHaveBeenCalled();
+    expect(copy).not.toHaveBeenCalled();
+  });
   it.each(shortcuts)("passes %s copy to the TUI when xterm has no selection (%j)", (platform, modifiers) => {
     const terminal = { hasSelection: () => false } as Terminal;
     const copy = vi.fn();

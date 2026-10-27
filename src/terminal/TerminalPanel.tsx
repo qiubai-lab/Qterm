@@ -4,7 +4,6 @@ import { createPortal } from "react-dom";
 import type { ISearchOptions } from "@xterm/addon-search";
 import { writeText as writeClipboardText } from "@qterm/services/textClipboard";
 import "@xterm/xterm/css/xterm.css";
-import { resolveAppShortcut } from "../app/shortcuts";
 import { DialogFrame } from "../components/dialogs/DialogFrame";
 import { ExactTextInput } from "../components/ExactTextInput";
 import { Icon } from "../components/Icon";
@@ -16,7 +15,8 @@ import {
   type TerminalStagingEvent,
 } from "@qterm/services/sessions";
 import { useWorkspace } from "../workspace/WorkspaceProvider";
-import { handleClipboardShortcut, terminalClipboardPlatform, type ClipboardPlatform } from "./terminalClipboardShortcuts";
+import { terminalClipboardPlatform } from "./terminalClipboardShortcuts";
+import { useTerminalInputBindings } from "./useTerminalInputBindings";
 import { resetTerminalSession } from "./terminalSessionReset";
 import { ensureTerminalSearch } from "./terminalSearch";
 import { readTerminalSearchColors } from "./terminalTheme";
@@ -355,21 +355,7 @@ export function TerminalPanel({ blockId, sessionKey, visible, local, osc7Enabled
     };
   }, [blockId, local, registerWriter, sessionKey, setBlockCwd, windowsPty]);
 
-  useEffect(() => {
-    const view = viewRef.current;
-    if (!view) return;
-    view.onKey = (event) => {
-      if (resolveAppShortcut(event, desktopPlatform)?.type === "searchTerminal") {
-        event.preventDefault();
-        event.stopPropagation();
-        openSearch();
-        return false;
-      }
-      if (!handleClipboardShortcut(event, clipboardPlatform, view.terminal, inputEnabled, copySelection, requestPaste)) return false;
-      return handleMacWordNavigationShortcut(event, clipboardPlatform, (data) => { void view.inputScheduler.send(data); });
-    };
-    return () => { view.onKey = () => true; };
-  }, [clipboardPlatform, copySelection, desktopPlatform, inputEnabled, openSearch, requestPaste]);
+  useTerminalInputBindings(viewRef, sessionKey, clipboardPlatform, desktopPlatform, inputEnabled, copySelection, requestPaste, openSearch);
 
   useEffect(() => registerTerminalController(blockId, {
     focus: () => viewRef.current?.terminal.focus(),
@@ -522,17 +508,6 @@ export function TerminalPanel({ blockId, sessionKey, visible, local, osc7Enabled
       <footer className="dialog-actions end"><button className="secondary-button" onClick={() => { setPendingPaste(null); restoreTerminalFocus(); }}>取消</button><button data-dialog-autofocus className="primary-button" disabled={!inputEnabled} onClick={confirmPaste}>粘贴到终端</button></footer>
     </DialogFrame>, document.body)}
   </>;
-}
-
-function handleMacWordNavigationShortcut(event: KeyboardEvent, platform: ClipboardPlatform, write: (data: string) => void): boolean {
-  const hasSingleWordModifier = event.ctrlKey !== event.altKey;
-  if (platform !== "mac" || event.type !== "keydown" || !hasSingleWordModifier || event.shiftKey || event.metaKey) return true;
-  const input = event.key === "ArrowLeft" ? "\x1bb" : event.key === "ArrowRight" ? "\x1bf" : null;
-  if (!input) return true;
-  event.preventDefault();
-  event.stopPropagation();
-  write(input);
-  return false;
 }
 
 function terminalStagingErrorMessage(reason: unknown): string {
