@@ -25,9 +25,12 @@ final class BrowserGuest: NSObject, WKNavigationDelegate, WKUIDelegate {
     var observations: [NSKeyValueObservation] = []
     var lastPalette = ""
     var navigationGuard = NavigationGuard()
+    let fileUpload: BrowserFileUpload
 
-    init(id: String, config: WKWebViewConfiguration, window: NSWindow, appOrigin: String, store: String, remote: Bool = false) {
+    init(id: String, config: WKWebViewConfiguration, window: NSWindow, appOrigin: String, store: String, remote: Bool = false,
+         fileUpload: BrowserFileUpload = BrowserFileUpload()) {
         self.id = id; self.store = store; self.remote = remote; self.appOrigin = appOrigin; self.window = window
+        self.fileUpload = fileUpload
         web = BrowserWebView(frame: NSRect(x: 0, y: 0, width: 1, height: 1), configuration: config)
         surface = BrowserSurface(frame: web.frame)
         super.init()
@@ -98,6 +101,7 @@ final class BrowserGuest: NSObject, WKNavigationDelegate, WKUIDelegate {
         decisionHandler(response.canShowMIMEType ? .allow : .cancel)
     }
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+        fileUpload.cancel()
         BrowserHost.shared.cancelPopups(id)
         message = ""; navigationError = nil; activeNavigation = navigation; loadState = "loading"; publish(visited: false)
     }
@@ -119,6 +123,7 @@ final class BrowserGuest: NSObject, WKNavigationDelegate, WKUIDelegate {
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) { failed(navigation, error) }
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) { failed(navigation, error) }
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        fileUpload.cancel()
         activeNavigation = nil; loadState = "failed"; message = "网页进程已退出，请刷新后重试"; publish(visited: false)
     }
     func action(_ input: [String: Any]) throws {
@@ -156,6 +161,7 @@ final class BrowserGuest: NSObject, WKNavigationDelegate, WKUIDelegate {
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) { reply.fail("网页预览超时") }
     }
     func dispose() {
+        fileUpload.cancel()
         if let monitor = closeShortcutMonitor { NSEvent.removeMonitor(monitor); closeShortcutMonitor = nil }
         closed = true; observations.removeAll(); web.stopLoading()
         web.navigationDelegate = nil; web.uiDelegate = nil; surface.removeFromSuperview()

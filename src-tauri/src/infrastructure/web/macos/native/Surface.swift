@@ -33,6 +33,7 @@ extension BrowserGuest {
         web.frame = surface.bounds
         let blocked = bounds["inputBlocked"] as? Bool ?? false
         let hidden = !(bounds["visible"] as? Bool ?? false) || (bounds["covered"] as? Bool ?? false)
+        if blocked || hidden { fileUpload.cancel() }
         if blocked || hidden, let responder = window?.firstResponder as? NSView,
            responder === web || responder.isDescendant(of: web) {
             // Main Tauri WKWebView is a sibling under the window content view.

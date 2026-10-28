@@ -66,6 +66,7 @@ func smoke(_ window: NSWindow) async throws {
     try await loaded(local)
     try check(local.web.title == "Proxy Local", "local environment connects directly")
     host.close("local")
+    try await fileUploadSmoke(a, origin)
     _ = try await js(a, "history.pushState({}, '', '/spa'); document.title='SPA'; true")
     await pause()
     try check(a.web.url?.path == "/spa" && a.web.title == "SPA", "SPA URL and title update")
@@ -111,6 +112,7 @@ func cleanup() async {
 }
 
 let app = NSApplication.shared
+setbuf(stdout, nil)
 app.setActivationPolicy(.regular)
 let window = NSWindow(contentRect: NSRect(x: 80, y: 80, width: 900, height: 650),
                       styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false)

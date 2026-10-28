@@ -19,6 +19,8 @@ Coverage:
 
 For focused navigation/network/store checks without desktop mouse interaction, run `python3 scripts/macos-web-smoke/fixture.py --navigation-only`. This mode still uses the real WebKit adapter, including script-loop detection and recovery, but skips popup mouse tests.
 
+This mode also exercises the production file-upload delegate with a hidden HTML file input and native `NSOpenPanel`: temporary-file bytes reaching the page, single/multiple/directory selection modes, cancellation, navigation/close cleanup, and reopening. A test panel supplies deterministic selected URLs and the test ends its sheet with OK; WebKit performs the real file read. Interactive Finder file selection is not automated. Only generated local fixture data is used; no user files are uploaded.
+
 The SOCKS fixture observes browser destination names. The production gateway's actual alias decoding and unchanged port/payload/SSH-reply forwarding are independently tested in `macos/tunnel.rs`; fixed alias boundaries live in `domain/web_tunnel.rs`. This is component integration, not a test against a user's real SSH server or production login provider.
 
 Validated 2026-10-26 on arm64 macOS 26.6.2 (25G83), SDK 27.0. The fixture passed with a snapshot visually inspected. A timing failure in the synthetic-click fixture was corrected by explicitly activating the AppKit application before clicking; automatic popup testing uses a real page-load timer rather than evaluateJavaScript, which WebKit treats as a user gesture.
