@@ -1,8 +1,10 @@
 mod browser;
+mod connections;
 mod control;
 mod proxy;
 mod report;
 
+use tauri::Manager;
 use tauri_runtime_cef::{Cef, ProxyConfig, SandboxPolicy, SecretStorage, WebRtcIpHandling};
 
 #[tauri_runtime_cef::cef_entry_point]
@@ -20,13 +22,19 @@ fn main() {
         .webrtc_ip_handling(WebRtcIpHandling::DisableNonProxiedUdp);
     tauri::Builder::default()
         .runtime(runtime)
+        .manage(connections::Connections::default())
         .setup(move |app| {
             report::emit(serde_json::json!({"event":"ready"}));
             control::start(app.handle().clone(), root.clone());
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("run CEF probe");
+        .build(tauri::generate_context!())
+        .expect("build CEF probe")
+        .run(|app, event| {
+            if matches!(event, tauri::RunEvent::Exit) {
+                app.state::<connections::Connections>().shutdown();
+            }
+        });
 }
 
 fn initial_proxy() -> ProxyConfig {

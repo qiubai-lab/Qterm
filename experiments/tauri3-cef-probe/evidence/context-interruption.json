@@ -1,0 +1,16 @@
+{
+  "passed": true,
+  "reported_passed": false,
+  "reported_completed": false,
+  "released": [
+    {
+      "count": 2,
+      "event": "connection_handles_released"
+    },
+    {
+      "count": 2,
+      "event": "context_pool_released"
+    }
+  ],
+  "remaining_app_ssh_sshd_processes": []
+}

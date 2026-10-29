@@ -3,11 +3,16 @@ use tauri_runtime_cef::{
     cef::{self, *},
 };
 
-pub fn configure(window: &tauri::WebviewWindow, port: u16) -> Result<(), String> {
+pub fn configure(
+    window: &tauri::WebviewWindow,
+    port: u16,
+    expected: Option<RequestContext>,
+    others: Vec<RequestContext>,
+) -> Result<RequestContext, String> {
     let (sender, receiver) = std::sync::mpsc::channel();
     window
         .with_cef_webview(move |view| {
-            let _ = sender.send(apply(view, port));
+            let _ = sender.send(bind(view, port, expected, others));
         })
         .map_err(|e| e.to_string())?;
     receiver
@@ -15,13 +20,55 @@ pub fn configure(window: &tauri::WebviewWindow, port: u16) -> Result<(), String>
         .map_err(|e| format!("proxy initialization timeout: {e}"))?
 }
 
-fn apply(view: &tauri_runtime_cef::Webview, port: u16) -> Result<(), String> {
+fn bind(
+    view: &tauri_runtime_cef::Webview,
+    port: u16,
+    expected: Option<RequestContext>,
+    others: Vec<RequestContext>,
+) -> Result<RequestContext, String> {
     let context = view
         .browser()
         .host()
         .ok_or("missing browser host")?
         .request_context()
         .ok_or("missing request context")?;
+    for mut other in others {
+        if context.is_same(Some(&mut other)) != 0 || context.is_sharing_with(Some(&mut other)) != 0
+        {
+            return Err("independent SSH connections share a native context or storage".into());
+        }
+    }
+    if let Some(mut expected) = expected {
+        if context.is_same(Some(&mut expected)) != 1 {
+            return Err("same connection did not reuse its native RequestContext".into());
+        }
+        verify(&context, port)?;
+    } else {
+        apply(&context, port)?;
+        verify(&context, port)?;
+    }
+    Ok(context)
+}
+
+fn verify(context: &RequestContext, port: u16) -> Result<(), String> {
+    let preference = context
+        .preference(Some(&CefString::from("proxy")))
+        .ok_or("missing proxy preference")?;
+    let dictionary = preference.dictionary().ok_or("proxy is not a dictionary")?;
+    for (key, expected) in [
+        ("mode", "fixed_servers".to_string()),
+        ("server", format!("socks5://127.0.0.1:{port}")),
+        ("bypass_list", "<-loopback>".to_string()),
+    ] {
+        if CefString::from(&dictionary.string(Some(&CefString::from(key)))).to_string() != expected
+        {
+            return Err(format!("connection proxy preference changed: {key}"));
+        }
+    }
+    Ok(())
+}
+
+fn apply(context: &RequestContext, port: u16) -> Result<(), String> {
     let mut dictionary = cef::dictionary_value_create().ok_or("allocate dictionary")?;
     for (key, text) in [
         ("mode", "fixed_servers".to_string()),

@@ -1,5 +1,5 @@
 use std::path::Path;
-use tauri::{WebviewUrl, WebviewWindowBuilder, webview::PageLoadEvent};
+use tauri::{Manager, WebviewUrl, WebviewWindowBuilder, webview::PageLoadEvent};
 use tauri_runtime_cef::WebviewWindowBuilderCefExt;
 
 pub fn open(
@@ -17,6 +17,8 @@ pub fn open(
     {
         return Err("invalid fixture profile, proxy port or path".into());
     }
+    let connections = app.state::<crate::connections::Connections>();
+    connections.validate(profile, port)?;
     let console_id = id.to_string();
     let load_id = id.to_string();
     let (blank_sender, blank_receiver) = std::sync::mpsc::channel();
@@ -57,12 +59,16 @@ pub fn open(
         let _ = window.destroy();
         return Err(format!("initial blank document did not finish: {error}"));
     }
-    if let Err(error) = crate::proxy::configure(&window, port) {
-        let _ = window.destroy();
-        return Err(error);
-    }
+    let reused = match connections.configure(&window, profile, port) {
+        Ok(reused) => reused,
+        Err(error) => {
+            let _ = window.destroy();
+            return Err(error);
+        }
+    };
     crate::report::emit(
-        serde_json::json!({"event":"proxy_ready","id":id,"profile":profile,"port":port}),
+        serde_json::json!({"event":"proxy_ready","id":id,"profile":profile,"port":port,
+            "context_reused":reused,"native_identity_verified":true,"other_contexts_isolated":true}),
     );
     window
         .navigate(

@@ -1,1 +1,32 @@
-{"productName":"Qterm CEF Probe","version":"0.1.0","identifier":"com.qiubai.qterm.cef-probe","build":{"frontendDist":"../frontend"},"app":{"windows":[{"label":"main","title":"Qterm CEF Probe — isolated experiment","width":640,"height":400}],"security":{"csp":"default-src 'self'; style-src 'self' 'unsafe-inline'"}},"bundle":{"active":true,"targets":["app","dmg"],"icon":[],"macOS":{"signingIdentity":"-"}}}
+{
+  "productName": "Qterm CEF Probe",
+  "version": "0.1.1",
+  "identifier": "com.qiubai.qterm.cef-probe",
+  "build": {
+    "frontendDist": "../frontend"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Qterm CEF Probe — isolated experiment",
+        "width": 640,
+        "height": 400
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "app",
+      "dmg"
+    ],
+    "icon": [],
+    "macOS": {
+      "signingIdentity": "-"
+    }
+  }
+}

@@ -12,6 +12,7 @@ class App:
     def __init__(self, binary, data, log):
         self.log = log.open('w')
         self.events, self.pending = queue.Queue(), []
+        self.history, self.contexts = [], {}
         self.process = subprocess.Popen([str(binary)], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                         stderr=self.log, text=True,
                                         env={**os.environ, 'QTERM_CEF_PROBE_DATA': str(data)})
@@ -28,7 +29,9 @@ class App:
             self.log.write(line)
             self.log.flush()
             if line.startswith('PROBE '):
-                self.events.put(json.loads(line[6:]))
+                event = json.loads(line[6:])
+                self.history.append(event)
+                self.events.put(event)
 
     def send(self, **command):
         self.process.stdin.write(json.dumps(command) + '\n')
@@ -46,14 +49,14 @@ class App:
                 item = self.events.get(timeout=.2)
             except queue.Empty:
                 continue
-            if item.get('event') == 'error':
+            if item.get('event') == 'error' and event != 'error':
                 raise RuntimeError(item)
             self.pending.append(item)
         raise TimeoutError(f'{event} {match}; pending={self.pending}')
 
     def open(self, id, profile, gateway, path='/'):
         self.send(op='open', id=id, profile=profile, port=gateway.server_address[1], path=path)
-        self.wait('proxy_ready', id=id)
+        self.contexts[id] = self.wait('proxy_ready', id=id)
         return self.wait('loaded', id=id)
 
     def evaluate(self, id, script, tag='eval', timeout=30):

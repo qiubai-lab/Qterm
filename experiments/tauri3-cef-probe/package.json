@@ -1,11 +1,11 @@
 {
   "name": "qterm-tauri3-cef-probe",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "packageManager": "pnpm@11.0.8",
   "scripts": {
-    "build": "tauri build --bundles app,dmg",
-    "dev": "tauri dev"
+    "build": "python3 prepare_runtime.py && tauri build --bundles app,dmg",
+    "dev": "python3 prepare_runtime.py && tauri dev"
   },
   "devDependencies": {
     "@tauri-apps/cli": "3.0.0-alpha.5",

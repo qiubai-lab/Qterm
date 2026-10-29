@@ -6,6 +6,7 @@
 - `src/`：负责 React 展示、用户交互和 Tauri IPC 客户端；不读取私钥、不实现 SSH 规则，也不持久化敏感凭据。
 - `src-tauri/`：负责桌面运行时、应用用例、领域规则和基础设施适配器；不承载 React 页面状态。
 - `experiments/tauri3-cef-probe/`：独立 macOS Tauri 3 + CEF 验证应用，拥有自己的依赖、打包、浏览环境代理和测试；复用 `scripts/macos-web-origin-probe/` 的临时 OpenSSH fixture，证据见 `evidence/`。不接入正式版构建或用户配置。
+  `patches/context_pool.rs` 与受校验的运行时补丁拥有按连接目录复用的原生 RequestContext；`src-tauri/src/connections.rs` 拥有连接代理绑定和身份校验，`tests/context_continuity.py` 覆盖新建/关闭窗口期间的连续流量与创建者退出。`prepare_runtime.py` 生成忽略的依赖目录，不修改全局 Cargo 缓存。
 - `scripts/`：负责仓库级可测试命令入口；当前只为 Tauri `dev` 注入开发 flavor 并把其他 CLI 参数原样转发，不承载应用业务、发布凭据或 shell 拼接。
 - `docs/qb-spec/`：负责长期产品上下文、需求规格和实施计划；不作为运行时代码或配置来源。
 - `.github/`：负责持续集成、依赖更新、桌面产物与静态产品站点构建发布自动化；不包含产品业务逻辑或发布凭据。

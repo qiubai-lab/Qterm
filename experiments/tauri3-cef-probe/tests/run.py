@@ -20,6 +20,7 @@ from transport import Gateway, Sentinel
 from controller import App
 from measure import memory, package
 from lifecycle import run as lifecycle
+from context_continuity import run as continuity
 
 
 def main():
@@ -33,7 +34,7 @@ def main():
     evidence = dict(timestamp=datetime.datetime.now(datetime.timezone.utc).isoformat(),
                     platform=platform.platform(), machine=platform.machine(),
                     ram_bytes=int(subprocess.check_output(['sysctl', '-n', 'hw.memsize'], text=True)),
-                    versions={'tauri': '3.0.0-alpha.5', 'runtime': '3.0.0-alpha.6', 'cef': '154.5.0'},
+                    versions={'probe': '0.1.1', 'tauri': '3.0.0-alpha.5', 'runtime': '3.0.0-alpha.6 + local context-pool patch', 'cef': '154.5.0'},
                     limitations=['macOS arm64 only', 'two sshd processes on one host with separate target ports',
                                  'tiny synthetic pages; not full Qterm or a large developer application',
                                  'RSS sums shared pages; not unique physical footprint',
@@ -95,6 +96,7 @@ def main():
                 value = app.evaluate(name.lower(), 'const profile='+json.dumps(name)+';\n'+storage)
                 add(name + ': Service Worker, Cache Storage, IndexedDB and localStorage identity',
                     all(value[k] == name for k in ('sw', 'cacheBefore', 'indexedDBBefore', 'local')), value)
+            continuity(app, gateways, add)
             lifecycle(app, gateways, environments, add)
             sample(app, 'SSH-windows-closed')
             hits = [sentinel.hits for sentinel in sentinels]
@@ -106,6 +108,12 @@ def main():
                     bool(records) and all(r['host'] == 'localhost:3000' and 'session='+other not in r['cookie'] for r in records), len(records))
                 sshlog = (environments[name].directory / 'sshd.log').read_text()
                 add(name + ': real SSH public-key authentication', 'Accepted publickey' in sshlog)
+            app.close()
+            released=[e for e in app.history if e.get('event') in ('connection_handles_released','context_pool_released')]
+            add('normal exit releases two connection handles and two pooled contexts before CEF shutdown',
+                app.process.returncode == 0 and [e['event'] for e in released] == ['connection_handles_released','context_pool_released']
+                and all(e.get('count') == 2 for e in released), released)
+            evidence['contexts'] = app.contexts
         evidence['completed'] = True
     except BaseException:
         evidence['error'] = traceback.format_exc()

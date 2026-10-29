@@ -1,0 +1,61 @@
+--- a/src/cef_impl/mod.rs
++++ b/src/cef_impl/mod.rs
+@@ -10,0 +11,2 @@
++
++pub(crate) mod context_pool;
+--- a/src/runtime.rs
++++ b/src/runtime.rs
+@@ -3732,0 +3733 @@
++    crate::cef_impl::context_pool::clear_before_shutdown();
+--- a/src/cef_impl/request_context.rs
++++ b/src/cef_impl/request_context.rs
+@@ -349,0 +350,20 @@
++  let pool_key = if !webview_attributes.incognito && webview_attributes.data_directory.is_some() {
++    let path = PathBuf::from(cache_path.to_string());
++    match path.canonicalize() {
++      Ok(path) => Some(path),
++      Err(error) => { log::error!("cannot canonicalize pooled context path: {error}"); return None; }
++    }
++  } else { None };
++  if pool_key.is_some() && webview_attributes.proxy_url.is_some() {
++    log::error!("pooled contexts require a connection-owned proxy, not per-window proxy_url");
++    return None;
++  }
++  let custom_schemes: Vec<&String> = custom_schemes.into_iter().collect();
++  if let Some(key) = pool_key.as_ref()
++    && let Some(context) = super::context_pool::get(key)
++  {
++    register_schemes(&context, &custom_schemes, custom_protocol_scheme, &scheme_registry, &main_thread);
++    super::context_pool::when_ready(key, on_initialized);
++    return Some(context);
++  }
++  let initialization_key = pool_key.clone();
+@@ -375 +395,4 @@
+-      on_initialized(rc);
++      let waiting = initialization_key.as_ref()
++        .map(|key| super::context_pool::initialized(key, rc.is_some())).unwrap_or_default();
++      on_initialized(rc.clone());
++      for callback in waiting { callback(rc.clone()); }
+@@ -384 +407,14 @@
+-  if let Some(request_context) = request_context.as_ref() {
++  if let Some(context) = request_context.as_ref() {
++    if let Some(key) = pool_key { super::context_pool::insert(key, context.clone()); }
++    register_schemes(context, &custom_schemes, custom_protocol_scheme, &scheme_registry, &main_thread);
++  }
++  request_context
++}
++
++fn register_schemes(
++  request_context: &RequestContext,
++  custom_schemes: &[&String],
++  custom_protocol_scheme: &str,
++  scheme_registry: &request_handler::SchemeRegistry,
++  main_thread: &request_handler::MainThreadDispatcher,
++) {
+@@ -391 +427 @@
+-          scheme.clone(),
++          (*scheme).clone(),
+@@ -396,3 +431,0 @@
+-  }
+-
+-  request_context

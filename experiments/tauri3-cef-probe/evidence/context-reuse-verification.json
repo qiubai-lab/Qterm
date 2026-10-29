@@ -1,0 +1,40 @@
+{
+  "cargo_fmt": "passed",
+  "owned_pool_rustfmt": "passed",
+  "python_compile": "passed",
+  "clippy": {
+    "command": "cargo clippy --manifest-path src-tauri/Cargo.toml --release --all-targets --features tauri/custom-protocol -- -D warnings",
+    "exit_code": 0,
+    "output": "   Compiling ring v0.17.14\n   Compiling qterm-cef-probe v0.1.1 (/Users/qiubai/.codex/worktrees/tauri3-cef-probe/Qterm/experiments/tauri3-cef-probe/src-tauri)\n   Compiling rustls v0.23.46\n   Compiling rustls-webpki v0.103.16\n   Compiling ureq v3.5.0\n   Compiling download-cef v3.0.0\n   Compiling cef-dll-sys v154.5.0+154.0.34\n   Compiling tauri-runtime-cef v3.0.0-alpha.6 (/Users/qiubai/.codex/worktrees/tauri3-cef-probe/Qterm/experiments/tauri3-cef-probe/runtime/tauri-runtime-cef)\n    Checking cef v154.5.0+154.0.34\nwarning: field `devtools_enabled` is never read\n   --> /Users/qiubai/.codex/worktrees/tauri3-cef-probe/Qterm/experiments/tauri3-cef-probe/runtime/tauri-runtime-cef/src/webview.rs:523:14\n    |\n508 | pub(crate) struct AppWebview {\n    |                   ---------- field in this struct\n...\n523 |   pub(crate) devtools_enabled: bool,\n    |              ^^^^^^^^^^^^^^^^\n    |\n    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default\n\nwarning: `tauri-runtime-cef` (lib) generated 1 warning\n    Finished `release` profile [optimized] target(s) in 11.03s\n",
+    "note": "Upstream dependency retains an existing unused devtools_enabled field warning; no warnings in the application."
+  },
+  "review": "Independent source review found no critical/important issue; README/Python prerequisite comments addressed.",
+  "signature": "--prepared:/Volumes/DATA/BuildCache/qterm-cef-probe/target/release/bundle/macos/Qterm CEF Probe.app/Contents/Frameworks/qterm-cef-probe Helper.app\n--prepared:/Volumes/DATA/BuildCache/qterm-cef-probe/target/release/bundle/macos/Qterm CEF Probe.app/Contents/Frameworks/qterm-cef-probe Helper (Renderer).app\n--prepared:/Volumes/DATA/BuildCache/qterm-cef-probe/target/release/bundle/macos/Qterm CEF Probe.app/Contents/Frameworks/qterm-cef-probe Helper (Plugin).app\n--prepared:/Volumes/DATA/BuildCache/qterm-cef-probe/target/release/bundle/macos/Qterm CEF Probe.app/Contents/Frameworks/qterm-cef-probe Helper (GPU).app\n--prepared:/Volumes/DATA/BuildCache/qterm-cef-probe/target/release/bundle/macos/Qterm CEF Probe.app/Contents/Frameworks/qterm-cef-probe Helper (Alerts).app\n--validated:/Volumes/DATA/BuildCache/qterm-cef-probe/target/release/bundle/macos/Qterm CEF Probe.app/Contents/Frameworks/qterm-cef-probe Helper.app\n--validated:/Volumes/DATA/BuildCache/qterm-cef-probe/target/release/bundle/macos/Qterm CEF Probe.app/Contents/Frameworks/qterm-cef-probe Helper (Renderer).app\n--validated:/Volumes/DATA/BuildCache/qterm-cef-probe/target/release/bundle/macos/Qterm CEF Probe.app/Contents/Frameworks/qterm-cef-probe Helper (Plugin).app\n--validated:/Volumes/DATA/BuildCache/qterm-cef-probe/target/release/bundle/macos/Qterm CEF Probe.app/Contents/Frameworks/qterm-cef-probe Helper (Alerts).app\n--validated:/Volumes/DATA/BuildCache/qterm-cef-probe/target/release/bundle/macos/Qterm CEF Probe.app/Contents/Frameworks/qterm-cef-probe Helper (GPU).app\n--prepared:/Volumes/DATA/BuildCache/qterm-cef-probe/target/release/bundle/macos/Qterm CEF Probe.app/Contents/Frameworks/Chromium Embedded Framework.framework\n--validated:/Volumes/DATA/BuildCache/qterm-cef-probe/target/release/bundle/macos/Qterm CEF Probe.app/Contents/Frameworks/Chromium Embedded Framework.framework\n/Volumes/DATA/BuildCache/qterm-cef-probe/target/release/bundle/macos/Qterm CEF Probe.app: valid on disk\n/Volumes/DATA/BuildCache/qterm-cef-probe/target/release/bundle/macos/Qterm CEF Probe.app: satisfies its Designated Requirement\n",
+  "dmg_checksum": "\u6b63\u5728\u68c0\u67e5\u201cProtective Master Boot Record\uff08MBR\uff1a0\uff09\u201d\u7684\u6821\u9a8c\u548c\u2026\nProtective Master Boot Record\uff08MBR\uff1a0\uff09\uff1a\u5df2\u9a8c\u8bc1CRC32 $2F6CC51B\n\u6b63\u5728\u68c0\u67e5\u201cGPT Header\uff08Primary GPT Header\uff1a1\uff09\u201d\u7684\u6821\u9a8c\u548c\u2026\n    GPT Header\uff08Primary GPT Header\uff1a1\uff09\uff1a\u5df2\u9a8c\u8bc1CRC32 $B1931E90\n\u6b63\u5728\u68c0\u67e5\u201cGPT Partition Data\uff08Primary GPT Table\uff1a2\uff09\u201d\u7684\u6821\u9a8c\u548c\u2026\nGPT Partition Data\uff08Primary GPT Table\uff1a\u5df2\u9a8c\u8bc1CRC32 $8DB786B2\n\u6b63\u5728\u68c0\u67e5\u201c\uff08Apple_Free\uff1a3\uff09\u201d\u7684\u6821\u9a8c\u548c\u2026\n                      \uff08Apple_Free\uff1a3\uff09\uff1a\u5df2\u9a8c\u8bc1CRC32 $00000000\n\u6b63\u5728\u68c0\u67e5\u201cdisk image\uff08Apple_HFS\uff1a4\uff09\u201d\u7684\u6821\u9a8c\u548c\u2026\n             disk image\uff08Apple_HFS\uff1a4\uff09\uff1a\u5df2\u9a8c\u8bc1CRC32 $E582F171\n\u6b63\u5728\u68c0\u67e5\u201c\uff08Apple_Free\uff1a5\uff09\u201d\u7684\u6821\u9a8c\u548c\u2026\n                      \uff08Apple_Free\uff1a5\uff09\uff1a\u5df2\u9a8c\u8bc1CRC32 $00000000\n\u6b63\u5728\u68c0\u67e5\u201cGPT Partition Data\uff08Backup GPT Table\uff1a6\uff09\u201d\u7684\u6821\u9a8c\u548c\u2026\nGPT Partition Data\uff08Backup GPT Table\uff1a\uff1a\u5df2\u9a8c\u8bc1CRC32 $8DB786B2\n\u6b63\u5728\u68c0\u67e5\u201cGPT Header\uff08Backup GPT Header\uff1a7\uff09\u201d\u7684\u6821\u9a8c\u548c\u2026\n     GPT Header\uff08Backup GPT Header\uff1a7\uff09\uff1a\u5df2\u9a8c\u8bc1CRC32 $7535F58A\n\u5df2\u9a8c\u8bc1CRC32 $244F505A\nhdiutil: verify: checksum of \"/Volumes/DATA/BuildCache/qterm-cef-probe/target/release/bundle/dmg/Qterm CEF Probe_0.1.1_aarch64.dmg\" is VALID\n",
+  "dmg_contents": {
+    "dmg_sha256_matches": true,
+    "readonly_mounted_app_signature_valid": true,
+    "mounted_binary_matches_tested_binary": true
+  },
+  "upstream_archive_sha256": "1fc02ef8f4295b0036b1d6cbe99111e263b587c870f0d54d9bc386602f10b947",
+  "patch_fingerprint": "56d51270367d85bd6eab7c3e14fb694c0b8737f43cf9d146fece62bb08aeccd9",
+  "patched_sources": {
+    "src/runtime.rs": "fa0db48fb6eddd3de61ee9d00399363b63f222246e792e35f701abf3f455b67e",
+    "src/cef_impl/request_context.rs": "cdc0329d8c088a43000561be1a7e2963f2a6c513c54a616891c19a885ba0917e",
+    "src/cef_impl/context_pool.rs": "9ed1bb7ed946630084a01e9857c7fe1aa1beb000c3fd21ad09a63c0816838ca6",
+    "src/cef_impl/mod.rs": "7db71708377b69f363c0580421abca7d4fe33f8a4f0213e11970d589c8ebcc11"
+  },
+  "runtime_diagnostics": [
+    "[87840:6219749:1029/173853.653280:ERROR:base/mac/process_requirement.cc:159] Unable to derive validation category for current process. Signature validation of current process failed: Error Domain=NSOSStatusErrorDomain Code=-67030 \"(null)\" (-67030)",
+    "[87852:6219416:1029/173909.012003:ERROR:net/socket/ssl_client_socket_impl.cc:949] handshake failed; returned -1, SSL error code 1, net_error -100",
+    "[87840:6219381:1029/173936.732171:ERROR:base/process/process_mac.cc:53] task_policy_set TASK_CATEGORY_POLICY: (os/kern) invalid argument (4)",
+    "[87840:6219381:1029/173936.732226:ERROR:base/process/process_mac.cc:98] task_policy_set TASK_SUPPRESSION_POLICY: (os/kern) invalid argument (4)",
+    "[87840:6219381:1029/173936.732245:ERROR:base/process/process_mac.cc:53] task_policy_set TASK_CATEGORY_POLICY: (os/kern) invalid argument (4)",
+    "[87840:6219381:1029/173936.732259:ERROR:base/process/process_mac.cc:98] task_policy_set TASK_SUPPRESSION_POLICY: (os/kern) invalid argument (4)",
+    "[87840:6219381:1029/173937.481294:ERROR:base/process/process_mac.cc:53] task_policy_set TASK_CATEGORY_POLICY: (os/kern) invalid argument (4)",
+    "[87840:6219381:1029/173937.481370:ERROR:base/process/process_mac.cc:98] task_policy_set TASK_SUPPRESSION_POLICY: (os/kern) invalid argument (4)",
+    "[87840:6219381:1029/173937.481388:ERROR:base/process/process_mac.cc:53] task_policy_set TASK_CATEGORY_POLICY: (os/kern) invalid argument (4)",
+    "[87840:6219381:1029/173937.481416:ERROR:base/process/process_mac.cc:98] task_policy_set TASK_SUPPRESSION_POLICY: (os/kern) invalid argument (4)"
+  ],
+  "patch_representation_check": "Zero-context diff reapplied to checksum-pinned original archive; all compiled patched source hashes unchanged."
+}

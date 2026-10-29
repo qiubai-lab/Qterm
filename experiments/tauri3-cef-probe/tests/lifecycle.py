@@ -1,5 +1,6 @@
 """Observable isolation and failure behaviour, beyond the per-page cookie/WS suite."""
 import time
+from context_continuity import close_creator
 
 SOCKET = """
 return await new Promise(resolve=>{
@@ -25,7 +26,7 @@ def run(app, gateways, environments, add):
     traffic = app.evaluate('a', 'window.trafficStop=true;await window.trafficPromise;return window.traffic')
     add('same-profile tab creation never redirects active A traffic',
         bool(traffic) and any(r.get('profile') == 'A' for r in traffic)
-        and all('error' in r or (r.get('profile') == 'A' and 'session=A' in r.get('cookie', '')) for r in traffic), traffic)
+        and all(r.get('profile') == 'A' and 'session=A' in r.get('cookie', '') for r in traffic), traffic)
     shared = app.evaluate('a2', "return {cookie:await fetch('/echo').then(r=>r.json()),storage:localStorage.getItem('profile')}")
     add('same connection tabs share native Cookie and localStorage',
         'session=A' in shared['cookie']['cookie'] and shared['storage'] == 'A', shared)
@@ -65,9 +66,12 @@ def run(app, gateways, environments, add):
     recovered = app.evaluate('a', SOCKET)
     add('SSH restore keeps original origin and A Cookie', recovered.get('profile') == 'A' and recovered.get('origin') == 'http://localhost:3000' and 'session=A' in recovered.get('cookie', ''), recovered)
 
-    # Close the request context and reopen with the same directory in the same app.
-    app.close_window('a')
+    # The context belongs to the connection, not its first or last browser window.
+    close_creator(app, gateways['A'], add)
     app.open('a3', 'A', gateways['A'])
+    add('closing every A window retains the identical connection-owned context',
+        app.contexts['a3'].get('context_reused') is True and app.contexts['a3'].get('native_identity_verified') is True,
+        app.contexts['a3'])
     state = app.evaluate('a3', "return {cookie:await fetch('/echo').then(r=>r.json()),storage:localStorage.getItem('profile')}")
     add('reopened connection restores its own storage', state['cookie']['profile'] == 'A' and 'session=A' in state['cookie']['cookie'] and state['storage'] == 'A', state)
     app.close_window('a3')
