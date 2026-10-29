@@ -1,0 +1,262 @@
+{
+  "date": "2026-10-29",
+  "scope": "standalone WKWebView plus two disposable OpenSSH routes; not Qterm backend integration",
+  "platform": "ProductName:\t\tmacOS\nProductVersion:\t\t26.5\nBuildVersion:\t\t25F71",
+  "webkit_version": "21624.2.5.11.4",
+  "native_exit": 0,
+  "ssh_authenticated": {
+    "A": true,
+    "B": true
+  },
+  "checks": {
+    "A": [
+      {
+        "name": "original origin and secure context",
+        "pass": true
+      },
+      {
+        "name": "HTTP SSH identity Host Origin POST",
+        "pass": true
+      },
+      {
+        "name": "HttpOnly round trip hidden from JS",
+        "pass": true
+      },
+      {
+        "name": "visible Cookie bridged into DOM",
+        "pass": true
+      },
+      {
+        "name": "secure foreign path Cookie excluded",
+        "pass": true
+      },
+      {
+        "name": "Cookie path included",
+        "pass": true
+      },
+      {
+        "name": "Cookie path boundary excluded",
+        "pass": true
+      },
+      {
+        "name": "JS Cookie reaches HTTP",
+        "pass": true
+      },
+      {
+        "name": "credentials omit sends no Cookie",
+        "pass": true
+      },
+      {
+        "name": "credentials omit ignores Set-Cookie",
+        "pass": true
+      },
+      {
+        "name": "multiple Set-Cookie headers",
+        "pass": true
+      },
+      {
+        "name": "expired Cookie excluded",
+        "pass": true
+      },
+      {
+        "name": "other connection Cookie absent",
+        "pass": true
+      },
+      {
+        "name": "localStorage connection identity",
+        "pass": true
+      },
+      {
+        "name": "Cookie deletion",
+        "pass": true
+      },
+      {
+        "name": "page WebSocket identity Host Origin Cookie",
+        "pass": true
+      },
+      {
+        "name": "WebSocket text binary close",
+        "pass": true
+      },
+      {
+        "name": "classic Worker HTTP and WebSocket",
+        "pass": true
+      },
+      {
+        "name": "module Worker HTTP and WebSocket",
+        "pass": true
+      },
+      {
+        "name": "unwrapped localhost WebSocket blocked",
+        "pass": true
+      },
+      {
+        "name": "blob Worker unmapped WebSocket blocked",
+        "pass": true
+      }
+    ],
+    "B": [
+      {
+        "name": "original origin and secure context",
+        "pass": true
+      },
+      {
+        "name": "HTTP SSH identity Host Origin POST",
+        "pass": true
+      },
+      {
+        "name": "HttpOnly round trip hidden from JS",
+        "pass": true
+      },
+      {
+        "name": "visible Cookie bridged into DOM",
+        "pass": true
+      },
+      {
+        "name": "secure foreign path Cookie excluded",
+        "pass": true
+      },
+      {
+        "name": "Cookie path included",
+        "pass": true
+      },
+      {
+        "name": "Cookie path boundary excluded",
+        "pass": true
+      },
+      {
+        "name": "JS Cookie reaches HTTP",
+        "pass": true
+      },
+      {
+        "name": "credentials omit sends no Cookie",
+        "pass": true
+      },
+      {
+        "name": "credentials omit ignores Set-Cookie",
+        "pass": true
+      },
+      {
+        "name": "multiple Set-Cookie headers",
+        "pass": true
+      },
+      {
+        "name": "expired Cookie excluded",
+        "pass": true
+      },
+      {
+        "name": "other connection Cookie absent",
+        "pass": true
+      },
+      {
+        "name": "localStorage connection identity",
+        "pass": true
+      },
+      {
+        "name": "Cookie deletion",
+        "pass": true
+      },
+      {
+        "name": "page WebSocket identity Host Origin Cookie",
+        "pass": true
+      },
+      {
+        "name": "WebSocket text binary close",
+        "pass": true
+      },
+      {
+        "name": "classic Worker HTTP and WebSocket",
+        "pass": true
+      },
+      {
+        "name": "module Worker HTTP and WebSocket",
+        "pass": true
+      },
+      {
+        "name": "unwrapped localhost WebSocket blocked",
+        "pass": true
+      },
+      {
+        "name": "blob Worker unmapped WebSocket blocked",
+        "pass": true
+      }
+    ]
+  },
+  "phases": [
+    {
+      "phase": "reuse",
+      "value": {
+        "body": "",
+        "cookie": "session=A; javascript=A; multi1=one; multi2=two",
+        "host": "localhost:3000",
+        "origin": null,
+        "path": "/echo",
+        "profile": "A"
+      }
+    },
+    {
+      "a": {
+        "body": "",
+        "cookie": "",
+        "host": "localhost:3000",
+        "origin": null,
+        "path": "/echo",
+        "profile": "A"
+      },
+      "b": {
+        "body": "",
+        "cookie": "session=B; javascript=B; multi1=one; multi2=two",
+        "host": "localhost:3000",
+        "origin": null,
+        "path": "/echo",
+        "profile": "B"
+      },
+      "phase": "clearA"
+    },
+    {
+      "a": "open",
+      "phase": "beforeCut"
+    },
+    {
+      "aStatus": 502,
+      "b": {
+        "body": "",
+        "cookie": "session=B; javascript=B; multi1=one; multi2=two",
+        "host": "localhost:3000",
+        "origin": null,
+        "path": "/echo",
+        "profile": "B"
+      },
+      "newSocket": "failed",
+      "phase": "cut",
+      "socketClose": 1006
+    },
+    {
+      "a": {
+        "body": "",
+        "cookie": "",
+        "host": "localhost:3000",
+        "origin": null,
+        "path": "/echo",
+        "profile": "A"
+      },
+      "phase": "restored"
+    },
+    {
+      "phase": "csp",
+      "value": "blocked"
+    }
+  ],
+  "origin_request_counts": {
+    "A": 32,
+    "B": 30
+  },
+  "local_bypass_requests": [],
+  "limitations": [
+    "strict CSP blocks mapped WebSocket",
+    "blob Worker WebSocket blocked, not routed",
+    "first-party Cookie subset only",
+    "unsupported HTTP Handler registration",
+    "two logical remotes in one OS namespace"
+  ]
+}
