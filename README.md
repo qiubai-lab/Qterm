@@ -14,7 +14,7 @@
   </p>
 </div>
 
-Qterm 基于 Tauri 2、React、TypeScript 与 Rust 构建，将本地终端、SSH 会话、SFTP 文件管理、Git 操作和网络转发组织在可持久化、可自由拆分的 Workspace 中。
+当前 `dev-cef` 分支的 Qterm 基于 Tauri 3 alpha、CEF、React、TypeScript 与 Rust 构建，将本地终端、SSH 会话、SFTP 文件管理、Git 操作和网络转发组织在可持久化、可自由拆分的 Workspace 中。
 
 ## 🌠 界面预览
 
@@ -37,6 +37,8 @@ Qterm 不内置 AI 模型或专属 Agent，而是面向在 SSH 服务器中运�
 一个典型流程是：通过 SSH Agent 或加密凭证连接服务器，在 Terminal Block 中启动 CLI Agent；将需求截图或本机资料直接粘贴为远端路径；从当前目录打开 Files 与 Git Block；最后在 Qterm 内审阅 Agent 产生的差异、解决冲突并完成提交与同步。
 
 ## 📥 安装
+
+以下发布渠道可能仍为 Tauri 2 正式版。`dev-cef` 的源码构建环境与平台限制见[开发指引](docs/DEVELOPMENT.md#开发环境dev-cef)，本分支普通产物名称为 `Qterm CEF`。
 
 各平台最新安装包统一发布在 [GitHub Releases](https://github.com/qiubai-lab/Qterm/releases/latest)：macOS `.dmg`、Windows `.msi`/NSIS `.exe`、Linux `.AppImage`/`.deb`/`.rpm`。
 
@@ -139,7 +141,7 @@ pnpm tauri dev
 
 安装 GNU Make 后，也可用 `make install` 安装依赖、`make dev` 启动桌面应用、`make check` 执行前后端检查。直接运行 `make` 查看全部命令；平台要求和参数示例见[开发指引](docs/DEVELOPMENT.md#统一命令入口makefile)。
 
-如需把当前源码作为标准应用安装到本机测试，退出 Qterm 后运行 `make install-local`（PowerShell 可用 `pnpm install:local`）。它先构建再覆盖安装，保持应用名、用户设置的版本号和现有配置。仅生成安装包可用 `make package`，或在对应系统使用 `make package-macos`、`make package-windows`、`make package-linux`。详见[本地安装与更新](docs/DEVELOPMENT.md#从本地源码安装和更新)。
+如需把当前源码作为标准应用安装到本机测试，退出 Qterm 后运行 `make install-local`（PowerShell 可用 `pnpm install:local`）。它先构建再覆盖安装，使用当前分支的应用名（dev-cef 为 `Qterm CEF`）、用户设置的版本号和现有配置。仅生成安装包可用 `make package`，或在对应系统使用 `make package-macos`、`make package-windows`、`make package-linux`。详见[本地安装与更新](docs/DEVELOPMENT.md#从本地源码安装和更新)。
 
 ## 📚 文档索引
 
@@ -159,7 +161,7 @@ pnpm tauri dev
 
 ## 🛠 技术栈
 
-- 桌面框架：[Tauri 2](https://tauri.app/)
+- 桌面框架：当前 `dev-cef` 分支采用 [Tauri 3 alpha + CEF](https://v3.tauri.app/develop/cef/)
 - 前端：React 19、TypeScript、Vite、xterm.js、CodeMirror
 - 后端：Rust、russh、russh-sftp
 - 测试与质量：Vitest、Testing Library、ESLint、Clippy、rustfmt

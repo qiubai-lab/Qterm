@@ -39,6 +39,51 @@ git -C "$(brew --repository qiubai-lab/tap)" pull
 - 本地路径必须由系统文件选择器产生。取消对话框后，之前的选择不应被视为新授权。
 - 取消或失败会清理 `.terminal-demo.part`；进程被强制终止时，远端或本地可能残留该后缀的临时文件，可在确认无活动传输后手动处理。
 
+## CEF 构建找不到 CMake / Ninja / Python / patch
+
+适用于 `dev-cef`。出现以下错误时，首先检查**启动 pnpm 的同一个终端/IDE 环境**：
+
+```text
+HOST_CMAKE = None
+CMAKE = None
+failed to execute command: No such file or directory (os error 2)
+is `cmake` not installed?
+```
+
+`HOST_CMAKE` / `CMAKE` 为 None 只表示未设置自定义可执行文件路径。此处真正失败的是
+构建脚本无法启动 PATH 上的 `cmake`；macOS/Windows 的 CEF wrapper 同时使用 Ninja。
+无需因此删除 `target`、改 Rust 代码或禁用 CEF。
+
+```sh
+# macOS，已安装 Homebrew
+brew install cmake ninja
+command -v cmake ninja python3 patch
+cmake --version
+ninja --version
+python3 --version
+pnpm tauri dev
+```
+
+Windows 在 Developer PowerShell 中用 `Get-Command cmake,ninja,python3,patch,cl` 检查。
+完整的 [macOS、Windows、Linux 安装方案](DEVELOPMENT.md#开发环境dev-cef) 包含 Python、
+patch、Node/pnpm、Rust 和平台 SDK。安装后重开终端/IDE，让 Node/Cargo 子进程继承更新后的
+PATH；PowerShell 函数或 shell alias 不等于存在可执行文件。
+
+其他相关症状：
+
+- `CMake was unable to find a build program corresponding to Ninja`：安装 Ninja 并检查 PATH。
+- `python3` / `patch` 无法启动：runtime 补丁准备阶段缺少工具；仅装 Python 的 `py` launcher
+  或 `python` 命令不满足当前脚本，按开发指引设置可执行入口。
+- macOS SDK 版本错误：CMake 安装成功仍需匹配 SDK；开发要求 26.5+，打包固定 26.5。
+- Linux `gtk4.pc` 缺失：安装 GTK 4 开发包与 pkg-config，旧的 WebKitGTK 依赖列表不够。
+- Windows `SandboxPolicy::Required cannot be honored`：当前 runtime 沙箱 broker 限制，
+  不是缺少编译工具；见开发指引中的平台状态，不通过关闭 sandbox 规避。
+- `qterm-tunnel.invalid` 仍出现在地址栏：先确认打开的是本分支构建的 `Qterm CEF.app`，
+  而非旧 `/Applications/Qterm.app`；构建不会自动安装。恢复的旧标签需改回原始 localhost URL。
+
+此前验证用过的 `/tmp/qterm-cef-build-tools` 是临时环境，不属于项目依赖安装方案，
+可能被系统清理；新终端也不会自动继承它。应按开发文档安装长期工具并检查 PATH。
+
 ## 开发与预览
 
 - 完整功能必须使用 `pnpm tauri dev`。该命令会自动加载开发身份配置并显示为 `Qterm Dev`；`pnpm dev` 只预览 Web UI，不具备 Tauri IPC，因此不能连接 SSH。

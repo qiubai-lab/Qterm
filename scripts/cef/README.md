@@ -4,12 +4,19 @@ This branch runs the real Qterm React application and backend on Tauri 3 + CEF.
 The standalone experiment remains under `experiments/tauri3-cef-probe`; it is not
 used as the application shell. Native integration is currently validated on
 macOS arm64. Windows/Linux Web Block capabilities remain disabled until their
-native surface adapters are implemented and tested.
+native surface adapters are implemented and tested. Windows additionally cannot
+start under the current Required sandbox policy: the pinned runtime cannot supply
+the Chromium sandbox broker. Installing build tools does not resolve this blocker.
 
 ## Build
 
-Requires the repository's Node/pnpm/Rust toolchain, Python 3.12+, CMake, Ninja,
-and the existing macOS SDK 26.5 requirement. Tauri CLI downloads/bundles CEF;
+Start with the [platform setup guide](../../docs/DEVELOPMENT.md#开发环境dev-cef)
+for macOS, Windows and Linux installation commands, required versions, PATH
+checks, SDK selection and current platform blockers. Missing CMake/Ninja errors
+are explained in [troubleshooting](../../docs/troubleshooting.md#cef-构建找不到-cmake--ninja--python--patch).
+
+Requires Node 22, pnpm 11.0.8, Rust 1.97.1, Python 3.12+ and `patch`.
+macOS/Windows also need CMake and Ninja; macOS release builds require SDK 26.5. Tauri CLI downloads/bundles CEF;
 `CEF_PATH` and `CARGO_TARGET_DIR` may point at external build caches.
 
 ```sh

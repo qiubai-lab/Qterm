@@ -1,5 +1,7 @@
 # 发布流程
 
+`dev-cef` 维护提示：本分支已采用 Tauri 3 + CEF，环境安装见[开发指引](DEVELOPMENT.md#开发环境dev-cef)。下述既有三平台发布流程不能作为 CEF 已验证的证明；Windows 当前受 Required sandbox 阻断，Linux/macOS Intel 尚未完成实机验收。三平台 CI 依赖与 CEF 发布兼容性需另行验证后才能发布。
+
 本文说明如何通过版本标签发布 Qterm 桌面安装包。相关流水线定义在 `.github/workflows/build-desktop.yml`。
 
 ## 触发方式
