@@ -98,6 +98,11 @@ def main():
                 if len(shell['content']) > 20 and shell.get('capabilities'): break
                 time.sleep(.1)
             add('real Qterm shell loads and trusted IPC works', shell['capabilities'] == {'local':True,'remote':True,'tunnelAddressMapping':False} and len(shell['content'])>20, shell)
+            from popup_tabs_ui import run as popup_tabs_ui
+            ui_origin = start_origin('UI')
+            cleanup.callback(ui_origin.server_close)
+            cleanup.callback(ui_origin.shutdown)
+            popup_tabs_ui(app, ui_origin, add)
             sample(app, 'idle-main-window')
             app.open('a', 'A', gateways['A'])
             sample(app, 'one-SSH-page')

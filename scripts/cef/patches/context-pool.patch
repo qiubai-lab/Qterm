@@ -1,13 +1,24 @@
+--- a/src/cef_impl/client/display.rs
++++ b/src/cef_impl/client/display.rs
+@@ -51,0 +52,3 @@
++      if let (Some(browser), Some(title)) = (_browser, title) {
++        crate::embedded_popups::title(browser.identifier(), title.to_string());
++      }
 --- a/src/cef_impl/client/life_span.rs
 +++ b/src/cef_impl/client/life_span.rs
 @@ -97,0 +98,2 @@
 +      if let Some(browser) = browser.as_deref() { crate::cef_impl::context_pool::browser_created(browser, self.webview_id); }
 +      if let Some(opener) = self.opener.as_ref() { crate::cef_impl::context_pool::popup_finished(opener.context_pool_key()); }
-@@ -131,0 +134,3 @@
+@@ -102,0 +105 @@
++          crate::embedded_popups::created(browser, opener);
+@@ -132 +135,5 @@
+-      if let Some(window_info) = window_info {
++      let mut window_info = window_info;
 +      if _user_gesture == 0 || browser.as_deref().is_some_and(|browser| !crate::cef_impl::context_pool::popup_admitted(browser)) {
 +        return 1;
 +      }
-@@ -135,0 +141,8 @@
++      if let Some(window_info) = window_info.as_deref_mut() {
+@@ -135,0 +143,8 @@
 +        #[cfg(target_os = "macos")]
 +        {
 +          // Each Alloy popup owns its native window; never inherit the
@@ -16,13 +27,19 @@
 +          window_info.view = std::ptr::null_mut();
 +          window_info.runtime_style = cef::RuntimeStyle::ALLOY;
 +        }
-@@ -158,0 +172 @@
+@@ -158,0 +174,5 @@
++          if !crate::embedded_popups::prepare(browser, &request, &url_str, window_info) {
++            family.abort(&self.frame_navigation_state, popup_id);
++            return 1;
++          }
 +          crate::cef_impl::context_pool::popup_pending(browser, request.context_pool_key(), request.context_pool_token(), self.webview_id);
-@@ -159,0 +174 @@
+@@ -159,0 +180,2 @@
 +            crate::cef_impl::context_pool::popup_finished(request.context_pool_key());
-@@ -190,0 +206 @@
++            crate::embedded_popups::aborted(request.context_pool_key());
+@@ -190,0 +213,2 @@
 +        crate::cef_impl::context_pool::popup_finished(request.context_pool_key());
-@@ -217 +233,8 @@
++            crate::embedded_popups::aborted(request.context_pool_key());
+@@ -217 +241,9 @@
 -      if browser.as_ref().is_none_or(|browser| browser.is_popup() != 0) {
 +      let Some(browser) = browser else { return 0; };
 +      if browser.is_popup() != 0 {
@@ -31,13 +48,23 @@
 +          let _ = self.sender.send(Message::DestroyPopupHostWindow(browser.clone()));
 +          self.context.wake_event_loop();
 +        }
++        if crate::embedded_popups::contains(browser.identifier()) { return 1; }
 +        // Keep CEF's accepted-close state and native window delegate handshake.
-@@ -220,2 +243 @@
+@@ -220,2 +252 @@
 -      if browser
 -        .and_then(|browser| browser.host())
 +      if browser.host()
-@@ -240,0 +263 @@
+@@ -240,0 +272,2 @@
 +      crate::cef_impl::context_pool::browser_closed(browser.identifier());
++      crate::embedded_popups::closed(browser.identifier());
+--- a/src/cef_impl/client/mod.rs
++++ b/src/cef_impl/client/mod.rs
+@@ -177 +177,4 @@
+-            frame_event_handler: Some(Arc::new(move |event| events.on_frame_event(&event))),
++            frame_event_handler: Some(Arc::new(move |event| {
++              events.on_frame_event(&event);
++              crate::embedded_popups::frame(event);
++            })),
 --- a/src/cef_impl/mod.rs
 +++ b/src/cef_impl/mod.rs
 @@ -10,0 +11,2 @@
@@ -122,9 +149,86 @@
 -  }
 -
 -  request_context
+--- /dev/null
++++ b/src/embedded_popups.rs
+@@ -0,0 +1,72 @@
++//! Explicit host opt-in for Alloy child popups. No guest IPC or URL replay.
++use cef::*;
++use std::{cell::RefCell, collections::HashMap, sync::Arc};
++
++#[derive(Clone)]
++pub enum Event {
++  Created { browser: Browser, parent: i32, url: String },
++  Frame(crate::FrameEvent),
++  Title { id: i32, title: String },
++  Closed { id: i32 },
++}
++type Handler = Arc<dyn Fn(Event) + Send + Sync>;
++#[derive(Clone)]
++struct Owner { root: i32, handler: Handler }
++struct Pending { owner: Owner, parent: i32, url: String }
++#[derive(Default)]
++struct Registry {
++  roots: HashMap<i32, Owner>,
++  children: HashMap<i32, Owner>,
++  pending: HashMap<usize, Pending>,
++}
++thread_local! { static REGISTRY: RefCell<Registry> = RefCell::default(); }
++fn owner(id: i32) -> Option<Owner> {
++  REGISTRY.with(|r| { let r = r.borrow(); r.roots.get(&id).or_else(|| r.children.get(&id)).cloned() })
++}
++/// Call on CEF UI thread before the root is externally navigated.
++pub fn register(browser: &Browser, handler: impl Fn(Event) + Send + Sync + 'static) -> Result<(), String> {
++  if currently_on(ThreadId::UI) == 0 { return Err("popup registration requires CEF UI thread".into()); }
++  if browser.is_valid() == 0 || browser.is_popup() != 0 { return Err("invalid popup root".into()); }
++  REGISTRY.with(|r| r.borrow_mut().roots.insert(browser.identifier(), Owner { root: browser.identifier(), handler: Arc::new(handler) }));
++  Ok(())
++}
++pub(crate) fn contains(id: i32) -> bool { REGISTRY.with(|r| r.borrow().children.contains_key(&id)) }
++pub(crate) fn prepare(browser: &Browser, request: &crate::popup::PopupRequest, url: &str, info: Option<&mut WindowInfo>) -> bool {
++  let Some(owner) = owner(browser.identifier()) else { return true; };
++  #[cfg(target_os = "macos")]
++  {
++    use objc2::{rc::Retained, runtime::AnyObject};
++    use objc2_app_kit::NSView;
++    let Some(info) = info else { return false; };
++    let Some(host) = browser.host() else { return false; };
++    let Some(view) = (unsafe { Retained::<NSView>::retain(host.window_handle().cast()) }) else { return false; };
++    let Some(parent) = (unsafe { view.superview() }) else { return false; };
++    info.parent_view = Retained::as_ptr(&parent) as *mut AnyObject as _;
++    info.view = std::ptr::null_mut();
++    info.hidden = 1;
++    info.bounds = Rect { x: -10000, y: -10000, width: 800, height: 560 };
++    info.runtime_style = RuntimeStyle::ALLOY;
++  }
++  #[cfg(not(target_os = "macos"))]
++  { let _ = info; return false; }
++  REGISTRY.with(|r| r.borrow_mut().pending.insert(request.context_pool_key(), Pending { owner, parent: browser.identifier(), url: url.into() }));
++  true
++}
++pub(crate) fn aborted(key: usize) { REGISTRY.with(|r| r.borrow_mut().pending.remove(&key)); }
++pub(crate) fn created(browser: &Browser, request: &crate::popup::PopupRequest) {
++  let pending = REGISTRY.with(|r| r.borrow_mut().pending.remove(&request.context_pool_key()));
++  if let Some(pending) = pending {
++    REGISTRY.with(|r| r.borrow_mut().children.insert(browser.identifier(), pending.owner.clone()));
++    (pending.owner.handler)(Event::Created { browser: browser.clone(), parent: pending.parent, url: pending.url });
++  }
++}
++pub(crate) fn frame(event: crate::FrameEvent) {
++  if contains(event.browser_id) && let Some(owner) = owner(event.browser_id) { (owner.handler)(Event::Frame(event)); }
++}
++pub(crate) fn title(id: i32, title: String) {
++  if contains(id) && let Some(owner) = owner(id) { (owner.handler)(Event::Title { id, title }); }
++}
++pub(crate) fn closed(id: i32) {
++  let owner = REGISTRY.with(|r| { let mut r = r.borrow_mut(); r.pending.retain(|_, pending| pending.owner.root != id); r.children.remove(&id).or_else(|| r.roots.remove(&id)) });
++  if let Some(owner) = owner { (owner.handler)(Event::Closed { id }); }
++}
 --- a/src/lib.rs
 +++ b/src/lib.rs
-@@ -54,0 +55,13 @@
+@@ -29,0 +30 @@
++pub mod embedded_popups;
+@@ -54,0 +56,13 @@
 +/// Retire a connection-owned context after closing its browsers (CEF UI thread only).
 +pub use cef_impl::context_pool::retire as retire_request_context;
 +/// Retry closing late browsers during final-owner retirement. UI thread only.
@@ -150,15 +254,15 @@
 +/// CEF 154's Alloy native popup closes its NSWindow but can leave the browser
 +/// view retained by AppKit. Detach the exact view after the normal close
 +/// handshake, so CefBrowserHostView::dealloc acknowledges browser destruction.
-+/// Only applies to popups we created with an unset parent_view, never a shared
-+/// Tauri host window or Chrome-style tabs. Must run after DoClose on the UI loop.
++/// Embedded popups only detach their own view: never performClose on the shared
++/// Tauri NSWindow. Must run after DoClose on the UI loop.
 +pub(crate) fn destroy_popup_host_window(browser: &cef::Browser) {
 +  use cef::ImplBrowser;
 +  if browser.is_valid() == 0 || browser.is_popup() == 0 { return; }
 +  let Some(host) = browser.host() else { return; };
 +  if host.runtime_style() != cef::RuntimeStyle::ALLOY { return; }
 +  let Some(view) = (unsafe { Retained::<NSView>::retain(host.window_handle().cast()) }) else { return; };
-+  if let Some(window) = view.window() {
++  if !crate::embedded_popups::contains(browser.identifier()) && let Some(window) = view.window() {
 +    // DoClose returned false before this event is processed. CEF's delegate
 +    // now accepts performClose and schedules release of its window reference.
 +    window.performClose(None);

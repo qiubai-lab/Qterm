@@ -42,7 +42,9 @@ impl WebHost {
         if state.guests.contains_key(&label) {
             return Err("网页已打开".into());
         }
-        crate::domain::web::ensure_web_page_capacity(state.guests.len())?;
+        crate::domain::web::ensure_web_page_capacity(
+            state.guests.len() + state.pending_popups.len(),
+        )?;
         if !state.environments.contains_key(&key) {
             let directory = match identity {
                 Some(identity) => super::storage::resolve(&self.root, Some(&identity))?,
@@ -124,6 +126,7 @@ impl WebHost {
         state.guests.insert(
             label.clone(),
             Guest {
+                popup: None,
                 target: target.clone(),
                 environment: key.into(),
                 visible: false,
@@ -162,6 +165,7 @@ impl WebHost {
         state.guests.insert(
             label.clone(),
             Guest {
+                popup: None,
                 target,
                 environment: key.into(),
                 visible: false,
@@ -246,9 +250,9 @@ impl WebHost {
             return Ok(());
         };
         if guest.closing.is_none()
-            && let Some(view) = app.get_webview(label)
+            && let Ok(view) = guest.view(app, label)
         {
-            match native::begin_close(&view).await {
+            match view.begin_close().await {
                 Ok(browsers) => guest.closing = Some(browsers),
                 Err(error) => {
                     if let Some(environment) = state.environments.get_mut(&guest.environment) {
@@ -357,9 +361,11 @@ impl WebHost {
         for key in keys {
             Self::retire(&mut state, app, &key).await?;
         }
+        // Context retirement acknowledged that all native descendants closed.
+        state.pending_popups.clear();
         #[cfg(feature = "cef-integration-test")]
         super::test_control::emit(
-            serde_json::json!({"event":"shutdown-complete","guests":state.guests.len(),"environments":state.environments.len(),"pooledContexts":native::on_ui(app, || Ok(tauri_runtime_cef::pooled_request_context_count())).await?}),
+            serde_json::json!({"event":"shutdown-complete","pendingPopups":state.pending_popups.len(),"guests":state.guests.len(),"environments":state.environments.len(),"pooledContexts":native::on_ui(app, || Ok(tauri_runtime_cef::pooled_request_context_count())).await?}),
         );
         Ok(())
     }

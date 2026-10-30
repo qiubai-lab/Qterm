@@ -26,6 +26,8 @@ def run(app,environments,add):
     for label,name in ((al,'A'),(bl,'B')):
         result=app.evaluate(label,f"await fetch('/set?cookie='+encodeURIComponent('real={name}; Path=/; HttpOnly'));return await fetch('/echo').then(r=>r.json())")
         add(name+': production russh SOCKS route preserves target and Cookie',result['profile']==name and f'real={name}' in result['cookie'],result)
+    from popup_tabs import run as popup_tabs
+    popup_tabs(app, al, bl, add)
     security=app.evaluate(al,"const denied=async cmd=>{try{await window.__TAURI_INTERNALS__.invoke(cmd);return false}catch(e){return String(e)}};return {app:await denied('web_supported'),plugin:await denied('plugin:clipboard-manager|write_text')}")
     add('guest application and plugin IPC are rejected',all(isinstance(security[k],str) and ('cannot invoke' in security[k] or 'not allowed' in security[k]) for k in ('app','plugin')),security)
     main_url=app.evaluate('main',"return location.href")
@@ -58,6 +60,8 @@ def run(app,environments,add):
     app.send(op='fail-close-once');app.wait('failure-armed')
     app.send(op='ssh-close',session=a1);app.wait('ssh-closed',session=a1)
     add('production disconnect watcher retries a failed close barrier',True)
+    app.send(op='counts');remaining=app.wait('counts')
+    add('disconnect releases adopted popup descendants and preserves only two surviving roots',remaining['guests']==remaining['environments']==remaining['pooledContexts']==2,remaining)
     survivor=app.evaluate(a2l,"return await fetch('/echo').then(r=>r.json())")
     add('closing one authenticated owner preserves same-identity survivor',survivor['profile']=='A',survivor)
     app.close_window(a2l)

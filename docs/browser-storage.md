@@ -1,5 +1,26 @@
 # Browser environments
 
+## dev-cef branch
+
+The current macOS CEF adapter adopts user-activated `_blank`, `window.open` and
+named POST popups as new tabs of the source Browser Block. It retains the actual
+native browser, POST body, opener/noopener semantics and the source RequestContext;
+no URL replay is used. Embedded popups share the Tauri NSWindow. Closing one tab
+detaches only its own native child view; source close closes its popup descendants.
+Requests use one-use opaque IDs, expire after 30 seconds, and count toward the
+99-native-page capacity together with existing guests. The existing 99-tab Block
+limit also applies. Unclaimed/rejected native browsers are closed. Requests and
+opener relationships are not persisted.
+
+CEF environments use separate browser storage from the legacy engines. Remote
+owners live until SSH disconnect, including when all their tabs have closed;
+final-owner retirement flushes cookies and closes the native context and gateway.
+See [CEF development and test instructions](../scripts/cef/README.md). The sections
+below describe the legacy system-webview implementation where platform details
+differ; they do not imply WebKit storage or tunnel aliases are used by dev-cef.
+
+## Shared model and legacy adapters
+
 Browser tabs are page instances, not storage owners. `WebTabs` retains each page while selecting one visible guest. `WebHost` owns local and remote connection environments. Local uses the computer's network and system proxy settings without an SSH session; remote uses a validated SSH session supplying the immutable connection ID and route host/port/account snapshot. Same-identity pages across blocks share an environment. Identity changes select another environment; they never reuse another target's site data. Local is explicit: a missing or disconnected remote profile never falls back to it.
 
 Each remote environment has a stable loopback gateway for this app lifetime. Guests on the same SSH session reuse one SOCKS listener; it is retired only after that session's final page closes. Removing one guest removes its gateway registration, and remaining guests continue through authenticated routes. The gateway never opens a remote socket directly. Closing/disconnecting an SSH session can interrupt in-flight requests or WebSockets carried by that session, even in another block sharing the environment; subsequent requests use surviving routes, but TCP streams cannot migrate. Local has no SSH gateway or watchdog. Each browser block supports 99 tabs, including cached/restored tabs. Up to 99 native pages may be loaded globally across blocks; empty tabs do not allocate a native guest.

@@ -90,3 +90,22 @@ void qterm_cef_surface(void *pointer, const char *json, const char *label, Focus
     [view.layer addSublayer:border]; CGPathRelease(rim);
   }
 }
+
+// Both root and popup tabs are children of the same Tauri content view.
+void qterm_cef_bounds(void *pointer, double x, double y, double width, double height) {
+  NSView *view = (__bridge NSView *)pointer;
+  if (!view || !NSThread.isMainThread || !view.superview) return;
+  NSView *parent = view.superview;
+  CGFloat bottom = parent.isFlipped ? y : parent.bounds.size.height - y - height;
+  [view setFrame:NSMakeRect(x, bottom, width, height)];
+}
+
+void qterm_cef_visible(void *pointer, bool visible) {
+  NSView *view = (__bridge NSView *)pointer;
+  if (view && NSThread.isMainThread) view.hidden = !visible;
+}
+
+bool qterm_cef_same_window(void *a, void *b) {
+  NSView *left = (__bridge NSView *)a, *right = (__bridge NSView *)b;
+  return NSThread.isMainThread && left.superview && left.window && left.window == right.window;
+}

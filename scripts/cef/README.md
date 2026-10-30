@@ -151,3 +151,26 @@ cargo test --manifest-path src-tauri/Cargo.toml --all-targets --all-features
 This branch has not been merged, installed, notarized or published. Retain `dev`
 and the preserved legacy browser data for rollback. Full release readiness must
 also resolve the explicit site-storage/UI gaps and validate other platforms.
+
+
+### Browser Block popup tabs (macOS)
+
+User-activated `_blank` and `window.open` pages now stay in the source Block as
+new tabs. The runtime patch creates a hidden Alloy child in the existing Tauri
+NSWindow and hands the same browser to the adapter; it does not cancel/replay
+navigation. POST, opener/noopener and RequestContext identity are preserved.
+`guest_view.rs` dispatches normal tab operations to either a Tauri root or an
+adopted popup, and `popup_events.rs` owns pending requests and native notifications.
+
+Pending requests expire after 30 seconds; accepted and pending pages share the
+99-page capacity. Native close remains authoritative if the frontend disappears.
+The embedded close path only removes the child NSView, never closes the shared
+main NSWindow. This replaces the earlier standalone popup choice.
+
+`tests/popup_tabs_ui.py` drives the actual React Block, automatic IPC adoption,
+address updates and close button. `tests/popup_tabs.py` uses authenticated Qterm
+SSH sessions for POST/opener, native window identity, nested close, named-target
+reuse, noopener, one-use/expired/rejected requests, previews and uninterrupted
+HTTP/WebSocket traffic. WebSocket heartbeats stay below the fixture's 10-second
+idle timeout; local UI smoke uses its own HTTP origin so it cannot contaminate
+SSH Host/isolation assertions. Other desktop platforms remain unverified.

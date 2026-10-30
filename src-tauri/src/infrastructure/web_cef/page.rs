@@ -104,6 +104,7 @@ pub(super) async fn create(
         })
         .await?;
         let protocol = Protocol::install(&view)?;
+        super::popup_events::install(app, &view).await?;
         Ok(Page {
             view: view.clone(),
             protocol,

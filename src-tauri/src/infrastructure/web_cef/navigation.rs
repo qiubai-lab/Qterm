@@ -70,6 +70,15 @@ impl Navigation {
             }
         }
     }
+    pub fn finish(&self) {
+        let url = self
+            .state
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .url
+            .clone();
+        self.complete(url);
+    }
     pub fn title(&self, title: String) {
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         state.title = title.clone();

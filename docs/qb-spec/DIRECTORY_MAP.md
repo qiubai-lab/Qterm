@@ -16,8 +16,8 @@
 ## Important Files
 
 - `src-tauri/src/main.rs`、`lib.rs`、`infrastructure/cef_runtime.rs`：CEF 主/子进程入口、应用组合与 sandbox/密钥存储/默认拒绝网络策略；不拥有浏览页业务状态。
-- `src-tauri/src/infrastructure/web_cef/`：当前 `infrastructure::web` façade 的实现；`lifecycle.rs` 拥有按连接身份共享的环境、session owners 与异步关闭/回收，`gateway.rs` 拥有稳定私有 SOCKS 入口，`contexts.rs` 验证原生身份与不变代理，`page.rs`/`navigation.rs`/`surface.rs`/`surface.m` 拥有客体视图；不修改 SSH 认证与前端状态模型。`web/` 保留旧平台实现及被 CEF 复用的纯规则，旧平台 adapter 不参与 dev-cef 应用编译。
-- `scripts/cef/prepare_runtime.py` 与 `patches/`：校验 upstream crate 并生成 `.cef-runtime/`，拥有 RequestContext 池、初始化网络门禁、原生 browser 计数、弹窗家族身份与 macOS Alloy 视图释放补丁；不写全局 Cargo registry。`scripts/cef/tests/` 调用编译期父进程驱动和已有 OpenSSH fixture；`web_cef/test_control.rs`/`test_session.rs` 只在 `cef-integration-test` feature 中编译，不属于客体 IPC。`tests/shutdown.py` 验证真实主窗口关闭与进程/监听器回收；`tests/measure_usage.py` 单独测量安静运行时的进程树内存。
+- `src-tauri/src/infrastructure/web_cef/`：当前 `infrastructure::web` façade 的实现；`lifecycle.rs` 拥有按连接身份共享的环境、session owners 与异步关闭/回收，`gateway.rs` 拥有稳定私有 SOCKS 入口，`contexts.rs` 验证原生身份与不变代理，`page.rs`/`navigation.rs`/`surface.rs`/`surface.m` 拥有客体视图，`guest_view.rs` 统一根页与已接管原生弹窗的视图操作，`popup_events.rs`/`popups.rs` 拥有待接管请求、同 Block 标签事件与上下文继承；不修改 SSH 认证与前端状态模型。`web/` 保留旧平台实现及被 CEF 复用的纯规则，旧平台 adapter 不参与 dev-cef 应用编译。
+- `scripts/cef/prepare_runtime.py` 与 `patches/`：校验 upstream crate 并生成 `.cef-runtime/`，拥有 RequestContext 池、初始化网络门禁、原生 browser 计数、弹窗家族身份、显式嵌入式 popup 注册与 macOS Alloy 子视图释放补丁；不写全局 Cargo registry。`scripts/cef/tests/` 调用编译期父进程驱动和已有 OpenSSH fixture；`web_cef/test_control.rs`/`test_session.rs` 只在 `cef-integration-test` feature 中编译，不属于客体 IPC。`tests/popup_tabs.py`/`popup_tabs_ui.py` 验证原生弹窗嵌入与真实 React 标签栏接管；`tests/shutdown.py` 验证真实主窗口关闭与进程/监听器回收；`tests/measure_usage.py` 单独测量安静运行时的进程树内存。
 - `src-tauri/build_cef_surface.rs`：编译 macOS CEF 视图的遮挡、输入与焦点边界；不负责网络或上下文归属。旧 `QtermWeb`/WKWebView examples 作为历史源保留，CEF 分支的 native 验证走完整打包应用。
 
 - `Makefile`：开发命令的薄入口，聚合 pnpm/Cargo 检查并提供帮助与参数转发；底层命令以 `package.json`、`scripts/tauri.mjs` 和 Cargo 为准，不复制 SDK/开发身份策略或自动发布。

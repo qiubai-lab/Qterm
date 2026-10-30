@@ -43,10 +43,9 @@ AC-006 [REQ-002, REQ-003]: Two sessions sharing one identity and a third indepen
 ## Preserved security and interaction
 Remote context starts with a rejecting proxy, is bound once before guest navigation and remains SSH-bound for workers, restored Service Workers and popup descendants. No direct/non-proxied UDP WebRTC, no certificate verification bypass, no credential IPC to guests. TLS errors retain default verification. On retirement, proxy/gateway are blocked before asynchronous browser shutdown.
 AC-007 [REQ-004]: Restored Service Worker startup is not directly networked, existing/new remote WebSockets and workers remain bound to the gateway, guest application/plugin IPC is denied, internal origin navigation is denied, and shutdown/reopen cannot reach IPv4/IPv6 localhost sentinels.
-Required browser operations: back/forward/reload/stop/navigation, visibility and input occlusion, focus, snapshot, metrics, cookie/cache/site-storage selective clear and isolation. Popup POST/opener/context inheritance must be retained; current CEF alpha cannot transplant native popups into existing Tauri webviews (verified upstream life_span.rs), user explicitly chose independent native popup windows on 2026-10-30. It will not be silently degraded to GET.
+Required browser operations: back/forward/reload/stop/navigation, visibility and input occlusion, focus, snapshot, metrics, cookie/cache/site-storage selective clear and isolation. Popup POST/opener/context inheritance must be retained. The earlier independent-window choice is superseded by the latest user instruction below: native CEF popup browsers are embedded as new tabs of the source Browser Block. The host must not cancel and replay POST as GET. Native family cleanup still owns descendant teardown.
 
-User-approved compatibility delta: CEF popups use independent native windows instead of Web Block tabs. POST/window.opener, native context inheritance, user-gesture admission, internal-navigation denial, bounded popup count and parent-close cleanup remain required. Runtime-native family cleanup owns these windows; the obsolete internal-tab accept IPC fails explicitly if invoked with a stale pending request.
-AC-008 [REQ-002, REQ-004, REQ-005]: A user-activated native popup retains POST body and opener with its source context; independent B remains isolated, source/connection close tears down descendants, and automatic non-gesture popup requests are blocked.
+AC-008 [REQ-002, REQ-004, REQ-005]: A user-activated popup retains POST body and opener with its source context; independent B remains isolated, source/connection close tears down descendants, and automatic non-gesture popup requests are blocked.
 
 Strict review: PASS WITH NOTES by independent reviewer. Existing streams on a disconnected same-identity SSH owner may close; no TCP migration is promised. Cookie persistence verification uses Max-Age cookies.
 
@@ -78,3 +77,23 @@ non-test artifact was rebuilt afterward and contains no harness markers. A quiet
 five-sample-per-stage process-tree memory run uses the verified test artifact;
 exact limitations and numeric results are retained in evidence. No installation,
 publish, merge, push or data migration was performed.
+
+## Popup tab delta — 2026-10-30
+Latest user instruction replaces the earlier independent-window choice: `_blank`
+and user-activated `window.open` belong to new tabs in the source Browser Block.
+REQ-006: Adopt the actual native popup as an embedded child, preserving POST,
+opener/noopener and RequestContext identity. Do not replay the navigation as GET.
+AC-009 [REQ-002, REQ-003, REQ-004, REQ-005, REQ-006]: HTTP(S) links, named POST,
+about:blank followed by script navigation, nested popups and window.close use
+Block tabs without additional NSWindows; existing tab/connection traffic remains
+intact. Reject, timeout, source close and main exit release native children.
+The prior AC-008 evidence applies to standalone windows only; AC-009 needs new
+native evidence. macOS embedding is the current scope; other platforms remain
+explicitly unverified. Review: PASS WITH NOTES, preserving prior isolation and
+close-barrier invariants; native close must never close the shared main window.
+
+AC-009 / VER-006: implemented and verified on macOS arm64. The final native
+artifact passes 164/164 checks, including real React tab adoption, HTTP/WS
+continuity and authenticated-owner cleanup with adopted nested guests. See
+[popup tab evidence](../../../scripts/cef/evidence/popup-tabs-2026-10-30.md).
+The larger migration remains active for the previously recorded AC-005/AC-007 gaps.

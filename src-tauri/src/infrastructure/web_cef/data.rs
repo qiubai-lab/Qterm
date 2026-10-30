@@ -4,7 +4,6 @@ use crate::{
     domain::web_storage::ClearBrowserData, infrastructure::ssh::client::SshSessionManager,
 };
 use serde_json::json;
-use tauri::Manager;
 
 impl WebHost {
     pub async fn clear_data(
@@ -26,28 +25,24 @@ impl WebHost {
         if !guest.target.connected(sessions) {
             return Err("SSH 已断开".into());
         }
-        let pages: Vec<_> = state
-            .guests
-            .iter()
-            .filter(|(_, g)| g.environment == guest.environment)
-            .map(|(label, g)| {
-                app.get_webview(label).ok_or("网页已关闭").and_then(|view| {
-                    view.url()
-                        .map(|url| (view, g.protocol.clone(), url))
-                        .map_err(|_| "网页已关闭")
-                })
-            })
-            .collect::<Result<_, _>>()?;
+        let mut pages = Vec::new();
+        for (label, g) in &state.guests {
+            if g.environment == guest.environment {
+                let view = g.view(app, label)?;
+                let url = view.url().await?;
+                pages.push((view, g.protocol.clone(), url));
+            }
+        }
         let (view, protocol, _) = pages.first().ok_or("网页已关闭")?;
         let result: Result<(), String> = async {
             for (view, protocol, _) in &pages {
                 protocol
-                    .call(view, "Page.navigate", json!({"url":"about:blank"}))
+                    .call_view(view, "Page.navigate", json!({"url":"about:blank"}))
                     .await?;
                 let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(5);
                 loop {
                     let reply = protocol
-                        .call(
+                        .call_view(
                             view,
                             "Runtime.evaluate",
                             json!({"expression":"location.href","returnByValue":true}),
@@ -64,12 +59,12 @@ impl WebHost {
             }
             if selection.cookies {
                 protocol
-                    .call(view, "Network.clearBrowserCookies", json!({}))
+                    .call_view(view, "Network.clearBrowserCookies", json!({}))
                     .await?;
             }
             if selection.cache {
                 protocol
-                    .call(view, "Network.clearBrowserCache", json!({}))
+                    .call_view(view, "Network.clearBrowserCache", json!({}))
                     .await?;
             }
             Ok(())
@@ -77,7 +72,7 @@ impl WebHost {
         .await;
         let mut restore_error = None;
         for (view, _, url) in pages {
-            if let Err(error) = view.navigate(url) {
+            if let Err(error) = view.navigate(url).await {
                 restore_error = Some(error.to_string());
             }
         }

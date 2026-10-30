@@ -118,21 +118,23 @@ async fn run(app: &tauri::AppHandle, command: Value) -> Result<(), String> {
         }
         "eval" => {
             let id = field(&command, "id")?;
-            let view = app.get_webview(id).ok_or("unknown window")?;
-            let protocol = if id == "main" {
-                super::protocol::Protocol::install(&view)?
-            } else {
-                host.state
-                    .lock()
-                    .await
-                    .guests
-                    .get(id)
-                    .ok_or("unknown window")?
-                    .protocol
-                    .clone()
-            };
             let expression = format!("(async()=>{{ {} }})()", field(&command, "script")?);
-            let result = protocol.call(&view,"Runtime.evaluate",json!({"expression":expression,"awaitPromise":true,"returnByValue":true,"userGesture":command["gesture"].as_bool().unwrap_or(false)})).await?;
+            let params = json!({"expression":expression,"awaitPromise":true,"returnByValue":true,"userGesture":command["gesture"].as_bool().unwrap_or(false)});
+            let result = if id == "main" {
+                let view = app.get_webview(id).ok_or("unknown window")?;
+                super::protocol::Protocol::install(&view)?
+                    .call(&view, "Runtime.evaluate", params)
+                    .await?
+            } else {
+                let state = host.state.lock().await;
+                let guest = state.guests.get(id).ok_or("unknown window")?;
+                let view = guest.view(app, id)?;
+                let protocol = guest.protocol.clone();
+                drop(state);
+                protocol
+                    .call_view(&view, "Runtime.evaluate", params)
+                    .await?
+            };
             let value = if result.get("exceptionDetails").is_some() {
                 json!({"tag":command["tag"],"error":result["exceptionDetails"]})
             } else {
@@ -186,6 +188,9 @@ async fn run(app: &tauri::AppHandle, command: Value) -> Result<(), String> {
                 Ok(())
             }).await?;
             emit(json!({"event":"popup-dispatched"}));
+        }
+        "popup-accept" | "popup-reject" | "popup-surface" => {
+            super::test_popups::run(app, &command).await?
         }
         "network-gate" => {
             let directory = host

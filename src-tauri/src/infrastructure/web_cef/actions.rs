@@ -1,6 +1,5 @@
-use super::{WebHost, label, native, page};
+use super::{WebHost, label, page};
 use crate::infrastructure::ssh::client::SshSessionManager;
-use tauri::Manager;
 use tauri_runtime_cef::cef::*;
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -31,7 +30,7 @@ impl WebHost {
         if !guest.target.connected(sessions) {
             return Err("SSH 已断开，请重新连接".into());
         }
-        let view = app.get_webview(&label).ok_or("网页已关闭")?;
+        let view = guest.view(app, &label)?;
         if action == "navigate" {
             let url: tauri::Url = address
                 .ok_or("请输入地址")?
@@ -40,14 +39,13 @@ impl WebHost {
             if !page::allowed(app, &url) {
                 return Err("仅支持外部 HTTP/HTTPS 地址".into());
             }
-            return view.navigate(url).map_err(|e| e.to_string());
+            return view.navigate(url).await;
         }
         if action == "stop" {
             guest.navigation.stop();
         }
         let action = action.to_owned();
-        native::with(&view, move |view| {
-            let browser = view.browser();
+        view.with(move |browser| {
             match action.as_str() {
                 "reload" => browser.reload(),
                 "stop" => browser.stop_load(),
@@ -71,8 +69,8 @@ impl WebHost {
         if !guest.target.connected(sessions) {
             return Err("SSH 已断开".into());
         }
-        let view = app.get_webview(&label).ok_or("网页已关闭")?;
-        let value = guest.protocol.call(&view, "Runtime.evaluate", serde_json::json!({"expression":"window.__qtermPageMetrics?.() ?? null", "returnByValue":true})).await?;
+        let view = guest.view(app, &label)?;
+        let value = guest.protocol.call_view(&view, "Runtime.evaluate", serde_json::json!({"expression":"window.__qtermPageMetrics?.() ?? null", "returnByValue":true})).await?;
         let metrics: Option<WebMetrics> =
             serde_json::from_value(value["result"]["value"].clone()).map_err(|_| "网页统计无效")?;
         Ok(metrics.filter(|m| {
@@ -95,11 +93,11 @@ impl WebHost {
         if !guest.visible || !guest.target.connected(sessions) {
             return Err("网页不可预览".into());
         }
-        let view = app.get_webview(&label).ok_or("网页已关闭")?;
-        let url = view.url().map_err(|e| e.to_string())?.to_string();
+        let view = guest.view(app, &label)?;
+        let url = view.url().await?.to_string();
         let result = guest
             .protocol
-            .call(
+            .call_view(
                 &view,
                 "Page.captureScreenshot",
                 serde_json::json!({"format":"png","captureBeyondViewport":false}),
@@ -110,7 +108,7 @@ impl WebHost {
             .filter(|p| p.len() < 16 * 1024 * 1024)
             .ok_or("网页预览无效")?
             .to_owned();
-        if view.url().map_err(|e| e.to_string())?.as_str() != url {
+        if view.url().await?.as_str() != url {
             return Err("网页已跳转".into());
         }
         Ok(WebSnapshot { url, png })

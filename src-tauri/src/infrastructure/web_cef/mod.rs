@@ -22,6 +22,7 @@ mod actions;
 mod contexts;
 mod data;
 mod gateway;
+mod guest_view;
 mod lifecycle;
 #[path = "../web/local_storage.rs"]
 mod local_storage;
@@ -30,6 +31,7 @@ mod navigation;
 #[path = "../web/navigation_state.rs"]
 mod navigation_state;
 mod page;
+mod popup_events;
 mod popups;
 #[path = "../web/profile_storage.rs"]
 mod profile_storage;
@@ -43,6 +45,8 @@ pub(crate) use startup::{initialize_main, on_event};
 #[cfg(feature = "cef-integration-test")]
 pub(crate) mod test_control;
 #[cfg(feature = "cef-integration-test")]
+mod test_popups;
+#[cfg(feature = "cef-integration-test")]
 mod test_session;
 pub use actions::{WebMetrics, WebSnapshot};
 pub use popups::reject_popup;
@@ -53,10 +57,12 @@ pub struct WebHost {
 }
 #[derive(Default)]
 struct HostState {
+    pending_popups: HashMap<String, popup_events::Pending>,
     guests: HashMap<String, Guest>,
     environments: HashMap<String, Environment>,
 }
 struct Guest {
+    popup: Option<tauri_runtime_cef::cef::Browser>,
     target: WebTarget,
     environment: String,
     visible: bool,

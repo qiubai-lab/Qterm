@@ -28,6 +28,18 @@ c.socket.close(1000,'finished');return result;
 """
 
 
+def wait_samples(app, label, minimum):
+    # Hidden Chromium pages may throttle timers. Wait for enough observations
+    # without relaxing the zero-failure or original-socket assertions below.
+    import time
+    deadline=time.monotonic()+20
+    while time.monotonic()<deadline:
+        if app.evaluate(label, f"return continuity.http.length >= {minimum}"):
+            return
+        time.sleep(.1)
+    raise TimeoutError(f'{label}: insufficient continuity observations')
+
+
 def run(app, gateways, add):
     # A connection's route is immutable while owned; reject before creating a context.
     app.send(op='open', id='wrong-route', profile='A', port=gateways['B'].server_address[1], path='/')
@@ -52,6 +64,7 @@ def run(app, gateways, add):
                 state['echo']['profile']==name and 'session='+name in state['echo']['cookie'] and state['storage']==name, state)
             app.close_window(label)
     for name in ('A', 'B'):
+        wait_samples(app, name.lower(), 10)
         result=app.evaluate(name.lower(), STOP)
         add(name+': opening and closing 12 windows causes zero HTTP failures',
             len(result['http'])>=10 and all(r.get('profile')==name and 'session='+name in r.get('cookie','') for r in result['http']),result['http'])
@@ -68,6 +81,7 @@ def close_creator(app, gateway, add):
     app.close_window('a')
     app.open('a-after-creator', 'A', gateway)
     app.close_window('a-after-creator')
+    wait_samples(app, 'a-survivor', 5)
     result = app.evaluate('a-survivor', STOP)
     add('closing original creator and opening another window preserves survivor HTTP',
         len(result['http'])>=5 and all(r.get('profile')=='A' and 'session=A' in r.get('cookie','') for r in result['http']), result['http'])

@@ -1,0 +1,716 @@
+{
+  "timestamp": "2026-10-30T10:11:34.449516+00:00",
+  "platform": "macOS-26.5-arm64-arm-64bit",
+  "machine": "arm64",
+  "versions": {
+    "probe": "Qterm dev-cef integration",
+    "tauri": "3.0.0-alpha.5",
+    "runtime": "3.0.0-alpha.6 + local context-pool patch",
+    "cef": "154.5.0"
+  },
+  "artifact": {
+    "binary_sha256": "305aab17863600e935bfa60226df21f09033915efe5ad982336fb9b24dc8c6f5",
+    "app_logical_bytes": 369521196
+  },
+  "completed": true,
+  "passed": true,
+  "limitations": [
+    "macOS arm64 only",
+    "two sshd processes on one host with separate target ports",
+    "real Qterm frontend with synthetic guest test pages",
+    "RSS sums shared pages; not unique physical footprint",
+    "compile-time test build uses Mock cookie encryption; normal builds use System"
+  ],
+  "checks": [
+    {
+      "name": "real Qterm shell loads and trusted IPC works",
+      "passed": true
+    },
+    {
+      "name": "real React Browser Block automatically adopts popup as selected new tab",
+      "passed": true
+    },
+    {
+      "name": "adopted Block tab receives its own URL metadata",
+      "passed": true
+    },
+    {
+      "name": "real tab close button releases popup and keeps original page alive",
+      "passed": true
+    },
+    {
+      "name": "closing real UI tabs releases the local environment",
+      "passed": true
+    },
+    {
+      "name": "A: original origin and secure context",
+      "passed": true
+    },
+    {
+      "name": "A: HTTP SSH identity Host Origin POST",
+      "passed": true
+    },
+    {
+      "name": "A: HttpOnly round trip hidden from JS",
+      "passed": true
+    },
+    {
+      "name": "A: native Cookie visible in DOM",
+      "passed": true
+    },
+    {
+      "name": "A: Secure Cookie works on trusted localhost",
+      "passed": true
+    },
+    {
+      "name": "A: foreign and path Cookie excluded",
+      "passed": true
+    },
+    {
+      "name": "A: Cookie path included",
+      "passed": true
+    },
+    {
+      "name": "A: Cookie path boundary excluded",
+      "passed": true
+    },
+    {
+      "name": "A: JS Cookie reaches HTTP",
+      "passed": true
+    },
+    {
+      "name": "A: credentials omit sends no Cookie",
+      "passed": true
+    },
+    {
+      "name": "A: credentials omit ignores Set-Cookie",
+      "passed": true
+    },
+    {
+      "name": "A: multiple Set-Cookie headers",
+      "passed": true
+    },
+    {
+      "name": "A: expired Cookie excluded",
+      "passed": true
+    },
+    {
+      "name": "A: other connection Cookie absent",
+      "passed": true
+    },
+    {
+      "name": "A: localStorage connection identity",
+      "passed": true
+    },
+    {
+      "name": "A: Cookie deletion",
+      "passed": true
+    },
+    {
+      "name": "A: page WebSocket identity Host Origin Cookie",
+      "passed": true
+    },
+    {
+      "name": "A: WebSocket text binary close",
+      "passed": true
+    },
+    {
+      "name": "A: classic Worker HTTP and WebSocket",
+      "passed": true
+    },
+    {
+      "name": "A: module Worker HTTP and WebSocket",
+      "passed": true
+    },
+    {
+      "name": "A: blob Worker native WebSocket over SSH",
+      "passed": true
+    },
+    {
+      "name": "A: 16 concurrent HTTP requests remain on their SSH connection",
+      "passed": true
+    },
+    {
+      "name": "B: original origin and secure context",
+      "passed": true
+    },
+    {
+      "name": "B: HTTP SSH identity Host Origin POST",
+      "passed": true
+    },
+    {
+      "name": "B: HttpOnly round trip hidden from JS",
+      "passed": true
+    },
+    {
+      "name": "B: native Cookie visible in DOM",
+      "passed": true
+    },
+    {
+      "name": "B: Secure Cookie works on trusted localhost",
+      "passed": true
+    },
+    {
+      "name": "B: foreign and path Cookie excluded",
+      "passed": true
+    },
+    {
+      "name": "B: Cookie path included",
+      "passed": true
+    },
+    {
+      "name": "B: Cookie path boundary excluded",
+      "passed": true
+    },
+    {
+      "name": "B: JS Cookie reaches HTTP",
+      "passed": true
+    },
+    {
+      "name": "B: credentials omit sends no Cookie",
+      "passed": true
+    },
+    {
+      "name": "B: credentials omit ignores Set-Cookie",
+      "passed": true
+    },
+    {
+      "name": "B: multiple Set-Cookie headers",
+      "passed": true
+    },
+    {
+      "name": "B: expired Cookie excluded",
+      "passed": true
+    },
+    {
+      "name": "B: other connection Cookie absent",
+      "passed": true
+    },
+    {
+      "name": "B: localStorage connection identity",
+      "passed": true
+    },
+    {
+      "name": "B: Cookie deletion",
+      "passed": true
+    },
+    {
+      "name": "B: page WebSocket identity Host Origin Cookie",
+      "passed": true
+    },
+    {
+      "name": "B: WebSocket text binary close",
+      "passed": true
+    },
+    {
+      "name": "B: classic Worker HTTP and WebSocket",
+      "passed": true
+    },
+    {
+      "name": "B: module Worker HTTP and WebSocket",
+      "passed": true
+    },
+    {
+      "name": "B: blob Worker native WebSocket over SSH",
+      "passed": true
+    },
+    {
+      "name": "B: 16 concurrent HTTP requests remain on their SSH connection",
+      "passed": true
+    },
+    {
+      "name": "A: fresh Cache Storage and IndexedDB isolated",
+      "passed": true
+    },
+    {
+      "name": "B: fresh Cache Storage and IndexedDB isolated",
+      "passed": true
+    },
+    {
+      "name": "A: Service Worker, Cache Storage, IndexedDB and localStorage identity",
+      "passed": true
+    },
+    {
+      "name": "B: Service Worker, Cache Storage, IndexedDB and localStorage identity",
+      "passed": true
+    },
+    {
+      "name": "closed native network gate rejects page and worker requests while B survives",
+      "passed": true
+    },
+    {
+      "name": "native network gate admits requests after binding without changing origin",
+      "passed": true
+    },
+    {
+      "name": "automatic non-gesture popup is blocked",
+      "passed": true
+    },
+    {
+      "name": "user gesture opens a native popup",
+      "passed": true
+    },
+    {
+      "name": "popup retains POST body and window.opener",
+      "passed": true
+    },
+    {
+      "name": "popup inherits A Cookie and SSH route",
+      "passed": true
+    },
+    {
+      "name": "independent B remains isolated while A popup is open",
+      "passed": true
+    },
+    {
+      "name": "macOS popup retains Alloy native runtime",
+      "passed": true
+    },
+    {
+      "name": "40 native popup parent closes complete, including in-flight and nested creation",
+      "passed": true
+    },
+    {
+      "name": "same connection rejects a different SSH gateway before window creation",
+      "passed": true
+    },
+    {
+      "name": "rejected route creates no window",
+      "passed": true
+    },
+    {
+      "name": "reuse-a-0: identical native RequestContext and isolated other connection",
+      "passed": true
+    },
+    {
+      "name": "reuse-a-0: Cookie and localStorage retain connection identity",
+      "passed": true
+    },
+    {
+      "name": "reuse-b-0: identical native RequestContext and isolated other connection",
+      "passed": true
+    },
+    {
+      "name": "reuse-b-0: Cookie and localStorage retain connection identity",
+      "passed": true
+    },
+    {
+      "name": "reuse-a-1: identical native RequestContext and isolated other connection",
+      "passed": true
+    },
+    {
+      "name": "reuse-a-1: Cookie and localStorage retain connection identity",
+      "passed": true
+    },
+    {
+      "name": "reuse-b-1: identical native RequestContext and isolated other connection",
+      "passed": true
+    },
+    {
+      "name": "reuse-b-1: Cookie and localStorage retain connection identity",
+      "passed": true
+    },
+    {
+      "name": "reuse-a-2: identical native RequestContext and isolated other connection",
+      "passed": true
+    },
+    {
+      "name": "reuse-a-2: Cookie and localStorage retain connection identity",
+      "passed": true
+    },
+    {
+      "name": "reuse-b-2: identical native RequestContext and isolated other connection",
+      "passed": true
+    },
+    {
+      "name": "reuse-b-2: Cookie and localStorage retain connection identity",
+      "passed": true
+    },
+    {
+      "name": "reuse-a-3: identical native RequestContext and isolated other connection",
+      "passed": true
+    },
+    {
+      "name": "reuse-a-3: Cookie and localStorage retain connection identity",
+      "passed": true
+    },
+    {
+      "name": "reuse-b-3: identical native RequestContext and isolated other connection",
+      "passed": true
+    },
+    {
+      "name": "reuse-b-3: Cookie and localStorage retain connection identity",
+      "passed": true
+    },
+    {
+      "name": "reuse-a-4: identical native RequestContext and isolated other connection",
+      "passed": true
+    },
+    {
+      "name": "reuse-a-4: Cookie and localStorage retain connection identity",
+      "passed": true
+    },
+    {
+      "name": "reuse-b-4: identical native RequestContext and isolated other connection",
+      "passed": true
+    },
+    {
+      "name": "reuse-b-4: Cookie and localStorage retain connection identity",
+      "passed": true
+    },
+    {
+      "name": "reuse-a-5: identical native RequestContext and isolated other connection",
+      "passed": true
+    },
+    {
+      "name": "reuse-a-5: Cookie and localStorage retain connection identity",
+      "passed": true
+    },
+    {
+      "name": "reuse-b-5: identical native RequestContext and isolated other connection",
+      "passed": true
+    },
+    {
+      "name": "reuse-b-5: Cookie and localStorage retain connection identity",
+      "passed": true
+    },
+    {
+      "name": "A: opening and closing 12 windows causes zero HTTP failures",
+      "passed": true
+    },
+    {
+      "name": "A: original WebSocket stays open without reconnect across window churn",
+      "passed": true
+    },
+    {
+      "name": "B: opening and closing 12 windows causes zero HTTP failures",
+      "passed": true
+    },
+    {
+      "name": "B: original WebSocket stays open without reconnect across window churn",
+      "passed": true
+    },
+    {
+      "name": "same-profile tab creation never redirects active A traffic",
+      "passed": true
+    },
+    {
+      "name": "same connection tabs share native Cookie and localStorage",
+      "passed": true
+    },
+    {
+      "name": "strict self CSP allows native localhost WebSocket",
+      "passed": true
+    },
+    {
+      "name": "logout A does not clear B cookies",
+      "passed": true
+    },
+    {
+      "name": "open socket belongs to A before disconnect",
+      "passed": true
+    },
+    {
+      "name": "SSH cut closes existing WebSocket abnormally",
+      "passed": true
+    },
+    {
+      "name": "disconnected A HTTP and new WebSocket fail closed",
+      "passed": true
+    },
+    {
+      "name": "B WebSocket stays usable while A disconnected",
+      "passed": true
+    },
+    {
+      "name": "SSH restore keeps original origin and A Cookie",
+      "passed": true
+    },
+    {
+      "name": "closing original creator and opening another window preserves survivor HTTP",
+      "passed": true
+    },
+    {
+      "name": "surviving window WebSocket remains open after original creator closes",
+      "passed": true
+    },
+    {
+      "name": "closing every A window retains the identical connection-owned context",
+      "passed": true
+    },
+    {
+      "name": "reopened connection restores its own storage",
+      "passed": true
+    },
+    {
+      "name": "no direct IPv4 or IPv6 fallback to local port 3000",
+      "passed": true
+    },
+    {
+      "name": "A: every request preserves Host and never carries other session",
+      "passed": true
+    },
+    {
+      "name": "A: real SSH public-key authentication",
+      "passed": true
+    },
+    {
+      "name": "B: every request preserves Host and never carries other session",
+      "passed": true
+    },
+    {
+      "name": "B: real SSH public-key authentication",
+      "passed": true
+    },
+    {
+      "name": "close barrier failure reports error and quarantines generation",
+      "passed": true
+    },
+    {
+      "name": "failed retirement cannot reuse or replace context prematurely",
+      "passed": true
+    },
+    {
+      "name": "disconnect A retires its environment while B remains",
+      "passed": true
+    },
+    {
+      "name": "disconnect closes every A guest",
+      "passed": true
+    },
+    {
+      "name": "B requests remain isolated after A retirement",
+      "passed": true
+    },
+    {
+      "name": "repeat disconnect is idempotent",
+      "passed": true
+    },
+    {
+      "name": "reopen creates a new native context after pool retirement",
+      "passed": true
+    },
+    {
+      "name": "persistent Cookie survives context retirement and reopen",
+      "passed": true
+    },
+    {
+      "name": "zero-page connection is still retired on disconnect",
+      "passed": true
+    },
+    {
+      "name": "final connection retirement empties environment owner",
+      "passed": true
+    },
+    {
+      "name": "no retained guest or environment resources",
+      "passed": true
+    },
+    {
+      "name": "authenticated Qterm sessions share native context only for same identity",
+      "passed": true
+    },
+    {
+      "name": "A: production russh SOCKS route preserves target and Cookie",
+      "passed": true
+    },
+    {
+      "name": "B: production russh SOCKS route preserves target and Cookie",
+      "passed": true
+    },
+    {
+      "name": "A: popup adoption starts with live SSH WebSocket",
+      "passed": true
+    },
+    {
+      "name": "B: popup adoption starts with live SSH WebSocket",
+      "passed": true
+    },
+    {
+      "name": "adopted Block tab preserves native POST body and source Cookie",
+      "passed": true
+    },
+    {
+      "name": "adopted Block tab preserves window.opener",
+      "passed": true
+    },
+    {
+      "name": "adopted popup shares root NSWindow instead of opening an extra window",
+      "passed": true
+    },
+    {
+      "name": "adopted tab supports bounds visibility metrics and PNG preview",
+      "passed": true
+    },
+    {
+      "name": "named target reuses adopted browser without another tab",
+      "passed": true
+    },
+    {
+      "name": "nested popup is another embedded tab in the same window",
+      "passed": true
+    },
+    {
+      "name": "closing nested tab preserves opener tab and main window",
+      "passed": true
+    },
+    {
+      "name": "window.close closes its adopted tab without closing the shared main window",
+      "passed": true
+    },
+    {
+      "name": "B connection stays isolated after embedded tab and nested close",
+      "passed": true
+    },
+    {
+      "name": "rejected popup releases actual native browser",
+      "passed": true
+    },
+    {
+      "name": "target blank anchor becomes embedded tab and retains noopener",
+      "passed": true
+    },
+    {
+      "name": "noopener blank tab also has no extra NSWindow",
+      "passed": true
+    },
+    {
+      "name": "popup adoption request is one use",
+      "passed": true
+    },
+    {
+      "name": "unclaimed popup expires and closes its native child",
+      "passed": true
+    },
+    {
+      "name": "expired popup request cannot be adopted",
+      "passed": true
+    },
+    {
+      "name": "A: HTTP and original WebSocket survive popup adoption and teardown",
+      "passed": true
+    },
+    {
+      "name": "B: HTTP and original WebSocket survive popup adoption and teardown",
+      "passed": true
+    },
+    {
+      "name": "connection teardown begins with two adopted nested tab guests",
+      "passed": true
+    },
+    {
+      "name": "guest application and plugin IPC are rejected",
+      "passed": true
+    },
+    {
+      "name": "guest navigation to trusted application origin is denied",
+      "passed": true
+    },
+    {
+      "name": "browser action rejects application origin",
+      "passed": true
+    },
+    {
+      "name": "browser navigation back forward reload and stop remain callable",
+      "passed": true
+    },
+    {
+      "name": "production metrics and PNG preview work",
+      "passed": true
+    },
+    {
+      "name": "Cookie clear affects every A page and preserves B",
+      "passed": true
+    },
+    {
+      "name": "native HTTP cache clear completes",
+      "passed": true
+    },
+    {
+      "name": "unsupported whole-profile site storage clear fails explicitly",
+      "passed": true
+    },
+    {
+      "name": "production disconnect watcher retries a failed close barrier",
+      "passed": true
+    },
+    {
+      "name": "disconnect releases adopted popup descendants and preserves only two surviving roots",
+      "passed": true
+    },
+    {
+      "name": "closing one authenticated owner preserves same-identity survivor",
+      "passed": true
+    },
+    {
+      "name": "zero-page final owner is reaped while independent B survives",
+      "passed": true
+    },
+    {
+      "name": "production disconnect watchers retire all native environments",
+      "passed": true
+    },
+    {
+      "name": "A: live WebSocket exists before main-window exit",
+      "passed": true
+    },
+    {
+      "name": "B: live WebSocket exists before main-window exit",
+      "passed": true
+    },
+    {
+      "name": "exit starts with two owned contexts and native nested popups",
+      "passed": true
+    },
+    {
+      "name": "main-window close exits normally with live resources",
+      "passed": true
+    },
+    {
+      "name": "main-window exit acknowledges empty guests, environments and native pool",
+      "passed": true
+    },
+    {
+      "name": "main-window exit releases every owned gateway listener",
+      "passed": true
+    },
+    {
+      "name": "main-window exit leaves no captured CEF helper processes",
+      "passed": true
+    }
+  ],
+  "checks_passed": 164,
+  "test_app": "scripts/cef/artifacts/popup-tabs-test-app/Qterm CEF.app",
+  "raw_evidence": "scripts/cef/artifacts/popup-tabs-complete/results.json",
+  "repository_checks": {
+    "frontend": {
+      "passed": 1486,
+      "skipped": 2,
+      "files_passed": 247
+    },
+    "node": {
+      "passed": 40
+    },
+    "rust": {
+      "passed": 370,
+      "ignored": 6
+    },
+    "fmt": true,
+    "clippy_all_targets_all_features": true,
+    "source_size": true
+  },
+  "normal_package": {
+    "app": "/Volumes/DATA/BuildCache/qterm-cef-integration/target/release/bundle/macos/Qterm CEF.app",
+    "app_bytes": 368469228,
+    "binary_sha256": "63c2c4ad2e1bbc805159ba80101734120c623a12da9b08feb871b45d49ea371b",
+    "test_markers_absent": true,
+    "cookie_backend": "System",
+    "signed": "ad-hoc",
+    "notarized": false,
+    "dmg": "/Volumes/DATA/BuildCache/qterm-cef-integration/target/release/bundle/dmg/Qterm CEF_0.6.0_aarch64.dmg",
+    "dmg_bytes": 156437194,
+    "dmg_sha256": "45c9f5e0c22d269628fa9991f92f8ff7cb3c4463f1cc4aedcf8ad67ba3b5e380",
+    "signature_verified": true,
+    "dmg_verified": true
+  }
+}

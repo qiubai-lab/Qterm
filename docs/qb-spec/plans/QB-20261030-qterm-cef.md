@@ -51,3 +51,16 @@ Recovery: previous dev branch and legacy browser stores remain available. No del
 Evidence: [2026-10-30 report](../../../scripts/cef/evidence/2026-10-30.md).
 The latest user-requested verification and repackaging is complete; this larger
 migration change is not archived while AC-005 / AC-007 retain explicit gaps.
+
+## Popup tabs implementation
+- TASK-006 [REQ-006, AC-009]: Runtime opt-in child-popup lifecycle; adapter pending
+  requests and common guest-view operations; reuse existing WebTabs/IPC. New
+  modules own popup notifications and view dispatch, with <700 Rust lines each.
+- VER-006 [AC-009]: Real packaged CEF/OpenSSH tests for embedded POST/opener,
+  native window identity, nested close, rejection/expiry, sibling HTTP/WS and
+  cross-connection isolation; existing popup frontend tests and repository gates.
+
+TASK-006 / VER-006: completed for macOS arm64, with 164/164 native checks and
+repository gates. Native close, failed/expired requests, live source connection
+teardown and actual frontend IPC are covered. Other-platform verification remains
+outside this run. Evidence: `scripts/cef/evidence/popup-tabs-2026-10-30.md`.
