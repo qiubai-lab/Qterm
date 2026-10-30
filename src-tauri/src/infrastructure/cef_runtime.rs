@@ -5,7 +5,11 @@ use tauri_runtime_cef::{Cef, ProxyConfig, SandboxPolicy, SecretStorage, WebRtcIp
 pub(crate) fn runtime(root: &Path) -> Cef {
     Cef::default()
         .root_cache_path(root)
-        .sandbox(SandboxPolicy::Required)
+        .sandbox(if cfg!(all(windows, debug_assertions)) {
+            SandboxPolicy::Auto
+        } else {
+            SandboxPolicy::Required
+        })
         .secret_storage(storage())
         .proxy(ProxyConfig::FixedServers {
             server: format!("socks5://127.0.0.1:{}", rejecting_port()),

@@ -4,9 +4,12 @@ This branch runs the real Qterm React application and backend on Tauri 3 + CEF.
 The standalone experiment remains under `experiments/tauri3-cef-probe`; it is not
 used as the application shell. Native integration is currently validated on
 macOS arm64. Windows/Linux Web Block capabilities remain disabled until their
-native surface adapters are implemented and tested. Windows additionally cannot
-start under the current Required sandbox policy: the pinned runtime cannot supply
-the Chromium sandbox broker. Installing build tools does not resolve this blocker.
+native surface adapters are implemented and tested. Windows builds with
+`debug_assertions` (including default `pnpm tauri dev`) use `SandboxPolicy::Auto`
+to permit local debugging without Chromium's process sandbox. Default release
+builds and all other platforms retain `Required`; Windows release startup remains
+blocked because the pinned runtime cannot supply the Chromium sandbox broker.
+Installing build tools does not resolve this blocker.
 
 ## Build
 

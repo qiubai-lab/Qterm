@@ -20,10 +20,10 @@
 | macOS arm64 | 已验证完整应用、OpenSSH、Cookie/WebSocket、隔离、回收及 app/DMG 打包 |
 | macOS Intel | 可准备原生 x86_64 工具链；本分支尚未实机验证 |
 | Linux | 以下为依赖安装及编译准备方案；未实机验证，Web Block 能力暂未启用 |
-| Windows x64 | 以下为编译环境准备方案；Web Block 暂未启用，且当前 runtime 无法满足 `SandboxPolicy::Required`，应用启动被阻断 |
+| Windows x64 | Web Block 暂未启用；调试构建使用 `SandboxPolicy::Auto`，允许无 Chromium 进程沙箱启动；默认 release 构建仍要求 `Required`，当前 runtime 无法满足，启动被阻断 |
 
 Windows 沙箱限制来自固定的 runtime 实现，不能靠补装 CMake 或 WebView2 解决。
-保持项目沙箱策略不变，后续需完成 runtime/打包方案适配。参见
+仅 Windows 且启用 `debug_assertions` 时允许上述调试例外（包括默认 `pnpm tauri dev`）；默认 release 构建及其他平台仍使用 `Required`，后续需完成 runtime/打包方案适配。`Auto` 不会修复 Windows 沙箱支持，也不代表 Web Block 已完成适配。参见
 [Tauri CEF 沙箱说明](https://v3.tauri.app/develop/cef/#process-sandbox)。
 
 ### 通用工具与版本
@@ -169,8 +169,8 @@ ninja --version
 ```
 
 CEF 随应用打包，安装 WebView2 不能替代上述工具。原生 Windows 构建请使用 Windows
-工具链；WSL 属于 Linux 环境。这些安装步骤尚未在 Windows 主机实测，且安装成功后仍有
-本节开头说明的 Required sandbox 启动阻塞。
+工具链；WSL 属于 Linux 环境。这些安装步骤尚未在 Windows 主机实测；调试构建允许上述
+无沙箱例外，默认 release 构建仍有本节开头说明的 Required sandbox 启动阻塞。
 
 ### Linux（Ubuntu 24.04 / Debian 13）
 
