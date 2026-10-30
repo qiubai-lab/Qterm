@@ -3,8 +3,8 @@
 This branch runs the real Qterm React application and backend on Tauri 3 + CEF.
 The standalone experiment remains under `experiments/tauri3-cef-probe`; it is not
 used as the application shell. Native integration is currently validated on
-macOS arm64. Windows/Linux Web Block capabilities remain disabled until their
-native surface adapters are implemented and tested. Windows builds with
+macOS arm64. Windows Browser Blocks now have a native HWND adapter and the
+isolated smoke below; Linux capabilities remain disabled. Windows builds with
 `debug_assertions` (including default `pnpm tauri dev`) use `SandboxPolicy::Auto`
 to permit local debugging without Chromium's process sandbox. Default release
 builds and all other platforms retain `Required`; Windows release startup remains
@@ -176,4 +176,39 @@ SSH sessions for POST/opener, native window identity, nested close, named-target
 reuse, noopener, one-use/expired/rejected requests, previews and uninterrupted
 HTTP/WebSocket traffic. WebSocket heartbeats stay below the fixture's 10-second
 idle timeout; local UI smoke uses its own HTTP origin so it cannot contaminate
-SSH Host/isolation assertions. Other desktop platforms remain unverified.
+SSH Host/isolation assertions. Windows has the separate local fixture below;
+the full real-SSH run remains macOS evidence.
+
+### Windows Browser Block
+
+`web_cef/windows/` owns UI-thread-only bounds/DPI, HWND clipping, input blocking,
+focus return and trusted Ctrl+W routing. Native hooks are removed on HWND
+destruction; the shared bitmap overlay remains a mouse-transparent child.
+`patches/embedded_popups.rs` creates hidden Alloy child HWNDs and destroys only
+the accepted popup child on close, preserving POST, opener and RequestContext.
+The main application window is never used as a guest clipping/close target.
+
+```powershell
+pnpm tauri build --debug --no-bundle --features cef-integration-test
+python scripts/cef/tests/windows.py --app src-tauri/target/debug/Qterm.exe
+```
+
+This starts a disposable local HTTP origin and isolated application data, drives
+the real React Browser Block, and records native bounds, visibility, focus,
+occlusion, popup semantics, screenshots via CDP and context retirement under
+`scripts/cef/artifacts/windows/`. The test feature's parent stdin diagnostics
+are absent from normal builds and are never guest IPC. It does not certify
+Windows release sandboxing, installation, real SSH, or Linux/macOS behavior.
+Measured Windows results and repository check exceptions are recorded in
+[the Windows verification note](evidence/windows-block-2026-10-31.md).
+
+For direct Cargo tests, first prepare the patched runtime and set `CEF_PATH` to
+the actual extracted Windows distribution used by Tauri CLI (the directory
+containing `libcef.dll` and `include/`), and include it in `PATH` for test DLLs:
+
+```powershell
+python scripts/cef/prepare_runtime.py
+$env:CEF_PATH = "$env:LOCALAPPDATA\tauri-cef\154.0.34\cef_windows_x86_64"
+$env:PATH = "$env:CEF_PATH;$env:PATH"
+cargo test --manifest-path src-tauri/Cargo.toml --locked --lib infrastructure::web::windows::tests -- --test-threads=1
+```

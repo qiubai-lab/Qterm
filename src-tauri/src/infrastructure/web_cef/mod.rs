@@ -41,6 +41,11 @@ mod scrollbars;
 mod startup;
 mod storage;
 mod surface;
+#[cfg(windows)]
+mod windows;
+#[cfg(windows)]
+#[path = "../web/windows_frame.rs"]
+mod windows_frame;
 pub(crate) use startup::{initialize_main, on_event};
 #[cfg(feature = "cef-integration-test")]
 pub(crate) mod test_control;
@@ -48,6 +53,8 @@ pub(crate) mod test_control;
 mod test_popups;
 #[cfg(feature = "cef-integration-test")]
 mod test_session;
+#[cfg(all(windows, feature = "cef-integration-test"))]
+mod test_windows;
 pub use actions::{WebMetrics, WebSnapshot};
 pub use popups::reject_popup;
 
@@ -86,7 +93,7 @@ impl WebHost {
     }
 }
 pub fn supported() -> bool {
-    cfg!(target_os = "macos")
+    cfg!(any(target_os = "macos", windows))
 }
 pub fn remote_supported() -> bool {
     supported()

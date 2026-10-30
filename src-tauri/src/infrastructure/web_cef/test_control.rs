@@ -33,6 +33,10 @@ pub(super) fn field<'a>(command: &'a Value, key: &str) -> Result<&'a str, String
 }
 async fn run(app: &tauri::AppHandle, command: Value) -> Result<(), String> {
     let host = app.state::<WebHost>();
+    #[cfg(windows)]
+    if field(&command, "op")?.starts_with("windows-") {
+        return super::test_windows::run(app, &command).await;
+    }
     match field(&command, "op")? {
         "open" => {
             let (id, profile, path) = (

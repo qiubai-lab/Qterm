@@ -1,0 +1,277 @@
+{
+  "timestamp": "2026-10-30T17:00:59.179621+00:00",
+  "platform": "Windows-11-10.0.26100-SP0",
+  "checks": [
+    {
+      "name": "Windows main IPC advertises local and remote Browser Blocks",
+      "pass_": true,
+      "detail": {
+        "local": true,
+        "remote": true,
+        "tunnelAddressMapping": false
+      }
+    },
+    {
+      "name": "real React Browser Block automatically adopts popup as selected new tab",
+      "pass_": true,
+      "detail": [
+        {
+          "selected": "false",
+          "text": "SSH Origin Probe"
+        },
+        {
+          "selected": "true",
+          "text": "127.0.0.1:64817/echo?ui-tab"
+        }
+      ]
+    },
+    {
+      "name": "adopted Block tab receives its own URL metadata",
+      "pass_": true,
+      "detail": [
+        "http://127.0.0.1:64817/echo?ui-tab"
+      ]
+    },
+    {
+      "name": "real tab close button releases popup and keeps original page alive",
+      "pass_": true,
+      "detail": null
+    },
+    {
+      "name": "closing real UI tabs releases the local environment",
+      "pass_": true,
+      "detail": {
+        "environments": 0,
+        "event": "counts",
+        "gatewayPorts": [],
+        "guests": 0,
+        "pooledContexts": 1
+      }
+    },
+    {
+      "name": "CEF guest is a visible enabled child at physical DPI bounds",
+      "pass_": true,
+      "detail": {
+        "child": true,
+        "enabled": true,
+        "focused": true,
+        "height": 400,
+        "hit": [],
+        "hwnd": 986936,
+        "overlay": 0,
+        "parent": 6557648,
+        "region": 0,
+        "top": 6557648,
+        "visible": true,
+        "width": 600,
+        "x": 80,
+        "y": 120
+      }
+    },
+    {
+      "name": "guest retains HTTP origin and application/plugin IPC is rejected",
+      "pass_": true,
+      "detail": {
+        "app": "web_supported not allowed. Plugin not found",
+        "href": "http://127.0.0.1:64817/",
+        "plugin": "clipboard-manager.write_text not allowed on window \"main\", webview \"web-2a083dc2-31cf-402a-885d-9993ff4ede44\", URL: http://127.0.0.1:64817/\n\nallowed on: [webviews: \"main\", URL: local]\n\nreferenced by: capability: default, permission: allow-write-text"
+      }
+    },
+    {
+      "name": "guest navigation cannot enter the privileged main origin",
+      "pass_": true,
+      "detail": {
+        "error": "\u4ec5\u652f\u6301\u5916\u90e8 HTTP/HTTPS \u5730\u5740",
+        "event": "error"
+      }
+    },
+    {
+      "name": "popup without a native user gesture is denied",
+      "pass_": true,
+      "detail": null
+    },
+    {
+      "name": "native occlusion union exposes application overlays",
+      "pass_": true,
+      "detail": {
+        "child": true,
+        "enabled": true,
+        "focused": true,
+        "height": 400,
+        "hit": [
+          true,
+          false,
+          false,
+          true
+        ],
+        "hwnd": 986936,
+        "overlay": 0,
+        "parent": 6557648,
+        "region": 3,
+        "top": 6557648,
+        "visible": true,
+        "width": 600,
+        "x": 80,
+        "y": 120
+      }
+    },
+    {
+      "name": "blocked surface releases focus and disables native input",
+      "pass_": true,
+      "detail": {
+        "child": true,
+        "enabled": false,
+        "focused": false,
+        "height": 400,
+        "hit": [],
+        "hwnd": 986936,
+        "overlay": 0,
+        "parent": 6557648,
+        "region": 0,
+        "top": 6557648,
+        "visible": true,
+        "width": 600,
+        "x": 80,
+        "y": 120
+      }
+    },
+    {
+      "name": "covered surface is hidden and disabled",
+      "pass_": true,
+      "detail": {
+        "child": true,
+        "enabled": false,
+        "focused": false,
+        "height": 400,
+        "hit": [],
+        "hwnd": 986936,
+        "overlay": 0,
+        "parent": 6557648,
+        "region": 1,
+        "top": 6557648,
+        "visible": false,
+        "width": 600,
+        "x": 80,
+        "y": 120
+      }
+    },
+    {
+      "name": "uncovered surface recovers input and unclipped region",
+      "pass_": true,
+      "detail": {
+        "child": true,
+        "enabled": true,
+        "focused": true,
+        "height": 400,
+        "hit": [],
+        "hwnd": 986936,
+        "overlay": 0,
+        "parent": 6557648,
+        "region": 0,
+        "top": 6557648,
+        "visible": true,
+        "width": 600,
+        "x": 80,
+        "y": 120
+      }
+    },
+    {
+      "name": "inactive tab hides its HWND",
+      "pass_": true,
+      "detail": null
+    },
+    {
+      "name": "visible Windows guest produces scroll metrics and PNG snapshot",
+      "pass_": true,
+      "detail": {
+        "event": "observed",
+        "metrics": {
+          "documentId": 1793379662611.9,
+          "loadMs": 18,
+          "resources": 4,
+          "url": "http://127.0.0.1:64817/"
+        },
+        "snapshotBytes": 2936
+      }
+    },
+    {
+      "name": "popup shares the application HWND tree",
+      "pass_": true,
+      "detail": {
+        "sameWindow": true,
+        "valid": true
+      }
+    },
+    {
+      "name": "embedded Windows popup preserves native POST and cookies",
+      "pass_": true,
+      "detail": {
+        "profile": "Windows",
+        "path": "/echo",
+        "host": "127.0.0.1:64817",
+        "origin": "http://127.0.0.1:64817",
+        "cookie": "native=Windows",
+        "body": "body=native-post"
+      }
+    },
+    {
+      "name": "embedded Windows popup preserves opener",
+      "pass_": true,
+      "detail": null
+    },
+    {
+      "name": "named target reuses the adopted browser",
+      "pass_": true,
+      "detail": null
+    },
+    {
+      "name": "popup shares the application HWND tree",
+      "pass_": true,
+      "detail": {
+        "sameWindow": true,
+        "valid": true
+      }
+    },
+    {
+      "name": "closing nested popup keeps opener and main alive",
+      "pass_": true,
+      "detail": null
+    },
+    {
+      "name": "window.close destroys only its child HWND",
+      "pass_": true,
+      "detail": null
+    },
+    {
+      "name": "popup shares the application HWND tree",
+      "pass_": true,
+      "detail": {
+        "sameWindow": true,
+        "valid": true
+      }
+    },
+    {
+      "name": "target blank retains noopener",
+      "pass_": true,
+      "detail": null
+    },
+    {
+      "name": "all Windows guests and request contexts retire",
+      "pass_": true,
+      "detail": {
+        "environments": 0,
+        "event": "counts",
+        "gatewayPorts": [],
+        "guests": 0,
+        "pooledContexts": 1
+      }
+    }
+  ],
+  "completed": true,
+  "limitations": [
+    "debug-only Auto sandbox; production Required remains blocked upstream",
+    "local HTTP fixture; this run does not certify real SSH transport or other operating systems"
+  ],
+  "binary_sha256": "72109848076ca26e8ea46b519b760054162a5fc46907c8c28d7f387bb54182ad",
+  "passed": true
+}

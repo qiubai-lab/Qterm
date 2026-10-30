@@ -18,8 +18,13 @@ pub(super) fn handler(
         .map(|u| u.origin());
     let _ = label;
     move |url, _| {
-        if (url.as_str() == "about:blank" || crate::domain::web::allowed_web_url(url.as_str()))
-            && origin.as_ref().is_none_or(|o| *o != url.origin())
+        // The pinned runtime admits only native user gestures before invoking this handler.
+        if crate::domain::web::allow_popup(
+            url.as_str(),
+            true,
+            origin.as_ref().is_some_and(|o| *o == url.origin()),
+        )
+        .is_ok()
         {
             tauri::webview::NewWindowResponse::Allow
         } else {

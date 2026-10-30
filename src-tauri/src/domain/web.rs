@@ -37,7 +37,6 @@ pub fn trusted_ui_label(label: &str) -> bool {
     label == "main"
 }
 
-#[cfg(any(windows, test))]
 pub fn allow_popup(url: &str, user_initiated: bool, app_origin: bool) -> Result<(), &'static str> {
     if !user_initiated {
         return Err("已拦截网页自动弹窗");

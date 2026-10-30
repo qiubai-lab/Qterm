@@ -20,10 +20,10 @@
 | macOS arm64 | 已验证完整应用、OpenSSH、Cookie/WebSocket、隔离、回收及 app/DMG 打包 |
 | macOS Intel | 可准备原生 x86_64 工具链；本分支尚未实机验证 |
 | Linux | 以下为依赖安装及编译准备方案；未实机验证，Web Block 能力暂未启用 |
-| Windows x64 | Web Block 暂未启用；调试构建使用 `SandboxPolicy::Auto`，允许无 Chromium 进程沙箱启动；默认 release 构建仍要求 `Required`，当前 runtime 无法满足，启动被阻断 |
+| Windows x64 | 已接入 CEF Browser Block 的 HWND 表面、遮挡、焦点及同 Block 弹窗；调试构建使用 `SandboxPolicy::Auto`；默认 release 仍要求 `Required`，当前 runtime 无法满足，启动被阻断 |
 
 Windows 沙箱限制来自固定的 runtime 实现，不能靠补装 CMake 或 WebView2 解决。
-仅 Windows 且启用 `debug_assertions` 时允许上述调试例外（包括默认 `pnpm tauri dev`）；默认 release 构建及其他平台仍使用 `Required`，后续需完成 runtime/打包方案适配。`Auto` 不会修复 Windows 沙箱支持，也不代表 Web Block 已完成适配。参见
+仅 Windows 且启用 `debug_assertions` 时允许上述调试例外（包括默认 `pnpm tauri dev`）；默认 release 构建及其他平台仍使用 `Required`，后续需完成 runtime/打包方案适配。`Auto` 不会修复 Windows 沙箱支持。Browser Block 的独立验证入口见 [CEF Windows 测试](../scripts/cef/README.md#windows-browser-block)。参见
 [Tauri CEF 沙箱说明](https://v3.tauri.app/develop/cef/#process-sandbox)。
 
 ### 通用工具与版本

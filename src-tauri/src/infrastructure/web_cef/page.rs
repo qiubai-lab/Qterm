@@ -39,6 +39,8 @@ pub(super) async fn create(
     #[cfg(feature = "cef-integration-test")]
     let event_label = label.to_string();
     let builder = WebviewBuilder::new(label, WebviewUrl::External("about:blank".parse().unwrap()))
+        // Embedded children and their native popups must use the same CEF runtime style.
+        .browser_runtime_style(tauri_runtime_cef::RuntimeStyle::Alloy)
         .data_directory(directory.to_path_buf())
         .position(tauri::LogicalPosition::new(-10000.0, -10000.0))
         .size(tauri::LogicalSize::new(800.0, 560.0))

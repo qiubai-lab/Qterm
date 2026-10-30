@@ -69,7 +69,9 @@ pub(super) async fn run(app: &tauri::AppHandle, command: &Value) -> Result<(), S
                                 .cast(),
                         )
                     };
-                    #[cfg(not(target_os = "macos"))]
+                    #[cfg(windows)]
+                    let same = super::windows::same_window(&browser, &parent)?;
+                    #[cfg(not(any(target_os = "macos", windows)))]
                     let same = false;
                     Ok(json!({"sameWindow":same,"valid":browser.is_valid()!=0}))
                 })

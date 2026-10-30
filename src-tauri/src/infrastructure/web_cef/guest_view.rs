@@ -75,6 +75,14 @@ impl View {
         .await
     }
     pub async fn set_bounds(&self, bounds: &super::WebBounds) -> Result<(), String> {
+        #[cfg(windows)]
+        {
+            let bounds = bounds.clone();
+            let app = self.app.clone();
+            return self
+                .with(move |browser| super::windows::set_bounds(&app, &browser, &bounds))
+                .await;
+        }
         #[cfg(target_os = "macos")]
         {
             let (x, y, width, height) = (bounds.x, bounds.y, bounds.width, bounds.height);
@@ -96,13 +104,20 @@ impl View {
             })
             .await
         }
-        #[cfg(not(target_os = "macos"))]
+        #[cfg(not(any(target_os = "macos", windows)))]
         {
             let _ = bounds;
             Err("平台尚不支持嵌入弹窗".into())
         }
     }
     pub async fn set_visible(&self, visible: bool) -> Result<(), String> {
+        #[cfg(windows)]
+        {
+            let app = self.app.clone();
+            return self
+                .with(move |browser| super::windows::set_visible(&app, &browser, visible))
+                .await;
+        }
         #[cfg(target_os = "macos")]
         {
             self.with(move |browser| {
@@ -117,7 +132,7 @@ impl View {
             })
             .await
         }
-        #[cfg(not(target_os = "macos"))]
+        #[cfg(not(any(target_os = "macos", windows)))]
         {
             let _ = visible;
             Err("平台尚不支持嵌入弹窗".into())

@@ -1,5 +1,6 @@
 use super::{WebBounds, WebHost, label};
 use crate::infrastructure::ssh::client::SshSessionManager;
+#[cfg(target_os = "macos")]
 use tauri::Emitter;
 impl WebHost {
     pub async fn sync(
@@ -65,7 +66,15 @@ async fn apply(view: &super::guest_view::View, bounds: &WebBounds) -> Result<(),
     })
     .await
 }
-#[cfg(not(target_os = "macos"))]
+#[cfg(windows)]
+async fn apply(view: &super::guest_view::View, bounds: &WebBounds) -> Result<(), String> {
+    let app = view.app.clone();
+    let label = view.label.clone();
+    let bounds = bounds.clone();
+    view.with(move |browser| super::windows::apply(&app, &label, &browser, &bounds))
+        .await
+}
+#[cfg(not(any(target_os = "macos", windows)))]
 async fn apply(_view: &super::guest_view::View, _bounds: &WebBounds) -> Result<(), String> {
     Err("当前 CEF 分支尚未验证此平台的原生遮挡适配".into())
 }

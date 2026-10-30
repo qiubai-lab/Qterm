@@ -10,11 +10,11 @@ import time
 
 class App:
     def __init__(self, binary, data, log):
-        self.log = log.open('w')
+        self.log = log.open('w', encoding='utf-8')
         self.events, self.pending = queue.Queue(), []
         self.history, self.contexts = [], {}
         self.process = subprocess.Popen([str(binary)], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                        stderr=self.log, text=True,
+                                        stderr=self.log, text=True, encoding='utf-8',
                                         env={**os.environ, 'QTERM_CEF_PROBE_DATA': str(data)})
         self.reader = threading.Thread(target=self.read, daemon=True)
         self.reader.start()
