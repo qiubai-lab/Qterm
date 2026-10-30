@@ -1,5 +1,8 @@
+import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { afterEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn().mockResolvedValue(undefined) }));
 
 vi.mock("@tauri-apps/api/window", () => ({ getCurrentWindow: vi.fn() }));
 
@@ -77,6 +80,8 @@ describe("Tauri window adapter", () => {
     expect(preventDefault).toHaveBeenCalledOnce();
     expect(flush).toHaveBeenCalledOnce();
     expect(destroy).toHaveBeenCalledOnce();
+    expect(invoke).toHaveBeenCalledWith("web_shutdown");
+    expect(vi.mocked(invoke).mock.invocationCallOrder[0]).toBeLessThan(destroy.mock.invocationCallOrder[0]);
     expect(flush.mock.invocationCallOrder[0]).toBeLessThan(destroy.mock.invocationCallOrder[0]);
   });
 
@@ -93,4 +98,19 @@ describe("Tauri window adapter", () => {
     await expect(closeHandler?.({ preventDefault: vi.fn() })).rejects.toThrow("save failed");
     expect(destroy).toHaveBeenCalledOnce();
   });
+  it("keeps the window alive if native cleanup fails and permits a later retry", async () => {
+    const destroy = vi.fn().mockResolvedValue(undefined);
+    let closeHandler: ((event: { preventDefault: () => void }) => Promise<void>) | undefined;
+    Object.defineProperty(window, "__TAURI_INTERNALS__", { configurable: true, value: {} });
+    vi.mocked(getCurrentWindow).mockReturnValue({
+      onCloseRequested: vi.fn().mockImplementation(async handler => { closeHandler = handler; return vi.fn(); }), destroy,
+    } as unknown as ReturnType<typeof getCurrentWindow>);
+    vi.mocked(invoke).mockRejectedValueOnce(new Error("native close timeout"));
+    await registerCurrentWindowCloseFlush(vi.fn().mockResolvedValue(undefined));
+    await expect(closeHandler?.({ preventDefault: vi.fn() })).rejects.toThrow("native close timeout");
+    expect(destroy).not.toHaveBeenCalled();
+    await closeHandler?.({ preventDefault: vi.fn() });
+    expect(destroy).toHaveBeenCalledOnce();
+  });
+
 });

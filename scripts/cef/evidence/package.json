@@ -1,0 +1,30 @@
+{
+  "app": "/Volumes/DATA/BuildCache/qterm-cef-integration/target/release/bundle/macos/Qterm CEF.app",
+  "dmg": "/Volumes/DATA/BuildCache/qterm-cef-integration/target/release/bundle/dmg/Qterm CEF_0.6.0_aarch64.dmg",
+  "app_logical_bytes": 368036556,
+  "dmg_bytes": 156282887,
+  "framework_bytes": 336443396,
+  "dmg_sha256": "06c0b73ab737ebe103a4c47941df67b47b3145170700fa4e9047adc4fb5ac8a0",
+  "binary_sha256": "bf1ee93267de7eafd8d29329c47d10cae4eb26e42b42e6c21ad9b3b98a180de1",
+  "binary_architecture": "/Volumes/DATA/BuildCache/qterm-cef-integration/target/release/bundle/macos/Qterm CEF.app/Contents/MacOS/Qterm: Mach-O 64-bit executable arm64",
+  "build_version": "/Volumes/DATA/BuildCache/qterm-cef-integration/target/release/bundle/macos/Qterm CEF.app/Contents/MacOS/Qterm:\nLoad command 10\n      cmd LC_BUILD_VERSION\n  cmdsize 32\n platform MACOS\n    minos 11.0\n      sdk 26.5\n   ntools 1\n     tool LD\n  version 1267.0",
+  "helpers": [
+    "/Volumes/DATA/BuildCache/qterm-cef-integration/target/release/bundle/macos/Qterm CEF.app/Contents/Frameworks/Qterm Helper (GPU).app/Contents/MacOS/Qterm Helper (GPU): Mach-O 64-bit executable arm64",
+    "/Volumes/DATA/BuildCache/qterm-cef-integration/target/release/bundle/macos/Qterm CEF.app/Contents/Frameworks/Qterm Helper (Plugin).app/Contents/MacOS/Qterm Helper (Plugin): Mach-O 64-bit executable arm64",
+    "/Volumes/DATA/BuildCache/qterm-cef-integration/target/release/bundle/macos/Qterm CEF.app/Contents/Frameworks/Qterm Helper (Renderer).app/Contents/MacOS/Qterm Helper (Renderer): Mach-O 64-bit executable arm64",
+    "/Volumes/DATA/BuildCache/qterm-cef-integration/target/release/bundle/macos/Qterm CEF.app/Contents/Frameworks/Qterm Helper.app/Contents/MacOS/Qterm Helper: Mach-O 64-bit executable arm64",
+    "/Volumes/DATA/BuildCache/qterm-cef-integration/target/release/bundle/macos/Qterm CEF.app/Contents/Frameworks/Qterm Helper (Alerts).app/Contents/MacOS/Qterm Helper (Alerts): Mach-O 64-bit executable arm64"
+  ],
+  "forbidden_test_markers_absent": [
+    "QTERM_CEF_PROBE_DATA",
+    "popup-dispatched",
+    "shutdown-complete",
+    "injected close barrier timeout"
+  ],
+  "codesign": "",
+  "signing": "ad-hoc (-)",
+  "notarized": false,
+  "installed": false,
+  "dmg_verify": "passed",
+  "normal_system_secret_storage_runtime_tested": false
+}

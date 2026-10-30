@@ -69,7 +69,8 @@ export async function buildAndInstall(plan, { root = ROOT, run = execute, instal
   const bundle = path.join(metadata.target_directory, "release/bundle");
   if (plan.host === "macos") {
     const config = JSON.parse(await readFile(path.join(root, "src-tauri/tauri.conf.json"), "utf8"));
-    await installMac(path.join(bundle, "macos/Qterm.app"), "/Applications/Qterm.app", config.identifier);
+    const appName = `${config.productName}.app`;
+    await installMac(path.join(bundle, "macos", appName), path.join("/Applications", appName), config.identifier);
   } else if (plan.host === "windows") {
     run(await recentInstaller(path.join(bundle, "nsis"), "-setup.exe", started), []);
   } else {

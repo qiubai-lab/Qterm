@@ -2,7 +2,7 @@ use crate::{
     commands::session::SessionState,
     infrastructure::web::{WebBounds, WebHost, WebMetrics, WebTarget},
 };
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, State};
 
 #[tauri::command]
 pub async fn web_clear_data(
@@ -40,9 +40,7 @@ pub async fn web_open(
             &input.target,
             &input.url,
         )
-        .await?;
-    watch_connection(app, sessions.manager().clone(), input.id, input.target);
-    Ok(())
+        .await
 }
 
 #[tauri::command]
@@ -53,36 +51,15 @@ pub async fn web_accept_popup(
     id: String,
     request: String,
 ) -> Result<(), String> {
-    let target = state
+    state
         .accept_popup(&app, sessions.manager(), &id, &request)
-        .await?;
-    watch_connection(app, sessions.manager().clone(), id, target);
-    Ok(())
+        .await
+        .map(|_| ())
 }
 
 #[tauri::command]
 pub async fn web_reject_popup(app: AppHandle, request: String) -> Result<(), String> {
     crate::infrastructure::web::reject_popup(&app, &request).await
-}
-
-fn watch_connection(
-    app: AppHandle,
-    manager: std::sync::Arc<crate::infrastructure::ssh::client::SshSessionManager>,
-    id: String,
-    target: WebTarget,
-) {
-    let Some(session_id) = target.session().map(str::to_owned) else {
-        return;
-    };
-    tauri::async_runtime::spawn(async move {
-        while app.state::<WebHost>().contains(&id).await {
-            if !manager.web_session_connected(&session_id) {
-                let _ = app.state::<WebHost>().close(&app, &manager, &id).await;
-                break;
-            }
-            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
-        }
-    });
 }
 
 #[tauri::command]
@@ -142,5 +119,11 @@ pub async fn web_action(
 
 #[tauri::command]
 pub fn web_supported() -> serde_json::Value {
-    serde_json::json!({"local": crate::infrastructure::web::supported(), "remote": crate::infrastructure::web::remote_supported(), "tunnelAddressMapping": cfg!(target_os = "macos")})
+    serde_json::json!({"local": crate::infrastructure::web::supported(), "remote": crate::infrastructure::web::remote_supported(), "tunnelAddressMapping": false})
+}
+
+/// Called by the trusted main UI after persistence flush and before window destruction.
+#[tauri::command]
+pub async fn web_shutdown(app: AppHandle, state: State<'_, WebHost>) -> Result<(), String> {
+    state.shutdown(&app).await
 }

@@ -6,6 +6,13 @@ authors = ["Qterm contributors"]
 license = "GPL-3.0-only"
 readme = "../README.md"
 edition = "2024"
+# The WKWebView-only examples remain historical sources on dev-cef. They require
+# Tauri 2 + QtermWeb and are exercised on dev; CEF native tests are packaged-app tests.
+autoexamples = false
+
+[[example]]
+name = "conpty_resize_probe"
+path = "examples/conpty_resize_probe.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -17,11 +24,12 @@ name = "terminal_demo_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
-tauri-build = { version = "2", features = [] }
+tauri-build = { version = "=3.0.0-alpha.4", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["macos-private-api", "unstable"] }
-tauri-plugin-dialog = "=2.7.2"
+tauri = { version = "=3.0.0-alpha.5", features = ["unstable"] }
+tauri-runtime-cef = { version = "=3.0.0-alpha.6", features = ["unstable"] }
+tauri-plugin-dialog = "=3.0.0-alpha.4"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 secrecy = "0.10.3"
@@ -40,15 +48,15 @@ russh-sftp = "=2.4.0"
 ssh2-config-rs = { version = "=0.7.2", features = ["nolog"] }
 tokio = { version = "1.53.1", features = ["fs", "io-util", "net", "sync", "time"] }
 portable-pty = "=0.9.0"
-tauri-plugin-clipboard-manager = "2.3.2"
-tauri-plugin-opener = "=2.5.4"
+tauri-plugin-clipboard-manager = "=3.0.0-alpha.3"
+tauri-plugin-opener = "=3.0.0-alpha.3"
 image = { version = "=0.25.10", default-features = false, features = ["png"] }
 arboard = { version = "=3.6.1", default-features = false, features = ["image-data", "wayland-data-control"] }
 tempfile = "=3.27.0"
-tauri-plugin-notification = "=2.4.0"
+tauri-plugin-notification = "=3.0.0-alpha.3"
 
 [target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
-tauri-plugin-window-state = "=2.4.1"
+tauri-plugin-window-state = "=3.0.0-alpha.2"
 
 [target.'cfg(windows)'.dependencies]
 windows-version = "0.1.7"
@@ -61,3 +69,9 @@ objc2 = "0.6.2"
 objc2-app-kit = { version = "0.3.2", default-features = false, features = ["NSRunningApplication", "NSWorkspace", "block2"] }
 objc2-foundation = { version = "0.3.2", default-features = false, features = ["NSArray", "NSOperation", "NSString", "NSURL", "block2"] }
 objc2-user-notifications = "0.3.2"
+
+[features]
+cef-integration-test = []
+
+[patch.crates-io]
+tauri-runtime-cef = { path = "../.cef-runtime/tauri-runtime-cef" }

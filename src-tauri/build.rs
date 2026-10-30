@@ -1,6 +1,6 @@
-mod build_macos_web;
+mod build_cef_surface;
 fn main() {
-    build_macos_web::build();
+    build_cef_surface::build();
     // Embed the default Common Controls dependency through the linker on MSVC
     // so native lib tests receive it too. Avoid a second manifest in resource.lib.
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows")

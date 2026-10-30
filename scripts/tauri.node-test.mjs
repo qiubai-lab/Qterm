@@ -6,7 +6,6 @@ import test from "node:test";
 
 import {
   DEVELOPMENT_CONFIG_PATH,
-  MACOS_DEVELOPMENT_RUNNER_PATH,
   withDevelopmentConfig,
 } from "./tauri.mjs";
 import {
@@ -22,8 +21,6 @@ test("development commands automatically include the development config once", (
     "dev",
     "--config",
     DEVELOPMENT_CONFIG_PATH,
-    "--runner",
-    MACOS_DEVELOPMENT_RUNNER_PATH,
   ]);
   assert.deepEqual(
     withDevelopmentConfig(
@@ -161,8 +158,8 @@ test("development config isolates identity without replacing window arrays", asy
     macOS: { infoPlist: "Info.dev.plist" },
   });
 
-  assert.equal(production.productName, "Qterm");
-  assert.equal(production.identifier, "com.qiubai.qterm");
+  assert.equal(production.productName, "Qterm CEF");
+  assert.equal(production.identifier, "com.qiubai.qterm.cef");
   assert.equal(production.bundle.macOS.signingIdentity, "-");
 });
 

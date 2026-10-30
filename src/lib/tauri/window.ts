@@ -1,3 +1,4 @@
+import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { AppTheme } from "./settings";
 
@@ -43,12 +44,21 @@ export async function setNativeWindowTheme(theme: AppTheme): Promise<void> {
 export async function registerCurrentWindowCloseFlush(flush: () => Promise<void>): Promise<() => void> {
   if (!isTauriRuntime()) return () => undefined;
   const currentWindow = getCurrentWindow();
+  let closing = false;
   return currentWindow.onCloseRequested(async (event) => {
     event.preventDefault();
+    if (closing) return;
+    closing = true;
     try {
-      await flush();
+      try {
+        await flush();
+      } finally {
+        // CEF native popup families must drain while the main window still exists.
+        await invoke("web_shutdown");
+        await currentWindow.destroy();
+      }
     } finally {
-      await currentWindow.destroy();
+      closing = false;
     }
   });
 }

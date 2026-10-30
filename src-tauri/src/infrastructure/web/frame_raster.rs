@@ -129,4 +129,5 @@ pub(super) fn rounded_distance(point: (f64, f64), half: (f64, f64), radius: f64)
 }
 
 #[cfg(test)]
+#[path = "frame_raster/tests.rs"]
 mod tests;

@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { prepareMacosSdk } from "./macos-sdk.mjs";
 
@@ -21,23 +22,14 @@ export function withDevelopmentConfig(args, platform = process.platform) {
     forwarded.splice(1, 0, "--config", DEVELOPMENT_CONFIG_PATH);
   }
 
-  const hasCustomRunner = forwarded.some(
-    (argument) => argument === "--runner" || argument === "-r",
-  );
-  if (platform === "darwin" && !hasCustomRunner) {
-    const developmentConfigIndex = forwarded.indexOf(DEVELOPMENT_CONFIG_PATH);
-    forwarded.splice(
-      developmentConfigIndex + 1,
-      0,
-      "--runner",
-      MACOS_DEVELOPMENT_RUNNER_PATH,
-    );
-  }
   return forwarded;
 }
 
 async function run() {
   prepareMacosSdk(process.argv[2]);
+  if (["dev", "build"].includes(process.argv[2])) {
+    execFileSync("python3", [fileURLToPath(new URL("./cef/prepare_runtime.py", import.meta.url))], { stdio: "inherit" });
+  }
   const { default: tauriCli } = await import("@tauri-apps/cli");
   await tauriCli.run(withDevelopmentConfig(process.argv.slice(2)), "pnpm tauri");
 }

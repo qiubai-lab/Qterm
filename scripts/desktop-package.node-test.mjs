@@ -39,7 +39,7 @@ test("a failed build never invokes an installer", async () => {
   assert.equal(called, false);
 });
 
-test("macOS install resolves Cargo's output directory and keeps standard Qterm identity", async () => {
+test("macOS install resolves Cargo's output directory and uses the configured application identity", async () => {
   const calls = [];
   let installation;
   await buildAndInstall(packagePlan({ platform: "darwin", install: true }), {
@@ -50,7 +50,7 @@ test("macOS install resolves Cargo's output directory and keeps standard Qterm i
     installMac: (...args) => { installation = args; },
   });
   assert.deepEqual(calls[0].args.slice(1), ["build", "--bundles", "app"]);
-  assert.deepEqual(installation, ["/tmp/target with spaces/release/bundle/macos/Qterm.app", "/Applications/Qterm.app", "com.qiubai.qterm"]);
+  assert.deepEqual(installation, ["/tmp/target with spaces/release/bundle/macos/Qterm CEF.app", "/Applications/Qterm CEF.app", "com.qiubai.qterm.cef"]);
 });
 
 test("installer discovery rejects stale and ambiguous output", async (t) => {

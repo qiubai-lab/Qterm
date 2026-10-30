@@ -1,0 +1,194 @@
+--- a/src/cef_impl/client/life_span.rs
++++ b/src/cef_impl/client/life_span.rs
+@@ -97,0 +98,2 @@
++      if let Some(browser) = browser.as_deref() { crate::cef_impl::context_pool::browser_created(browser, self.webview_id); }
++      if let Some(opener) = self.opener.as_ref() { crate::cef_impl::context_pool::popup_finished(opener.context_pool_key()); }
+@@ -131,0 +134,3 @@
++      if _user_gesture == 0 || browser.as_deref().is_some_and(|browser| !crate::cef_impl::context_pool::popup_admitted(browser)) {
++        return 1;
++      }
+@@ -135,0 +141,8 @@
++        #[cfg(target_os = "macos")]
++        {
++          // Each Alloy popup owns its native window; never inherit the
++          // embedded guest parent view or change runtime style mid-creation.
++          window_info.parent_view = std::ptr::null_mut();
++          window_info.view = std::ptr::null_mut();
++          window_info.runtime_style = cef::RuntimeStyle::ALLOY;
++        }
+@@ -158,0 +172 @@
++          crate::cef_impl::context_pool::popup_pending(browser, request.context_pool_key(), request.context_pool_token(), self.webview_id);
+@@ -159,0 +174 @@
++            crate::cef_impl::context_pool::popup_finished(request.context_pool_key());
+@@ -190,0 +206 @@
++        crate::cef_impl::context_pool::popup_finished(request.context_pool_key());
+@@ -217 +233,8 @@
+-      if browser.as_ref().is_none_or(|browser| browser.is_popup() != 0) {
++      let Some(browser) = browser else { return 0; };
++      if browser.is_popup() != 0 {
++        #[cfg(target_os = "macos")]
++        if browser.host().is_some_and(|host| host.runtime_style() == RuntimeStyle::ALLOY) {
++          let _ = self.sender.send(Message::DestroyPopupHostWindow(browser.clone()));
++          self.context.wake_event_loop();
++        }
++        // Keep CEF's accepted-close state and native window delegate handshake.
+@@ -220,2 +243 @@
+-      if browser
+-        .and_then(|browser| browser.host())
++      if browser.host()
+@@ -240,0 +263 @@
++      crate::cef_impl::context_pool::browser_closed(browser.identifier());
+--- a/src/cef_impl/mod.rs
++++ b/src/cef_impl/mod.rs
+@@ -10,0 +11,2 @@
++
++pub(crate) mod context_pool;
+--- a/src/cef_impl/request_context.rs
++++ b/src/cef_impl/request_context.rs
+@@ -233,0 +234 @@
++    network: Arc<AtomicBool>,
+@@ -236,0 +238,9 @@
++    fn resource_request_handler(
++      &self,
++      _browser: Option<&mut Browser>, _frame: Option<&mut Frame>,
++      _request: Option<&mut Request>, _is_navigation: std::os::raw::c_int,
++      _is_download: std::os::raw::c_int, _request_initiator: Option<&CefString>,
++      _disable_default_handling: Option<&mut std::os::raw::c_int>,
++    ) -> Option<ResourceRequestHandler> {
++      Some(OwnedNetworkGate::new(self.network.clone()))
++    }
+@@ -242,0 +253,10 @@
++    }
++  }
++}
++
++wrap_resource_request_handler! {
++  struct OwnedNetworkGate { network: Arc<AtomicBool> }
++  impl ResourceRequestHandler {
++    fn on_before_resource_load(&self, _browser: Option<&mut Browser>, _frame: Option<&mut Frame>, _request: Option<&mut Request>, _callback: Option<&mut Callback>) -> ReturnValue {
++      if self.network.load(Ordering::SeqCst) { sys::cef_return_value_t::RV_CONTINUE.into() }
++      else { sys::cef_return_value_t::RV_CANCEL.into() }
+@@ -349,0 +370,21 @@
++  let pool_key = if !webview_attributes.incognito && webview_attributes.data_directory.is_some() {
++    let path = PathBuf::from(cache_path.to_string());
++    match path.canonicalize() {
++      Ok(path) => Some(path),
++      Err(error) => { log::error!("cannot canonicalize pooled context path: {error}"); return None; }
++    }
++  } else { None };
++  if pool_key.is_some() && webview_attributes.proxy_url.is_some() {
++    log::error!("pooled contexts require a connection-owned proxy, not per-window proxy_url");
++    return None;
++  }
++  let custom_schemes: Vec<&String> = custom_schemes.into_iter().collect();
++  if let Some(key) = pool_key.as_ref()
++    && let Some(context) = super::context_pool::get(key)
++  {
++    register_schemes(&context, &custom_schemes, custom_protocol_scheme, &scheme_registry, &main_thread);
++    super::context_pool::when_ready(key, on_initialized);
++    return Some(context);
++  }
++  let network = Arc::new(AtomicBool::new(pool_key.is_none()));
++  let initialization_key = pool_key.clone();
+@@ -375 +416,4 @@
+-      on_initialized(rc);
++      let waiting = initialization_key.as_ref()
++        .map(|key| super::context_pool::initialized(key, rc.is_some())).unwrap_or_default();
++      on_initialized(rc.clone());
++      for callback in waiting { callback(rc.clone()); }
+@@ -380 +424 @@
+-  let mut handler = WebviewRequestContextHandler::new(Arc::new(Mutex::new(Some(wrapped_callback))));
++  let mut handler = WebviewRequestContextHandler::new(Arc::new(Mutex::new(Some(wrapped_callback))), network.clone());
+@@ -384 +428,14 @@
+-  if let Some(request_context) = request_context.as_ref() {
++  if let Some(context) = request_context.as_ref() {
++    if let Some(key) = pool_key { super::context_pool::insert(key, context.clone(), network); }
++    register_schemes(context, &custom_schemes, custom_protocol_scheme, &scheme_registry, &main_thread);
++  }
++  request_context
++}
++
++fn register_schemes(
++  request_context: &RequestContext,
++  custom_schemes: &[&String],
++  custom_protocol_scheme: &str,
++  scheme_registry: &request_handler::SchemeRegistry,
++  main_thread: &request_handler::MainThreadDispatcher,
++) {
+@@ -391 +448 @@
+-          scheme.clone(),
++          (*scheme).clone(),
+@@ -396,3 +452,0 @@
+-  }
+-
+-  request_context
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -54,0 +55,13 @@
++/// Retire a connection-owned context after closing its browsers (CEF UI thread only).
++pub use cef_impl::context_pool::retire as retire_request_context;
++/// Retry closing late browsers during final-owner retirement. UI thread only.
++pub use cef_impl::context_pool::close_browsers as close_request_context_browsers;
++/// Revoke/drain one embedded browser popup family before closing its root. UI thread only.
++pub use cef_impl::context_pool::drain_popups as drain_browser_popups;
++
++/// Number of connection-owned profiles, sampled on the CEF UI thread.
++pub use cef_impl::context_pool::count as pooled_request_context_count;
++/// Recover an owned context after interrupted browser initialization. UI thread only.
++pub use cef_impl::context_pool::owned as owned_request_context;
++/// Admit network requests after proxy binding, or block them before retirement. UI thread only.
++pub use cef_impl::context_pool::set_network_enabled as set_request_context_network_enabled;
+--- a/src/platform/macos/mod.rs
++++ b/src/platform/macos/mod.rs
+@@ -22,0 +23,2 @@
++
++pub(crate) use webview::destroy_popup_host_window;
+--- a/src/platform/macos/webview.rs
++++ b/src/platform/macos/webview.rs
+@@ -128,0 +129,19 @@
++
++/// CEF 154's Alloy native popup closes its NSWindow but can leave the browser
++/// view retained by AppKit. Detach the exact view after the normal close
++/// handshake, so CefBrowserHostView::dealloc acknowledges browser destruction.
++/// Only applies to popups we created with an unset parent_view, never a shared
++/// Tauri host window or Chrome-style tabs. Must run after DoClose on the UI loop.
++pub(crate) fn destroy_popup_host_window(browser: &cef::Browser) {
++  use cef::ImplBrowser;
++  if browser.is_valid() == 0 || browser.is_popup() == 0 { return; }
++  let Some(host) = browser.host() else { return; };
++  if host.runtime_style() != cef::RuntimeStyle::ALLOY { return; }
++  let Some(view) = (unsafe { Retained::<NSView>::retain(host.window_handle().cast()) }) else { return; };
++  if let Some(window) = view.window() {
++    // DoClose returned false before this event is processed. CEF's delegate
++    // now accepts performClose and schedules release of its window reference.
++    window.performClose(None);
++  }
++  view.removeFromSuperview();
++}
+--- a/src/popup.rs
++++ b/src/popup.rs
+@@ -28,0 +29,2 @@
++  pub(crate) fn context_pool_token(&self) -> std::sync::Weak<()> { Arc::downgrade(&self.identity) }
++  pub(crate) fn context_pool_key(&self) -> usize { Arc::as_ptr(&self.identity) as usize }
+--- a/src/runtime.rs
++++ b/src/runtime.rs
+@@ -1527,0 +1528,2 @@
++  #[cfg(target_os = "macos")]
++  DestroyPopupHostWindow(cef::Browser),
+@@ -1823,0 +1826,4 @@
++      #[cfg(target_os = "macos")]
++      Message::DestroyPopupHostWindow(browser) => {
++        crate::platform::macos::destroy_popup_host_window(&browser);
++      }
+@@ -3732,0 +3739 @@
++    crate::cef_impl::context_pool::clear_before_shutdown();
+--- a/src/webview.rs
++++ b/src/webview.rs
+@@ -1279 +1279,6 @@
+-      WebviewMessage::Close => child.host.close_browser(0),
++      WebviewMessage::Close => {
++        // Qterm owns embedded-tab teardown. Revoke native descendants before
++        // closing the root, including roots without an observed frame identity.
++        child.popup_family.close_all();
++        child.host.close_browser(1);
++      },

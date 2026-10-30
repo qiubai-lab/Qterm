@@ -82,7 +82,7 @@ pub(crate) fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     )
 }
 
-pub(crate) fn handle<R: Runtime>(app: &AppHandle<R>, event: tauri::menu::MenuEvent) {
+pub(crate) fn handle(app: &AppHandle, event: tauri::menu::MenuEvent) {
     if event.id().as_ref() == SELECT_ALL {
         select_all::dispatch(app);
         return;

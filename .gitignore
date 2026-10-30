@@ -42,3 +42,8 @@ id_dsa*
 # Browser product site
 dist-site
 **/target/
+
+# Checksum-verified CEF runtime generated from tracked patches
+.cef-runtime/
+scripts/cef/artifacts/
+**/__pycache__/

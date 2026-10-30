@@ -13,6 +13,8 @@ pub(crate) mod terminal_image;
 
 pub mod notifications;
 
+pub(crate) mod cef_runtime;
+#[path = "web_cef/mod.rs"]
 pub mod web;
 
 #[cfg(target_os = "macos")]
