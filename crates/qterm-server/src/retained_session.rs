@@ -54,7 +54,7 @@ impl RetainedSession {
             return Err(ApiError::invalid());
         }
         let screen_id = uuid::Uuid::new_v4().to_string();
-        if kind != "files" {
+        if matches!(kind, "terminal" | "local") {
             let windows_pty = (kind == "local")
                 .then(|| {
                     qterm_core::infrastructure::local::pty::terminal_capabilities().windows_pty
@@ -113,7 +113,7 @@ impl RetainedSession {
     }
     fn process(&self, data: Vec<u8>) {
         let mut state = self.inner.lock().unwrap();
-        if self.kind != "files" {
+        if matches!(self.kind.as_str(), "terminal" | "local") {
             match self
                 .worker
                 .call(json!({"op":"write","id":self.screen_id,"data":STANDARD.encode(&data)}))
@@ -174,7 +174,7 @@ impl RetainedSession {
     pub fn attach(&self) -> Result<(u64, Value, Vec<u8>, broadcast::Receiver<Message>)> {
         let mut s = self.inner.lock().unwrap();
         let receiver = self.output.subscribe(); // Same lock as output parsing: snapshot and tail cannot overlap.
-        let data = if self.kind == "files" {
+        let data = if !matches!(self.kind.as_str(), "terminal" | "local") {
             Vec::new()
         } else {
             let snapshot = self
@@ -208,7 +208,7 @@ impl RetainedSession {
             return Err(ApiError::invalid());
         }
         let mut s = self.inner.lock().unwrap();
-        if self.kind != "files" {
+        if matches!(self.kind.as_str(), "terminal" | "local") {
             self.worker
                 .call(json!({"op":"resize","id":self.screen_id,"columns":columns,"rows":rows}))?;
         }
@@ -232,7 +232,7 @@ impl RetainedSession {
 }
 impl Drop for RetainedSession {
     fn drop(&mut self) {
-        if self.kind != "files" {
+        if matches!(self.kind.as_str(), "terminal" | "local") {
             let _ = self
                 .worker
                 .call(json!({"op":"destroy","id":self.screen_id}));

@@ -1,3 +1,4 @@
+import { isServer } from "../lib/runtime/environment";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
 import { createPortal } from "react-dom";
 
@@ -136,7 +137,7 @@ export function NetworkPane({ profileId, profileHost = "", runtimeStates = {}, l
   if (!profileId) return <div className="network-empty"><Icon name="network" size={28}/><strong>选择远程连接</strong><p>网络规则按连接配置保存。选择连接后即可创建端口转发或 SOCKS5 代理。</p></div>;
 
   return <div className="network-pane">
-    <div className="network-toolbar"><div className="network-toolbar-summary"><strong>网络实例</strong><span>{rules.length} 条配置 · 默认停止</span></div><button className="network-create-button" aria-label="创建网络实例" title="创建网络实例" onClick={() => setChoosingType(true)}><Icon name="plus" size={12}/></button></div>
+    <div className="network-toolbar"><div className="network-toolbar-summary"><strong>网络实例</strong><span>{rules.length} 条配置 · {isServer ? "本地端点位于服务主机" : "默认停止"}</span></div><button className="network-create-button" aria-label="创建网络实例" title="创建网络实例" onClick={() => setChoosingType(true)}><Icon name="plus" size={12}/></button></div>
     {message && <div className="network-inline-error" role="alert">{message}</div>}
     <OverlayScrollArea className="network-rule-list-scroll-area" viewportClassName={`network-rule-list${!loading && rules.length === 0 ? " empty" : ""}`} viewportProps={{ role: "list", "aria-busy": loading }} trackInsets={{ right: 3, bottom: 3 }}>
       {loading ? <div className="network-empty"><span>正在读取网络规则…</span></div> : rules.length === 0 ? <div className="network-empty"><Icon name="network" size={25}/><strong>暂无网络实例</strong><p>创建本地、远程端口转发或 SOCKS5 动态代理。</p></div> : rules.map((rule) => {
@@ -222,17 +223,17 @@ function routeEndpoints(rule: NetworkRule): [RouteEndpoint, RouteEndpoint] {
   if (rule.type === "remote") {
     return [
       { label: "远程", address: bindAddress, icon: "server" },
-      { label: "本地", address: `${rule.targetHost}:${rule.targetPort}`, icon: "computer" },
+      { label: isServer ? "服务主机" : "本地", address: `${rule.targetHost}:${rule.targetPort}`, icon: "computer" },
     ];
   }
   if (rule.type === "socks5") {
     return [
-      { label: "本地", address: bindAddress, icon: "computer" },
+      { label: isServer ? "服务主机" : "本地", address: bindAddress, icon: "computer" },
       { label: "远程网络", address: "动态目标", icon: "server" },
     ];
   }
   return [
-    { label: "本地", address: bindAddress, icon: "computer" },
+    { label: isServer ? "服务主机" : "本地", address: bindAddress, icon: "computer" },
     { label: "远程", address: `${rule.targetHost}:${rule.targetPort}`, icon: "server" },
   ];
 }

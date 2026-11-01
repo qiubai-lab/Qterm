@@ -21,6 +21,8 @@ import type { RetainedSession } from "@qterm/services/runtimeSessions";
 interface WorkspaceContextValue extends ReturnType<typeof useWebOpenController> {
   webTabSessions?: WebTabSessionStore;
   restoreTerminalBlock: (session: RetainedSession) => Promise<void>;
+  restoreGitBlock: (session: RetainedSession) => Promise<void>;
+  restoreNetworkBlock: (session: RetainedSession) => Promise<void>;
   restoreFileBlock: (session: RetainedSession) => Promise<void>;
   hydrated: boolean;
   document: WorkspaceDocument;

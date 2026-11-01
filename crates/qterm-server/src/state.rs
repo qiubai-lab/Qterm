@@ -29,6 +29,17 @@ pub struct ServerState {
     pub workspace_runtime: Mutex<crate::workspace_runtime::Runtime>,
     pub retained: Mutex<HashMap<String, Arc<crate::retained_session::RetainedSession>>>,
     pub screen_worker: Arc<crate::screen_worker::ScreenWorker>,
+    pub network: qterm_core::application::network_service::NetworkService<
+        qterm_core::infrastructure::persistence::json_network_repository::JsonNetworkRepository,
+    >,
+    pub network_gate: tokio::sync::Mutex<()>,
+    pub network_running: Mutex<HashMap<String, HashMap<String, String>>>,
+    pub git: Arc<
+        qterm_core::application::git_service::GitService<
+            qterm_core::infrastructure::git_cli::SystemGitExecutor,
+        >,
+    >,
+    pub git_operations: Arc<tokio::sync::Semaphore>,
     pub config: Config,
     pub settings: crate::settings::ServerSettings,
     pub auth: Auth,
@@ -72,9 +83,22 @@ impl ServerState {
             .map_err(|_| "Cannot read transfer cache")?
         {
             let entry = entry.map_err(|_| "Cannot read transfer cache")?;
-            std::fs::remove_file(entry.path()).map_err(|_| "Cannot clean transfer cache")?;
+            if entry
+                .file_type()
+                .map_err(|_| "Cannot inspect transfer cache")?
+                .is_dir()
+            {
+                std::fs::remove_dir_all(entry.path()).map_err(|_| "Cannot clean transfer cache")?;
+            } else {
+                std::fs::remove_file(entry.path()).map_err(|_| "Cannot clean transfer cache")?;
+            }
         }
         Ok(Arc::new(Self {
+            network: qterm_core::application::network_service::NetworkService::new(qterm_core::infrastructure::persistence::json_network_repository::JsonNetworkRepository::new(config.data.join("data/network-forwards.json"))),
+            network_gate: Default::default(),
+            network_running: Default::default(),
+            git: Arc::new(qterm_core::application::git_service::GitService::new(qterm_core::infrastructure::git_cli::SystemGitExecutor::discover())),
+            git_operations: Arc::new(tokio::sync::Semaphore::new(4)),
             workspace_runtime: Default::default(),
             retained: Default::default(),
             screen_worker: Default::default(),

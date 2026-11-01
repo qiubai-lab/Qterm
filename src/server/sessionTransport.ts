@@ -17,7 +17,7 @@ function failure(message: string, code = "transportLost"): SessionEvent {
 function screen(connection: Connection, phase: "start" | "end" | "geometry", columns?: number, rows?: number, cwd?: string) {
   window.dispatchEvent(new CustomEvent(SCREEN_STATE,{detail:{runtimeKey:connection.runtimeKey,phase,columns,rows,cwd}}));
 }
-export function openSession(purpose: "terminal" | "files", input: SessionConnectInput | TerminalSessionConnectInput, onEvent: (event: SessionEvent) => void, onData: (data: Uint8Array, consumed?: () => void) => void = (_data, consumed) => consumed?.()): Promise<string> {
+export function openSession(purpose: "terminal" | "files" | "git" | "network", input: SessionConnectInput | TerminalSessionConnectInput, onEvent: (event: SessionEvent) => void, onData: (data: Uint8Array, consumed?: () => void) => void = (_data, consumed) => consumed?.()): Promise<string> {
   const {runtimeKey,...request} = input;
   return openSocket("/sessions", {version:1,purpose,input:request,runtimeKey},onEvent,onData).then(value=>value.sessionId);
 }

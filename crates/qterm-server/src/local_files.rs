@@ -11,7 +11,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use std::path::PathBuf;
 
-fn path(value: String) -> Result<PathBuf> {
+pub(crate) fn path(value: String) -> Result<PathBuf> {
     if value.is_empty() || value.len() > 4096 || value.contains('\0') {
         return Err(ApiError::invalid());
     }

@@ -26,10 +26,13 @@ jobs:
       - run: python3 scripts/test-server-local.py
       - run: python3 scripts/test-server-retention.py
       - run: python3 scripts/test-server-takeover.py
+      - run: python3 scripts/test-server-blocks.py
+      - run: python3 scripts/test-server-blocks-ssh.py
       - run: docker build --tag qterm-server:local .
       - run: python3 scripts/test-server-local.py --container
       - run: python3 scripts/test-server-retention.py --container
       - run: python3 scripts/test-server-takeover.py --container
+      - run: python3 scripts/test-server-blocks.py --container
   native-server:
     strategy:
       fail-fast: false
@@ -51,3 +54,4 @@ jobs:
       - run: python scripts/test-server-local.py
       - run: python scripts/test-server-retention.py
       - run: python scripts/test-server-takeover.py
+      - run: python scripts/test-server-blocks.py

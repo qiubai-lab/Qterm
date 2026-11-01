@@ -7,7 +7,7 @@ import { DialogFrame } from "../components/dialogs/DialogFrame";
 import { listProxyBrowsers, launchProxyBrowser, type ProxyBrowserAvailability, type ProxyBrowserId } from "@qterm/services/browserProxy";
 import type { NetworkRule, NetworkRuleRuntimeState } from "../lib/tauri/network";
 import { deriveNetworkAccess, type NetworkAccessField } from "./networkAccess";
-import { isDemo } from "../lib/runtime/environment";
+import { isDemo, isServer } from "../lib/runtime/environment";
 
 const BROWSERS: ProxyBrowserAvailability[] = [
   { id: "chrome", name: "Google Chrome", installed: false, supported: true },
@@ -21,7 +21,7 @@ export function NetworkAccessDialog({ rule, profileHost, runtimeState, activeEls
   activeElsewhere: boolean;
   onClose: () => void;
 }) {
-  const access = deriveNetworkAccess(rule, profileHost);
+  const access = deriveNetworkAccess(rule, profileHost, isServer ? "server" : "desktop");
   const [message, setMessage] = useState("");
   const [messageError, setMessageError] = useState(false);
   const [browsers, setBrowsers] = useState(BROWSERS);
@@ -31,7 +31,7 @@ export function NetworkAccessDialog({ rule, profileHost, runtimeState, activeEls
   const listenerExpected = runtimeState === "running" || activeElsewhere;
 
   useEffect(() => {
-    if (rule.type !== "socks5") return;
+    if (rule.type !== "socks5" || isServer) return;
     let cancelled = false;
     listProxyBrowsers()
       .then((items) => {
@@ -78,7 +78,7 @@ export function NetworkAccessDialog({ rule, profileHost, runtimeState, activeEls
   return <DialogFrame
     className="network-access-dialog"
     title={`访问 ${rule.name}`}
-    subtitle={rule.type === "socks5" ? "复制代理地址或启动独立代理浏览器" : "复制转发端点，或手动选择地址"}
+    subtitle={isServer ? "端点位于服务主机或 SSH 远端；容器端口需按部署配置映射" : rule.type === "socks5" ? "复制代理地址或启动独立代理浏览器" : "复制转发端点，或手动选择地址"}
     headerActions={rule.type === "socks5" ? <StatusBadge tone="warning" presentation="tag" size="compact">实验性</StatusBadge> : undefined}
     onClose={onClose}
   >
@@ -96,7 +96,7 @@ export function NetworkAccessDialog({ rule, profileHost, runtimeState, activeEls
         {access.warning && <p className="network-access-warning"><Icon name="network" size={13}/><span>{access.warning}</span></p>}
       </section>
 
-      {rule.type === "socks5" && <section className="network-access-browsers" role="group" aria-label="代理浏览器">
+      {rule.type === "socks5" && !isServer && <section className="network-access-browsers" role="group" aria-label="代理浏览器">
         <header><div><strong>通过代理打开浏览器</strong><p>使用隔离 Profile；主要代理网页请求，不保证扩展或 WebRTC 流量。</p></div></header>
         <div className="network-access-proxy-option">
           <span><strong>代理本地与内网地址</strong><small>{proxyLocalAddresses
@@ -129,7 +129,7 @@ export function NetworkAccessDialog({ rule, profileHost, runtimeState, activeEls
 
       <div className={`network-access-footer${rule.type === "socks5" ? " with-note" : ""}${message ? " has-message" : ""}${messageError ? " error" : ""}`}>
         {rule.type === "socks5" && <p className="network-access-footer-note" aria-hidden={message ? true : undefined}>
-          <Icon name="network" size={12}/><span>{listenerExpected
+          <Icon name="network" size={12}/><span>{isServer ? "请在客户端手动配置此代理；容器部署需映射监听端口。" : listenerExpected
             ? "仅新启动的独立窗口使用此代理；停止 SOCKS5 后浏览器可能无法继续访问网络。"
             : "请先启动 SOCKS5 实例，再打开代理浏览器。"}</span>
         </p>}

@@ -84,3 +84,12 @@ describe("deriveNetworkAccess", () => {
     });
   });
 });
+
+it("identifies service-side endpoints for Web forwarding", () => {
+  const local: NetworkRule = {id:"rule",profileId:"profile",name:"web",type:"local",bindHost:"0.0.0.0",bindPort:8080,targetHost:"localhost",targetPort:3000,exposed:true};
+  const access=deriveNetworkAccess(local, profileHost, "server");
+  expect(access.fields[0]).toEqual({label:"服务主机可访问地址",value:"127.0.0.1:8080"});
+  expect(access.description).toContain("从服务主机");
+  expect(access.warning).toContain("服务主机实际地址");
+  expect(deriveNetworkAccess({...local,type:"remote"},profileHost,"server").description).toContain("转发到服务主机的 localhost:3000");
+});

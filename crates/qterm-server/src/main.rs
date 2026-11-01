@@ -8,9 +8,12 @@ mod connection;
 mod credential_management;
 mod error;
 mod files;
+mod git;
+mod git_remote;
 mod local_files;
 mod local_socket;
 mod login_password;
+mod network;
 #[cfg(test)]
 mod recovery_tests;
 mod retained_session;
@@ -25,7 +28,9 @@ mod socket_io;
 mod state;
 #[cfg(test)]
 mod tests;
+mod transfer_archive;
 mod transfer_lifecycle;
+mod transfer_storage;
 mod transfers;
 mod vault;
 mod workspace_recovery;

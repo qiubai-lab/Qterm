@@ -73,6 +73,8 @@ async fn run(mut socket: WebSocket, state: Arc<ServerState>, owner: String) {
     let purpose = match open.purpose.as_str() {
         "terminal" => SessionPurpose::Terminal,
         "files" => SessionPurpose::Files,
+        "git" => SessionPurpose::Git,
+        "network" => SessionPurpose::Network,
         _ => return,
     };
     let gate = state.vault_gate.lock().await;
@@ -152,7 +154,17 @@ async fn run(mut socket: WebSocket, state: Arc<ServerState>, owner: String) {
         }
     };
     let emit = session.events();
-    let events = Arc::new(move |event| emit(json!(SessionEventDto::from(event))));
+    let weak_state = Arc::downgrade(&state);
+    let weak_session = Arc::downgrade(&session);
+    let events = Arc::new(move |event| {
+        let value = json!(SessionEventDto::from(event));
+        if matches!(value["state"].as_str(), Some("closed" | "failed"))
+            && let (Some(state), Some(session)) = (weak_state.upgrade(), weak_session.upgrade())
+        {
+            state.network_running.lock().unwrap().remove(&session.id());
+        }
+        emit(value);
+    });
     let id = state.sessions.connect(request, events);
     session.ready(id, None);
     if crate::retained_socket::register(&state, session.clone()).is_err() {

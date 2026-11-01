@@ -1,4 +1,3 @@
-import { isServer } from "../lib/runtime/environment";
 import type { ComponentProps } from "react";
 import { supportsWebBlocks, webSupportNotice } from "../web/webModel";
 import { openFileWindowAction } from "./fileWindow";
@@ -16,8 +15,8 @@ export function WorkspaceToolRail({ controls, remoteShellIntegrationEnabled }: {
   return <WorkspaceUtilityRail controls={{
     ...controls,
     files: { onClick: () => dispatch(openFileWindowAction(activeWorkspace, runtimes, remoteShellIntegrationEnabled)) },
-    network: { disabled:isServer, onClick: () => dispatch(openNetworkWindowAction(activeWorkspace)) },
-    git: { disabled:isServer, onClick: () => dispatch(openGitWindowAction(activeWorkspace, runtimes)) },
+    network: { onClick: () => dispatch(openNetworkWindowAction(activeWorkspace)) },
+    git: { onClick: () => dispatch(openGitWindowAction(activeWorkspace, runtimes)) },
     terminal: { onClick: () => splitTerminalBlock(activeWorkspace.id, activeWorkspace.activeBlockId, "horizontal", remoteShellIntegrationEnabled) },
     browser: {
       disabled: !browserSupported,

@@ -64,10 +64,20 @@ fn validate_auth(
 }
 pub async fn delete_profile(
     State(state): State<Arc<ServerState>>,
+    axum::Extension(owner): axum::Extension<crate::auth::Identity>,
     Path(id): Path<String>,
 ) -> Result<Json<Value>> {
-    state.profiles.delete(&id)?;
-    Ok(Json(json!({"deletedNetworkRules": 0})))
+    let _gate = state.network_gate.lock().await;
+    if !state.auth.valid(&owner.0) {
+        return Err(crate::error::ApiError::unauthorized());
+    }
+    let deleted = qterm_core::application::profile_service::delete_profile_with_network_rules(
+        &state.profiles,
+        &state.network,
+        &id,
+    )?;
+    state.sessions.close_profile_network_sessions(&id);
+    Ok(Json(json!({"deletedNetworkRules": deleted})))
 }
 pub async fn groups(State(state): State<Arc<ServerState>>) -> Result<Json<Vec<ProfileGroupDto>>> {
     Ok(Json(

@@ -1,3 +1,5 @@
+import { isServer } from "../lib/runtime/environment";
+import { attachRetainedSession, type RetainedSession } from "@qterm/services/runtimeSessions";
 import { useCallback, type Dispatch } from "react";
 
 import { connectGitSession } from "@qterm/services/git";
@@ -100,7 +102,7 @@ export function useGitWorkspaceController(state: WorkspaceRuntimeState, dispatch
     finishedEpochs.current.delete(key);
     updateGitRuntime(blockId, () => ({ ...defaultGitRuntime, status: "connecting", connectionProgress: initialConnectionProgress(profile.jumpProfileIds?.length ?? 0) }));
     try {
-      const sessionId = await connectGitSession({ profileId: profile.id, auth }, (event) => onGitSessionEvent(blockId, epoch, event));
+      const sessionId = await connectGitSession({ profileId: profile.id, auth, ...(isServer ? {runtimeKey:blockId} : {}) }, (event) => onGitSessionEvent(blockId, epoch, event));
       if (!isCurrentEpoch(blockId, epoch)) await closeSession(sessionId).catch(() => undefined);
       else if (!finishedEpochs.current.has(key)) updateGitRuntime(blockId, (runtime) => ({ ...runtime, sessionId }));
     } catch (error) {
@@ -108,6 +110,18 @@ export function useGitWorkspaceController(state: WorkspaceRuntimeState, dispatch
       consumeFailureHandler(connectionFailureHandlers.current, `git:${blockId}`);
     }
   }, [closeCurrentGitSession, connectionFailureHandlers, connectionTargetIntents, finishedEpochs, isCurrentEpoch, nextEpoch, onGitSessionEvent, updateGitRuntime]);
+  const restoreGitBlock = useCallback(async (session: RetainedSession) => {
+    const blockId = session.runtimeKey;
+    if (!blockId || gitRuntimesRef.current[blockId]?.sessionId) return;
+    const epoch = nextEpoch(blockId);
+    updateGitRuntime(blockId, () => ({...defaultGitRuntime,status:"connecting"}));
+    try {
+      const sessionId = await attachRetainedSession(session,event=>onGitSessionEvent(blockId,epoch,event),(_data,consumed)=>consumed?.());
+      if (isCurrentEpoch(blockId,epoch)) updateGitRuntime(blockId,runtime=>({...runtime,sessionId}));
+    } catch (error) {
+      if (isCurrentEpoch(blockId,epoch)) updateGitRuntime(blockId,runtime=>({...runtime,status:"failed",notice:workspaceErrorMessage(error)}));
+    }
+  }, [gitRuntimesRef,isCurrentEpoch,nextEpoch,onGitSessionEvent,updateGitRuntime]);
   const acceptGitHostKey = useCallback(async (blockId: string) => {
     const sessionId = gitRuntimes[blockId]?.sessionId;
     if (sessionId) await acceptHostKey(sessionId);
@@ -119,5 +133,5 @@ export function useGitWorkspaceController(state: WorkspaceRuntimeState, dispatch
     updateGitRuntime(blockId, (runtime) => ({ ...runtime, hostKeyPrompt: null }));
   }, [gitRuntimes, updateGitRuntime]);
 
-  return { selectGitTarget, stageGitRemoteTarget, cancelStagedGitTarget, connectGitBlock, disconnectGitBlock, acceptGitHostKey, rejectGitHostKey, closeCurrentGitSession };
+  return { restoreGitBlock, selectGitTarget, stageGitRemoteTarget, cancelStagedGitTarget, connectGitBlock, disconnectGitBlock, acceptGitHostKey, rejectGitHostKey, closeCurrentGitSession };
 }

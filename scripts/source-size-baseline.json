@@ -1,7 +1,6 @@
 {
   "version": 1,
   "limits": {
-    "src-tauri/src/commands/git.rs": 2031,
     "crates/qterm-core/src/domain/git.rs": 1284,
     "crates/qterm-core/src/infrastructure/ssh/auth.rs": 828,
     "crates/qterm-core/src/infrastructure/ssh/client/git.rs": 1255,
@@ -20,7 +19,7 @@
     "src/git/styles/gitShell.css": 824,
     "src/terminal/TerminalPanel.tsx": 553,
     "src/workspace/LayoutView.test.tsx": 808,
-    "src/workspace/LayoutView.tsx": 546,
+    "src/workspace/LayoutView.tsx": 545,
     "src/workspace/WorkspaceShell.tsx": 458
   }
 }

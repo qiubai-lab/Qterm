@@ -58,7 +58,19 @@ pub async fn list(State(state): State<Arc<ServerState>>) -> Json<Value> {
             .lock()
             .unwrap()
             .values()
-            .map(|s| s.metadata())
+            .map(|s| {
+                let mut value = s.metadata();
+                value["ruleStates"] = json!(
+                    state
+                        .network_running
+                        .lock()
+                        .unwrap()
+                        .get(&s.id())
+                        .cloned()
+                        .unwrap_or_default()
+                );
+                value
+            })
             .collect::<Vec<_>>()
     ))
 }
@@ -72,6 +84,7 @@ pub async fn destroy(
         session.stop();
     }
     state.owners.lock().unwrap().remove(&id);
+    state.network_running.lock().unwrap().remove(&id);
     Ok(Json(Value::Null))
 }
 pub async fn upgrade(

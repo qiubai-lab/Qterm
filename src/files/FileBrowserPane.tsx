@@ -1,3 +1,4 @@
+import { isServer } from "../lib/runtime/environment";
 import { useRetainedFilePreview } from "./useRetainedFilePreview";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FocusEvent, type FormEvent, type KeyboardEvent, type MouseEvent } from "react";
 import { createPortal } from "react-dom";
@@ -17,7 +18,6 @@ import { FileUploadMenu } from "./FileUploadMenu";
 import { FILE_LIST_PADDING, FILE_ROW_HEIGHT, FILE_VIRTUAL_FALLBACK_ROWS, FILE_VIRTUAL_OVERSCAN, copyName, fileErrorMessage, fileListAnchor, fileVirtualRange, fitContextMenu, formatSize, imageMime, previewKindFor, sortEntries, type SortKey, type SortState, type VirtualRange } from "./fileBrowserModel";
 import { FilePreviewDocument } from "./FilePreviewDocument";
 import { displayLocalPath, isWindowsDriveRoot, parentPath } from "./path";
-type FileViewMode = "preview" | "edit";
 type TransferState = { transferId: string; status: "starting" | "running" | "completed" | "cancelled" | "failed"; transferred: number; total: number; message: string; direction: "download" | "upload" };
 type NameOperation = { kind: "copy" | "rename" | "createFile" | "createDirectory"; entry: FileEntry | null; value: string; error: string; busy: boolean };
 type DeleteOperation = { entries: FileEntry[]; error: string; busy: boolean };
@@ -75,8 +75,8 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange, persistenc
   const uploadMenuRef = useRef<HTMLDivElement>(null);
   const uploadButtonRef = useRef<HTMLButtonElement>(null);
   const uploadMenuPointerActive = useRef(false);
-  const kind = runtime?.kind;
-  const sessionId = runtime?.sessionId;
+  const kind = runtime?.kind, transferable = kind === "sftp" || isServer;
+  const sessionId = isServer && kind === "local" ? "local" : runtime?.sessionId;
   const status = runtime?.status;
   const sessionIdRef = useRef(sessionId);
   const connectionError = kind === "sftp" && status === "failed" ? runtime.notice.trim() || "文件连接失败" : "";
@@ -279,7 +279,7 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange, persistenc
   useEffect(() => () => { if (preview?.imageUrl) URL.revokeObjectURL(preview.imageUrl); }, [preview?.imageUrl]);
 
   useEffect(() => {
-    if (kind !== "sftp" || status !== "connected" || !sessionId) return;
+    if (!transferable || status !== "connected" || !sessionId) return;
     let disposed = false;
     let unlisten: (() => void) | undefined;
     const insideContent = (position: { x: number; y: number }) => {
@@ -291,7 +291,7 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange, persistenc
     };
     void listenFileDrop((event) => {
       const payload = event.payload;
-      if (document.querySelector(".dialog-scrim")) { setDropActive(false); return; }
+      if (showLocalRootsRef.current || document.querySelector(".dialog-scrim")) { setDropActive(false); return; }
       if (payload.type === "leave") { setDropActive(false); return; }
       const inside = insideContent(payload.position);
       if (payload.type === "enter" || payload.type === "over") { setDropActive(inside); return; }
@@ -306,9 +306,9 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange, persistenc
       });
     }).then((stop) => { if (disposed) stop(); else unlisten = stop; }).catch(() => setDropActive(false));
     return () => { disposed = true; unlisten?.(); setDropActive(false); };
-  }, [kind, load, path, sessionId, status]);
+  }, [transferable, load, path, sessionId, status]);
 
-  async function openFile(entry: FileEntry, requestedMode: FileViewMode) {
+  async function openFile(entry: FileEntry, requestedMode: "preview" | "edit") {
     if (entry.isDirectory || entry.isSymlink) return;
     setOperationMessage("");
     const previewKind = previewKindFor(entry.name);
@@ -455,7 +455,7 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange, persistenc
   }
 
   async function startDownload(entry: FileEntry) {
-    if (!sessionId || kind !== "sftp") return;
+    if (!sessionId || !transferable) return;
     setContextMenu(null);
     const localPath = entry.isDirectory ? await selectDownloadDirectory(entry.name) : await selectDownloadPath(entry.name);
     if (!localPath) return;
@@ -483,7 +483,7 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange, persistenc
   }
 
   async function startSelectedUpload(selection: "files" | "folder") {
-    if (kind !== "sftp" || status !== "connected" || !sessionId) return;
+    if (!transferable || status !== "connected" || !sessionId) return;
     const targetPath = pathRef.current;
     const targetSessionId = sessionId;
     setUploadMenu(null);
@@ -654,7 +654,7 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange, persistenc
   const transferActive = transfer?.status === "starting" || transfer?.status === "running";
 
   return <div className="file-browser">
-    <nav className="file-browser-navigation" data-upload-action={kind === "sftp" || undefined} aria-label="文件夹导航">
+    <nav className="file-browser-navigation" data-upload-action={transferable || undefined} aria-label="文件夹导航">
       <button aria-label="返回上级文件夹" title="返回上级" disabled={showLocalRoots || (!parent && !driveRoot) || loading} onClick={() => void navigateUp()}><Icon name="back" size={14}/></button>
       <button aria-label="前进到下一目录" title={forwardPath ? `前进到 ${kind === "local" ? displayLocalPath(forwardPath) : forwardPath}` : "没有可前进的目录"} disabled={!forwardPath || loading} onClick={() => void navigateForward()}><Icon name="forward" size={14}/></button>
       <div className="file-browser-path-shell" data-editing={editingPath || undefined}>
@@ -664,7 +664,7 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange, persistenc
       </div>
       <button aria-label="创建文件" title="创建文件" disabled={showLocalRoots || loading || (kind === "sftp" && status !== "connected")} onClick={() => requestCreate("createFile")}><Icon name="filePlus" size={14}/></button>
       <button aria-label="创建文件夹" title="创建文件夹" disabled={showLocalRoots || loading || (kind === "sftp" && status !== "connected")} onClick={() => requestCreate("createDirectory")}><Icon name="folderPlus" size={14}/></button>
-      {kind === "sftp" && <button ref={uploadButtonRef} data-file-upload-trigger aria-label="上传到当前目录" aria-haspopup="menu" aria-expanded={Boolean(uploadMenu)} aria-busy={selectingUpload || undefined} title="上传到当前目录" disabled={status !== "connected" || loading || selectingUpload || transferActive} onClick={toggleUploadMenu}><Icon name="upload" size={14}/></button>}
+      {transferable && <button ref={uploadButtonRef} data-file-upload-trigger aria-label="上传到当前目录" aria-haspopup="menu" aria-expanded={Boolean(uploadMenu)} aria-busy={selectingUpload || undefined} title="上传到当前目录" disabled={showLocalRoots || status !== "connected" || loading || selectingUpload || transferActive} onClick={toggleUploadMenu}><Icon name="upload" size={14}/></button>}
       <button aria-label={showLocalRoots ? "刷新本机位置" : "刷新文件夹"} aria-busy={loading || undefined} title="刷新" disabled={loading} onClick={() => showLocalRoots ? void openLocalRoots() : void load(path)}><Icon name="refresh" size={14}/></button>
     </nav>
     {!connectionError && error && (listing || (showLocalRoots && localRoots.length > 0)) && <div className="file-browser-inline-error" role="alert">{error}</div>}
@@ -690,7 +690,7 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange, persistenc
       {contextEntries.length === 1 && contextMenu.entry.isDirectory && <button role="menuitem" onClick={() => { setContextMenu(null); void navigateTo(contextMenu.entry.path); }}><Icon name="files" size={13}/><span>打开</span></button>}
       {contextEntries.length === 1 && !contextMenu.entry.isDirectory && !contextMenu.entry.isSymlink && <button role="menuitem" onClick={() => { setContextMenu(null); void openFile(contextMenu.entry, "preview"); }}><Icon name="eye" size={13}/><span>预览</span></button>}
       {contextEntries.length === 1 && !contextMenu.entry.isDirectory && !contextMenu.entry.isSymlink && previewKindFor(contextMenu.entry.name) !== "image" && <button role="menuitem" className="file-context-edit" onClick={() => { setContextMenu(null); void openFile(contextMenu.entry, "edit"); }}><Icon name="edit" size={13}/><span>编辑</span><StatusBadge tone="warning" presentation="tag" size="compact">实验</StatusBadge></button>}
-      {contextEntries.length === 1 && kind === "sftp" && !contextMenu.entry.isSymlink && <button role="menuitem" onClick={() => void startDownload(contextMenu.entry)}><Icon name="download" size={13}/><span>下载到本地…</span></button>}
+      {contextEntries.length === 1 && transferable && !contextMenu.entry.isSymlink && <button role="menuitem" onClick={() => void startDownload(contextMenu.entry)}><Icon name="download" size={13}/><span>下载到本地…</span></button>}
       {contextEntries.length === 1 && <button role="menuitem" onClick={() => void copyPath(contextMenu.entry)}><Icon name="copy" size={13}/><span>复制路径</span></button>}
       {contextEntries.length === 1 && !contextMenu.entry.isDirectory && !contextMenu.entry.isSymlink && previewKindFor(contextMenu.entry.name) === "image" && <button role="menuitem" onClick={() => void copyImage(contextMenu.entry)}><Icon name="copy" size={13}/><span>复制图片</span></button>}
       {contextEntries.length === 1 && <div className="file-context-menu-separator" role="separator"/>}

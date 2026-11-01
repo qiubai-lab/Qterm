@@ -1,7 +1,6 @@
 use crate::{
     auth::{Identity, random_token},
     error::{ApiError, Result},
-    files::remote_path,
     state::ServerState,
     transfer_lifecycle::Operation,
 };
@@ -20,7 +19,6 @@ use qterm_core::{
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::{
-    path::PathBuf,
     sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
@@ -44,7 +42,7 @@ impl Drop for ActiveTransfer {
         let _ = self.manager.cancel_transfer(&self.session, &self.task);
     }
 }
-async fn transfer(
+pub(crate) async fn transfer(
     state: &ServerState,
     owner: &str,
     session: &str,
@@ -93,7 +91,7 @@ async fn transfer(
         }
     }
 }
-fn temporary(state: &ServerState) -> Result<tempfile::TempPath> {
+pub(crate) fn temporary(state: &ServerState) -> Result<tempfile::TempPath> {
     tempfile::NamedTempFile::new_in(state.config.data.join("cache/transfers"))
         .map(|file| file.into_temp_path())
         .map_err(|_| ApiError::storage())
@@ -104,6 +102,10 @@ pub struct UploadQuery {
     session_id: String,
     path: String,
     task_id: String,
+    #[serde(default)]
+    relative_path: Option<String>,
+    #[serde(default)]
+    directory: bool,
 }
 pub async fn upload(
     State(state): State<Arc<ServerState>>,
@@ -111,7 +113,12 @@ pub async fn upload(
     Query(input): Query<UploadQuery>,
     mut multipart: Multipart,
 ) -> Result<Json<Value>> {
-    state.authorize(&owner.0, &input.session_id)?;
+    crate::transfer_storage::authorize(&state, &owner.0, &input.session_id)?;
+    state
+        .downloads
+        .lock()
+        .unwrap()
+        .retain(|_, d| d.expires > Instant::now());
     let _permit = state.transfers.clone().try_acquire_owned().map_err(|_| {
         ApiError::new(
             axum::http::StatusCode::TOO_MANY_REQUESTS,
@@ -144,7 +151,7 @@ pub async fn upload(
                 "单文件上限为 128 MiB",
             ));
         }
-        state.authorize(&owner.0, &input.session_id)?;
+        crate::transfer_storage::authorize(&state, &owner.0, &input.session_id)?;
         file.write_all(&chunk)
             .await
             .map_err(|_| ApiError::storage())?;
@@ -160,14 +167,14 @@ pub async fn upload(
     {
         return Err(ApiError::invalid());
     }
-    transfer(
+    crate::transfer_storage::upload(
         &state,
         &owner.0,
         &input.session_id,
-        TransferRequest::Upload {
-            local_path: PathBuf::from(&path),
-            remote_path: remote_path(input.path)?,
-        },
+        &input.path,
+        input.relative_path.as_deref(),
+        input.directory,
+        &path,
         &operation,
     )
     .await?;
@@ -178,7 +185,12 @@ pub async fn prepare_download(
     Extension(owner): Extension<Identity>,
     Json(input): Json<UploadQuery>,
 ) -> Result<Json<Value>> {
-    state.authorize(&owner.0, &input.session_id)?;
+    crate::transfer_storage::authorize(&state, &owner.0, &input.session_id)?;
+    state
+        .downloads
+        .lock()
+        .unwrap()
+        .retain(|_, d| d.expires > Instant::now());
     let _permit = state.transfers.clone().try_acquire_owned().map_err(|_| {
         ApiError::new(
             axum::http::StatusCode::TOO_MANY_REQUESTS,
@@ -194,24 +206,17 @@ pub async fn prepare_download(
         }
     }
     let operation = Operation::start(&state, &owner.0, input.task_id)?;
-    let filename = input
-        .path
-        .rsplit('/')
-        .next()
-        .unwrap_or("qterm-download")
-        .to_owned();
-    let file = temporary(&state)?;
-    transfer(
+    let (file, filename) = crate::transfer_storage::download(
         &state,
         &owner.0,
         &input.session_id,
-        TransferRequest::Download {
-            remote_path: remote_path(input.path)?,
-            local_path: PathBuf::from(&file),
-        },
+        &input.path,
+        input.directory,
         &operation,
     )
     .await?;
+    crate::transfer_storage::authorize(&state, &owner.0, &input.session_id)?;
+    operation.check()?;
     let id = random_token()?;
     state.downloads.lock().unwrap().insert(
         id.clone(),

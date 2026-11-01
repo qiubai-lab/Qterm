@@ -137,10 +137,10 @@ async def receive(ws):
     return json.loads(value)
 
 
-async def connect(f, profile, credential, purpose="terminal", changed=False):
+async def connect(f, profile, credential, purpose="terminal", changed=False, runtime_key=None):
     ws = await websockets.connect(f"ws://localhost:{f.http_port}/api/v1/sessions", origin=f.origin,
                                   extra_headers={"Cookie": f.cookie}, max_queue=None)
-    await ws.send(json.dumps({**f.proof(),"version": 1, "purpose": purpose, "input": {
+    await ws.send(json.dumps({**f.proof(),"version": 1, "purpose": purpose, "runtimeKey":runtime_key, "input": {
         "profileId": profile, "auth": {"method": "storedCredential", "credentialId": credential},
         "terminalSize": {"columns": 90, "rows": 30} if purpose == "terminal" else None}}))
     ready = await receive(ws)

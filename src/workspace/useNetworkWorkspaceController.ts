@@ -1,3 +1,5 @@
+import { isServer } from "../lib/runtime/environment";
+import { attachRetainedSession, type RetainedSession } from "@qterm/services/runtimeSessions";
 import { useCallback, type Dispatch } from "react";
 
 import { connectNetworkSession, startNetworkRule, stopNetworkRule } from "@qterm/services/network";
@@ -64,7 +66,7 @@ export function useNetworkWorkspaceController(state: WorkspaceRuntimeState, disp
     finishedEpochs.current.delete(key);
     updateNetworkRuntime(blockId, () => ({ ...defaultNetworkRuntime, status: "connecting", connectionProgress: initialConnectionProgress(profile.jumpProfileIds?.length ?? 0) }));
     try {
-      const sessionId = await connectNetworkSession({ profileId: profile.id, auth }, (event) => onNetworkSessionEvent(blockId, epoch, event));
+      const sessionId = await connectNetworkSession({ profileId: profile.id, auth, ...(isServer ? {runtimeKey:blockId} : {}) }, (event) => onNetworkSessionEvent(blockId, epoch, event));
       if (!isCurrentEpoch(blockId, epoch)) await closeSession(sessionId).catch(() => undefined);
       else if (!finishedEpochs.current.has(key)) updateNetworkRuntime(blockId, (runtime) => ({ ...runtime, sessionId }));
     } catch (error) {
@@ -96,6 +98,18 @@ export function useNetworkWorkspaceController(state: WorkspaceRuntimeState, disp
       throw error;
     }
   }, [networkRuntimesRef, updateNetworkRuntime]);
+  const restoreNetworkBlock = useCallback(async (session: RetainedSession) => {
+    const blockId = session.runtimeKey;
+    if (!blockId || networkRuntimesRef.current[blockId]?.sessionId) return;
+    const epoch = nextEpoch(blockId);
+    updateNetworkRuntime(blockId, () => ({...defaultNetworkRuntime,status:"connecting",ruleStates:session.ruleStates ?? {}}));
+    try {
+      const sessionId = await attachRetainedSession(session,event=>onNetworkSessionEvent(blockId,epoch,event),(_data,consumed)=>consumed?.());
+      if (isCurrentEpoch(blockId,epoch)) updateNetworkRuntime(blockId,runtime=>({...runtime,sessionId}));
+    } catch (error) {
+      if (isCurrentEpoch(blockId,epoch)) updateNetworkRuntime(blockId,runtime=>({...runtime,status:"failed",notice:workspaceErrorMessage(error)}));
+    }
+  }, [networkRuntimesRef,isCurrentEpoch,nextEpoch,onNetworkSessionEvent,updateNetworkRuntime]);
   const acceptNetworkHostKey = useCallback(async (blockId: string) => {
     const sessionId = networkRuntimes[blockId]?.sessionId;
     if (sessionId) await acceptHostKey(sessionId);
@@ -107,5 +121,5 @@ export function useNetworkWorkspaceController(state: WorkspaceRuntimeState, disp
     updateNetworkRuntime(blockId, (runtime) => ({ ...runtime, hostKeyPrompt: null }));
   }, [networkRuntimes, updateNetworkRuntime]);
 
-  return { selectNetworkTarget, connectNetworkBlock, disconnectNetworkBlock, startNetworkBlockRule, stopNetworkBlockRule, acceptNetworkHostKey, rejectNetworkHostKey, closeCurrentNetworkSession };
+  return { restoreNetworkBlock, selectNetworkTarget, connectNetworkBlock, disconnectNetworkBlock, startNetworkBlockRule, stopNetworkBlockRule, acceptNetworkHostKey, rejectNetworkHostKey, closeCurrentNetworkSession };
 }

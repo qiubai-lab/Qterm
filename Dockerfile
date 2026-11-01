@@ -21,7 +21,7 @@ RUN --mount=type=secret,id=cargo_config,target=/usr/local/cargo/config.toml \
     && cp /build/crates/target/release/qterm-server /build/qterm-server
 
 FROM debian:bookworm-slim AS runtime
-RUN apt-get update && apt-get install --yes --no-install-recommends ca-certificates curl tini \
+RUN apt-get update && apt-get install --yes --no-install-recommends ca-certificates curl tini git openssh-client \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --gid 10001 qterm && useradd --uid 10001 --gid 10001 --no-create-home qterm \
     && mkdir -p /data /app && chown 10001:10001 /data

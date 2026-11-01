@@ -12,12 +12,14 @@ export type NetworkAccessDetails = {
   socksEndpoint?: { host: string; port: number };
 };
 
-export function deriveNetworkAccess(rule: NetworkRule, profileHost: string): NetworkAccessDetails {
+export function deriveNetworkAccess(rule: NetworkRule, profileHost: string, runtime: "desktop" | "server" = "desktop"): NetworkAccessDetails {
+  const local = runtime === "server" ? "服务主机" : "本地";
+  const machine = runtime === "server" ? "服务主机" : "本机";
   if (rule.type === "remote") {
     const wildcard = isWildcardHost(rule.bindHost);
     const serverHost = wildcard ? profileHost : rule.bindHost;
     return {
-      description: `远程访问下面的远程地址，Qterm 会自动转发到本地的 ${formatEndpoint(rule.targetHost, rule.targetPort)}`,
+      description: `远程访问下面的远程地址，Qterm 会自动转发到${local}的 ${formatEndpoint(rule.targetHost, rule.targetPort)}`,
       fields: [{ label: "远程可访问地址", value: formatEndpoint(serverHost, rule.bindPort) }],
       warning: wildcard
         ? "服务器实际可访问性取决于 SSH GatewayPorts、监听网卡和防火墙配置。"
@@ -27,7 +29,7 @@ export function deriveNetworkAccess(rule: NetworkRule, profileHost: string): Net
 
   const localHost = clientHostForListener(rule.bindHost);
   const wildcardWarning = isWildcardHost(rule.bindHost)
-    ? `监听配置为 ${rule.bindHost}；复制时使用本机回环地址，局域网设备仍可能通过本机实际地址访问。`
+    ? `监听配置为 ${rule.bindHost}；复制时使用${machine}回环地址，局域网设备仍可能通过${machine}实际地址访问。`
     : undefined;
 
   if (rule.type === "socks5") {
@@ -39,8 +41,8 @@ export function deriveNetworkAccess(rule: NetworkRule, profileHost: string): Net
   }
 
   return {
-    description: `本地访问下面的本地地址，Qterm 会自动转发到服务器的 ${formatEndpoint(rule.targetHost, rule.targetPort)}`,
-    fields: [{ label: "本地可访问地址", value: formatEndpoint(localHost, rule.bindPort) }],
+    description: `${runtime === "server" ? "从服务主机访问下面的地址" : "本地访问下面的本地地址"}，Qterm 会自动转发到服务器的 ${formatEndpoint(rule.targetHost, rule.targetPort)}`,
+    fields: [{ label: `${local}可访问地址`, value: formatEndpoint(localHost, rule.bindPort) }],
     warning: wildcardWarning,
   };
 }

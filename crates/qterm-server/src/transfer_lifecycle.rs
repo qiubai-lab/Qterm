@@ -37,7 +37,7 @@ impl Transfers {
         }
         let mut entries = self.0.lock().unwrap();
         entries.retain(|_, entry| entry.expires > Instant::now());
-        if !entries.contains_key(id) && entries.len() >= 64 {
+        if !entries.contains_key(id) && entries.len() >= 10_064 {
             return Err(ApiError::new(
                 axum::http::StatusCode::TOO_MANY_REQUESTS,
                 "transferLimit",
@@ -55,6 +55,8 @@ impl Transfers {
         }
         action(entry)
     }
+    // A folder selection may contain 10,000 sequential requests. Keep bounded
+    // replay tombstones for a full selection plus pending cancellations.
     pub fn start(&self, owner: &str, id: &str) -> Result<Arc<AtomicBool>> {
         self.access(owner, id, |entry| {
             if entry.started || entry.cancelled.load(Ordering::Relaxed) {
@@ -95,6 +97,7 @@ pub async fn cancel(
 pub struct Operation {
     state: Arc<ServerState>,
     id: String,
+    owner: String,
     pub cancelled: Arc<AtomicBool>,
 }
 impl Operation {
@@ -103,9 +106,13 @@ impl Operation {
             cancelled: state.transfer_tasks.start(owner, &id)?,
             state: state.clone(),
             id,
+            owner: owner.into(),
         })
     }
     pub fn check(&self) -> Result<()> {
+        if !self.state.auth.valid(&self.owner) {
+            return Err(ApiError::unauthorized());
+        }
         if self.cancelled.load(Ordering::Relaxed) {
             Err(ApiError::new(
                 axum::http::StatusCode::CONFLICT,
@@ -133,6 +140,19 @@ mod tests {
         registry.cancel("one", &id).unwrap();
         assert!(registry.start("one", &id).is_err());
         assert!(registry.cancel("two", &id).is_err());
+    }
+    #[test]
+    fn a_folder_can_complete_more_than_sixty_four_entries_without_losing_replay_protection() {
+        let registry = Transfers::default();
+        let first = uuid::Uuid::new_v4().to_string();
+        registry.start("one", &first).unwrap();
+        registry.finish(&first);
+        for _ in 0..100 {
+            let id = uuid::Uuid::new_v4().to_string();
+            registry.start("one", &id).unwrap();
+            registry.finish(&id);
+        }
+        assert!(registry.start("one", &first).is_err());
     }
     #[test]
     fn active_transfer_observes_cancellation_and_cannot_replay() {

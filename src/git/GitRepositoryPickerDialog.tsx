@@ -1,3 +1,4 @@
+import { isServer } from "../lib/runtime/environment";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent } from "react";
 import { createPortal } from "react-dom";
 
@@ -197,8 +198,8 @@ export function GitRepositoryPickerDialog(props: GitRepositoryPickerDialogProps)
   }
 
   return createPortal(<DialogFrame
-    title={local ? "选择本机仓库目录" : "选择远程仓库目录"}
-    subtitle={local ? "浏览本机目录，或使用系统目录选择器" : "浏览服务器目录，或直接输入远程路径"}
+    title={local ? (isServer ? "选择服务主机仓库目录" : "选择本机仓库目录") : "选择远程仓库目录"}
+    subtitle={local ? (isServer ? "浏览服务主机目录，或直接输入路径" : "浏览本机目录，或使用系统目录选择器") : "浏览服务器目录，或直接输入远程路径"}
     className="git-repository-picker-dialog"
     closing={closing}
     dismissible={!selectingSystem}
@@ -278,19 +279,19 @@ export function GitRepositoryPickerDialog(props: GitRepositoryPickerDialogProps)
               />;
             })}
           </div>}
-          {!listing && !loading && <div className="git-repository-picker-empty"><Icon name="files" size={22}/><strong>无法显示目录</strong><span>{local ? "可以输入其他已有路径，或使用系统选择器" : "仍可在上方直接输入远程路径"}</span></div>}
+          {!listing && !loading && <div className="git-repository-picker-empty"><Icon name="files" size={22}/><strong>无法显示目录</strong><span>{local ? (isServer ? "可以输入其他已有路径" : "可以输入其他已有路径，或使用系统选择器") : "仍可在上方直接输入远程路径"}</span></div>}
           {listing && !loading && entries.length === 0 && <div className="git-repository-picker-empty"><Icon name="files" size={22}/><strong>此目录没有子目录</strong><span>{local ? "可以选择当前目录，或输入其他已有路径" : "可以选择当前目录，或直接输入其他路径"}</span></div>}
           {loading && <div className="git-repository-picker-loading" role="status" aria-live="polite"><span className="git-repository-picker-spinner"/><span>正在读取{local ? "本机" : "远程"}目录…</span></div>}
         </div>
       </div>
 
       <div className={`git-repository-picker-feedback${error ? " error" : ""}`} role={error ? "alert" : "status"} aria-live="polite">
-        {error ? <><span title={error}>{error}</span><small>{local ? "可以输入其他已有路径，或使用系统选择器" : "仍可直接输入远程路径并选择"}</small></> : <span>{local ? "仅浏览本机目录；系统位置和新建文件夹可使用系统选择器" : "目录浏览不会读取、上传、删除或修改远程文件"}</span>}
+        {error ? <><span title={error}>{error}</span><small>{local ? (isServer ? "可以输入其他已有路径" : "可以输入其他已有路径，或使用系统选择器") : "仍可直接输入远程路径并选择"}</small></> : <span>{local ? (isServer ? "目录属于运行 Qterm 的服务主机" : "仅浏览本机目录；系统位置和新建文件夹可使用系统选择器") : "目录浏览不会读取、上传、删除或修改远程文件"}</span>}
       </div>
 
       <footer className="git-repository-picker-footer" data-local={local || undefined}>
         <div><span>选择路径</span><code title={selectablePath || pathDraft}>{selectablePath || "请输入有效路径"}</code></div>
-        <div>{local && <Button loading={selectingSystem} disabled={loading || closing} onClick={() => void selectWithSystemDialog()}>{selectingSystem ? "正在选择…" : "使用系统选择器"}</Button>}<Button variant="danger" disabled={selectingSystem || closing} onClick={closeDialog}>取消</Button><Button variant="primary" disabled={!selectablePath || selectingSystem || closing} onClick={() => selectablePath && selectPath(selectablePath)}>选择此路径</Button></div>
+        <div>{local && !isServer && <Button loading={selectingSystem} disabled={loading || closing} onClick={() => void selectWithSystemDialog()}>{selectingSystem ? "正在选择…" : "使用系统选择器"}</Button>}<Button variant="danger" disabled={selectingSystem || closing} onClick={closeDialog}>取消</Button><Button variant="primary" disabled={!selectablePath || selectingSystem || closing} onClick={() => selectablePath && selectPath(selectablePath)}>选择此路径</Button></div>
       </footer>
     </div>
   </DialogFrame>, document.body);

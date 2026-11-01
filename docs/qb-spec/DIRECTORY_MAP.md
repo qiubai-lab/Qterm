@@ -239,7 +239,7 @@
 - `crates/qterm-server/src/retained_session.rs`、`retained_socket.rs`：进程所有权、稳定 Block 标识、画面接入、写入控制权和输出流控。
 - `crates/qterm-server/src/screen_worker.rs` 与 `src/server/screen/`：私有 stdio headless-xterm 屏幕状态工作进程；`scripts/build-server-screen.mjs` 打包。
 - `workspace_runtime.rs`、`workspace_recovery.rs`：服务端工作区快照、版本化内存草稿、未保存布局中的会话找回。
-- `src/server/sessionTransport.ts`、`ServerRuntimeRestore.tsx`：浏览器接入、断线重连与已有 SSH/SFTP 会话恢复。
+- `src/server/sessionTransport.ts`、`ServerRuntimeRestore.tsx`：浏览器接入、断线重连与已有 SSH/SFTP/Git/Network 会话及网络规则运行状态恢复。
 - `src/files/useRetainedFilePreview.ts`：文件预览/编辑草稿加载与顺序同步。
 - `scripts/test-server-retention.py`、`scripts/server-screen.node-test.mjs`：真实 PTY 和屏幕状态恢复验收。
 
@@ -249,3 +249,12 @@
 - `access_transport.rs`、`access_socket.rs`：接管/恢复 HTTP 边界与页面在线 WebSocket；`auth.rs` 统一验证 HTTP 页面凭证，终端握手另行验证同一身份。
 - `src/server/useServerAccess.ts`、`accessIdentity.ts`、`accessPresence.ts`：页面身份、登录/恢复/确认生命周期与撤销后的重连停止；`AccessTakeoverDialog.tsx` 复用共享对话框；`AccessReplacedDialog.tsx` 阻断旧工作台交互，等待确认后回登录页。
 - `scripts/test-server-takeover.py`：跨平台原生/容器接管验收，覆盖旧页面拒绝与原终端、布局、草稿保留。
+
+### Web 文件、Git 与网络
+
+- `crates/qterm-protocol/src/git/{requests,results,tests}.rs`、`network.rs`：桌面 IPC 与服务端 HTTP 共享的闭合 DTO、领域映射和序列化回归；原生命令保持窄适配。
+- `crates/qterm-server/src/git.rs`、`git_remote.rs`：本地 Git 的有界阻塞任务与远端 Git 的会话授权；具体操作复用核心服务。
+- `crates/qterm-server/src/network.rs`：网络规则 CRUD、运行时启动/停止与活动规则保护；配置复用核心 NetworkService，服务状态负责保留会话和运行标记。
+- `crates/qterm-server/src/transfer_storage.rs`、`transfer_archive.rs`：本地/SFTP 上传目的路径、目录暂存与有界 tar 归档；`transfers.rs` 保留 HTTP 准入/票据，`transfer_lifecycle.rs` 保留取消与重放控制。
+- `src/server/uploadSelection.ts`、`services/fileDrop.ts`、`services/transfers.ts`：浏览器文件选择与目录拖放句柄、批次上传、下载和取消；复用 Files 面板。
+- `scripts/test-server-blocks.py`、`test-server-blocks-ssh.py`：原生/容器本地目录传输与 Git，真实 SSH 的 SFTP 目录、Git、三类 TCP 转发及重新登录后的原会话恢复验收。
