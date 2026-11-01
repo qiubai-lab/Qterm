@@ -101,6 +101,8 @@ pub async fn upgrade(
             #[derive(Deserialize)]
             #[serde(rename_all = "camelCase", deny_unknown_fields)]
             struct Attach {
+                #[serde(flatten)]
+                access: crate::access::Proof,
                 version: u8,
                 session_id: String,
                 #[serde(rename = "runtimeKey")]
@@ -109,6 +111,14 @@ pub async fn upgrade(
             let Ok(input) = serde_json::from_str::<Attach>(&text) else {
                 return;
             };
+            if state
+                .auth
+                .access
+                .prove_owner(&owner.0, &input.access)
+                .is_err()
+            {
+                return;
+            }
             if input.version != 2 || state.authorize(&owner.0, &input.session_id).is_err() {
                 return;
             }
@@ -168,8 +178,11 @@ pub async fn attach(
     let mut snapshot_done = false;
     let mut last_seen = Instant::now();
     let mut heartbeat = tokio::time::interval(Duration::from_secs(1));
-    let mut writable = session.writable(client);
+    let mut access_changes = state.auth.access.subscribe();
     loop {
+        if !state.auth.valid(&owner) || !session.writable(client) {
+            break;
+        }
         if !snapshot_done && outstanding < 256 * 1024 {
             if let Some(chunk) = initial.next() {
                 if send(&mut socket, Message::Binary(chunk.to_vec().into()))
@@ -214,10 +227,9 @@ pub async fn attach(
             }
         }
         tokio::select! {
+            _=access_changes.changed()=>{},
             _=heartbeat.tick()=>{
                 if !state.auth.valid(&owner)||last_seen.elapsed()>Duration::from_secs(30)||state.authorize(&owner,&id).is_err(){break;}
-                let access=session.writable(client);
-                if access!=writable{writable=access;let _=send(&mut socket,Message::Text(json!({"type":"access","readOnly":!access}).to_string().into())).await;}
                 if send(&mut socket,Message::Ping(Vec::new().into())).await.is_err(){break;}
             }
             next=output.recv(),if snapshot_done && outstanding<256*1024=>{
@@ -251,16 +263,5 @@ pub async fn attach(
         }
     }
     session.detach(client);
-    if send(&mut socket, Message::Close(None)).await.is_ok() {
-        // Drain the close handshake. Dropping TCP with unread credits can send RST
-        // and discard the resync marker that was just flushed to a slow viewer.
-        let _ = tokio::time::timeout(Duration::from_secs(2), async {
-            while let Some(Ok(message)) = socket.recv().await {
-                if matches!(message, Message::Close(_)) {
-                    break;
-                }
-            }
-        })
-        .await;
-    }
+    crate::socket_io::finish(&mut socket).await;
 }

@@ -15,7 +15,7 @@ spec.loader.exec_module(fixture)
 
 async def attach(f, key='retained-test'):
     ws=await connect(f'ws://localhost:{f.port}/api/v1/local/sessions',origin=f.origin,extra_headers={'Cookie':f.cookie})
-    await ws.send(json.dumps({'version':1,'runtimeKey':key,'columns':90,'rows':30,'osc7Enabled':True,'initialDirectory':f.cwd}))
+    await ws.send(json.dumps({**f.proof(),'version':1,'runtimeKey':key,'columns':90,'rows':30,'osc7Enabled':True,'initialDirectory':f.cwd}))
     ready=await fixture.receive(ws)
     assert ready['type']=='ready',ready
     output=b''
@@ -61,22 +61,17 @@ async def verify(f):
         ws,ready,snapshot=await attach(f)
         assert '中文 CLI state'.encode() in snapshot
         assert b'1049h' in snapshot
-    # Second view is read-only and cannot terminate the first view's process.
+    # A transport reconnect replaces the stale attachment within the same page.
     other,second,_=await attach(f)
-    assert second['readOnly'] is True
-    await ws.close()
-    while True:
-        event=await fixture.receive(other)
-        if isinstance(event,dict) and event.get('type')=='access':
-            assert event['readOnly'] is False
-            break
+    assert second['sessionId']==identifier
+    await asyncio.wait_for(ws.wait_closed(),5)
     ws=other
     if not f.windows:
         await ws.send(b"printf '\\033[?1049l'\r")
     await ws.send(json.dumps({'type':'close'}))
     await asyncio.wait_for(ws.wait_closed(),5)
     assert all(s['sessionId']!=identifier for s in f.api('/runtime/sessions'))
-    print('PASS: browser detach, logout/relogin, original PID, offline output, alternate screen/Unicode, read-only second attachment, control handoff, explicit stop')
+    print('PASS: browser detach, logout/relogin, original PID, offline output, alternate screen/Unicode, exclusive transport replacement, explicit stop')
 
 with tempfile.TemporaryDirectory(prefix='qterm-retained-') as directory:
     parser=argparse.ArgumentParser()

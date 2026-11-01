@@ -80,3 +80,18 @@ pub async fn send(socket: &mut WebSocket, message: Message) -> Result<()> {
         .map_err(|_| ApiError::invalid())?
         .map_err(|_| ApiError::invalid())
 }
+
+pub async fn finish(socket: &mut WebSocket) {
+    if send(socket, Message::Close(None)).await.is_ok() {
+        // Drain the close handshake. Dropping TCP with unread credits can send RST
+        // and discard the resync marker that was just flushed to a slow viewer.
+        let _ = tokio::time::timeout(Duration::from_secs(2), async {
+            while let Some(Ok(message)) = socket.recv().await {
+                if matches!(message, Message::Close(_)) {
+                    break;
+                }
+            }
+        })
+        .await;
+    }
+}

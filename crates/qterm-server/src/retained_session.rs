@@ -192,8 +192,9 @@ impl RetainedSession {
         };
         s.next_client += 1;
         let client = s.next_client;
+        s.clients.clear();
         s.clients.insert(client);
-        let ready = json!({"type":"ready","sessionId":s.id,"cwd":s.cwd,"columns":s.columns,"rows":s.rows,"readOnly":s.clients.first()!=Some(&client),"status":s.status,"event":s.event,"failure":s.failure});
+        let ready = json!({"type":"ready","sessionId":s.id,"cwd":s.cwd,"columns":s.columns,"rows":s.rows,"status":s.status,"event":s.event,"failure":s.failure});
         Ok((client, ready, data, receiver))
     }
     pub fn writable(&self, client: u64) -> bool {

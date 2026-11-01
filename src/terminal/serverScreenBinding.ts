@@ -18,7 +18,7 @@ export function bindServerScreen(terminal: Terminal, blockId: () => string | und
     }),
   ];
   const listener = (event: Event) => {
-    const value = (event as CustomEvent<{runtimeKey:string;phase:string;columns?:number;rows?:number;cwd?:string;readOnly:boolean}>).detail;
+    const value = (event as CustomEvent<{runtimeKey:string;phase:string;columns?:number;rows?:number;cwd?:string}>).detail;
     if (value.runtimeKey !== blockId()) return;
     if (value.phase === "start" && value.columns && value.rows) {
       locked = true; columns = value.columns; rows = value.rows;
@@ -27,9 +27,9 @@ export function bindServerScreen(terminal: Terminal, blockId: () => string | und
     } else if (value.phase === "geometry" && value.columns && value.rows) {
       const nextColumns = value.columns, nextRows = value.rows;
       terminal.write("", () => { columns=nextColumns;rows=nextRows;terminal.resize(columns,rows); });
-    } else if (value.phase === "end" || value.phase === "access") {
-      locked = value.readOnly;
-      if (!locked) requestAnimationFrame(fit);
+    } else if (value.phase === "end") {
+      locked = false;
+      requestAnimationFrame(fit);
     }
   };
   window.addEventListener("qterm:server-screen",listener);

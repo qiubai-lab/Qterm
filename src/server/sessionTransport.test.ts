@@ -11,6 +11,8 @@ class Socket {
   constructor(public url: string) { Socket.instances.push(this); }
   message(value: unknown) { this.onmessage?.({data: value instanceof ArrayBuffer ? value : JSON.stringify(value)}); }
 }
+vi.mock("./accessIdentity",()=>({accessProof:()=>({accessKey:"page-key",clientId:"page"}),accessHeaders:()=>({})}));
+const proof={accessKey:"page-key",clientId:"page"};
 const fetchMock = vi.fn();
 beforeEach(() => { vi.useFakeTimers(); Socket.instances = []; vi.stubGlobal("WebSocket", Socket); vi.stubGlobal("fetch",fetchMock); fetchMock.mockResolvedValue({ok:true,status:200,json:async()=>[{sessionId:"one"}]}); });
 afterEach(() => { closeAllSessions(); vi.useRealTimers(); vi.unstubAllGlobals(); vi.clearAllMocks(); });
@@ -20,7 +22,7 @@ it("restores before allowing input, acknowledges rendered bytes, and deletes onl
   const output = vi.fn(consume);
   const connected = openSession("terminal", {...input,runtimeKey:"block"}, vi.fn(),output);
   const socket=Socket.instances[0];socket.onopen?.();
-  expect(JSON.parse(socket.send.mock.calls[0][0])).toEqual({version:1,purpose:"terminal",input,runtimeKey:"block"});
+  expect(JSON.parse(socket.send.mock.calls[0][0])).toEqual({version:1,purpose:"terminal",input,runtimeKey:"block",...proof});
   socket.message({type:"ready",sessionId:"one"});expect(await connected).toBe("one");
   expect(()=>control("one",new Uint8Array([13]))).toThrow("画面正在恢复");
   socket.message(new Uint8Array([65,66]).buffer);
@@ -38,25 +40,22 @@ it("reattaches the original session after network loss without resending passwor
   expect(()=>control("one",new Uint8Array([13]))).toThrow("重新接入");
   await vi.advanceTimersByTimeAsync(1000);
   const second=Socket.instances[1];expect(String(second.url)).toContain("/runtime/attach");second.onopen?.();
-  expect(second.send.mock.calls).toEqual([[JSON.stringify({version:2,sessionId:"one"})]]);
+  expect(second.send.mock.calls).toEqual([[JSON.stringify({version:2,sessionId:"one",...proof})]]);
 });
 it("page teardown detaches without deleting the server session or scheduling reconnection", async () => {
   const connected=openSession("terminal",input,vi.fn(),consume);const socket=Socket.instances[0];
   socket.message({type:"ready",sessionId:"one"});await connected;closeAllSessions();
   await vi.advanceTimersByTimeAsync(20000);expect(fetchMock).not.toHaveBeenCalled();expect(Socket.instances).toHaveLength(1);
 });
-it("enforces read-only attachments then accepts input when the server transfers control",async()=>{
+it("bounds terminal input after restoration",async()=>{
   const connected=openSession("terminal",input,vi.fn(),consume);const socket=Socket.instances[0];
-  socket.message({type:"ready",sessionId:"one",readOnly:true});await connected;socket.message({type:"restored"});
-  expect(()=>control("one",new Uint8Array([65]))).toThrow("只读");
-  socket.message({type:"access",readOnly:false});control("one",new Uint8Array([65]));
-  expect(socket.send).toHaveBeenLastCalledWith(new Uint8Array([65]));
+  socket.message({type:"ready",sessionId:"one"});await connected;socket.message({type:"restored"});
   socket.bufferedAmount=300*1024;expect(()=>control("one",new Uint8Array([65]))).toThrow("输入队列繁忙");
 });
 it("local restoration uses the stable block key and reports temporary disconnection",async()=>{
   const events=vi.fn();const pending=connectLocalSession(120,40,events,consume,true,"/work","block");
   const socket=Socket.instances[0];socket.onopen?.();
-  expect(JSON.parse(socket.send.mock.calls[0][0])).toEqual({version:1,columns:120,rows:40,osc7Enabled:true,initialDirectory:"/work",runtimeKey:"block"});
+  expect(JSON.parse(socket.send.mock.calls[0][0])).toEqual({version:1,columns:120,rows:40,osc7Enabled:true,initialDirectory:"/work",runtimeKey:"block",...proof});
   socket.message({type:"ready",sessionId:"local",cwd:"/work"});expect(await pending).toEqual({sessionId:"local",cwd:"/work"});
   socket.close();expect(events).toHaveBeenCalledWith({type:"stateChanged",state:"connecting"});
 });

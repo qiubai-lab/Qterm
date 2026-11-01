@@ -1,3 +1,6 @@
+mod access;
+mod access_socket;
+mod access_transport;
 mod auth;
 mod catalog;
 mod config;

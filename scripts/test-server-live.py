@@ -35,6 +35,8 @@ class Fixture:
         self.http_port, self.ssh_port = port(), port()
         self.origin = f"http://localhost:{self.http_port}"
         self.cookie = ""
+        self.access_key = ""
+        self.client_id = secrets.token_hex(16)
         self.password = secrets.token_urlsafe(24)
         self.processes = []
         hashed = subprocess.check_output([BINARY, "hash-password"], input=self.password.encode())
@@ -89,7 +91,7 @@ LogLevel ERROR
 
     def request(self, path, method="GET", body=None, status=200, origin=None, raw=None, content_type=None):
         data = raw if raw is not None else (json.dumps(body).encode() if body is not None else None)
-        headers = {"Origin": origin or self.origin, "Cookie": self.cookie}
+        headers = {"Origin": origin or self.origin, "Cookie": self.cookie,"X-Qterm-Access":self.access_key,"X-Qterm-Client":self.client_id}
         if data is not None:
             headers["Content-Type"] = content_type or "application/json"
         request = urllib.request.Request(self.origin + path, data=data, headers=headers, method=method)
@@ -109,7 +111,12 @@ LogLevel ERROR
         return self.request("/api/v1" + path, method, body, **kwargs)
 
     def login(self):
-        self.api("/login", "POST", {"password": self.password})
+        reply=self.api("/login", "POST", {"password": self.password,"clientId":self.client_id})
+        assert reply["authenticated"], reply
+        self.access_key=reply["accessKey"]
+
+    def proof(self):
+        return {"accessKey":self.access_key,"clientId":self.client_id}
 
     def close(self):
         for process in reversed(self.processes):
@@ -133,7 +140,7 @@ async def receive(ws):
 async def connect(f, profile, credential, purpose="terminal", changed=False):
     ws = await websockets.connect(f"ws://localhost:{f.http_port}/api/v1/sessions", origin=f.origin,
                                   extra_headers={"Cookie": f.cookie}, max_queue=None)
-    await ws.send(json.dumps({"version": 1, "purpose": purpose, "input": {
+    await ws.send(json.dumps({**f.proof(),"version": 1, "purpose": purpose, "input": {
         "profileId": profile, "auth": {"method": "storedCredential", "credentialId": credential},
         "terminalSize": {"columns": 90, "rows": 30} if purpose == "terminal" else None}}))
     ready = await receive(ws)
@@ -172,7 +179,7 @@ async def output_contains(ws, marker):
 
 async def exercise(f):
     f.api("/profiles", status=401)
-    f.api("/login", "POST", {"password": f.password}, origin="https://attacker.test", status=403)
+    f.api("/login", "POST", {"password": f.password,"clientId":f.client_id}, origin="https://attacker.test", status=403)
     f.login()
     try:
         async with websockets.connect(f"ws://localhost:{f.http_port}/api/v1/sessions", origin="https://attacker.test", extra_headers={"Cookie": f.cookie}):
@@ -241,7 +248,7 @@ async def exercise(f):
     f.login()
     assert not f.api("/vault")["unlocked"]
     terminal = await websockets.connect(f"ws://localhost:{f.http_port}/api/v1/runtime/attach", origin=f.origin, extra_headers={"Cookie":f.cookie})
-    await terminal.send(json.dumps({"version":2,"sessionId":terminal_id}))
+    await terminal.send(json.dumps({**f.proof(),"version":2,"sessionId":terminal_id}))
     ready = await receive(terminal)
     assert ready["sessionId"] == terminal_id
     while True:

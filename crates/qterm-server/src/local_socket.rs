@@ -24,6 +24,8 @@ use std::{path::PathBuf, sync::Arc, time::Duration};
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Open {
+    #[serde(flatten)]
+    access: crate::access::Proof,
     version: u8,
     columns: u32,
     rows: u32,
@@ -74,6 +76,9 @@ async fn run(mut socket: WebSocket, state: Arc<ServerState>, owner: String) {
     let Ok(size) = TerminalSize::new(open.columns, open.rows) else {
         return;
     };
+    if state.auth.access.prove_owner(&owner, &open.access).is_err() {
+        return;
+    }
     if open.version != 1 || !state.auth.valid(&owner) {
         return;
     }

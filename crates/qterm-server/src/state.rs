@@ -47,6 +47,7 @@ pub struct ServerState {
     pub transfers: Arc<tokio::sync::Semaphore>,
     pub transfer_tasks: crate::transfer_lifecycle::Transfers,
     pub sockets: Arc<tokio::sync::Semaphore>,
+    pub access_sockets: Arc<tokio::sync::Semaphore>,
     _data_lock: File,
 }
 impl ServerState {
@@ -102,6 +103,7 @@ impl ServerState {
             owners: Mutex::new(HashMap::new()),
             pending_recovery: Mutex::new(None),
             sockets: Arc::new(tokio::sync::Semaphore::new(32)),
+            access_sockets: Arc::new(tokio::sync::Semaphore::new(8)),
             config,
             _data_lock: lock,
         }))

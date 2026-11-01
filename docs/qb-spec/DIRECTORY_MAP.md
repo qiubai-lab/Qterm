@@ -229,7 +229,7 @@
 - `vite.web.config.ts`, `web/index.html`: explicit real-browser build, independent of desktop and demo.
 
 - `src/workspace/WorkspaceChrome.tsx`: shared workspace header and desktop window gestures; browser logout occupies the native control area.
-- `crates/qterm-server/src/local_socket.rs` / `socket_io.rs`: local PTY admission and shared bounded SSH/local WebSocket transport; logout closes both runtimes.
+- `crates/qterm-server/src/local_socket.rs` / `socket_io.rs`: local PTY admission and shared bounded SSH/local WebSocket transport; logout closes browser transports while retained runtime processes keep running.
 - `crates/qterm-server/src/local_files.rs` / `settings.rs` / `credential_management.rs`: service-account files, persistent settings and shared credential workflows exposed through narrow authenticated routes.
 - `crates/qterm-core/src/application/local_file_listing.rs`: shared desktop/server local directory listing.
 - `scripts/test-server-local.py`: cross-platform native and container local PTY/file/lifecycle acceptance; native CI includes Linux, Windows and macOS.
@@ -242,3 +242,10 @@
 - `src/server/sessionTransport.ts`、`ServerRuntimeRestore.tsx`：浏览器接入、断线重连与已有 SSH/SFTP 会话恢复。
 - `src/files/useRetainedFilePreview.ts`：文件预览/编辑草稿加载与顺序同步。
 - `scripts/test-server-retention.py`、`scripts/server-screen.node-test.mjs`：真实 PTY 和屏幕状态恢复验收。
+
+### Web 独占接管
+
+- `crates/qterm-server/src/access.rs`、`access_tests.rs`：唯一页面访问所有者、限时确认票据、并发接管、恢复与心跳宽限；不拥有终端进程。
+- `access_transport.rs`、`access_socket.rs`：接管/恢复 HTTP 边界与页面在线 WebSocket；`auth.rs` 统一验证 HTTP 页面凭证，终端握手另行验证同一身份。
+- `src/server/useServerAccess.ts`、`accessIdentity.ts`、`accessPresence.ts`：页面身份、登录/恢复/确认生命周期与撤销后的重连停止；`AccessTakeoverDialog.tsx` 复用共享对话框；`AccessReplacedDialog.tsx` 阻断旧工作台交互，等待确认后回登录页。
+- `scripts/test-server-takeover.py`：跨平台原生/容器接管验收，覆盖旧页面拒绝与原终端、布局、草稿保留。

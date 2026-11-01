@@ -21,3 +21,13 @@ describe("server HTTP authentication", () => {
     window.removeEventListener(AUTH_EXPIRED, expire);
   });
 });
+it("does not revoke a newer login because an older request returns late",async()=>{
+  const {rememberAccess}=await import("./accessIdentity");
+  let finish!:(response:Response)=>void;
+  vi.stubGlobal("fetch",vi.fn(()=>new Promise<Response>(resolve=>{finish=resolve;})));
+  const expired=vi.fn();window.addEventListener(AUTH_EXPIRED,expired);
+  rememberAccess("old-key");const pending=api("/workspace");const rejected=expect(pending).rejects.toBeInstanceOf(RequestError);
+  rememberAccess("new-key");finish(new Response('{"code":"sessionReplaced"}',{status:401}));
+  await rejected;expect(expired).not.toHaveBeenCalled();
+  rememberAccess("");window.removeEventListener(AUTH_EXPIRED,expired);
+});

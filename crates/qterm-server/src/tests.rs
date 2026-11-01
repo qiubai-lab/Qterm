@@ -33,6 +33,8 @@ pub(super) async fn call(
         .method(method)
         .uri(path)
         .header("Cookie", format!("qterm={token}"))
+        .header("x-qterm-access", token)
+        .header("x-qterm-client", "test-client")
         .header("Origin", "http://localhost:1423")
         .header("Content-Type", "application/json")
         .body(Body::from(body.to_string()))
@@ -64,6 +66,8 @@ async fn unauthenticated_requests_and_cross_origin_mutations_are_rejected() {
         .method("POST")
         .uri("/api/v1/profiles")
         .header("Cookie", format!("qterm={token}"))
+        .header("x-qterm-access", token)
+        .header("x-qterm-client", "test-client")
         .header("Origin", "https://attacker.test")
         .header("Content-Type", "application/json")
         .body(Body::from("{}"))
@@ -191,7 +195,7 @@ async fn login_checks_password_and_sets_an_http_only_cookie() {
             "",
             "POST",
             "/api/v1/login",
-            json!({"password":"wrong"})
+            json!({"password":"wrong","clientId":"test-client"})
         )
         .await
         .0,
@@ -202,7 +206,9 @@ async fn login_checks_password_and_sets_an_http_only_cookie() {
         .uri("/api/v1/login")
         .header("Origin", "http://localhost:1423")
         .header("Content-Type", "application/json")
-        .body(Body::from(r#"{"password":"test-only-long-password"}"#))
+        .body(Body::from(
+            r#"{"password":"test-only-long-password","clientId":"test-client"}"#,
+        ))
         .unwrap();
     let response = router(state).oneshot(request).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);

@@ -25,9 +25,11 @@ jobs:
       - run: python3 scripts/test-server-live.py
       - run: python3 scripts/test-server-local.py
       - run: python3 scripts/test-server-retention.py
+      - run: python3 scripts/test-server-takeover.py
       - run: docker build --tag qterm-server:local .
       - run: python3 scripts/test-server-local.py --container
       - run: python3 scripts/test-server-retention.py --container
+      - run: python3 scripts/test-server-takeover.py --container
   native-server:
     strategy:
       fail-fast: false
@@ -48,3 +50,4 @@ jobs:
       - run: cargo clippy --manifest-path crates/Cargo.toml --locked -p qterm-server --all-targets -- -D warnings
       - run: python scripts/test-server-local.py
       - run: python scripts/test-server-retention.py
+      - run: python scripts/test-server-takeover.py

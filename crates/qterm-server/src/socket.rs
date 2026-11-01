@@ -22,6 +22,8 @@ use std::{sync::Arc, time::Duration};
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Open {
+    #[serde(flatten)]
+    access: crate::access::Proof,
     version: u8,
     purpose: String,
     input: SessionConnectDto,
@@ -62,6 +64,9 @@ async fn run(mut socket: WebSocket, state: Arc<ServerState>, owner: String) {
     let Ok(open) = serde_json::from_str::<Open>(&text) else {
         return;
     };
+    if state.auth.access.prove_owner(&owner, &open.access).is_err() {
+        return;
+    }
     if open.version != 1 || !state.auth.valid(&owner) {
         return;
     }

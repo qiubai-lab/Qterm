@@ -1,3 +1,4 @@
+.server-workspace { display: contents; }
 .server-login { display: grid; place-items: center; min-height: 100dvh; padding: 24px; background: var(--canvas); color: var(--text); }
 .server-login-card { display: grid; gap: 16px; width: min(390px, 100%); padding: 28px; border: 1px solid var(--border); border-radius: 13px; background: var(--raised); }
 .server-wordmark { display: flex; align-items: center; gap: 9px; color: var(--accent); font-size: 20px; }

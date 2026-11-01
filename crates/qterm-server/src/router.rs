@@ -13,6 +13,7 @@ pub fn router(state: Arc<ServerState>) -> Router {
     let protected=Router::new()
         .route("/auth",get(||async{Json(serde_json::json!({"authenticated":true,"runtime":"web-server","protocolVersion":1,"version":env!("CARGO_PKG_VERSION")}))}))
         .route("/logout",post(auth::logout))
+        .route("/access",get(crate::access_socket::upgrade))
         .route("/profiles",get(catalog::profiles).post(catalog::create_profile))
         .route("/profiles/{id}",axum::routing::put(catalog::update_profile).delete(catalog::delete_profile))
         .route("/profiles/{id}/requirements",get(catalog::requirements))
@@ -69,7 +70,7 @@ pub fn router(state: Arc<ServerState>) -> Router {
         .route_layer(middleware::from_fn_with_state(state.clone(),auth::guard));
     Router::new()
         .route("/healthz",get(||async{"ok"}))
-        .nest("/api/v1",protected.route("/login",post(auth::login)))
+        .nest("/api/v1",protected.route("/login",post(auth::login)).route("/access/resume",post(crate::access_transport::resume)).route("/access/takeover",post(crate::access_transport::takeover)))
         .fallback_service(ServeDir::new(&state.config.assets).append_index_html_on_directories(true))
         .layer(DefaultBodyLimit::max(4*1024*1024))
         .layer(SetResponseHeaderLayer::overriding(header::CACHE_CONTROL,HeaderValue::from_static("no-store")))

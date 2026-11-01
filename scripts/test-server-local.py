@@ -34,6 +34,8 @@ class Fixture:
             self.port = listener.getsockname()[1]
         self.origin = f"http://localhost:{self.port}"
         self.cookie = ""
+        self.access_key = ""
+        self.client_id = secrets.token_hex(16)
         self.password = secrets.token_urlsafe(24)
         password_file = self.directory / "password"
         password_file.write_text(self.password)
@@ -69,7 +71,7 @@ class Fixture:
     def request(self, path, method="GET", body=None, status=200, origin=None):
         data = json.dumps(body).encode() if body is not None else None
         request = urllib.request.Request(self.origin + path, data=data, method=method,
-            headers={"Origin": origin or self.origin, "Cookie": self.cookie, "Content-Type":"application/json"})
+            headers={"Origin": origin or self.origin, "Cookie": self.cookie, "Content-Type":"application/json", "X-Qterm-Access":self.access_key,"X-Qterm-Client":self.client_id})
         try:
             response = urllib.request.urlopen(request, timeout=30)
         except urllib.error.HTTPError as error:
@@ -84,7 +86,12 @@ class Fixture:
         return self.request("/api/v1" + path, method, body, **kwargs)
 
     def login(self):
-        self.api("/login", "POST", {"password":self.password})
+        reply=self.api("/login", "POST", {"password":self.password,"clientId":self.client_id})
+        assert reply["authenticated"], reply
+        self.access_key=reply["accessKey"]
+
+    def proof(self):
+        return {"accessKey":self.access_key,"clientId":self.client_id}
 
     def close(self):
         if self.container:
@@ -108,7 +115,7 @@ async def receive(ws):
 
 async def open_terminal(f):
     ws = await connect(f"ws://localhost:{f.port}/api/v1/local/sessions", origin=f.origin, extra_headers={"Cookie":f.cookie})
-    await ws.send(json.dumps({"version":1,"columns":90,"rows":30,"osc7Enabled":True,"initialDirectory":f.cwd}))
+    await ws.send(json.dumps({**f.proof(),"version":1,"columns":90,"rows":30,"osc7Enabled":True,"initialDirectory":f.cwd}))
     ready = await receive(ws)
     assert ready["type"] == "ready", ready
     expected = Path(f.cwd) if f.container else Path(f.cwd).resolve()

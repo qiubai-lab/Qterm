@@ -1,8 +1,9 @@
+import { accessProof } from "./accessIdentity";
 import type { SessionConnectInput, SessionEvent, TerminalSessionConnectInput } from "../lib/tauri/sessions";
 import { API, api } from "./http";
 
 interface Connection {
-  socket: WebSocket; id?: string; stopped: boolean; readOnly: boolean; restoring: boolean;
+  socket: WebSocket; id?: string; stopped: boolean; restoring: boolean;
   retry?: number; timer?: number; runtimeKey?: string;
   event: (event: SessionEvent) => void;
   data: (data: Uint8Array, consumed?: () => void) => void;
@@ -13,8 +14,8 @@ export const SCREEN_STATE = "qterm:server-screen";
 function failure(message: string, code = "transportLost"): SessionEvent {
   return {type:"failed",code,message,node:null,stage:null};
 }
-function screen(connection: Connection, phase: "start" | "end" | "access" | "geometry", columns?: number, rows?: number, cwd?: string) {
-  window.dispatchEvent(new CustomEvent(SCREEN_STATE,{detail:{runtimeKey:connection.runtimeKey,phase,columns,rows,cwd,readOnly:connection.readOnly}}));
+function screen(connection: Connection, phase: "start" | "end" | "geometry", columns?: number, rows?: number, cwd?: string) {
+  window.dispatchEvent(new CustomEvent(SCREEN_STATE,{detail:{runtimeKey:connection.runtimeKey,phase,columns,rows,cwd}}));
 }
 export function openSession(purpose: "terminal" | "files", input: SessionConnectInput | TerminalSessionConnectInput, onEvent: (event: SessionEvent) => void, onData: (data: Uint8Array, consumed?: () => void) => void = (_data, consumed) => consumed?.()): Promise<string> {
   const {runtimeKey,...request} = input;
@@ -23,14 +24,14 @@ export function openSession(purpose: "terminal" | "files", input: SessionConnect
 export function openSocket(endpoint: string, handshake: unknown, onEvent: (event: SessionEvent) => void, onData: (data: Uint8Array, consumed?: () => void) => void): Promise<{sessionId:string;cwd?:string}> {
   return new Promise((resolve,reject)=>{
     const runtimeKey=(handshake as {runtimeKey?:string}).runtimeKey;
-    const connection:Connection={socket:null as unknown as WebSocket,stopped:false,readOnly:false,restoring:true,event:onEvent,data:onData,runtimeKey};
+    const connection:Connection={socket:null as unknown as WebSocket,stopped:false,restoring:true,event:onEvent,data:onData,runtimeKey};
     connections.add(connection);
     const stopError=(message:string)=>{reject(new Error(message));onEvent(failure(message));onEvent({type:"stateChanged",state:"failed"});detach(connection);};
     function connect(path:string,input:unknown){
       const url=new URL(`${API}${path}`,location.href);url.protocol=url.protocol==="https:"?"wss:":"ws:";
       const socket=new WebSocket(url);connection.socket=socket;socket.binaryType="arraybuffer";
       connection.timer=window.setTimeout(()=>{if(!connection.id)stopError("建立终端连接超时");else socket.close();},15000);
-      socket.onopen=()=>{socket.send(JSON.stringify(input));input=undefined;};
+      socket.onopen=()=>{socket.send(JSON.stringify({...input as object,...accessProof()}));input=undefined;};
       socket.onmessage=event=>{
         if (connection.stopped || connection.socket!==socket)return;
         if(event.data instanceof ArrayBuffer){
@@ -43,7 +44,8 @@ export function openSocket(endpoint: string, handshake: unknown, onEvent: (event
           const value=JSON.parse(String(event.data));
           if(value.type==="ready" && value.sessionId){
             window.clearTimeout(connection.timer);
-            connection.id=value.sessionId;connection.readOnly=Boolean(value.readOnly);connection.restoring=true;
+            connection.id=value.sessionId;connection.restoring=true;
+            const previous=sessions.get(value.sessionId);if(previous && previous!==connection)detach(previous);
             sessions.set(value.sessionId,connection);
             screen(connection,"start",value.columns,value.rows,value.cwd);
             // Reset the browser parser before restoring a serialized framebuffer.
@@ -53,13 +55,8 @@ export function openSocket(endpoint: string, handshake: unknown, onEvent: (event
             onData(new Uint8Array(),()=>{connection.restoring=false;screen(connection,"end");});
           }else if(value.type==="geometry"){
             screen(connection,"geometry",value.columns,value.rows);
-          }else if(value.type==="access"){
-            connection.readOnly=Boolean(value.readOnly);
-            screen(connection,"access");
-            onEvent(connection.readOnly?failure("此终端正在另一页面操作，当前为只读","readOnly"):{type:"stateChanged",state:"connected"});
           }else if(value.type==="event" && value.event){
             onEvent(value.event);
-            if(connection.readOnly && value.event.type==="stateChanged" && value.event.state==="connected")onEvent(failure("此终端正在另一页面操作，当前为只读；关闭该页面后可继续操作","readOnly"));
           }else if(value.type==="resync")socket.close();
           else if(value.type==="error")stopError(value.error?.message??"连接失败，后台任务仍保留");
         }catch{stopError("服务端返回了无效的会话消息");}
@@ -87,7 +84,6 @@ function detach(connection:Connection){
 export function control(id:string,value:unknown):void {
   const c=sessions.get(id);
   if(!c || c.socket.readyState!==WebSocket.OPEN)throw new Error("正在重新接入终端，请稍后输入");
-  if(c.readOnly)throw new Error("终端在另一页面操作，当前页面只读");
   if(c.restoring) { if(value instanceof Uint8Array)throw new Error("终端画面正在恢复，请稍后输入"); return; } // Browser resize/query callbacks during restoration must not mutate the PTY.
   if(c.socket.bufferedAmount>256*1024)throw new Error("终端输入队列繁忙");
   if(value instanceof Uint8Array)c.socket.send(value);else c.socket.send(JSON.stringify(value));

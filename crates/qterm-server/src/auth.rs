@@ -19,19 +19,15 @@ use std::{
 
 #[derive(Clone)]
 pub struct Identity(pub String);
-struct Login {
-    token: String,
-    expires: Instant,
-}
 pub struct Auth {
-    login: Mutex<Option<Login>>,
+    pub access: crate::access::Access,
     attempts: Mutex<(Instant, u32)>,
     pub verification: Arc<tokio::sync::Semaphore>,
 }
 impl Default for Auth {
     fn default() -> Self {
         Self {
-            login: Mutex::new(None),
+            access: Default::default(),
             attempts: Mutex::new((Instant::now(), 0)),
             verification: Arc::new(tokio::sync::Semaphore::new(2)),
         }
@@ -39,22 +35,14 @@ impl Default for Auth {
 }
 impl Auth {
     pub fn valid(&self, token: &str) -> bool {
-        self.login
-            .lock()
-            .unwrap()
-            .as_ref()
-            .is_some_and(|login| login.token == token && login.expires > Instant::now())
+        self.access.valid(token)
     }
+    #[cfg(test)]
     pub fn issue(&self) -> Result<String> {
-        let token = random_token()?;
-        *self.login.lock().unwrap() = Some(Login {
-            token: token.clone(),
-            expires: Instant::now() + Duration::from_secs(8 * 3600),
-        });
-        Ok(token)
+        self.access.fixture()
     }
     pub fn revoke(&self) {
-        *self.login.lock().unwrap() = None;
+        self.access.revoke();
     }
     fn attempt(&self) -> Result<()> {
         let mut attempts = self.attempts.lock().unwrap();
@@ -86,7 +74,7 @@ pub fn check_origin(headers: &HeaderMap, origin: &str) -> Result<()> {
 fn cookie_name(secure: bool) -> &'static str {
     if secure { "__Host-qterm" } else { "qterm" }
 }
-fn token(headers: &HeaderMap, secure: bool) -> Option<&str> {
+pub fn token(headers: &HeaderMap, secure: bool) -> Option<&str> {
     headers
         .get(header::COOKIE)?
         .to_str()
@@ -97,7 +85,7 @@ fn token(headers: &HeaderMap, secure: bool) -> Option<&str> {
             (key == cookie_name(secure)).then_some(value)
         })
 }
-fn cookie(secure: bool, token: &str, age: u32) -> HeaderValue {
+pub fn cookie(secure: bool, token: &str, age: u32) -> HeaderValue {
     HeaderValue::from_str(&format!(
         "{}={token}; Path=/; HttpOnly; SameSite=Strict; Max-Age={age}{}",
         cookie_name(secure),
@@ -110,18 +98,49 @@ pub async fn guard(
     mut request: Request,
     next: Next,
 ) -> Result<Response> {
-    let token =
-        token(request.headers(), state.config.secure_cookie).ok_or_else(ApiError::unauthorized)?;
-    if !state.auth.valid(token) {
-        return Err(ApiError::unauthorized());
-    }
     if !matches!(
         *request.method(),
         axum::http::Method::GET | axum::http::Method::HEAD
     ) {
         check_origin(request.headers(), &state.config.origin)?;
     }
-    let identity = Identity(token.to_owned());
+    let cookie =
+        token(request.headers(), state.config.secure_cookie).ok_or_else(ApiError::unauthorized)?;
+    // Browser downloads cannot set headers. Their short-lived, single-use ticket
+    // is already bound to the current owner and is cleared during takeover.
+    let path = request.uri().path();
+    let path = path.strip_prefix("/api/v1").unwrap_or(path);
+    let ticket_download =
+        *request.method() == axum::http::Method::GET && path.starts_with("/downloads/");
+    let socket_upgrade = *request.method() == axum::http::Method::GET
+        && matches!(
+            path,
+            "/access" | "/sessions" | "/local/sessions" | "/runtime/attach"
+        )
+        && request
+            .headers()
+            .get(header::UPGRADE)
+            .is_some_and(|v| v.as_bytes().eq_ignore_ascii_case(b"websocket"));
+    let owner = if ticket_download || socket_upgrade {
+        state.auth.access.cookie_owner(cookie)?
+    } else {
+        let proof = crate::access::Proof {
+            access_key: request
+                .headers()
+                .get("x-qterm-access")
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or_default()
+                .into(),
+            client_id: request
+                .headers()
+                .get("x-qterm-client")
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or_default()
+                .into(),
+        };
+        state.auth.access.authorize(cookie, &proof)?
+    };
+    let identity = Identity(owner);
     request.extensions_mut().insert(identity);
     Ok(next.run(request).await)
 }
@@ -129,6 +148,8 @@ pub async fn guard(
 #[serde(deny_unknown_fields)]
 pub struct LoginInput {
     password: String,
+    #[serde(rename = "clientId")]
+    client_id: String,
 }
 pub async fn login(
     State(state): State<Arc<ServerState>>,
@@ -166,20 +187,10 @@ pub async fn login(
         ));
     }
     let _gate = state.vault_gate.lock().await;
-    state.clear_login_secrets();
-    state
-        .vault
-        .lock(qterm_core::application::credential_lifecycle::LockReason::Manual);
-    let token = state.auth.issue()?;
-    Ok((
-        [(
-            header::SET_COOKIE,
-            cookie(state.config.secure_cookie, &token, 8 * 3600),
-        )],
-        Json(serde_json::json!({"authenticated":true})),
-    )
-        .into_response())
+    let admission = state.auth.access.login(&input.client_id)?;
+    crate::access_transport::admitted(&state, admission, true)
 }
+
 pub async fn logout(
     State(state): State<Arc<ServerState>>,
     axum::Extension(owner): axum::Extension<Identity>,
