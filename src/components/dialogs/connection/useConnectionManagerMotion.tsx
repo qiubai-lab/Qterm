@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 
-import type { ConnectionProfile, ProfileGroup } from "../../../lib/tauri/profiles";
+import type { ConnectionProfile, ProfileGroup } from "@qterm/services/profiles";
 
 type EditorTransition = "idle" | "switching-down" | "switching-up" | "creating";
 export type ConnectionSelectionState = { offset: number; ready: boolean; targetId: string | null; visible: boolean };

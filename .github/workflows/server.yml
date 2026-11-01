@@ -1,0 +1,50 @@
+name: Web server runtime
+on:
+  pull_request:
+  push:
+    branches: [main, dev-webruntime]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: jdx/mise-action@v3
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check
+      - run: pnpm test:web
+      - run: pnpm build:web
+      - run: cargo fmt --manifest-path crates/Cargo.toml --all -- --check
+      - run: cargo test --manifest-path crates/Cargo.toml --workspace --all-targets --all-features --locked
+      - run: cargo clippy --manifest-path crates/Cargo.toml --workspace --all-targets --all-features --locked -- -D warnings
+      - run: sudo apt-get update && sudo apt-get install -y openssh-server python3-websockets
+      - run: sudo mkdir -p /run/sshd
+      - run: cargo build --manifest-path crates/Cargo.toml --locked -p qterm-server
+      - run: python3 scripts/test-server-live.py
+      - run: python3 scripts/test-server-local.py
+      - run: python3 scripts/test-server-retention.py
+      - run: docker build --tag qterm-server:local .
+      - run: python3 scripts/test-server-local.py --container
+      - run: python3 scripts/test-server-retention.py --container
+  native-server:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: jdx/mise-action@v3
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build:server-screen
+      - run: python -m pip install websockets==13.1
+      - run: cargo build --manifest-path crates/Cargo.toml --locked -p qterm-server
+      - run: cargo test --manifest-path crates/Cargo.toml --locked -p qterm-server
+      - run: cargo clippy --manifest-path crates/Cargo.toml --locked -p qterm-server --all-targets -- -D warnings
+      - run: python scripts/test-server-local.py
+      - run: python scripts/test-server-retention.py

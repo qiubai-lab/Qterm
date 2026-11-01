@@ -1,4 +1,4 @@
-import type { AppTheme } from "../../lib/tauri/settings";
+import type { AppTheme } from "@qterm/services/settings";
 import { applyTerminalImageCorners } from "./terminalImageCorners";
 import { drawImageChrome } from "./terminalImageChrome";
 import { IMAGE_CORNER_RADIUS, IMAGE_HEADER_HEIGHT, IMAGE_SCALE, IMAGE_VERTICAL_PADDING, imageDimensions, type TerminalImageCell, type TerminalImageSnapshot, type TerminalImageStyle, type TerminalImageScale } from "./terminalImageModel";

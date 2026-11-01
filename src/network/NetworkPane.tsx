@@ -11,7 +11,7 @@ import { NetworkRuleDialog } from "./NetworkRuleDialog";
 import { NetworkRuleTypeDialog } from "./NetworkRuleTypeDialog";
 import { hasWorkspaceRuntime } from "../lib/runtime/environment";
 import type { NetworkRuleType } from "./networkRuleTypes";
-import { CONFIGURATION_MERGED } from "../lib/tauri/configurationMerge";
+import { CONFIGURATION_MERGED } from "@qterm/services/configurationMerge";
 
 const NETWORK_RULES_CHANGED_EVENT = "qterm:network-rules-changed";
 

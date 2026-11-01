@@ -1,0 +1,9 @@
+.server-login { display: grid; place-items: center; min-height: 100dvh; padding: 24px; background: var(--canvas); color: var(--text); }
+.server-login-card { display: grid; gap: 16px; width: min(390px, 100%); padding: 28px; border: 1px solid var(--border); border-radius: 13px; background: var(--raised); }
+.server-wordmark { display: flex; align-items: center; gap: 9px; color: var(--accent); font-size: 20px; }
+.server-wordmark span, .server-login-note { color: var(--muted); font-size: 11px; }
+.server-login-card h1 { margin: 8px 0 0; font-size: 18px; }
+.server-login-card p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.6; }
+.server-login-card label { display: grid; gap: 7px; color: var(--muted); font-size: 11px; }
+.server-login-card input { box-sizing: border-box; width: 100%; min-width: 0; height: 32px; padding: 6px 9px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); font: inherit; }
+.server-status { min-height: 20px; }

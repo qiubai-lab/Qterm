@@ -41,4 +41,11 @@ id_dsa*
 
 # Browser product site
 dist-site
+dist-web
+.server-secrets/
+.server-data/
 **/target/
+
+__pycache__/
+
+dist-server/

@@ -1,7 +1,7 @@
 import { useCallback, useState, type RefObject } from "react";
 import type { Terminal } from "@xterm/xterm";
 import { currentDocumentTheme } from "../../app/theme/AppThemeProvider";
-import type { AppTheme } from "../../lib/tauri/settings";
+import type { AppTheme } from "@qterm/services/settings";
 import { currentDesktopPlatform } from "../../lib/tauri/window";
 import { imageExportError, type TerminalImageSnapshot, type TerminalImageStyle } from "./terminalImageModel";
 import { captureTerminalImage, measureTerminalImage } from "./terminalImageSnapshot";

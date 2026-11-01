@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-import { getCurrentWebview } from "@tauri-apps/api/webview";
-import { writeText as writeClipboardText } from "@tauri-apps/plugin-clipboard-manager";
-import { cancelPrivateKeyCredential, clearVault, commitPrivateKeyCredential, createPasswordCredential, deleteCredential, getCredentialPublicKey, getVaultStatus, listCredentials, prepareDroppedPrivateKeyCredential, prepareGeneratedPrivateKeyCredential, preparePrivateKeyCredential, renameCredential, revealCredentialPassword, type CredentialKind, type CredentialSummary, type GeneratedPrivateKeyAlgorithm, type PrivateKeyDraft, type VaultStatus } from "../../lib/tauri/credentials";
+import { useCredentialPrivateKeyDrop } from "./credential/useCredentialPrivateKeyDrop";
+import { writeText as writeClipboardText } from "@qterm/services/textClipboard";
+import { cancelPrivateKeyCredential, clearVault, commitPrivateKeyCredential, createPasswordCredential, deleteCredential, getCredentialPublicKey, getVaultStatus, listCredentials, prepareDroppedPrivateKeyCredential, prepareGeneratedPrivateKeyCredential, preparePrivateKeyCredential, renameCredential, revealCredentialPassword, type CredentialKind, type CredentialSummary, type GeneratedPrivateKeyAlgorithm, type PrivateKeyDraft, type VaultStatus } from "@qterm/services/credentials";
 import { Button, IconButton, StatusBadge } from "../Button";
 import { Icon } from "../Icon";
 import { RequiredFieldLabel } from "../RequiredFieldLabel";
@@ -162,32 +162,7 @@ export function CredentialDialog({ onClose }: { onClose: () => void }) {
   useEffect(() => { prepareKeyRef.current = prepareKey; });
   useEffect(() => () => { const draft = privateKeyDraftRef.current; if (draft) void cancelPrivateKeyCredential(draft.id); }, []);
 
-  useEffect(() => {
-    if (view.type !== "create" || view.kind !== "privateKey") return;
-    let disposed = false;
-    let unlisten: (() => void) | undefined;
-    const insideDropzone = (position: { x: number; y: number }) => {
-      const rect = privateKeyDropRef.current?.getBoundingClientRect();
-      const ratio = window.devicePixelRatio || 1;
-      const x = position.x / ratio;
-      const y = position.y / ratio;
-      return Boolean(rect && x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom);
-    };
-    void getCurrentWebview().onDragDropEvent((event) => {
-      const payload = event.payload;
-      if (payload.type === "leave") { setPrivateKeyDropState("idle"); return; }
-      const inside = insideDropzone(payload.position);
-      if (payload.type === "enter" || payload.type === "over") {
-        setPrivateKeyDropState(inside && !busy ? "active" : "idle");
-        return;
-      }
-      setPrivateKeyDropState("idle");
-      if (!inside || busy) return;
-      if (payload.paths.length !== 1) { setPrivateKeyDropState("invalid"); return; }
-      void prepareKeyRef.current(payload.paths[0]);
-    }).then((stop) => { if (disposed) stop(); else unlisten = stop; }).catch(() => setPrivateKeyDropState("idle"));
-    return () => { disposed = true; unlisten?.(); setPrivateKeyDropState("idle"); };
-  }, [busy, name, passphrase, view]);
+  useCredentialPrivateKeyDrop(view.type === "create" && view.kind === "privateKey", busy, privateKeyDropRef, prepareKeyRef, setPrivateKeyDropState);
 
   async function prepareGeneratedKey() {
     if (busy) return;

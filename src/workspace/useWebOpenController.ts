@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useMemo, type Dispatch } from "react";
-import type { ConnectionProfile } from "../lib/tauri/profiles";
+import type { ConnectionProfile } from "@qterm/services/profiles";
 import type { WebLinkOrigin } from "../web/webLinkOrigin";
 import { normalizeWebAddress, supportsWebBlocks, webSupportNotice } from "../web/webModel";
 import { blockIds, findLeaf } from "./layout";

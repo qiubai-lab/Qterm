@@ -1,0 +1,17 @@
+import type * as Desktop from "../../lib/tauri/files";
+import { api, request } from "../http";
+import { openSession } from "../sessionTransport";
+export type * from "../../lib/tauri/files";
+const route = (sessionId:string|null, action:string) => `${sessionId ? "" : "/local"}/files/${action}`;
+const body = (sessionId:string|null, value:Record<string,unknown>) => sessionId ? {sessionId,...value} : value;
+export const connectFileSession: typeof Desktop.connectFileSession = (input, onEvent) => openSession("files", input, onEvent);
+export const listRemoteDirectory: typeof Desktop.listRemoteDirectory = (sessionId, path) => api("/files/list", "POST", { sessionId, path });
+export const readTextFile: typeof Desktop.readTextFile = (sessionId, path) => api(route(sessionId,"read"), "POST", body(sessionId, { path }));
+export const readBinaryFile: typeof Desktop.readBinaryFile = async (sessionId, path) => (await request(route(sessionId,"binary"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body(sessionId,{path})) })).arrayBuffer();
+export const writeTextFile: typeof Desktop.writeTextFile = (sessionId, path, content, expectedRevision) => api(route(sessionId,"write"), "POST", body(sessionId, { path, content, expectedRevision }));
+export const createEntry: typeof Desktop.createEntry = (sessionId, directory, name, isDirectory) => api(route(sessionId,"create"), "POST", body(sessionId, { directory, name, isDirectory }));
+export const copyFile: typeof Desktop.copyFile = (sessionId, path, targetName) => api(route(sessionId,"copy"), "POST", body(sessionId, { path, targetName }));
+export const renameEntry: typeof Desktop.renameEntry = (sessionId, path, targetName) => api(route(sessionId,"rename"), "POST", body(sessionId, { path, targetName }));
+export const deleteEntry: typeof Desktop.deleteEntry = (sessionId, path) => api(route(sessionId,"delete"), "POST", body(sessionId, { path }));
+export const listLocalDirectory: typeof Desktop.listLocalDirectory = (path) => api("/local/files/list","POST",{path});
+export const listLocalRoots: typeof Desktop.listLocalRoots = () => api("/local/files/roots");

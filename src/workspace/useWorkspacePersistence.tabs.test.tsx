@@ -7,7 +7,7 @@ import { createWorkspaceDocument } from "./model";
 import type { WebTabCache } from "../lib/tauri/webTabs";
 
 const mocks = vi.hoisted(() => ({ load: vi.fn(), save: vi.fn(), tabsLoad: vi.fn(), tabsSave: vi.fn(), close: null as null | (() => Promise<void>) }));
-vi.mock("../lib/runtime/environment", () => ({ hasWorkspaceRuntime: () => true }));
+vi.mock("../lib/runtime/environment", () => ({ hasWorkspaceRuntime: () => true, isServer: false }));
 vi.mock("../lib/tauri/workspaces", () => ({ loadWorkspaces: mocks.load, saveWorkspaces: mocks.save }));
 vi.mock("../lib/tauri/profiles", () => ({ listProfiles: async () => [], listProfileGroups: async () => [] }));
 vi.mock("../lib/tauri/webTabs", () => ({ loadWebTabCache: mocks.tabsLoad, saveWebTabCache: mocks.tabsSave }));

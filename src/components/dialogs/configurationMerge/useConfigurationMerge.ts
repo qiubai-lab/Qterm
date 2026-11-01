@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { cancelConfigurationMerge, commitConfigurationMerge, CONFIGURATION_MERGED, previewConfigurationMerge, selectMergeSource, unlockMergeSourceCredentials, type MergeOptions, type MergePreview, type MergeScan } from "../../../lib/tauri/configurationMerge";
-import { getVaultStatus } from "../../../lib/tauri/credentials";
+import { cancelConfigurationMerge, commitConfigurationMerge, CONFIGURATION_MERGED, previewConfigurationMerge, selectMergeSource, unlockMergeSourceCredentials, type MergeOptions, type MergePreview, type MergeScan } from "@qterm/services/configurationMerge";
+import { getVaultStatus } from "@qterm/services/credentials";
 import type { MasterPasswordMode } from "../MasterPasswordDialog";
 
 const initialOptions: MergeOptions = { connections: false, network: false, credentials: false };

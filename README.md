@@ -128,7 +128,7 @@ Qterm 只提供搜索当前终端和切换到指定 Workspace 两类工作台快
 
 ## 🚀 从源码运行
 
-开发环境需要 Node.js 22、pnpm 11.0.8、Rust 1.97.1，以及对应平台的 Tauri 2 系统依赖。
+开发环境可通过 `mise install` 准备 Node.js 24、pnpm 11.0.8、Rust 1.97.1，以及对应平台的 Tauri 2 系统依赖。
 
 ```bash
 pnpm install --frozen-lockfile
@@ -148,6 +148,7 @@ pnpm tauri dev
 | [开发指引](docs/DEVELOPMENT.md) | 环境准备、源码运行、测试、构建与贡献约定 |
 | [安全模型](docs/security-model.md) | 凭据、主机密钥、文件传输与信任边界 |
 | [故障排查](docs/troubleshooting.md) | SSH、私钥、SFTP 与开发环境常见问题 |
+| [Web / 容器运行时](docs/server-runtime.md) | 单用户服务部署、HTTPS 代理、数据持久化与能力边界 |
 | [发布流程](docs/release.md) | 版本检查、标签发布、CI 产物与失败处理 |
 | [产品目标](docs/qb-spec/context/PRODUCT_SPEC.md) | 目标用户、核心流程与产品原则 |
 | [架构规范](docs/qb-spec/context/ARCHITECTURE_SPEC.md) | 技术基线、模块边界、数据流与安全规则 |

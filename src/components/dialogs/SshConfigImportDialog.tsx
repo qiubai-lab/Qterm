@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { getVaultStatus, type VaultStatus } from "../../lib/tauri/credentials";
-import { importSshConfig, previewSshConfigImport, type SshConfigCandidate, type SshConfigImportResult, type SshConfigPreview } from "../../lib/tauri/profiles";
+import { getVaultStatus, type VaultStatus } from "@qterm/services/credentials";
+import { importSshConfig, previewSshConfigImport, type SshConfigCandidate, type SshConfigImportResult, type SshConfigPreview } from "@qterm/services/profiles";
 import { Button } from "../Button";
 import { Icon } from "../Icon";
 import { DialogActionStatus, DialogFrame } from "./DialogFrame";

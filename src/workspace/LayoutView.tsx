@@ -1,3 +1,5 @@
+import { useFileAutoConnect } from "./useFileAutoConnect";
+import { isServer } from "../lib/runtime/environment";
 import { boundsStyle } from "./layoutPresentation";
 import { WebBlock } from "../web/WebBlock";
 import { supportsWebBlocks } from "../web/webModel";
@@ -12,7 +14,7 @@ import { GitRemoteTargetConfig } from "../git/GitRemoteTargetConfig";
 import { GitRepositoryHistoryPopover } from "../git/GitRepositoryHistoryPopover";
 import { GitRepositoryPickerDialog } from "../git/GitRepositoryPickerDialog";
 import { selectGitRepositoryDirectory } from "@qterm/services/git";
-import type { ConnectionProfile } from "../lib/tauri/profiles";
+import type { ConnectionProfile } from "@qterm/services/profiles";
 import { NetworkPane } from "../network/NetworkPane";
 import { TerminalPanel } from "../terminal/TerminalPanel";
 import { OSC7_REPORT_GRACE_MS, TERMINAL_ATTENTION_MS } from "../terminal/terminalAttention";
@@ -26,9 +28,7 @@ import type { GitRepositoryHistoryEntry, GitTarget, LayoutLeaf, Workspace } from
 import { TerminalTargetPicker } from "./TerminalTargetPicker";
 import { useWorkspace, type FileRuntime } from "./WorkspaceProvider";
 export type ConnectionOwner = "terminal" | "files" | "network" | "git";
-
 function BlockNotice({ message }: { message: string }) { return <div className="block-notice" role="alert" aria-live="assertive" aria-atomic="true">{message}</div>; }
-
 export function WorkspaceCanvas({ workspace, visible, localTerminalAttention = false, remoteShellIntegrationEnabled = false, terminalSettingsReady = true, onRequestClose, onRequestDisconnect, onRequestAuthConnection, onOpenConnectionManager }: { workspace: Workspace; visible: boolean; localTerminalAttention?: boolean; remoteShellIntegrationEnabled?: boolean; terminalSettingsReady?: boolean; onRequestClose: (blockId: string) => void; onRequestDisconnect?: (owner: ConnectionOwner, blockId: string, name: string, local: boolean) => void; onRequestAuthConnection: (owner: ConnectionOwner, blockId: string, profile: ConnectionProfile) => void; onOpenConnectionManager?: () => void }) {
   const { dispatch } = useWorkspace();
   const { drag, geometry, layoutSurfaceRef, beginDrag, startResize } = useLayoutInteractions(workspace, visible, dispatch);
@@ -250,9 +250,9 @@ function TerminalBlock(props: BlockRenderProps & { blockId: string; profileId: s
         actions={[
           { label: "搜索终端输出", icon: "search", onSelect: () => openTerminalSearch(props.blockId) },
           { label: "清除终端缓冲区", icon: "clear", onSelect: () => clearBlockBuffer(props.blockId) },
-          { label: "打开仓库管理", title: status === "connected" ? `管理终端目录仓库 ${fileBrowserPath}` : "连接终端后打开仓库管理", icon: "git", disabled: status !== "connected", onSelect: openTerminalRepository },
+          { label: "打开仓库管理", title: status === "connected" ? `管理终端目录仓库 ${fileBrowserPath}` : "连接终端后打开仓库管理", icon: "git", disabled: isServer || status !== "connected", onSelect: openTerminalRepository },
           { label: "打开终端文件夹", title: cwdButtonTitle, icon: "files", disabled: status !== "connected", onSelect: openTerminalDirectory },
-          { label: "打开网络窗口", title: props.profileId ? "使用当前远程连接打开网络窗口" : "本地终端无法创建网络窗口", icon: "network", disabled: !props.profileId, onSelect: () => dispatch({ type: "openNetwork", workspaceId: props.workspace.id, anchorBlockId: props.blockId, profileId: props.profileId }) },
+          { label: "打开网络窗口", title: props.profileId ? "使用当前远程连接打开网络窗口" : "本地终端无法创建网络窗口", icon: "network", disabled: isServer || !props.profileId, onSelect: () => dispatch({ type: "openNetwork", workspaceId: props.workspace.id, anchorBlockId: props.blockId, profileId: props.profileId }) },
           { label: "通过此连接打开网页", icon: "browser", disabled: !supportsWebBlocks(props.profileId), onSelect: () => { dispatch({ type: "openWeb", workspaceId: props.workspace.id, anchorBlockId: props.blockId, profileId: props.profileId }); } },
           { label: "左右分割", icon: "splitHorizontal", onSelect: () => splitTerminalBlock(props.workspace.id, props.blockId, "horizontal", props.remoteShellIntegrationEnabled) },
           { label: "上下分割", icon: "splitVertical", onSelect: () => splitTerminalBlock(props.workspace.id, props.blockId, "vertical", props.remoteShellIntegrationEnabled) },
@@ -298,11 +298,7 @@ function FilesBlock(props: BlockRenderProps & { blockId: string; profileId: stri
     requestedProfileRef.current = target?.id ?? null;
     if (target) requestConnection("files", props.blockId, target);
   }
-  useEffect(() => {
-    if (!profile || runtime.status !== "closed" || requestedProfileRef.current === profile.id) return;
-    requestedProfileRef.current = profile.id;
-    requestConnection("files", props.blockId, profile);
-  }, [profile, props.blockId, requestConnection, runtime.status]);
+  useFileAutoConnect(profile, runtime.status, props.blockId, requestedProfileRef, requestConnection);
   return <section
     className={`terminal-block file-browser-block${active ? " active" : ""}`}
     data-layout-block={props.blockId}
@@ -312,11 +308,11 @@ function FilesBlock(props: BlockRenderProps & { blockId: string; profileId: stri
     aria-label={`文件窗口 ${props.path}`}
   >
     <header className="terminal-block-header" onPointerDown={(event) => props.beginDrag(event, props.blockId)}>
-      <TerminalTargetPicker profiles={profiles} groups={profileGroups} recentProfileIds={document?.recentProfileIds ?? []} selectedProfileId={props.profileId} status={runtime.status} detail={detail} hideDetail={Boolean(runtime.connectionProgress)} onSelect={(profileId) => void chooseTarget(profileId)} onManageConnections={props.onOpenConnectionManager} icon="files" localName="本机文件" localDetail="本地文件系统" ariaContext="文件连接" onRequestDisconnect={runtime.status === "connected" && profile ? requestDisconnect : undefined} statusAction={statusAction}/>
+      <TerminalTargetPicker profiles={profiles} groups={profileGroups} recentProfileIds={document?.recentProfileIds ?? []} selectedProfileId={props.profileId} status={runtime.status} detail={detail} hideDetail={Boolean(runtime.connectionProgress)} onSelect={(profileId) => void chooseTarget(profileId)} onManageConnections={props.onOpenConnectionManager} icon="files" localName={"本机文件"} localDetail={"本地文件系统"} ariaContext="文件连接" onRequestDisconnect={runtime.status === "connected" && profile ? requestDisconnect : undefined} statusAction={statusAction}/>
       <ConnectionRouteProgress progress={runtime.connectionProgress} endpoint={endpoint} profile={profile} onRequestDisconnect={runtime.status === "connected" && profile ? requestDisconnect : undefined} statusAction={runtime.connectionProgress ? statusAction : undefined}/>
       <BlockHeaderClose label="关闭文件窗口" onClose={() => props.onRequestClose(props.blockId)}/>
     </header>
-    <FileBrowserPane key={`files:${props.profileId ?? "local"}`} initialPath={props.profileId !== null && props.path === "~" ? "." : props.path} runtime={runtime} onPathChange={updatePath}/>
+    <FileBrowserPane persistenceKey={`${props.blockId}:${props.profileId ?? "local"}`} key={`files:${props.profileId ?? "local"}`} initialPath={props.profileId !== null && props.path === "~" ? "." : props.path} runtime={runtime} onPathChange={updatePath}/>
     {runtime.notice && <BlockNotice message={runtime.notice}/>}
   </section>;
 }

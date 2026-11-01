@@ -1,4 +1,4 @@
-import type { AppTheme } from "../../lib/tauri/settings";
+import type { AppTheme } from "@qterm/services/settings";
 import type { DesktopPlatform } from "../../lib/tauri/window";
 
 export type TerminalImageStyle = DesktopPlatform;

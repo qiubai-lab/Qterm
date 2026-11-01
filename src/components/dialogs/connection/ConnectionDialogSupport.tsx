@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 
-import type { ConnectionProfile, JumpCandidate, ProfileGroup } from "../../../lib/tauri/profiles";
+import type { ConnectionProfile, JumpCandidate, ProfileGroup } from "@qterm/services/profiles";
 import { Button } from "../../Button";
 import { Icon } from "../../Icon";
 import { DialogActionStatus, DialogFrame } from "../DialogFrame";

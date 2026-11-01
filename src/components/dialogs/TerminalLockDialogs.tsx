@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 
-import { unlockVault } from "../../lib/tauri/credentials";
+import { unlockVault } from "@qterm/services/credentials";
 import { Button } from "../Button";
 import { Icon } from "../Icon";
 import { DialogActionStatus, DialogFrame } from "./DialogFrame";

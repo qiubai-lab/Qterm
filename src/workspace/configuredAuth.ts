@@ -1,4 +1,4 @@
-import type { ConnectionProfile } from "../lib/tauri/profiles";
+import type { ConnectionProfile } from "@qterm/services/profiles";
 import type { SessionAuth } from "../lib/tauri/sessions";
 
 export async function resolveConfiguredAuth(profile: ConnectionProfile): Promise<SessionAuth | null> {

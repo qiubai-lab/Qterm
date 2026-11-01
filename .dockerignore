@@ -1,0 +1,11 @@
+.git
+node_modules
+**/target
+dist*
+.server-secrets
+.server-data
+.env*
+.codex
+.agents
+docs/qb-spec/evidence
+site

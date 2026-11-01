@@ -1,7 +1,7 @@
 import { memo } from "react";
 import { Icon } from "../../components/Icon";
 import { OverlayScrollArea } from "../../components/scrollbars/OverlayScrollArea";
-import type { AppTheme } from "../../lib/tauri/settings";
+import type { AppTheme } from "@qterm/services/settings";
 import type { RenderedTerminalImage } from "./renderTerminalImage";
 import { imageStyles, imageThemes, type TerminalImageSnapshot, type TerminalImageStyle } from "./terminalImageModel";
 

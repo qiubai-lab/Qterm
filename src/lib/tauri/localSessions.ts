@@ -1,24 +1,6 @@
+export type * from "../contracts/localSessions";
+import type { LocalSessionEvent, LocalTerminalCapabilities, LocalSessionConnection, LocalTerminalClipboardPaste } from "../contracts/localSessions";
 import { Channel, invoke } from "@tauri-apps/api/core";
-
-export type LocalSessionEvent =
-  | { type: "stateChanged"; state: "connected" | "closed" };
-
-export interface LocalTerminalCapabilities {
-  windowsPty: {
-    backend: "conpty";
-    buildNumber: number;
-  } | null;
-}
-
-export interface LocalSessionConnection {
-  sessionId: string;
-  cwd: string;
-}
-
-export type LocalTerminalClipboardPaste =
-  | { kind: "empty" }
-  | { kind: "text"; text: string }
-  | { kind: "paths"; text: string; displayName: string; itemCount: number };
 
 export function getLocalTerminalCapabilities(): Promise<LocalTerminalCapabilities> {
   return invoke<LocalTerminalCapabilities>("local_terminal_capabilities");
@@ -32,10 +14,12 @@ export function connectLocalSession(
   columns: number,
   rows: number,
   onEvent: (event: LocalSessionEvent) => void,
-  onTerminalData: (data: Uint8Array) => void,
+  onTerminalData: (data: Uint8Array, consumed?: () => void) => void,
   osc7Enabled: boolean,
   initialDirectory?: string,
+  _runtimeKey?: string,
 ): Promise<LocalSessionConnection> {
+  void _runtimeKey;
   const eventChannel = new Channel<LocalSessionEvent>(onEvent);
   const terminalChannel = new Channel<{ data: number[] }>((message) => onTerminalData(Uint8Array.from(message.data)));
   return invoke<LocalSessionConnection>("local_session_connect", {

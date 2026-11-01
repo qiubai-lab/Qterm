@@ -1,7 +1,9 @@
+import { isServer } from "../../lib/runtime/environment";
+import { BrowserRecoveryConfirmation } from "./BrowserRecoveryConfirmation";
 import { createPortal } from "react-dom";
 import { useEffect, useState, type FormEvent } from "react";
 
-import { initializeVault, unlockVault } from "../../lib/tauri/credentials";
+import { initializeVault, unlockVault, downloadVaultRecovery } from "@qterm/services/credentials";
 import { Button } from "../Button";
 import { RequiredFieldLabel } from "../RequiredFieldLabel";
 import { DialogActionStatus, DialogFrame } from "./DialogFrame";
@@ -22,6 +24,7 @@ export function MasterPasswordForm({ mode, onSuccess, onClose, onSubmittingChang
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
   const [savePromptOpen, setSavePromptOpen] = useState(false);
+  const [recoverySaved, setRecoverySaved] = useState(false);
   const initializing = mode === "initialize";
   useEffect(() => { onSubmittingChange(submitting); }, [submitting, onSubmittingChange]);
 
@@ -79,10 +82,11 @@ export function MasterPasswordForm({ mode, onSuccess, onClose, onSubmittingChang
       <p className="callout">{initializing ? "初始化时将保存一份恢复密钥文件。请与 secrets.vault 分开、离线保管；任何同时取得两者的人都可以重置主密码。" : "应用不会保存主密码；忘记后可使用初始化时保存的恢复密钥文件重置。"}</p>
       <footer className="dialog-actions dialog-actions-with-status"><DialogActionStatus message={savePromptOpen ? "" : message}/><div><Button disabled={submitting} onClick={onClose}>取消</Button><Button type="submit" variant="primary" loading={submitting}>{submitting ? "正在验证…" : submitLabel ?? (initializing ? "初始化" : "验证")}</Button></div></footer>
     </form>
-  {initializing && savePromptOpen && createPortal(<DialogFrame title="保存恢复密钥" subtitle="保存成功后才会创建凭证库" compact onClose={submitting ? () => undefined : () => { setSavePromptOpen(false); setMessage(""); }}>
+  {initializing && savePromptOpen && createPortal(<DialogFrame title="保存恢复密钥" subtitle="保存成功后才会创建凭证库" compact onClose={submitting ? () => undefined : () => { setSavePromptOpen(false); setRecoverySaved(false); setMessage(""); }}>
     <div className="recovery-save-confirmation">
       <p className="callout">请选择与 secrets.vault 分开的本地或离线位置。恢复密钥用于忘记主密码时重置访问权限，请妥善保管。</p>
-      <footer className="dialog-actions dialog-actions-with-status"><DialogActionStatus message={message}/><div><Button disabled={submitting} onClick={() => { setSavePromptOpen(false); setMessage(""); }}>返回</Button><Button variant="primary" data-dialog-autofocus loading={submitting} onClick={() => void saveRecoveryAndInitialize()}>{submitting ? "正在保存…" : "保存到本地并初始化"}</Button></div></footer>
+      {isServer && <BrowserRecoveryConfirmation download={downloadVaultRecovery} onSavedChange={setRecoverySaved}/>}
+      <footer className="dialog-actions dialog-actions-with-status"><DialogActionStatus message={message}/><div><Button disabled={submitting} onClick={() => { setSavePromptOpen(false); setRecoverySaved(false); setMessage(""); }}>返回</Button><Button variant="primary" data-dialog-autofocus disabled={isServer && !recoverySaved} loading={submitting} onClick={() => void saveRecoveryAndInitialize()}>{submitting ? "正在保存…" : isServer ? "确认保存并初始化" : "保存到本地并初始化"}</Button></div></footer>
     </div>
   </DialogFrame>, document.body)}
   </>;

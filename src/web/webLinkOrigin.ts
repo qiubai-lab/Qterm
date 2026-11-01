@@ -1,4 +1,4 @@
-import type { ConnectionProfile } from "../lib/tauri/profiles";
+import type { ConnectionProfile } from "@qterm/services/profiles";
 import { findLeaf } from "../workspace/layout";
 import type { WorkspaceDocument } from "../workspace/model";
 

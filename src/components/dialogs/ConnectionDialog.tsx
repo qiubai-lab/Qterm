@@ -1,6 +1,7 @@
+import { isServer } from "../../lib/runtime/environment";
 import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent as ReactPointerEvent } from "react";
-import { getVaultStatus, listCredentials, type CredentialSummary, type VaultStatus } from "../../lib/tauri/credentials";
-import { clearUnsupportedProfileStorage, createProfile, createProfileGroup, deleteProfile, deleteProfileGroup, listJumpCandidates, listProfileGroups, updateProfile, updateProfileGroup, type ConnectionProfile, type JumpCandidate, type ProfileGroup, type ProfileInput } from "../../lib/tauri/profiles";
+import { getVaultStatus, listCredentials, type CredentialSummary, type VaultStatus } from "@qterm/services/credentials";
+import { clearUnsupportedProfileStorage, createProfile, createProfileGroup, deleteProfile, deleteProfileGroup, listJumpCandidates, listProfileGroups, updateProfile, updateProfileGroup, type ConnectionProfile, type JumpCandidate, type ProfileGroup, type ProfileInput } from "@qterm/services/profiles";
 import { findLeaf, terminalBlockIds } from "../../workspace/layout";
 import { useWorkspace } from "../../workspace/WorkspaceProvider";
 import { Button, StatusBadge } from "../Button";
@@ -13,7 +14,7 @@ import { CredentialDialog } from "./CredentialDialog";
 import { MasterPasswordDialog } from "./MasterPasswordDialog";
 import { SshConfigImportDialog } from "./SshConfigImportDialog";
 import { ConnectionSaveFeedbackBubble, JumpProfilePicker, JumpRouteFlow, type SaveFeedback } from "./connection/ConnectionDialogSupport";
-import { authPreferenceLabel, connectionErrorCode, connectionErrorMessage, dropGroupAtPoint, duplicateProfileName, findProfileId, profileToInput } from "./connection/connectionDialogModel"; import { ConnectionSelectionIndicator } from "./connection/ConnectionSelectionIndicator"; import { ConnectionGroupContent } from "./connection/ConnectionGroupContent"; import { useConnectionManagerMotion } from "./connection/useConnectionManagerMotion";
+import { sshImportMessage, authPreferenceLabel, connectionErrorCode, connectionErrorMessage, dropGroupAtPoint, duplicateProfileName, findProfileId, profileToInput } from "./connection/connectionDialogModel"; import { ConnectionSelectionIndicator } from "./connection/ConnectionSelectionIndicator"; import { ConnectionGroupContent } from "./connection/ConnectionGroupContent"; import { useConnectionManagerMotion } from "./connection/useConnectionManagerMotion";
 
 const empty: ProfileInput = { name: "", host: "", port: 22, username: "", authPreference: "password", credentialId: null, groupId: null, jumpProfileIds: [] };
 type EditorTab = "connection" | "authentication" | "jump";
@@ -510,7 +511,7 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
     <DialogFrame
       title="连接管理"
       subtitle="管理 SSH 连接配置"
-      headerActions={<>{profileStorageUnsupported && <span className="connection-storage-warning"><span className="connection-storage-warning-message" role="alert" title="连接配置文件版本不受支持">连接配置文件版本不受支持</span><Button variant="danger" size="compact" className="connection-storage-clear" onClick={() => { setClearStorageMessage(""); setClearStorageRequested(true); }}><Icon name="trash" size={13}/>清除旧配置</Button></span>}<StatusBadge tone={vaultStatus.unlocked ? "success" : vaultStatus.legacy ? "warning" : "neutral"}>{vaultStatus.unlocked ? "凭证库已解锁" : vaultStatus.initialized ? "凭证库已锁定" : vaultStatus.legacy ? "旧版凭证库" : "凭证库未初始化"}</StatusBadge><Button variant="secondary" size="compact" className="connection-import-button" onClick={() => setSshConfigImportOpen(true)}><Icon name="upload" size={13}/>导入</Button></>}
+      headerActions={<>{profileStorageUnsupported && <span className="connection-storage-warning"><span className="connection-storage-warning-message" role="alert" title="连接配置文件版本不受支持">连接配置文件版本不受支持</span><Button variant="danger" size="compact" className="connection-storage-clear" onClick={() => { setClearStorageMessage(""); setClearStorageRequested(true); }}><Icon name="trash" size={13}/>清除旧配置</Button></span>}<StatusBadge tone={vaultStatus.unlocked ? "success" : vaultStatus.legacy ? "warning" : "neutral"}>{vaultStatus.unlocked ? "凭证库已解锁" : vaultStatus.initialized ? "凭证库已锁定" : vaultStatus.legacy ? "旧版凭证库" : "凭证库未初始化"}</StatusBadge><Button variant="secondary" size="compact" className="connection-import-button" disabled={isServer} onClick={() => setSshConfigImportOpen(true)}><Icon name="upload" size={13}/>导入</Button></>}
       onClose={credentialManagerOpen || credentialUnlockOpen || sshConfigImportOpen || jumpPickerOpen !== null || deleteRequested || clearStorageRequested || groupEditor || groupDeleteRequested || contextMenu ? () => undefined : onClose}
       wide
     >
@@ -566,7 +567,7 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
               <label className="span-2">认证方式<select value={editor.authPreference} onChange={(event) => {
                 const authPreference = event.target.value as ProfileInput["authPreference"];
                 setEditor({ ...editor, authPreference, credentialId: authPreference === "manual" || authPreference === "sshAgent" ? null : editor.credentialId });
-              }}><option value="password">密码凭证</option><option value="privateKey">私钥凭证</option><option value="sshAgent">SSH Agent（推荐）</option><option value="manual">手动选择</option></select></label>
+              }}><option value="password">密码凭证</option><option value="privateKey">私钥凭证</option><option value="sshAgent" disabled={isServer}>SSH Agent（推荐）</option><option value="manual">手动选择</option></select></label>
               {(editor.authPreference === "password" || editor.authPreference === "privateKey") && <><p className="callout span-2">连接只保存凭证引用；实际{editor.authPreference === "password" ? "密码" : "私钥"}由加密凭证库提供。应用每次启动后需要先解锁凭证库。</p><div className="credential-reference-field span-2"><label>引用凭证{vaultStatus.unlocked ? <select value={editor.credentialId ?? ""} onChange={(event) => setEditor({ ...editor, credentialId: event.target.value || null })}><option value="">未选择凭证</option>{credentials.filter((item) => item.kind === editor.authPreference).map((item) => <option value={item.id} key={item.id}>{item.name}{item.detail ? ` · ${item.detail}` : ""}</option>)}</select> : <button type="button" className="credential-reference-locked" aria-label={`解锁后选择凭证，当前：${linkedCredential?.name ?? (editor.credentialId ? "已关联凭证" : "未选择凭证")}`} disabled={!vaultStatus.initialized || vaultStatus.legacy} onClick={() => setCredentialUnlockOpen(true)}><span>{linkedCredential?.name ?? (editor.credentialId ? "已关联凭证" : "未选择凭证")}{linkedCredential?.detail ? ` · ${linkedCredential.detail}` : ""}</span><Icon name="lock" size={12}/></button>}</label><Button className="credential-manage-button" onClick={() => setCredentialManagerOpen(true)}><Icon name="key" size={13}/>管理凭证</Button></div>{!vaultStatus.unlocked && <p className="dialog-note span-2">当前关联凭证仍可查看；更改选择前需要解锁凭证库。</p>}</>}
               {editor.authPreference === "sshAgent" && <div className="agent-auth-note span-2"><strong>使用系统 SSH Agent</strong><p>应用只请求 Agent 完成签名，不读取、不扫描也不保存私钥。</p></div>}
               {editor.authPreference === "manual" && <div className="agent-auth-note span-2"><strong>每次连接时手动选择</strong><p>连接前选择一次性密码、凭证库凭证或 SSH Agent，本次选择不会保存。</p></div>}
@@ -672,11 +673,7 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
         onImported={async (result) => {
           await refreshProfiles();
           await refreshCredentialSummaries();
-          const credentialResult = [
-            result.importedPrivateKeys > 0 ? `新建 ${result.importedPrivateKeys} 个私钥凭证` : "",
-            result.reusedPrivateKeys > 0 ? `复用 ${result.reusedPrivateKeys} 个已有凭证` : "",
-          ].filter(Boolean).join("，");
-          setMessage(`已导入 ${result.imported} 个连接${credentialResult ? `，${credentialResult}` : ""}`);
+          setMessage(sshImportMessage(result));
         }}
       />
     )}

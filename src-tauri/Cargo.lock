@@ -22,6 +22,8 @@ dependencies = [
  "objc2-foundation",
  "objc2-user-notifications",
  "portable-pty",
+ "qterm-core",
+ "qterm-protocol",
  "russh",
  "russh-sftp",
  "secrecy",
@@ -4865,6 +4867,43 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d55d956fa96f5ec02be2e13af0e20391a5aa83d6a074e3ad368959d0fab299ea"
 
 [[package]]
+name = "qterm-core"
+version = "0.6.0"
+dependencies = [
+ "aes-gcm",
+ "argon2 0.5.3",
+ "atomic-write-file",
+ "base64 0.23.1",
+ "dirs",
+ "dunce",
+ "getrandom 0.4.3",
+ "glob",
+ "portable-pty",
+ "russh",
+ "russh-sftp",
+ "secrecy",
+ "serde",
+ "serde_json",
+ "ssh2-config-rs",
+ "tempfile",
+ "tokio",
+ "url",
+ "uuid",
+ "windows 0.61.3",
+ "windows-version",
+ "zeroize",
+]
+
+[[package]]
+name = "qterm-protocol"
+version = "0.6.0"
+dependencies = [
+ "qterm-core",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "quick-error"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6770,7 +6809,9 @@ dependencies = [
  "bytes",
  "libc",
  "mio",
+ "parking_lot",
  "pin-project-lite",
+ "signal-hook-registry",
  "socket2",
  "tokio-macros",
  "windows-sys 0.61.2",

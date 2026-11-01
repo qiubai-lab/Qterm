@@ -1,6 +1,6 @@
 import { isElementOverflowing, useThemedTooltip } from "../../useThemedTooltip";
 import { OverlayScrollArea } from "../../scrollbars/OverlayScrollArea";
-import type { MergeDetail, MergePreview } from "../../../lib/tauri/configurationMerge";
+import type { MergeDetail, MergePreview } from "@qterm/services/configurationMerge";
 
 const categories = { connections: "连接", groups: "分组", network: "规则", credentials: "凭证" };
 const outcomes = { added: "新增", skipped: "复用", renamed: "重命名", invalid: "失效跳过" };

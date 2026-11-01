@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 
-import { changeMasterPassword } from "../../lib/tauri/credentials";
+import { changeMasterPassword } from "@qterm/services/credentials";
 import { Button } from "../Button";
 import { RequiredFieldLabel } from "../RequiredFieldLabel";
 import { DialogFrame } from "./DialogFrame";

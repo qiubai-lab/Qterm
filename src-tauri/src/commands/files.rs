@@ -132,45 +132,10 @@ pub async fn files_list_local(path: String) -> Result<DirectoryListingDto, IpcEr
         return Err(invalid_path());
     }
     let requested = expand_home_path(&path, dirs::home_dir().as_deref())?;
-    let canonical = tokio::fs::canonicalize(requested)
+    let listing = crate::application::local_file_listing::list(&requested)
         .await
-        .map_err(|_| unavailable())?;
-    let canonical = dunce::simplified(&canonical).to_path_buf();
-    let mut directory = tokio::fs::read_dir(&canonical)
-        .await
-        .map_err(|_| unavailable())?;
-    let mut entries = Vec::new();
-    while let Some(entry) = directory.next_entry().await.map_err(|_| unavailable())? {
-        let metadata = entry.metadata().await.map_err(|_| unavailable())?;
-        let file_type = entry.file_type().await.map_err(|_| unavailable())?;
-        let modified_at = metadata
-            .modified()
-            .ok()
-            .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
-            .map(|duration| duration.as_secs());
-        #[cfg(unix)]
-        let permission_mode = {
-            use std::os::unix::fs::PermissionsExt;
-            Some(metadata.permissions().mode() & 0o7777)
-        };
-        #[cfg(not(unix))]
-        let permission_mode = None;
-        entries.push(FileEntry {
-            name: entry.file_name().to_string_lossy().into_owned(),
-            path: dunce::simplified(&entry.path())
-                .to_string_lossy()
-                .into_owned(),
-            is_directory: metadata.is_dir(),
-            is_symlink: file_type.is_symlink(),
-            size: metadata.len(),
-            modified_at,
-            permission_mode,
-        });
-    }
-    Ok(DirectoryListingDto::from(DirectoryListing::new(
-        canonical.to_string_lossy().into_owned(),
-        entries,
-    )))
+        .map_err(file_error)?;
+    Ok(DirectoryListingDto::from(listing))
 }
 
 #[tauri::command]

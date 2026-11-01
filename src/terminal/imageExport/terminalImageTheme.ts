@@ -1,5 +1,5 @@
 import type { ITheme } from "@xterm/xterm";
-import type { AppTheme } from "../../lib/tauri/settings";
+import type { AppTheme } from "@qterm/services/settings";
 import { readTerminalTheme } from "../terminalTheme";
 import type { CellColor } from "./terminalImageModel";
 

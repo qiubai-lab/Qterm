@@ -1,0 +1,13 @@
+import type * as Desktop from "../../lib/tauri/sessions";
+import { openSession, control, closeSession as close } from "../sessionTransport";
+export type * from "../../lib/tauri/sessions";
+export const connectSession: typeof Desktop.connectSession = (input, onEvent, onData) => openSession("terminal", input, onEvent, onData);
+export const writeSession: typeof Desktop.writeSession = async (id, data) => control(id, data);
+export const resizeSession: typeof Desktop.resizeSession = async (id, columns, rows) => control(id, { type: "resize", columns, rows });
+export const acceptHostKey: typeof Desktop.acceptHostKey = async id => control(id, { type: "acceptHostKey" });
+export const rejectHostKey: typeof Desktop.rejectHostKey = async id => control(id, { type: "rejectHostKey" });
+export const closeSession: typeof Desktop.closeSession = async id => close(id);
+export const startTerminalClipboardStaging: typeof Desktop.startTerminalClipboardStaging = async () => {
+  const text = await navigator.clipboard.readText(); return text ? { kind: "text", text } : { kind: "empty" };
+};
+export const cancelTerminalClipboardStaging: typeof Desktop.cancelTerminalClipboardStaging = async () => undefined;

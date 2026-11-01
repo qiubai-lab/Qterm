@@ -1,6 +1,6 @@
 import { Button } from "../../Button";
 import { Icon, type IconName } from "../../Icon";
-import type { MergeOptions, MergeScan } from "../../../lib/tauri/configurationMerge";
+import type { MergeOptions, MergeScan } from "@qterm/services/configurationMerge";
 
 const items: { key: keyof MergeOptions; title: string; icon: IconName; hint: string }[] = [
   { key: "connections", title: "连接与分组", icon: "server", hint: "保留分组与跳板机关系" },

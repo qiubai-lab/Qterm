@@ -1,7 +1,8 @@
+import { isServer } from "../../lib/runtime/environment";
 import { useEffect, useState, type FormEvent } from "react";
 
-import { getVaultStatus, listCredentials, type CredentialSummary, type VaultStatus } from "../../lib/tauri/credentials";
-import type { ConnectionProfile } from "../../lib/tauri/profiles";
+import { getVaultStatus, listCredentials, type CredentialSummary, type VaultStatus } from "@qterm/services/credentials";
+import type { ConnectionProfile } from "@qterm/services/profiles";
 import type { SessionAuth } from "../../lib/tauri/sessions";
 import { Button } from "../Button";
 import { DialogFrame } from "./DialogFrame";
@@ -72,7 +73,7 @@ export function ConnectionAuthDialog({ profile, onConnect, onClose }: { profile:
           <span className="auth-method-indicator" aria-hidden="true"/>
           <button type="button" className={method === "password" ? "selected" : ""} aria-pressed={method === "password"} onClick={() => selectMethod("password")}><span>密码</span></button>
           <button type="button" className={method === "credential" ? "selected" : ""} aria-pressed={method === "credential"} onClick={() => selectMethod("credential")}><span>凭证</span></button>
-          <button type="button" className={method === "sshAgent" ? "selected" : ""} aria-pressed={method === "sshAgent"} onClick={() => selectMethod("sshAgent")}><span>SSH Agent</span></button>
+          <button type="button" className={method === "sshAgent" ? "selected" : ""} aria-pressed={method === "sshAgent"} disabled={isServer} onClick={() => selectMethod("sshAgent")}><span>SSH Agent</span></button>
         </div>
 
         <div key={method} className={`auth-method-content auth-method-panel${motionDirection ? ` auth-${motionDirection}` : " auth-idle"}`} data-method={method}>
@@ -116,7 +117,7 @@ export function ConnectionAuthDialog({ profile, onConnect, onClose }: { profile:
 }
 
 function initialMethod(profile: ConnectionProfile): AuthMethod {
-  if (profile.authPreference === "sshAgent") return "sshAgent";
+  if (profile.authPreference === "sshAgent" && !isServer) return "sshAgent";
   if (profile.authPreference === "privateKey") return "credential";
   return "password";
 }

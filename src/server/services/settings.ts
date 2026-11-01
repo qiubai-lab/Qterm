@@ -1,0 +1,10 @@
+import type * as Desktop from "../../lib/tauri/settings";
+import { api } from "../http";
+export type * from "../../lib/tauri/settings";
+export const getSettings: typeof Desktop.getSettings = () => api("/settings");
+export const updateSecuritySettings: typeof Desktop.updateSecuritySettings = value => api("/settings/security", "PUT", value);
+export const updateAppearanceSettings: typeof Desktop.updateAppearanceSettings = value => api("/settings/appearance", "PUT", value);
+export const updateTerminalSettings: typeof Desktop.updateTerminalSettings = value => api("/settings/terminal", "PUT", value);
+export const updateConfigurationDirectory: typeof Desktop.updateConfigurationDirectory = async ({path}) => { const snapshot = await getSettings(); if (path !== snapshot.general.rootDirectory) throw new Error("请通过服务启动配置修改数据目录"); return snapshot; };
+export const selectConfigurationDirectory: typeof Desktop.selectConfigurationDirectory = async () => { throw new Error("请通过服务启动配置修改数据目录"); };
+export const updateUpdateSettings: typeof Desktop.updateUpdateSettings = async () => { throw new Error("Web 服务由部署环境管理更新"); };

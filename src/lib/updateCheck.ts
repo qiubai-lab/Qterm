@@ -1,4 +1,4 @@
-import { getVersion } from "@tauri-apps/api/app";
+import { getVersion } from "@qterm/services/appInfo";
 import { openUrl } from "@tauri-apps/plugin-opener";
 
 const LATEST_RELEASE_API =

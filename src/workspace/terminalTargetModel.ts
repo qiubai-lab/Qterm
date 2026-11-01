@@ -1,4 +1,4 @@
-import type { ConnectionProfile, ProfileGroup } from "../lib/tauri/profiles";
+import type { ConnectionProfile, ProfileGroup } from "@qterm/services/profiles";
 
 /** Derive picker lists without owning connection selection or native sessions. */
 export function recentTargetProfiles(profiles: ConnectionProfile[], ids: string[]) {

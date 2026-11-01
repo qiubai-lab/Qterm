@@ -1,3 +1,4 @@
+import { isServer } from "../../lib/runtime/environment";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
@@ -11,7 +12,7 @@ import {
   type GeneralSettings,
   type SecuritySettings,
   type TerminalSettings,
-} from "../../lib/tauri/settings";
+} from "@qterm/services/settings";
 import { useAppTheme } from "../../app/theme/AppThemeProvider";
 import { Button } from "../Button";
 import { Icon } from "../Icon";
@@ -157,13 +158,13 @@ export function SettingsDialog({ onClose, onSecuritySettingsChanged, onTerminalS
             {general ? <div className="settings-general-stack">
               <ConfigurationDirectorySetting
                 value={configurationDirectory}
-                disabled={busy}
+                disabled={busy || isServer}
                 onMerge={() => setMergeOpen(true)}
-                mergeDisabled={general.restartRequired || configurationDirectory !== general.activeRootDirectory}
+                mergeDisabled={isServer || general.restartRequired || configurationDirectory !== general.activeRootDirectory}
                 onChoose={() => void chooseConfigurationDirectory()}
                 onReset={() => setConfigurationDirectory(general.defaultRootDirectory)}
               />
-              <div className="settings-storage-note" role="note"><Icon name="help" size={12}/><span>{general.restartRequired || configurationDirectory !== general.activeRootDirectory ? "请先恢复当前目录或完成重启后再合并" : "切换目录不会迁移或覆盖旧文件"}</span></div>
+              <div className="settings-storage-note" role="note"><Icon name="help" size={12}/><span>{isServer ? "数据目录由服务启动配置指定" : general.restartRequired || configurationDirectory !== general.activeRootDirectory ? "请先恢复当前目录或完成重启后再合并" : "切换目录不会迁移或覆盖旧文件"}</span></div>
               <ConfigurationPaths rootDirectory={configurationDirectory || general.defaultRootDirectory}/>
             </div> : <p className="dialog-note">正在读取设置…</p>}
           </div> : category === "appearance" ? <div className="settings-appearance-view">
@@ -204,7 +205,7 @@ export function SettingsDialog({ onClose, onSecuritySettingsChanged, onTerminalS
               : category === "advanced" && saved ? <p className="inline-message settings-message" role="status">高级设置已保存。</p>
                 : category === "general" && general?.restartRequired ? <p className="inline-message settings-message" role="status">Qterm 配置目录已保存，重启 Qterm 后生效。</p> : null}
           </div>
-          {category !== "advanced" && <Button variant="primary" className={`save-state-button${saved ? " saved" : ""}`} loading={busy} disabled={!security || !general || !appearance || !terminal} onClick={() => void save()}>{busy ? "保存中…" : saved ? "✓ 已保存" : "保存设置"}</Button>}
+          {category !== "advanced" && <Button variant="primary" className={`save-state-button${saved ? " saved" : ""}`} loading={busy} disabled={!security || !general || !appearance || !terminal || (isServer && category === "general")} onClick={() => void save()}>{busy ? "保存中…" : saved ? "✓ 已保存" : "保存设置"}</Button>}
         </footer>
       </section>
     </div>

@@ -1,3 +1,4 @@
+import { useRetainedFilePreview } from "./useRetainedFilePreview";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FocusEvent, type FormEvent, type KeyboardEvent, type MouseEvent } from "react";
 import { createPortal } from "react-dom";
 import { listenFileDrop } from "@qterm/services/fileDrop";
@@ -14,9 +15,8 @@ import type { FileRuntime } from "../workspace/WorkspaceProvider";
 import { FileList, FileSortHeader } from "./FileList";
 import { FileUploadMenu } from "./FileUploadMenu";
 import { FILE_LIST_PADDING, FILE_ROW_HEIGHT, FILE_VIRTUAL_FALLBACK_ROWS, FILE_VIRTUAL_OVERSCAN, copyName, fileErrorMessage, fileListAnchor, fileVirtualRange, fitContextMenu, formatSize, imageMime, previewKindFor, sortEntries, type SortKey, type SortState, type VirtualRange } from "./fileBrowserModel";
-import { FilePreviewDocument, type FilePreviewState } from "./FilePreviewDocument";
+import { FilePreviewDocument } from "./FilePreviewDocument";
 import { displayLocalPath, isWindowsDriveRoot, parentPath } from "./path";
-
 type FileViewMode = "preview" | "edit";
 type TransferState = { transferId: string; status: "starting" | "running" | "completed" | "cancelled" | "failed"; transferred: number; total: number; message: string; direction: "download" | "upload" };
 type NameOperation = { kind: "copy" | "rename" | "createFile" | "createDirectory"; entry: FileEntry | null; value: string; error: string; busy: boolean };
@@ -25,7 +25,6 @@ type ContextMenuState = { entry: FileEntry; anchorX: number; anchorY: number; ab
 type UploadMenuState = { anchorRight: number; anchorY: number; x: number; y: number; placement: "above" | "below" };
 type DirectoryLocation = { scrollTop: number; selectedPath: string | null; anchorPath: string | null; anchorOffset: number };
 type PendingDirectoryLocation = { key: string; location: DirectoryLocation };
-
 const LOCAL_ROOTS_LOCATION = "\0local-roots";
 
 function FileLoadingState({ label }: { label: string }) {
@@ -34,7 +33,7 @@ function FileLoadingState({ label }: { label: string }) {
   </div>;
 }
 
-export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initialPath: string; runtime: FileRuntime; onPathChange: (path: string) => void }) {
+export function FileBrowserPane({ initialPath, runtime, onPathChange, persistenceKey }: { persistenceKey?: string; initialPath: string; runtime: FileRuntime; onPathChange: (path: string) => void }) {
   const [path, setPath] = useState(initialPath);
   const [listing, setListing] = useState<DirectoryListing | null>(null);
   const [localRoots, setLocalRoots] = useState<LocalRoot[]>([]);
@@ -49,7 +48,7 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(() => new Set());
   const [sort, setSort] = useState<SortState>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
-  const [preview, setPreview] = useState<FilePreviewState | null>(null);
+  const [preview, setPreview, draftSyncError] = useRetainedFilePreview(persistenceKey,runtime);
   const [saving, setSaving] = useState(false);
   const [saveConfirmation, setSaveConfirmation] = useState<{ error: string } | null>(null);
   const [leaveConfirmation, setLeaveConfirmation] = useState(false);
@@ -621,7 +620,7 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
         displayPath={previewDisplayPath}
         dirty={dirty}
         saving={saving}
-        operationMessage={operationMessage}
+        operationMessage={draftSyncError || operationMessage}
         onLeave={requestLeavePreview}
         onEdit={() => setPreview((current) => current && current.kind !== "image" ? { ...current, mode: "edit" } : current)}
         onSave={requestPreviewSave}
@@ -707,7 +706,7 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange }: { initia
         {transfer.transferId && sessionId && <button onClick={() => void cancelTransfer(sessionId, transfer.transferId)}>取消</button>}
       </> : <>
         <span>{selectedPaths.size > 1 ? `${selectedPaths.size} 项已选择` : showLocalRoots ? loading ? "正在读取本机位置…" : `${localRoots.length} 个文件夹 · 0 个文件` : listing ? `${folderCount} 个文件夹 · ${fileCount} 个文件` : loading ? "正在读取目录…" : "暂无目录统计"}</span>
-        {(transfer || operationMessage) && <span className="file-browser-transfer-result">{transfer?.message || operationMessage}</span>}
+        {(transfer || operationMessage || draftSyncError) && <span className="file-browser-transfer-result">{draftSyncError || transfer?.message || operationMessage}</span>}
         {(transfer || operationMessage) && <button aria-label="关闭操作状态" onClick={() => { setTransfer(null); setOperationMessage(""); }}><Icon name="close" size={10}/></button>}
       </>}
     </footer>

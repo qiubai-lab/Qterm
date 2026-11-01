@@ -1,11 +1,6 @@
+export type * from "../contracts/transfers";
+import type { TransferEvent } from "../contracts/transfers";
 import { Channel, invoke } from "@tauri-apps/api/core";
-
-export type TransferEvent =
-  | { type: "started"; totalBytes: number }
-  | { type: "progress"; transferredBytes: number; totalBytes: number }
-  | { type: "completed" }
-  | { type: "cancelled" }
-  | { type: "failed"; message: string };
 
 export function selectUploadFile(): Promise<string | null> {
   return invoke<string | null>("transfer_select_upload_file");

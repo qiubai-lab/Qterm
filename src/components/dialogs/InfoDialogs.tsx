@@ -1,6 +1,7 @@
+import { isServer } from "../../lib/runtime/environment";
 import { OnboardingRestart } from "../../onboarding/OnboardingRestart";
-import { getVersion } from "@tauri-apps/api/app";
-import { writeText as writeClipboardText } from "@tauri-apps/plugin-clipboard-manager";
+import { getVersion } from "@qterm/services/appInfo";
+import { writeText as writeClipboardText } from "@qterm/services/textClipboard";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
@@ -156,7 +157,7 @@ export function HelpDialog({ onClose, autoCheckOnStartup = false, onAutoCheckOnS
                 variant="primary"
                 size="compact"
                 className="about-update-action"
-                onClick={() => setUpdateDialogOpen(true)}
+                disabled={isServer} onClick={() => setUpdateDialogOpen(true)}
               >
                 检测更新
               </Button>

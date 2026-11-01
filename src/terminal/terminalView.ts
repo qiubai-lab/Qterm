@@ -1,3 +1,4 @@
+import { bindServerScreen } from "./serverScreenBinding";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { writeText as writeClipboardText } from "@qterm/services/textClipboard";
@@ -23,6 +24,7 @@ export interface TerminalView extends TerminalSearchHost {
   resize: { send: (columns: number, rows: number) => Promise<void> };
   layout: TerminalLayout;
   themeBinding: { dispose: () => void };
+  serverScreen?: { dispose: () => void };
   disposeTimer: number | null;
 }
 const terminalViews = new Map<string, TerminalView>();
@@ -68,6 +70,7 @@ export function acquireTerminalView(sessionKey: string, container: HTMLElement, 
   const resize: TerminalView["resize"] = { send: async () => undefined };
   fit.fit();
   const layout = createTerminalLayout(terminal, fit, (columns, rows) => resize.send(columns, rows), resizeDelayMs);
+  const serverScreen = bindServerScreen(terminal,getBlockId,()=>layout.restore(true),cwd=>{if(view.osc7Enabled)view.onCwd(cwd);});
   const themeBinding = bindTerminalTheme((theme) => { terminal.options.theme = theme; });
   const writeTarget: { send: (data: string) => Promise<void> } = { send: () => Promise.resolve() };
   const inputScheduler = createTerminalInputScheduler((data) => writeTarget.send(data));
@@ -86,6 +89,7 @@ export function acquireTerminalView(sessionKey: string, container: HTMLElement, 
     resize,
     layout,
     themeBinding,
+    serverScreen,
     disposeTimer: null,
   };
   writeTarget.send = (data) => view.write(data);
@@ -123,6 +127,7 @@ export function scheduleTerminalViewDisposal(sessionKey: string, view: TerminalV
     view.searchResultsHandler?.dispose();
     view.layout.dispose();
     view.themeBinding.dispose();
+    view.serverScreen?.dispose();
     view.terminal.dispose();
     terminalViews.delete(sessionKey);
     view.disposeTimer = null;

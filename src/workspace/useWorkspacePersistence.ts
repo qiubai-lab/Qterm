@@ -1,5 +1,5 @@
-import { CONFIGURATION_MERGED } from "../lib/tauri/configurationMerge";
-import { hasWorkspaceRuntime } from "../lib/runtime/environment";
+import { CONFIGURATION_MERGED } from "@qterm/services/configurationMerge";
+import { hasWorkspaceRuntime, isServer } from "../lib/runtime/environment";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type Dispatch } from "react";
 
 import { listProfileGroups, listProfiles, type ConnectionProfile, type ProfileGroup } from "@qterm/services/profiles";
@@ -73,7 +73,7 @@ export function useWorkspacePersistence(document: WorkspaceDocument, dispatch: D
   useEffect(() => {
     if (!hydrated || !hasWorkspaceRuntime()) return;
     let timer: number;
-    const schedule = () => { window.clearTimeout(timer); timer = window.setTimeout(() => { void flush(); }, 180); };
+    const schedule = () => { window.clearTimeout(timer); timer = window.setTimeout(() => { void flush(); }, isServer ? 0 : 180); };
     schedule();
     const stop = webTabSessions.subscribe(schedule);
     return () => { window.clearTimeout(timer); stop(); };

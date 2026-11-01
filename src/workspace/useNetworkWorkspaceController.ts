@@ -1,7 +1,7 @@
 import { useCallback, type Dispatch } from "react";
 
 import { connectNetworkSession, startNetworkRule, stopNetworkRule } from "@qterm/services/network";
-import type { ConnectionProfile } from "../lib/tauri/profiles";
+import type { ConnectionProfile } from "@qterm/services/profiles";
 import { acceptHostKey, closeSession, rejectHostKey, type SessionAuth, type SessionEvent } from "@qterm/services/sessions";
 import { completeConnectionProgress, connectionProgressFromRouteEvent, failConnectionProgress, initialConnectionProgress } from "./connectionProgress";
 import type { WorkspaceAction } from "./reducer";

@@ -1,4 +1,4 @@
-import { onVaultStatusChanged, type VaultStatusChanged } from "../../../lib/tauri/credentials";
+import { onVaultStatusChanged, type VaultStatusChanged } from "@qterm/services/credentials";
 
 /** Observe current-vault changes without treating a successful unlock as a lock. */
 export function observeCredentialVault({ refreshInitial, refresh, onLocked, onError }: {

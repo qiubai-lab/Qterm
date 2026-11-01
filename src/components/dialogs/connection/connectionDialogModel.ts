@@ -1,4 +1,4 @@
-import type { ConnectionProfile, ProfileInput } from "../../../lib/tauri/profiles";
+import type { ConnectionProfile, ProfileInput } from "@qterm/services/profiles";
 import type { LayoutNode } from "../../../workspace/model";
 
 export function findProfileId(node: LayoutNode, blockId: string): string | null {
@@ -49,4 +49,9 @@ export function authPreferenceLabel(preference: ConnectionProfile["authPreferenc
   if (preference === "sshAgent") return "代理";
   if (preference === "manual") return "手动";
   return "密码";
+}
+
+export function sshImportMessage(result: { imported:number; importedPrivateKeys:number; reusedPrivateKeys:number }):string {
+  const credentials=[result.importedPrivateKeys>0?`新建 ${result.importedPrivateKeys} 个私钥凭证`:"",result.reusedPrivateKeys>0?`复用 ${result.reusedPrivateKeys} 个已有凭证`:""].filter(Boolean).join("，");
+  return `已导入 ${result.imported} 个连接${credentials?`，${credentials}`:""}`;
 }

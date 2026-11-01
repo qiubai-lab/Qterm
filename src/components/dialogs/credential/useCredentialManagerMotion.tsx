@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 
-import type { CredentialSummary } from "../../../lib/tauri/credentials";
+import type { CredentialSummary } from "@qterm/services/credentials";
 
 type EditorTransition = "idle" | "switching-down" | "switching-up" | "creating";
 export type CredentialSelectionState = { offset: number; ready: boolean; targetId: string | null; visible: boolean };

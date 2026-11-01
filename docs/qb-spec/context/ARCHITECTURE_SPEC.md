@@ -3,6 +3,7 @@
 ## Technology Baseline
 
 - Desktop shell: Tauri 2
+- Web server runtime: Axum + Tokio, authenticated HTTP/WebSocket, single-user container
 - Frontend: React + TypeScript + Vite + xterm.js
 - Core runtime: Rust + Tokio
 - SSH: russh
@@ -19,12 +20,12 @@
 ## Dependency Direction
 
 ```text
-Frontend -> Tauri Commands -> Application -> Domain / Ports <- Infrastructure
+Frontend -> Desktop Tauri Commands / Web HTTP+WebSocket -> Application -> Domain / Ports <- Infrastructure
                                       ^                         |
                                       +------ composition ------+
 ```
 
-`src-tauri/src/lib.rs` 是组合根。Infrastructure 实现 ports；domain 和 application 不依赖 Tauri、russh、xterm.js 或具体存储格式。
+`src-tauri/src/lib.rs` 是桌面组合根；`crates/qterm-server/src/main.rs` 与 `state.rs` 是 Web 服务组合根。共享 domain/application/ports 与非原生 infrastructure 位于 `crates/qterm-core`，共享传输 DTO 位于 `crates/qterm-protocol`。浏览器通过构建期 `@qterm/services` alias 选择 `src/server/services`，不模拟或暴露通用 Tauri invoke。Infrastructure 实现 ports；domain 和 application 不依赖 Tauri、russh、xterm.js 或具体存储格式。
 
 开发桌面 flavor 由 `scripts/tauri.mjs`、macOS 专用的 `scripts/tauri-dev-runner.mjs`、`src-tauri/tauri.dev.conf.json` 与 `Info.dev.plist` 共同拥有：常规 `pnpm tauri dev` 自动合并 `Qterm Dev` / `com.qiubai.qterm.dev`；macOS 将热更新二进制原子放入 `target/tauri-dev/.../Qterm Dev.app` 后运行，使 LaunchServices 能读取唯一 identifier，Windows/Linux 继续使用 Tauri 默认 runner。其他 Tauri 子命令原样转发并继续使用 `tauri.conf.json` 的正式身份。开发配置不声明 `app.windows`，避免覆盖通用或平台窗口数组；组合根把主窗口标题同步为最终 productName。domain、application、IPC 与 React 不推断 flavor。
 
@@ -95,3 +96,12 @@ Frontend -> Tauri Commands -> Application -> Domain / Ports <- Infrastructure
 - 初始化与恢复轮换的每个系统文件选择器之前都必须显示明确的前端确认；用户取消属于正常中止，不映射为错误。恢复重置拆为选择验证旧密钥与保存提交新密钥两个 IPC 阶段：准备 IPC 必须先完整校验恢复文件格式、vault ID、generation 与 AEAD 包装，成功前前端不得显示或收集新主密码；验证成功后前端才显示新密码表单，随后显示“保存新恢复密钥”，用户再次点击后才能打开保存窗口。阶段间当前/替代恢复材料只以 zeroizing 类型暂存在 Rust `CredentialState`，返回、关闭或取消时由清理 IPC 删除，路径与内容不得进入 WebView。恢复文件只在用户选定保存目标后写入，默认文件名为 `qterm-recovery-{Unix 时间戳}.key`。恢复重置使用新主密码重新包装原 data key，并生成下一代恢复文件使旧文件失效；替代恢复文件保存取消或失败时不得修改 vault。旧版 vault 不迁移，只允许经现有破坏性确认流程定向清除 vault 与 credential references。
 - Tauri capabilities 使用最小权限；前端不能直接执行任意 shell 或读取任意文件。
 - 安全关键行为必须由真实 sshd/SFTP、密码与私钥 fixture 集成测试保护。
+
+## Web Runtime Boundary
+
+- 登录与 vault 解锁独立；服务要求显式 HTTPS origin（回环开发可 HTTP）、Argon2id 密码哈希、HttpOnly Cookie、mutation/WS Origin 验证和会话所有权检查。单实例新登录撤销旧登录、锁定凭证库，但保留后台会话；数据目录具有进程独占锁。
+- 会话由服务端注册表按稳定 Block ID 持有，与 WebSocket 视图生命周期分离；headless xterm 子进程维护屏幕/滚动历史并回答终端查询。接入在同一锁下读取屏幕和订阅后续输出；慢客户端重新接入最新屏幕，不重放输入。单终端以首个接入者为写入者，其余视图只读。工作区权威快照和文件草稿留在服务内存，版本号防止旧页面覆盖。明确关闭和服务退出才结束进程；服务重启不能恢复内存运行状态。
+- HTTP 文件传输使用限定大小的临时文件、所有者绑定的取消标记及一次性短期下载票据。启动只清理独立传输缓存。
+- Web 直接复用桌面 WorkspaceShell、管理弹窗和主题；本地 PTY 和本地文件运行于服务账户/容器内部，受相同登录、Origin 和会话生命周期约束。系统 Agent、原生浏览器、端口转发与 Git UI 尚未接入 Web；具体范围、部署和验证入口见 `docs/server-runtime.md`。
+
+- 浏览器恢复文件由显式下载加独立保存确认完成；浏览器选择的私钥/恢复文件通过受限上传交给 Rust，生成的私钥、解密数据密钥仍不返回浏览器。这是 Web 文件接口的必要边界，桌面端继续使用原生文件选择器。

@@ -30,7 +30,7 @@ export function useWorkspaceRuntimeState(document: WorkspaceDocument, setStorage
     terminalOutputObserver.current = observer;
     return () => { if (terminalOutputObserver.current === observer) terminalOutputObserver.current = null; };
   }, []);
-  const writers = useRef(new Map<string, (data: Uint8Array) => void>());
+  const writers = useRef(new Map<string, (data: Uint8Array, consumed?: () => void) => void>());
   const clearers = useRef(new Map<string, (reset: boolean) => void>());
   const terminalSizeReaders = useRef(new Map<string, () => TerminalSizeInput>());
   const writerOwners = useRef(new Map<string, symbol>());

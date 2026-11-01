@@ -1,0 +1,10 @@
+import type * as Desktop from "../../lib/tauri/network";
+import { unsupported } from "../http";
+export type * from "../../lib/tauri/network";
+export const listNetworkRules: typeof Desktop.listNetworkRules = async () => unsupported();
+export const createNetworkRule: typeof Desktop.createNetworkRule = async () => unsupported();
+export const updateNetworkRule: typeof Desktop.updateNetworkRule = async () => unsupported();
+export const deleteNetworkRule: typeof Desktop.deleteNetworkRule = async () => unsupported();
+export const connectNetworkSession: typeof Desktop.connectNetworkSession = async () => unsupported();
+export const startNetworkRule: typeof Desktop.startNetworkRule = async () => unsupported();
+export const stopNetworkRule: typeof Desktop.stopNetworkRule = async () => unsupported();

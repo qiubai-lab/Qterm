@@ -1,8 +1,10 @@
+import { isServer } from "../lib/runtime/environment";
+import { releaseRetainedBlock, attachRetainedSession, type RetainedSession } from "@qterm/services/runtimeSessions";
 import { hasWorkspaceRuntime } from "../lib/runtime/environment";
 import { useCallback, type Dispatch } from "react";
 
 import { closeLocalSession, connectLocalSession, resizeLocalSession, writeLocalSession, type LocalSessionEvent } from "@qterm/services/localSessions";
-import type { ConnectionProfile } from "../lib/tauri/profiles";
+import type { ConnectionProfile } from "@qterm/services/profiles";
 import { acceptHostKey, closeSession, connectSession, rejectHostKey, resizeSession, writeSession, type SessionAuth, type SessionEvent, type TerminalSizeInput } from "@qterm/services/sessions";
 import { completeConnectionProgress, connectionProgressFromRouteEvent, failConnectionProgress, initialConnectionProgress } from "./connectionProgress";
 import { findLeaf } from "./layout";
@@ -30,13 +32,14 @@ export function useTerminalWorkspaceController(state: WorkspaceRuntimeState, dis
     pendingLocalInput, pendingInitialDirectories, connectionFailureHandlers, updateRuntime, nextEpoch, isCurrentEpoch,
   } = state;
 
-  const deliverTerminalOutput = useCallback((blockId: string, epoch: number, data: Uint8Array) => {
+  const deliverTerminalOutput = useCallback((blockId: string, epoch: number, data: Uint8Array, consumed?: () => void) => {
     terminalOutputObserver.current?.(blockId, epoch, data);
     const writer = writers.current.get(blockId);
     if (writer) {
-      writer(data);
+      if (consumed) writer(data, consumed); else writer(data);
       return;
     }
+    if (consumed) throw new Error("终端视图尚未就绪，请重新连接");
     const chunk = data.byteLength > MAX_PENDING_TERMINAL_OUTPUT ? data.slice(-MAX_PENDING_TERMINAL_OUTPUT) : data.slice();
     const pending = pendingTerminalOutput.current.get(blockId) ?? { chunks: [], bytes: 0 };
     while (pending.chunks.length > 0 && pending.bytes + chunk.byteLength > MAX_PENDING_TERMINAL_OUTPUT) {
@@ -94,6 +97,7 @@ export function useTerminalWorkspaceController(state: WorkspaceRuntimeState, dis
     deleteFailureHandlers(connectionFailureHandlers.current, `terminal:${blockId}:`);
     const sessionId = activeLocalSessionId ?? runtime?.sessionId;
     updateRuntime(blockId, () => defaultRuntime);
+    if (!sessionId && isServer) await releaseRetainedBlock(blockId);
     if (sessionId) {
       try {
         if (activeLocalSessionId || runtime?.kind === "local") await closeLocalSession(sessionId);
@@ -151,11 +155,12 @@ export function useTerminalWorkspaceController(state: WorkspaceRuntimeState, dis
             activeLocalSessions.current.delete(blockId);
             pendingTerminalOutput.current.delete(blockId);
           }
-          updateRuntime(blockId, (runtime) => ({ ...runtime, status: event.state, sessionId: event.state === "closed" ? null : runtime.sessionId }));
+          updateRuntime(blockId, (runtime) => ({ ...runtime, status: event.state, notice: event.message ?? (event.state === "connected" ? "" : runtime.notice), sessionId: event.state === "closed" ? null : runtime.sessionId }));
         },
-        (data) => { if (isCurrentEpoch(blockId, epoch)) deliverTerminalOutput(blockId, epoch, data); },
+        (data, consumed) => { if (isCurrentEpoch(blockId, epoch)) deliverTerminalOutput(blockId, epoch, data, consumed); else consumed?.(); },
         osc7Enabled,
         pendingInitialDirectories.current.get(blockId) ?? (osc7Enabled ? terminalRestoreDirectory(blockId, null) : undefined),
+        ...(isServer ? [blockId] : []),
       );
       const { sessionId } = connection;
       startedSessionId = sessionId;
@@ -204,9 +209,9 @@ export function useTerminalWorkspaceController(state: WorkspaceRuntimeState, dis
     updateRuntime(blockId, () => ({ ...defaultRuntime, kind: "ssh", status: "connecting", connectionProgress: initialConnectionProgress(profile.jumpProfileIds?.length ?? 0) }));
     try {
       const sessionId = await connectSession(
-        { profileId: profile.id, auth, terminalSize, initialDirectory: pendingInitialDirectories.current.get(blockId) ?? terminalRestoreDirectory(blockId, profile.id) },
+        { profileId: profile.id, auth, ...(isServer ? {runtimeKey:blockId} : {}), terminalSize, initialDirectory: pendingInitialDirectories.current.get(blockId) ?? terminalRestoreDirectory(blockId, profile.id) },
         (event) => onSessionEvent(blockId, epoch, event),
-        (data) => { if (isCurrentEpoch(blockId, epoch)) deliverTerminalOutput(blockId, epoch, data); },
+        (data, consumed) => { if (isCurrentEpoch(blockId, epoch)) deliverTerminalOutput(blockId, epoch, data, consumed); },
       );
       if (!isCurrentEpoch(blockId, epoch)) await closeSession(sessionId).catch(() => undefined);
       else if (!finishedEpochs.current.has(key)) updateRuntime(blockId, (runtime) => ({ ...runtime, sessionId, kind: "ssh" }));
@@ -218,7 +223,20 @@ export function useTerminalWorkspaceController(state: WorkspaceRuntimeState, dis
     }
   }, [clearBlockBuffer, closeCurrentSession, connectionFailureHandlers, connectionTargetIntents, deliverTerminalOutput, finishedEpochs, isCurrentEpoch, nextEpoch, onSessionEvent, pendingInitialDirectories, terminalRestoreDirectory, terminalSizeReaders, updateRuntime]);
 
+  const restoreTerminalBlock = useCallback(async (session: RetainedSession) => {
+    const blockId=session.runtimeKey;
+    if (!blockId || runtimesRef.current[blockId]?.sessionId || startingLocal.current.has(blockId)) return;
+    const epoch=nextEpoch(blockId); startingLocal.current.set(blockId,epoch);
+    updateRuntime(blockId,()=>({...defaultRuntime,kind:"ssh",status:"connecting"}));
+    try {
+      const id=await attachRetainedSession(session,event=>onSessionEvent(blockId,epoch,event),(data,consumed)=>{if(isCurrentEpoch(blockId,epoch))deliverTerminalOutput(blockId,epoch,data,consumed);else consumed?.();});
+      if(isCurrentEpoch(blockId,epoch))updateRuntime(blockId,r=>({...r,sessionId:id}));
+    } catch(error) {updateRuntime(blockId,r=>({...r,notice:workspaceErrorMessage(error)}));}
+    finally{startingLocal.current.delete(blockId);}
+  },[deliverTerminalOutput,isCurrentEpoch,nextEpoch,onSessionEvent,runtimesRef,startingLocal,updateRuntime]);
+
   const restartLocalBlock = useCallback(async (blockId: string, osc7Enabled: boolean) => {
+    await releaseRetainedBlock(blockId);
     const size = terminalSizeReaders.current.get(blockId)?.() ?? { columns: 80, rows: 24 };
     await startLocalBlock(blockId, size.columns, size.rows, osc7Enabled);
   }, [startLocalBlock, terminalSizeReaders]);
@@ -234,6 +252,7 @@ export function useTerminalWorkspaceController(state: WorkspaceRuntimeState, dis
   const writeBlock = useCallback(async (blockId: string, data: Uint8Array) => {
     const pending = pendingLocalInput.current.get(blockId);
     if (pending) {
+      if (isServer) return;
       if (pending.reduce((size, chunk) => size + chunk.byteLength, 0) + data.byteLength <= 64 * 1024) pending.push(data);
       return;
     }
@@ -261,7 +280,7 @@ export function useTerminalWorkspaceController(state: WorkspaceRuntimeState, dis
     updateRuntime(blockId, (runtime) => ({ ...runtime, hostKeyPrompt: null }));
   }, [runtimes, updateRuntime]);
 
-  const registerWriter = useCallback((blockId: string, writer: (data: Uint8Array) => void, clearer: (reset: boolean) => void, readSize: () => TerminalSizeInput) => {
+  const registerWriter = useCallback((blockId: string, writer: (data: Uint8Array, consumed?: () => void) => void, clearer: (reset: boolean) => void, readSize: () => TerminalSizeInput) => {
     const owner = Symbol(blockId);
     writers.current.set(blockId, writer);
     clearers.current.set(blockId, clearer);
@@ -307,7 +326,7 @@ export function useTerminalWorkspaceController(state: WorkspaceRuntimeState, dis
   }, [dispatch, pendingInitialDirectories, runtimesRef, setRuntimes]);
 
   return {
-    registerWriter, clearBlockBuffer, setBlockCwd, clearTerminalOsc7State, splitTerminalBlock,
+    restoreTerminalBlock, registerWriter, clearBlockBuffer, setBlockCwd, clearTerminalOsc7State, splitTerminalBlock,
     startLocalBlock, restartLocalBlock, selectBlockTarget, connectBlock, disconnectBlock, writeBlock, resizeBlock,
     acceptBlockHostKey, rejectBlockHostKey, closeCurrentSession,
   };

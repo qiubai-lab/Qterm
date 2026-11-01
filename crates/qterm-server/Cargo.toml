@@ -1,0 +1,31 @@
+[package]
+name = "qterm-server"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+qterm-protocol = { path = "../qterm-protocol" }
+qterm-core = { path = "../qterm-core" }
+axum = { version = "0.8", features = ["ws", "multipart"] }
+tokio = { version = "1.53.1", features = ["full"] }
+tower-http = { version = "0.6", features = ["fs", "limit", "set-header"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+uuid = { version = "1.24.1", features = ["v4"] }
+argon2 = "0.5.3"
+zeroize = "1.9.0"
+getrandom = "0.4.3"
+base64 = "0.23.1"
+futures-util = "0.3"
+tokio-util = { version = "0.7", features = ["io"] }
+tempfile = "=3.27.0"
+url = "2"
+fs2 = "0.4"
+portable-pty = "=0.9.0"
+dirs = "6.0.0"
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
+

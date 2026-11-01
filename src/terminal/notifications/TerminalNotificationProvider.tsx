@@ -2,7 +2,7 @@ import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 /* eslint-disable react-refresh/only-export-components -- feature provider and its typed hook share a boundary. */
 import { createContext, useContext, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
-import { getNotificationSettings, sendTerminalNotification, updateNotificationSettings, getNotificationBodySettings, updateNotificationBodySettings } from "../../lib/tauri/notifications";
+import { getNotificationSettings, sendTerminalNotification, updateNotificationSettings, getNotificationBodySettings, updateNotificationBodySettings } from "@qterm/services/notifications";
 import { useWorkspace } from "../../workspace/WorkspaceProvider";
 import { findLeaf } from "../../workspace/layout";
 import { createNotificationInbox, createNotificationLimiter, createNotificationReceiver } from "./notificationAttention";

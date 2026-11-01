@@ -3,12 +3,10 @@
 pub mod browser;
 pub mod clipboard;
 pub(crate) mod external_links;
-pub mod git_cli;
-pub(crate) mod git_execution;
-pub mod local;
-pub mod persistence;
-pub(crate) mod shell_startup;
-pub mod ssh;
+pub use qterm_core::infrastructure::git_cli;
+pub use qterm_core::infrastructure::local;
+pub use qterm_core::infrastructure::persistence;
+pub use qterm_core::infrastructure::ssh;
 pub(crate) mod terminal_image;
 
 pub mod notifications;

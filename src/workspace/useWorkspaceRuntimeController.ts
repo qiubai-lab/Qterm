@@ -1,3 +1,5 @@
+import { isServer } from "../lib/runtime/environment";
+import { releaseRetainedBlock } from "@qterm/services/runtimeSessions";
 import { useCallback, type Dispatch } from "react";
 
 import { blockIds, findLeaf } from "./layout";
@@ -42,6 +44,7 @@ export function useWorkspaceRuntimeController(state: WorkspaceRuntimeState, docu
       if (fileRuntimesRef.current[id]) await files.closeCurrentFileSession(id);
       if (networkRuntimesRef.current[id]) await network.closeCurrentNetworkSession(id);
       if (gitRuntimesRef.current[id]) await git.closeCurrentGitSession(id);
+      if (isServer) await releaseRetainedBlock(id);
       writers.current.delete(id);
       clearers.current.delete(id);
       terminalSizeReaders.current.delete(id);

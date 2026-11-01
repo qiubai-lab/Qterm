@@ -7,7 +7,7 @@ import { HostIdentity } from "../components/HostIdentity";
 import { ExactTextInput } from "../components/ExactTextInput";
 import { useNativeWebDismiss } from "../components/useNativeWebDismiss";
 import { groupTargetProfiles, recentTargetProfiles, searchTargetProfiles } from "./terminalTargetModel";
-import type { ConnectionProfile, ProfileGroup } from "../lib/tauri/profiles";
+import type { ConnectionProfile, ProfileGroup } from "@qterm/services/profiles";
 import type { SessionState } from "../lib/tauri/sessions";
 
 interface TerminalTargetPickerProps {

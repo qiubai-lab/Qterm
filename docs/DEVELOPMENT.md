@@ -139,17 +139,15 @@ pnpm check
 Rust 质量门：
 
 ```bash
-cd src-tauri
-cargo fmt --check
-cargo clippy --all-targets --all-features -- -D warnings
-cargo test --all-targets --all-features
+mise exec -- make check-rust
 ```
+
+此入口同时检查 `crates/` 中的共享核心、协议与 Web 服务，以及 `src-tauri/` 桌面适配层。仅开发容器运行时时，可用 `pnpm check:server`，无需 GTK/WebKit；启动与部署说明见 [Server runtime](server-runtime.md)。
 
 本机装有 OpenSSH 服务端、`ssh-keygen` 与 SFTP server 时，可运行被忽略的真实 SSH/SFTP 集成测试：
 
 ```bash
-cd src-tauri
-cargo test local_openssh_exercises_terminal_transfer_and_file_editing -- --ignored
+cargo test --manifest-path crates/Cargo.toml -p qterm-core local_openssh_exercises_terminal_transfer_and_file_editing -- --ignored
 ```
 
 安装并运行 Rust 依赖审计：

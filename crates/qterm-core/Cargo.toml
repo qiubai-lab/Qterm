@@ -1,0 +1,34 @@
+[package]
+name = "qterm-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[features]
+test-support = []
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+secrecy = "0.10.3"
+zeroize = "1.9.0"
+atomic-write-file = "0.3.1"
+aes-gcm = "0.11.0"
+argon2 = "0.5.3"
+base64 = "0.23.1"
+dirs = "6.0.0"
+dunce = "1.0.5"
+glob = "0.3.3"
+getrandom = "0.4.3"
+uuid = { version = "1.24.1", features = ["v4"] }
+russh = { version = "=0.62.6", default-features = false, features = ["ring", "rsa"] }
+russh-sftp = "=2.4.0"
+ssh2-config-rs = { version = "=0.7.2", features = ["nolog"] }
+tokio = { version = "1.53.1", features = ["full"] }
+portable-pty = "=0.9.0"
+tempfile = "=3.27.0"
+url = "2"
+
+[target.'cfg(windows)'.dependencies]
+windows-version = "0.1.7"
+windows = { version = "=0.61.3", features = ["Win32_Storage_FileSystem", "Win32_System_Registry", "Win32_Graphics_Gdi", "Win32_UI_WindowsAndMessaging", "Win32_UI_Input_KeyboardAndMouse", "Win32_System_Com", "Win32_UI_Shell"] }

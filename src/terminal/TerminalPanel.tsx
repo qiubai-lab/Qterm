@@ -1,3 +1,4 @@
+import { supportsLocalSessions } from "../lib/runtime/environment";
 import { acquireTerminalView, scheduleTerminalViewDisposal, type TerminalView } from "./terminalView";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from "react";
 import { createPortal } from "react-dom";
@@ -40,7 +41,6 @@ const STAGING_RESULT_DURATION_MS = 2_200;
 const STAGING_ERROR_DURATION_MS = 5_000;
 const STAGING_EXIT_DURATION_MS = 120;
 const IDLE_TERMINAL_STAGING_STATUS: TerminalStagingStatusState = { phase: "idle" };
-
 export function TerminalPanel({ blockId, sessionKey, visible, local, osc7Enabled = true, terminalSettingsReady = true }: { blockId: string; sessionKey: string; visible: boolean; local: boolean; osc7Enabled?: boolean; terminalSettingsReady?: boolean }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -320,7 +320,7 @@ export function TerminalPanel({ blockId, sessionKey, visible, local, osc7Enabled
     viewRef.current = view;
     const unregisterWriter = registerWriter(
       blockId,
-      (data) => view.terminal.write(view.decoder.decode(data, { stream: true })),
+      (data, consumed) => { const text = view.decoder.decode(data, { stream: true }); if (consumed) view.terminal.write(text, consumed); else view.terminal.write(text); },
       (reset) => {
         if (reset) {
           view.decoder = new TextDecoder();
@@ -369,7 +369,7 @@ export function TerminalPanel({ blockId, sessionKey, visible, local, osc7Enabled
   }, [searchMounted, searchOpen]);
 
   useEffect(() => {
-    if (!hydrated || !local || !terminalSettingsReady) return;
+    if (!supportsLocalSessions || !hydrated || !local || !terminalSettingsReady) return;
     const view = viewRef.current;
     if (view) void startLocalRef.current(blockId, view.terminal.cols, view.terminal.rows, osc7EnabledRef.current);
   }, [blockId, hydrated, local, terminalSettingsReady]);

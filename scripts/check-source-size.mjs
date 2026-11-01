@@ -15,7 +15,7 @@ export const DEFAULT_LIMITS = Object.freeze({
   test: 800,
 });
 
-const DEFAULT_ROOTS = ["src", "src-tauri/src", "scripts"];
+const DEFAULT_ROOTS = ["src", "src-tauri/src", "crates/qterm-core/src", "crates/qterm-protocol/src", "crates/qterm-server/src", "scripts"];
 const DEFAULT_BASELINE = "scripts/source-size-baseline.json";
 const TEST_FILE = /(?:\.test\.[^.]+|[\\/]tests?\.rs|[\\/]tests[\\/])/;
 

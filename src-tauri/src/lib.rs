@@ -6,11 +6,11 @@ use commands::notification::{
     NotificationState, notification_body_settings_get, notification_body_settings_update,
     notification_settings_get, notification_settings_update, terminal_notification_send,
 };
-mod application;
+use qterm_core::application;
 mod commands;
-mod domain;
+use qterm_core::domain;
 mod infrastructure;
-mod ports;
+use qterm_core::ports;
 
 use commands::browser::{BrowserProxyState, browser_proxy_launch, browser_proxy_list};
 use commands::clipboard::{

@@ -3,7 +3,7 @@ import type { TerminalOutputObserver } from "../terminal/notifications/notificat
 import { createContext, useContext, useMemo, useReducer, type Dispatch, type ReactNode } from "react";
 
 import type { LocalTerminalCapabilities } from "../lib/tauri/localSessions";
-import type { ConnectionProfile, ProfileGroup } from "../lib/tauri/profiles";
+import type { ConnectionProfile, ProfileGroup } from "@qterm/services/profiles";
 import type { SessionAuth, TerminalSizeInput } from "../lib/tauri/sessions";
 import { createWorkspaceDocument, type GitTarget, type SplitDirection, type Workspace, type WorkspaceDocument } from "./model";
 import { workspaceReducer, type WorkspaceAction } from "./reducer";
@@ -16,8 +16,12 @@ import type { WebTabSessionStore } from "../web/webTabSessionStore";
 
 export type { FileRuntime, GitRuntime, HostKeyPrompt, NetworkRuntime, TerminalRuntime } from "./workspaceRuntime";
 
+import type { RetainedSession } from "@qterm/services/runtimeSessions";
+
 interface WorkspaceContextValue extends ReturnType<typeof useWebOpenController> {
   webTabSessions?: WebTabSessionStore;
+  restoreTerminalBlock: (session: RetainedSession) => Promise<void>;
+  restoreFileBlock: (session: RetainedSession) => Promise<void>;
   hydrated: boolean;
   document: WorkspaceDocument;
   dispatch: Dispatch<WorkspaceAction>;
@@ -33,7 +37,7 @@ interface WorkspaceContextValue extends ReturnType<typeof useWebOpenController> 
   activeBlockId: string;
   registerTerminalOutputObserver: (observer: TerminalOutputObserver) => () => void;
   getTerminalEpoch: (blockId: string) => number | undefined;
-  registerWriter: (blockId: string, writer: (data: Uint8Array) => void, clearer: (reset: boolean) => void, readSize: () => TerminalSizeInput) => () => void;
+  registerWriter: (blockId: string, writer: (data: Uint8Array, consumed?: () => void) => void, clearer: (reset: boolean) => void, readSize: () => TerminalSizeInput) => () => void;
   clearBlockBuffer: (blockId: string, reset?: boolean) => void;
   setBlockCwd: (blockId: string, cwd: string) => void;
   clearTerminalOsc7State: () => void;

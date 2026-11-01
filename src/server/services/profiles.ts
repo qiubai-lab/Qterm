@@ -1,0 +1,16 @@
+import type * as Desktop from "../../lib/tauri/profiles";
+import { api, unsupported } from "../http";
+export type * from "../../lib/tauri/profiles";
+export const listProfiles: typeof Desktop.listProfiles = () => api("/profiles");
+export const createProfile: typeof Desktop.createProfile = input => api("/profiles", "POST", input);
+export const updateProfile: typeof Desktop.updateProfile = (id, input) => api(`/profiles/${encodeURIComponent(id)}`, "PUT", input);
+export const deleteProfile: typeof Desktop.deleteProfile = id => api(`/profiles/${encodeURIComponent(id)}`, "DELETE");
+export const listProfileGroups: typeof Desktop.listProfileGroups = () => api("/groups");
+export const createProfileGroup: typeof Desktop.createProfileGroup = name => api("/groups", "POST", { name });
+export const updateProfileGroup: typeof Desktop.updateProfileGroup = (id, name) => api(`/groups/${encodeURIComponent(id)}`, "PUT", { name });
+export const deleteProfileGroup: typeof Desktop.deleteProfileGroup = id => api(`/groups/${encodeURIComponent(id)}`, "DELETE");
+export const listJumpCandidates: typeof Desktop.listJumpCandidates = (currentProfileId, selectedProfileIds = []) => api("/profiles/candidates", "POST", { currentProfileId, selectedProfileIds });
+export const getProfileRouteRequirements: typeof Desktop.getProfileRouteRequirements = id => api(`/profiles/${encodeURIComponent(id)}/requirements`);
+export const clearUnsupportedProfileStorage: typeof Desktop.clearUnsupportedProfileStorage = async () => unsupported();
+export const previewSshConfigImport: typeof Desktop.previewSshConfigImport = async () => unsupported();
+export const importSshConfig: typeof Desktop.importSshConfig = async () => unsupported();

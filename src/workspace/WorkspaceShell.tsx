@@ -2,7 +2,7 @@ import { WorkspaceToolRail } from "./WorkspaceToolRail";
 import { WorkspaceTabs } from "./WorkspaceTabs";
 import { createBlockCloseRequest, type CloseRequest } from "./workspaceClose";
 import { focusWorkspaceBlock } from "./workspaceFocus";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { isEditableOutsideTerminal, useWorkspaceShortcuts } from "./useWorkspaceShortcuts";
 import { Icon } from "../components/Icon";
@@ -14,11 +14,12 @@ import { SettingsDialog } from "../components/dialogs/SettingsDialog";
 import { ConnectionAuthDialog } from "../components/dialogs/ConnectionAuthDialog";
 import { MasterPasswordDialog, type MasterPasswordMode } from "../components/dialogs/MasterPasswordDialog";
 import { TerminalLockChoiceDialog, TerminalLockScreen } from "../components/dialogs/TerminalLockDialogs";
-import { getVaultStatus, lockVault, onVaultStatusChanged, type VaultStatus } from "../lib/tauri/credentials";
-import { getProfileRouteRequirements, type ConnectionProfile } from "../lib/tauri/profiles";
-import { getSettings, updateUpdateSettings, type SecuritySettings, type TerminalSettings, type UpdateSettings } from "../lib/tauri/settings";
+import { getVaultStatus, lockVault, onVaultStatusChanged, type VaultStatus } from "@qterm/services/credentials";
+import { getProfileRouteRequirements, type ConnectionProfile } from "@qterm/services/profiles";
+import { getSettings, updateUpdateSettings, type SecuritySettings, type TerminalSettings, type UpdateSettings } from "@qterm/services/settings";
 import { checkForUpdateOnStartupOnce } from "../lib/updateCheck";
-import { closeCurrentWindow, currentDesktopPlatform, isCurrentWindowAlwaysOnTop, minimizeCurrentWindow, setCurrentWindowAlwaysOnTop, startDraggingCurrentWindow, toggleMaximizeCurrentWindow } from "../lib/tauri/window";
+import { currentDesktopPlatform } from "../lib/tauri/window";
+import { WorkspaceChrome } from "./WorkspaceChrome";
 import { TERMINAL_ATTENTION_MS } from "../terminal/terminalAttention";
 import { WorkspaceCanvas, type ConnectionOwner } from "./LayoutView";
 import { resolveConfiguredAuth } from "./configuredAuth";
@@ -28,16 +29,11 @@ import { useWorkspace } from "./WorkspaceProvider";
 type Tool = "connections" | "credentials" | "settings" | "help";
 type WorkspaceTransitionDirection = "forward" | "backward";
 interface DisconnectRequest { owner: ConnectionOwner; blockId: string; name: string; local: boolean }
-interface TitlebarGesture { pointerId: number; x: number; y: number }
-interface TitlebarClick { at: number; x: number; y: number }
 
-const TITLEBAR_DRAG_THRESHOLD_PX = 5;
-const TITLEBAR_DOUBLE_CLICK_DISTANCE_PX = 5;
 const TITLEBAR_DOUBLE_CLICK_MS = 350;
 
-export function WorkspaceShell() {
+export function WorkspaceShell({ onLogout }: { onLogout?: () => Promise<void> } = {}) {
   const desktopPlatform = currentDesktopPlatform();
-  const usesNativeWindowControls = desktopPlatform === "macos";
   const { hydrated, document, activeWorkspace, dispatch, runtimes, fileRuntimes, networkRuntimes, gitRuntimes, clearTerminalOsc7State, connectBlock, connectFileBlock, connectNetworkBlock, connectGitBlock, disconnectBlock, disconnectFileBlock, disconnectNetworkBlock, disconnectGitBlock, isConnectionTargetCurrent, connectedCount, closeSessions, acceptBlockHostKey, rejectBlockHostKey, acceptFileHostKey, rejectFileHostKey, acceptNetworkHostKey, rejectNetworkHostKey, acceptGitHostKey, rejectGitHostKey, storageNotice, dismissStorageNotice } = useWorkspace();
   const [tool, setTool] = useState<Tool | null>(null);
   const [closeRequest, setCloseRequest] = useState<CloseRequest | null>(null);
@@ -54,15 +50,10 @@ export function WorkspaceShell() {
   const [terminalSettingsReady, setTerminalSettingsReady] = useState(false);
   const [updateSettings, setUpdateSettings] = useState<UpdateSettings | null>(null);
   const [availableUpdateVersion, setAvailableUpdateVersion] = useState<string | null>(null);
-  const [windowAlwaysOnTop, setWindowAlwaysOnTop] = useState(false);
-  const [windowPinBusy, setWindowPinBusy] = useState(false);
   const [workspaceTransition, setWorkspaceTransition] = useState<{ workspaceId: string; direction: WorkspaceTransitionDirection | null }>(() => ({ workspaceId: activeWorkspace.id, direction: null }));
   const [localTerminalAttentionWorkspaceId, setLocalTerminalAttentionWorkspaceId] = useState<string | null>(null);
   const previousWorkspaceOrderRef = useRef(document.workspaces.map((workspace) => workspace.id));
   const workspaceTransitionOrderOverrideRef = useRef<string[] | null>(null);
-  const titlebarGestureRef = useRef<TitlebarGesture | null>(null);
-  const titlebarGestureCleanupRef = useRef<(() => void) | null>(null);
-  const titlebarLastClickRef = useRef<TitlebarClick | null>(null);
   const automaticAttemptsRef = useRef(new Set<string>());
   const vaultStatusRef = useRef<VaultStatus | null>(null);
   const vaultLockBusyRef = useRef(false);
@@ -150,75 +141,6 @@ export function WorkspaceShell() {
     if (request) requestClose(request);
   }
 
-  function beginWindowDrag(event: ReactPointerEvent<HTMLElement>) {
-    if (event.button !== 0) return;
-    if (isInteractiveTitlebarTarget(event.target)) {
-      titlebarGestureCleanupRef.current?.();
-      titlebarLastClickRef.current = null;
-      return;
-    }
-
-    titlebarGestureCleanupRef.current?.();
-    const now = Date.now();
-    const lastClick = titlebarLastClickRef.current;
-    const isDoubleClick = lastClick
-      && now - lastClick.at <= TITLEBAR_DOUBLE_CLICK_MS
-      && Math.hypot(event.clientX - lastClick.x, event.clientY - lastClick.y) <= TITLEBAR_DOUBLE_CLICK_DISTANCE_PX;
-    if (isDoubleClick) {
-      event.preventDefault();
-      titlebarLastClickRef.current = null;
-      void toggleMaximizeCurrentWindow();
-      return;
-    }
-    if (lastClick && now - lastClick.at > TITLEBAR_DOUBLE_CLICK_MS) titlebarLastClickRef.current = null;
-
-    titlebarGestureRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
-    const finish = () => {
-      titlebarGestureRef.current = null;
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", end);
-      window.removeEventListener("pointercancel", cancel);
-      if (titlebarGestureCleanupRef.current === finish) titlebarGestureCleanupRef.current = null;
-    };
-    const move = (pointer: PointerEvent) => {
-      const gesture = titlebarGestureRef.current;
-      if (!gesture || pointer.pointerId !== gesture.pointerId) return;
-      if (Math.hypot(pointer.clientX - gesture.x, pointer.clientY - gesture.y) < TITLEBAR_DRAG_THRESHOLD_PX) return;
-      titlebarLastClickRef.current = null;
-      finish();
-      void startDraggingCurrentWindow();
-    };
-    const end = (pointer: PointerEvent) => {
-      const gesture = titlebarGestureRef.current;
-      if (!gesture || pointer.pointerId !== gesture.pointerId) return;
-      finish();
-      titlebarLastClickRef.current = { at: Date.now(), x: pointer.clientX, y: pointer.clientY };
-    };
-    const cancel = (pointer: PointerEvent) => {
-      if (pointer.pointerId !== titlebarGestureRef.current?.pointerId) return;
-      finish();
-      titlebarLastClickRef.current = null;
-    };
-    titlebarGestureCleanupRef.current = finish;
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", end);
-    window.addEventListener("pointercancel", cancel);
-  }
-
-  async function toggleWindowAlwaysOnTop() {
-    if (windowPinBusy) return;
-    const next = !windowAlwaysOnTop;
-    setWindowPinBusy(true);
-    try {
-      await setCurrentWindowAlwaysOnTop(next);
-      setWindowAlwaysOnTop(next);
-    } catch {
-      // Keep the visible state aligned with the last confirmed native state.
-    } finally {
-      setWindowPinBusy(false);
-    }
-  }
-
   const commitVaultStatus = useCallback((status: VaultStatus) => {
     vaultStatusRef.current = status;
     setVaultStatus(status);
@@ -248,18 +170,6 @@ export function WorkspaceShell() {
       setVaultLockBusy(false);
     }
   }, [commitVaultStatus]);
-
-  useEffect(() => () => {
-    titlebarGestureCleanupRef.current?.();
-  }, []);
-
-  useEffect(() => {
-    let disposed = false;
-    void isCurrentWindowAlwaysOnTop().then((value) => {
-      if (!disposed) setWindowAlwaysOnTop(value);
-    }).catch(() => undefined);
-    return () => { disposed = true; };
-  }, []);
 
   useEffect(() => {
     let disposed = false;
@@ -466,21 +376,10 @@ export function WorkspaceShell() {
         : !vaultStatus.initialized
           ? "请先初始化凭证库"
         : "锁定终端";
-  return <main data-onboarding-ready={hydrated && terminalSettingsReady && !terminalLocked} className="app-shell" data-platform={desktopPlatform}>
-    <header className="app-chrome" onPointerDown={beginWindowDrag}>
-      <div className="app-brand" aria-label="Qterm">
-        <Icon name="terminal" size={15}/><span>Qterm</span>
-      </div>
+  return <main data-onboarding-ready={hydrated && terminalSettingsReady && !terminalLocked} className="app-shell" data-platform={onLogout ? "web" : desktopPlatform}>
+    <WorkspaceChrome onLogout={onLogout}>
       <WorkspaceTabs disabled={terminalLocked} requestClose={requestClose} onReorderSelection={order => { workspaceTransitionOrderOverrideRef.current = order; }}/>
-      <div className="window-controls" aria-label="窗口控制">
-        <button className="window-pin" aria-label={windowAlwaysOnTop ? "取消窗口置顶" : "置顶窗口"} aria-pressed={windowAlwaysOnTop} aria-busy={windowPinBusy || undefined} title={windowAlwaysOnTop ? "取消置顶" : "置顶窗口"} disabled={windowPinBusy} onClick={() => void toggleWindowAlwaysOnTop()}><Icon name="pin" size={14}/></button>
-        {!usesNativeWindowControls && <>
-          <button aria-label="最小化窗口" title="最小化" onClick={() => void minimizeCurrentWindow()}><Icon name="windowMinimize" size={14}/></button>
-          <button aria-label="最大化或还原窗口" title="最大化或还原" onClick={() => void toggleMaximizeCurrentWindow()}><Icon name="windowMaximize" size={12}/></button>
-          <button className="window-close" aria-label="关闭窗口" title="关闭" onClick={() => void closeCurrentWindow()}><Icon name="close" size={14}/></button>
-        </>}
-      </div>
-    </header>
+    </WorkspaceChrome>
 
     <section className="workspace-stage">
       <div className="workspace-stage-content" inert={terminalLocked ? true : undefined} aria-hidden={terminalLocked || undefined}>
@@ -530,7 +429,7 @@ export function WorkspaceShell() {
     {tool === "help" && <HelpDialog
       onClose={() => setTool(null)}
       autoCheckOnStartup={updateSettings?.autoCheckOnStartup ?? false}
-      onAutoCheckOnStartupChange={updateSettings ? changeAutoUpdateCheck : undefined}
+      onAutoCheckOnStartupChange={!onLogout && updateSettings ? changeAutoUpdateCheck : undefined}
     />}
     {lockChoiceOpen && <TerminalLockChoiceDialog vaultUnlocked={Boolean(vaultStatus?.unlocked)} busy={vaultLockBusy} message={vaultLockError} onClose={() => { setLockChoiceOpen(false); setVaultLockError(""); }} onLockVault={() => void applyLockScope("vault")} onLockTerminalAndVault={() => void applyLockScope("terminalAndVault")}/>}
     {closeRequest && <DialogFrame title={closeRequest.title} subtitle={closeRequest.subtitle ?? "未保存的终端输出无法恢复"} onClose={() => setCloseRequest(null)}><p className="confirm-copy">{closeRequest.detail}</p>{connectedCount(closeRequest.ids) > 0 && <p className="callout">将断开 {connectedCount(closeRequest.ids)} 个活动会话。</p>}<footer className="dialog-actions end"><button className="secondary-button" onClick={() => setCloseRequest(null)}>取消</button><button className="danger-button filled" onClick={() => void confirmClose()}>{connectedCount(closeRequest.ids) > 0 ? "关闭并断开" : "确认关闭"}</button></footer></DialogFrame>}
@@ -546,10 +445,6 @@ export function WorkspaceShell() {
   function rejectPromptHostKey(owner: ConnectionOwner, blockId: string) {
     return owner === "terminal" ? rejectBlockHostKey(blockId) : owner === "files" ? rejectFileHostKey(blockId) : owner === "network" ? rejectNetworkHostKey(blockId) : rejectGitHostKey(blockId);
   }
-}
-
-function isInteractiveTitlebarTarget(target: EventTarget): boolean {
-  return target instanceof Element && Boolean(target.closest("button,input,[data-workspace-id]"));
 }
 
 function errorMessage(error: unknown): string {

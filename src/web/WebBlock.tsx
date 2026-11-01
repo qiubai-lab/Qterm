@@ -1,5 +1,5 @@
 import { useCallback, useState, type PointerEvent } from "react";
-import type { ConnectionProfile } from "../lib/tauri/profiles";
+import type { ConnectionProfile } from "@qterm/services/profiles";
 import type { WebNode } from "../workspace/model";
 import { useWorkspace } from "../workspace/WorkspaceProvider";
 import { TerminalTargetPicker } from "../workspace/TerminalTargetPicker";

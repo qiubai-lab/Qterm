@@ -1,13 +1,7 @@
+export type * from "../contracts/credentials";
+import type { VaultStatus, FileOperationResult, GeneratedPrivateKeyAlgorithm, CredentialSummary, PrivateKeyDraft, VaultStatusChanged } from "../contracts/credentials";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-
-export interface VaultStatus { initialized: boolean; unlocked: boolean; legacy: boolean }
-export interface FileOperationResult { completed: boolean }
-export type CredentialKind = "password" | "privateKey";
-export type GeneratedPrivateKeyAlgorithm = "ed25519" | "ecdsaP256" | "ecdsaP384" | "ecdsaP521";
-export interface CredentialSummary { id: string; name: string; kind: CredentialKind; detail: string | null }
-export interface PrivateKeyDraft { id: string; source: "file" | "generated"; label: string; detail: string }
-export interface VaultStatusChanged { initialized?: boolean; legacy?: boolean; unlocked: boolean; reason: "manual" | "windowsSession" | "timeout" }
 
 export const getVaultStatus = (): Promise<VaultStatus> => invoke("credential_vault_status");
 export const initializeVault = (masterPassword: string): Promise<FileOperationResult> => invoke("credential_vault_initialize", { input: { masterPassword } });
@@ -30,3 +24,5 @@ export const cancelPrivateKeyCredential = (draftId: string): Promise<void> => in
 export const revealCredentialPassword = (credentialId: string): Promise<string> => invoke("credential_reveal_password", { input: { credentialId } });
 export const getCredentialPublicKey = (credentialId: string): Promise<string> => invoke("credential_public_key", { input: { credentialId } });
 export const deleteCredential = (credentialId: string): Promise<void> => invoke("credential_delete", { input: { credentialId } });
+export const downloadVaultRecovery = async (): Promise<void> => undefined;
+export const downloadResetRecovery = async (): Promise<void> => undefined;

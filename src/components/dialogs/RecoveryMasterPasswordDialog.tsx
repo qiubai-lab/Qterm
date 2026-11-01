@@ -1,6 +1,8 @@
+import { isServer } from "../../lib/runtime/environment";
+import { BrowserRecoveryConfirmation } from "./BrowserRecoveryConfirmation";
 import { useState, type FormEvent } from "react";
 
-import { cancelMasterPasswordReset, prepareMasterPasswordReset, resetMasterPassword } from "../../lib/tauri/credentials";
+import { cancelMasterPasswordReset, prepareMasterPasswordReset, resetMasterPassword, downloadResetRecovery } from "@qterm/services/credentials";
 import { Button } from "../Button";
 import { RequiredFieldLabel } from "../RequiredFieldLabel";
 import { DialogActionStatus, DialogFrame } from "./DialogFrame";
@@ -12,6 +14,7 @@ export function RecoveryMasterPasswordDialog({ onClose, onSuccess }: { onClose: 
   const [newPassword, setNewPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
   const [busy, setBusy] = useState(false);
+  const [recoverySaved,setRecoverySaved]=useState(false);
   const [message, setMessage] = useState("");
 
   function clearPendingRecovery() {
@@ -96,10 +99,11 @@ export function RecoveryMasterPasswordDialog({ onClose, onSuccess }: { onClose: 
     </DialogFrame>;
   }
 
-  return <DialogFrame title="保存新恢复密钥" subtitle="保存成功后才会重置主密码" compact onClose={busy ? () => undefined : () => { setMessage(""); setPhase("newPassword"); }}>
+  return <DialogFrame title="保存新恢复密钥" subtitle="保存成功后才会重置主密码" compact onClose={busy ? () => undefined : () => { setMessage(""); setRecoverySaved(false); setPhase("newPassword"); }}>
     <div className="recovery-save-confirmation">
       <p className="callout">点击保存后再选择新密钥的本地位置；新文件写入成功后，新主密码才会生效且旧恢复密钥将失效。</p>
-      <footer className="dialog-actions dialog-actions-with-status"><DialogActionStatus message={message}/><div><Button disabled={busy} onClick={() => { setMessage(""); setPhase("newPassword"); }}>返回</Button><Button variant="primary" data-dialog-autofocus loading={busy} onClick={() => void saveNewRecovery()}>{busy ? "正在保存…" : "保存新密钥到本地"}</Button></div></footer>
+      {isServer && <BrowserRecoveryConfirmation download={downloadResetRecovery} onSavedChange={setRecoverySaved}/>}
+      <footer className="dialog-actions dialog-actions-with-status"><DialogActionStatus message={message}/><div><Button disabled={busy} onClick={() => { setMessage(""); setRecoverySaved(false); setPhase("newPassword"); }}>返回</Button><Button variant="primary" data-dialog-autofocus disabled={isServer && !recoverySaved} loading={busy} onClick={() => void saveNewRecovery()}>{busy ? "正在保存…" : isServer ? "确认保存并重置" : "保存新密钥到本地"}</Button></div></footer>
     </div>
   </DialogFrame>;
 }

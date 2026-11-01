@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { AppTheme } from "../../lib/tauri/settings";
+import type { AppTheme } from "@qterm/services/settings";
 import { useTerminalImageAction } from "./useTerminalImageAction";
 import { IMAGE_SCALE, imageExportError, type TerminalImageSnapshot, type TerminalImageStyle, type TerminalImageScale } from "./terminalImageModel";
 import { renderTerminalImage, type RenderedTerminalImage } from "./renderTerminalImage";
