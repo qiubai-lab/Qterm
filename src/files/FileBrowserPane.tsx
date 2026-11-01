@@ -700,7 +700,7 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange, persistenc
     </div>, document.body)}
     <footer className={`file-browser-statusbar${transfer ? ` ${transfer.status}` : ""}`} role="status" aria-label="文件状态">
       {transferActive && transfer ? <>
-        <span className="file-browser-transfer-label">{transfer.message}</span>
+        <span className="file-browser-transfer-label">{transfer.message}{transfer.total > 0 ? ` ${Math.min(100, Math.round(transfer.transferred / transfer.total * 100))}%` : ""}</span>
         {transfer.total > 0 ? <progress className="file-browser-transfer-progress" aria-label={`${transfer.direction === "upload" ? "上传" : "下载"}进度`} value={transfer.transferred} max={transfer.total}/> : <progress className="file-browser-transfer-progress" aria-label={`${transfer.direction === "upload" ? "上传" : "下载"}进度`}/>}
         <small>{transfer.total > 0 ? `${formatSize(transfer.transferred)} / ${formatSize(transfer.total)}` : "准备中"}</small>
         {transfer.transferId && sessionId && <button onClick={() => void cancelTransfer(sessionId, transfer.transferId)}>取消</button>}

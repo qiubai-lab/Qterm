@@ -1,4 +1,4 @@
-import { supportsLocalSessions } from "../lib/runtime/environment";
+import { supportsLocalSessions, isServer } from "../lib/runtime/environment";
 import { acquireTerminalView, scheduleTerminalViewDisposal, type TerminalView } from "./terminalView";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from "react";
 import { createPortal } from "react-dom";
@@ -16,7 +16,7 @@ import {
   type TerminalStagingEvent,
 } from "@qterm/services/sessions";
 import { useWorkspace } from "../workspace/WorkspaceProvider";
-import { terminalClipboardPlatform } from "./terminalClipboardShortcuts";
+import { terminalClipboardPlatform, type TerminalClipboardInput } from "./terminalClipboardShortcuts";
 import { useTerminalInputBindings } from "./useTerminalInputBindings";
 import { resetTerminalSession } from "./terminalSessionReset";
 import { ensureTerminalSearch } from "./terminalSearch";
@@ -117,13 +117,13 @@ export function TerminalPanel({ blockId, sessionKey, visible, local, osc7Enabled
     closeContextMenu();
   }, [closeContextMenu]);
 
-  const requestPaste = useCallback(async () => {
+  const requestPaste = useCallback(async (clipboard?: TerminalClipboardInput) => {
     if (!inputEnabled) return;
     const view = viewRef.current;
     if (!view) return;
     await view.inputScheduler.runExclusive(async (capture) => {
       closeContextMenu(false);
-      if (local) {
+      if (local && !isServer) {
         const sessionId = connectedSessionIdRef.current;
         const pasteRequestId = ++pasteRequestIdRef.current;
         setStagingSessionId(sessionId);
@@ -193,7 +193,7 @@ export function TerminalPanel({ blockId, sessionKey, visible, local, osc7Enabled
         }
       };
       try {
-        const result = await startTerminalClipboardStaging(sessionId, updateFromEvent);
+        const result = await startTerminalClipboardStaging(sessionId, updateFromEvent, ...(isServer ? [clipboard] : []));
         if (viewRef.current !== view || connectedSessionIdRef.current !== sessionId) {
           return;
         }

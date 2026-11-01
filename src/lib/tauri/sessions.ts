@@ -45,7 +45,9 @@ export function closeSession(sessionId: string): Promise<void> {
 export function startTerminalClipboardStaging(
   sessionId: string,
   onEvent: (event: TerminalStagingEvent) => void,
+  browserInput?: import("../contracts/sessions").TerminalClipboardInput,
 ): Promise<TerminalClipboardPasteStart> {
+  void browserInput;
   return invoke("session_start_clipboard_staging", {
     sessionId,
     onEvent: new Channel<TerminalStagingEvent>(onEvent),

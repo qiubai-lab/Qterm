@@ -12,7 +12,7 @@ use std::{
     collections::HashMap,
     sync::{
         Arc, Mutex,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
     },
     time::{Duration, Instant},
 };
@@ -24,6 +24,7 @@ struct Entry {
     expires: Instant,
     started: bool,
     cancelled: Arc<AtomicBool>,
+    progress: Arc<AtomicU64>,
 }
 impl Transfers {
     fn access<T>(
@@ -49,6 +50,7 @@ impl Transfers {
             expires: Instant::now() + Duration::from_secs(660),
             started: false,
             cancelled: Arc::new(AtomicBool::new(false)),
+            progress: Arc::new(AtomicU64::new(0)),
         });
         if entry.owner != owner {
             return Err(ApiError::forbidden());
@@ -65,6 +67,20 @@ impl Transfers {
             entry.started = true;
             Ok(entry.cancelled.clone())
         })
+    }
+    fn progress(&self, owner: &str, id: &str) -> Result<Arc<AtomicU64>> {
+        let entries = self.0.lock().unwrap();
+        let entry = entries.get(id).ok_or_else(|| {
+            ApiError::new(
+                axum::http::StatusCode::NOT_FOUND,
+                "transferNotFound",
+                "传输尚未开始或已过期",
+            )
+        })?;
+        if entry.owner != owner {
+            return Err(ApiError::forbidden());
+        }
+        Ok(entry.progress.clone())
     }
     pub fn finish(&self, id: &str) {
         if let Some(entry) = self.0.lock().unwrap().get_mut(id) {
@@ -94,16 +110,29 @@ pub async fn cancel(
     Ok(Json(serde_json::Value::Null))
 }
 
+pub async fn progress(
+    State(state): State<Arc<ServerState>>,
+    Extension(owner): Extension<Identity>,
+    Path(id): Path<String>,
+) -> Result<Json<serde_json::Value>> {
+    let progress = state.transfer_tasks.progress(&owner.0, &id)?;
+    Ok(Json(
+        serde_json::json!({"transferredBytes": progress.load(Ordering::Relaxed)}),
+    ))
+}
+
 pub struct Operation {
     state: Arc<ServerState>,
     id: String,
     owner: String,
     pub cancelled: Arc<AtomicBool>,
+    pub progress: Arc<AtomicU64>,
 }
 impl Operation {
     pub fn start(state: &Arc<ServerState>, owner: &str, id: String) -> Result<Self> {
         Ok(Self {
             cancelled: state.transfer_tasks.start(owner, &id)?,
+            progress: state.transfer_tasks.progress(owner, &id)?,
             state: state.clone(),
             id,
             owner: owner.into(),
@@ -153,6 +182,26 @@ mod tests {
             registry.finish(&id);
         }
         assert!(registry.start("one", &first).is_err());
+    }
+    #[test]
+    fn progress_is_owner_scoped_and_does_not_create_unknown_tasks() {
+        let registry = Transfers::default();
+        let id = uuid::Uuid::new_v4().to_string();
+        assert!(registry.progress("one", &id).is_err());
+        registry.start("one", &id).unwrap();
+        registry
+            .progress("one", &id)
+            .unwrap()
+            .store(42, Ordering::Relaxed);
+        registry.finish(&id);
+        assert_eq!(
+            registry
+                .progress("one", &id)
+                .unwrap()
+                .load(Ordering::Relaxed),
+            42
+        );
+        assert!(registry.progress("two", &id).is_err());
     }
     #[test]
     fn active_transfer_observes_cancellation_and_cannot_replay() {

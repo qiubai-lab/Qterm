@@ -258,3 +258,11 @@
 - `crates/qterm-server/src/transfer_storage.rs`、`transfer_archive.rs`：本地/SFTP 上传目的路径、目录暂存与有界 tar 归档；`transfers.rs` 保留 HTTP 准入/票据，`transfer_lifecycle.rs` 保留取消与重放控制。
 - `src/server/uploadSelection.ts`、`services/fileDrop.ts`、`services/transfers.ts`：浏览器文件选择与目录拖放句柄、批次上传、下载和取消；复用 Files 面板。
 - `scripts/test-server-blocks.py`、`test-server-blocks-ssh.py`：原生/容器本地目录传输与 Git，真实 SSH 的 SFTP 目录、Git、三类 TCP 转发及重新登录后的原会话恢复验收。
+
+### Web 上传进度与终端剪贴板
+
+- `src/server/uploadRequest.ts`：带页面凭证的 XHR 发送进度、目标写入进度轮询、取消与最终确认；由 Files 与终端粘贴共同使用。
+- `src/server/terminalClipboard.ts`：读取粘贴快照/浏览器剪贴板、上传文件、完成/取消事件适配；共享终端保持输入排序、旧会话保护和路径粘贴所有权。
+- `crates/qterm-server/src/terminal_clipboard.rs`：验证终端身份，受限 multipart 临时文件落地，本地私有运行缓存与核心 RemoteTerminalStagingStore 对接；客户端文件名不作为服务端路径。
+- `transfer_lifecycle.rs` 的任务记录持有所有者绑定的目标字节进度；进度查询不隐式注册任务。
+- `scripts/test-server-clipboard.py`：本地/容器与真实 SSH 的文件粘贴、路径内容、进度、取消及会话隔离验收。

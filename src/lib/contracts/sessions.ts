@@ -70,3 +70,6 @@ export type TerminalClipboardPasteStart =
   | { kind: "empty" }
   | { kind: "text"; text: string }
   | { kind: "transfer"; taskId: string };
+
+/** Snapshot of browser paste data, captured before the event becomes inaccessible. */
+export interface TerminalClipboardInput { files: File[]; text: string }

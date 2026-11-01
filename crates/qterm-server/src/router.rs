@@ -105,6 +105,8 @@ pub fn router(state: Arc<ServerState>) -> Router {
         .route("/files/rename",post(files::rename)).route("/files/delete",post(files::delete))
         .route("/transfers/upload",post(transfers::upload).layer(DefaultBodyLimit::max(transfers::MAX_TRANSFER_BYTES as usize+1024*1024)))
         .route("/transfers/download",post(transfers::prepare_download))
+        .route("/transfers/{id}/progress",get(crate::transfer_lifecycle::progress))
+        .route("/terminal/clipboard",post(crate::terminal_clipboard::upload).layer(DefaultBodyLimit::max(transfers::MAX_TRANSFER_BYTES as usize+1024*1024)))
         .route("/transfers/{id}/cancel",post(crate::transfer_lifecycle::cancel))
         .route("/downloads/{id}",get(transfers::download))
         .route_layer(middleware::from_fn_with_state(state.clone(),auth::guard));

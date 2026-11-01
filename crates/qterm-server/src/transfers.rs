@@ -52,7 +52,14 @@ pub(crate) async fn transfer(
     state.authorize(owner, session)?;
     let (tx, rx) = tokio::sync::oneshot::channel();
     let tx = Mutex::new(Some(tx));
+    let progress = operation.progress.clone();
     let sink = Arc::new(move |event| {
+        if let TransferEvent::Progress {
+            transferred_bytes, ..
+        } = &event
+        {
+            progress.store(*transferred_bytes, std::sync::atomic::Ordering::Relaxed);
+        }
         let result = match event {
             TransferEvent::Completed => Some(true),
             TransferEvent::Cancelled | TransferEvent::Failed => Some(false),

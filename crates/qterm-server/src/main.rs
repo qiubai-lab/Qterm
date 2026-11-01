@@ -26,6 +26,7 @@ mod settings;
 mod socket;
 mod socket_io;
 mod state;
+mod terminal_clipboard;
 #[cfg(test)]
 mod tests;
 mod transfer_archive;

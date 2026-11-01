@@ -7,7 +7,4 @@ export const resizeSession: typeof Desktop.resizeSession = async (id, columns, r
 export const acceptHostKey: typeof Desktop.acceptHostKey = async id => control(id, { type: "acceptHostKey" });
 export const rejectHostKey: typeof Desktop.rejectHostKey = async id => control(id, { type: "rejectHostKey" });
 export const closeSession: typeof Desktop.closeSession = async id => close(id);
-export const startTerminalClipboardStaging: typeof Desktop.startTerminalClipboardStaging = async () => {
-  const text = await navigator.clipboard.readText(); return text ? { kind: "text", text } : { kind: "empty" };
-};
-export const cancelTerminalClipboardStaging: typeof Desktop.cancelTerminalClipboardStaging = async () => undefined;
+export { startClipboard as startTerminalClipboardStaging, cancelClipboard as cancelTerminalClipboardStaging } from "../terminalClipboard";

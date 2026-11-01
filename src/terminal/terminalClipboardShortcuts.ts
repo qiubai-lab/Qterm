@@ -1,14 +1,16 @@
 import type { Terminal } from "@xterm/xterm";
 
+export type { TerminalClipboardInput } from "../lib/contracts/sessions";
+
 export type ClipboardPlatform = "mac" | "windows" | "linux";
 
-export function bindTerminalClipboardEvents(element: HTMLElement, inputEnabled: boolean, paste: () => Promise<void>, selectAll: () => void): () => void {
+export function bindTerminalClipboardEvents(element: HTMLElement, inputEnabled: boolean, paste: (event?: ClipboardEvent) => Promise<void>, selectAll: () => void): () => void {
   // Native Edit menus can dispatch paste without any keydown. Capture before
   // xterm's textarea listener, which only reads text/plain and bypasses staging.
   const onPaste = (event: Event) => {
     event.preventDefault();
     event.stopImmediatePropagation();
-    if (inputEnabled) void paste();
+    if (inputEnabled) void paste(event as ClipboardEvent);
   };
   const onSelectAll = (event: Event) => {
     event.preventDefault();

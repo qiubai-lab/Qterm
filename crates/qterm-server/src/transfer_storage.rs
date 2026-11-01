@@ -174,6 +174,9 @@ async fn copy(source: &Path, destination: &Path, operation: &Operation) -> Resul
             .write_all(&buffer[..size])
             .await
             .map_err(|_| ApiError::storage())?;
+        operation
+            .progress
+            .store(total, std::sync::atomic::Ordering::Relaxed);
     }
     output.flush().await.map_err(|_| ApiError::storage())
 }
