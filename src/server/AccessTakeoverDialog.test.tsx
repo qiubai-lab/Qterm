@@ -6,6 +6,7 @@ it("offers cancellation or one explicit takeover and keeps pending submission di
   const cancel=vi.fn(),takeover=vi.fn(),user=userEvent.setup();
   const view=render(<AccessTakeoverDialog busy={false} onCancel={cancel} onTakeover={takeover}/>);
   expect(screen.getByRole("dialog",{name:"当前工作台正在使用中"})).toBeInTheDocument();
+  expect(screen.getByText("若凭证库已初始化，接管后需验证主密码才能使用工作台。")).toBeInTheDocument();
   expect(takeover).not.toHaveBeenCalled();
   await user.click(screen.getByRole("button",{name:"取消"}));expect(cancel).toHaveBeenCalledOnce();
   await user.click(screen.getByRole("button",{name:"直接接管"}));expect(takeover).toHaveBeenCalledOnce();

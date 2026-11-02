@@ -61,12 +61,19 @@ pub async fn takeover(
 ) -> Result<Response> {
     check_origin(&headers, &state.config.origin)?;
     let _gate = state.vault_gate.lock().await;
+    let vault = state.vault.status()?;
+    // Publish the new owner and its lock together, before any data request can be admitted.
+    let terminal_locked = vault.initialized && !vault.legacy;
     admitted(
         &state,
         state
             .auth
             .access
-            .takeover(&input.ticket, &input.client_id)?,
+            .takeover(&input.ticket, &input.client_id, terminal_locked)?,
         true,
     )
 }
+
+#[cfg(test)]
+#[path = "access_takeover_tests.rs"]
+mod tests;

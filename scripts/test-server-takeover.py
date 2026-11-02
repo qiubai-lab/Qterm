@@ -9,6 +9,7 @@ from pathlib import Path
 import secrets
 import tempfile
 from websockets.legacy.client import connect
+from websockets.exceptions import InvalidStatusCode
 
 spec=importlib.util.spec_from_file_location('local_fixture',Path(__file__).with_name('test-server-local.py'))
 local=importlib.util.module_from_spec(spec);spec.loader.exec_module(local)
@@ -42,7 +43,12 @@ def take(f,ticket):
     assert reply['authenticated'];f.access_key=reply['accessKey']
 
 async def verify(f):
-    f.login();first_presence=await presence(f)
+    f.login()
+    master=secrets.token_urlsafe(24)
+    recovery=f.api('/vault/recovery','POST')['id']
+    f.api('/vault/recovery/'+recovery)
+    f.api('/vault/initialize','POST',{'recoveryId':recovery,'masterPassword':master,'savedRecovery':True})
+    first_presence=await presence(f)
     if f.windows:f.api('/settings/terminal','PUT',{'historyFreeBashEnabled':False})
     ws,identifier,_=await terminal(f)
     command=b'set QTERM_TAKEOVER=survived\recho ready-proof\r' if f.windows else b"export QTERM_TAKEOVER=survived; printf 'ready-%s\\n' proof\r"
@@ -63,7 +69,11 @@ async def verify(f):
     rival=other(f)
     late=rival.api('/login','POST',{'password':f.password,'clientId':rival.client_id})
     take(next_client,prompt['takeoverTicket'])
-    assert json.loads(await asyncio.wait_for(first_presence.recv(),5))['type']=='revoked'
+    async def wait_revoked():
+        while True:
+            event=json.loads(await first_presence.recv())
+            if event['type']=='revoked':return event
+    assert (await asyncio.wait_for(wait_revoked(),5))['reason']=='sessionReplaced'
     await asyncio.wait_for(ws.wait_closed(),5)
     f.api('/workspace',status=401)
     # Shared cookies alone cannot revive the old page.
@@ -73,6 +83,19 @@ async def verify(f):
     f.api('/logout','POST',status=401)
     f.api('/runtime/sessions/'+identifier,'DELETE',status=401)
     rival.api('/access/takeover','POST',{'ticket':late['takeoverTicket'],'clientId':rival.client_id},status=409)
+    assert next_client.api('/terminal-lock')['locked']
+    for path in ['/workspace','/runtime/sessions','/credentials']:
+        assert next_client.api(path,status=423)['code']=='terminalLocked'
+    try:
+        await terminal(next_client)
+        raise AssertionError('locked takeover admitted a terminal socket')
+    except InvalidStatusCode as error:
+        assert error.status_code==423
+    next_client.api('/terminal-lock/unlock','POST',{'masterPassword':'wrong-master-password'},status=400)
+    assert next_client.api('/terminal-lock')['locked']
+    assert next_client.api('/access/resume','POST',next_client.proof())['authenticated']
+    assert next_client.api('/terminal-lock')['locked']
+    assert not next_client.api('/terminal-lock/unlock','POST',{'masterPassword':master})['locked']
     next_presence=await presence(next_client)
     resumed,same_id,screen=await terminal(next_client)
     assert same_id==identifier and b'ready-proof' in screen
@@ -90,7 +113,7 @@ async def verify(f):
     refreshed,same_id,_=await terminal(refresh)
     assert same_id==identifier
     await refreshed.close();await refresh_presence.close()
-    print('PASS: occupancy/cancel, copied tab isolation, explicit takeover, immediate revocation, stale takeover rejection, old HTTP/WS denial, same PTY/environment/layout/draft, refresh resume')
+    print('PASS: occupancy/cancel, copied tab isolation, takeover master-password lock, HTTP/WS denial before unlock, wrong password and locked resume, immediate revocation, same PTY/environment/layout/draft after unlock, refresh resume')
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser();parser.add_argument('--container',action='store_true');args=parser.parse_args()

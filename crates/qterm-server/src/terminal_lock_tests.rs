@@ -211,7 +211,7 @@ async fn terminal_lock_requires_an_initialized_vault_and_authenticated_owner() {
 }
 
 #[tokio::test]
-async fn new_admission_and_logout_end_the_lock_lifetime() {
+async fn takeover_starts_a_new_lock_and_logout_ends_its_lifetime() {
     let (_dir, state, token) = fixture();
     initialize(&state);
     call(
@@ -229,7 +229,7 @@ async fn new_admission_and_logout_end_the_lock_lifetime() {
     let admission = state
         .auth
         .access
-        .takeover(&ticket, "takeover-page")
+        .takeover(&ticket, "takeover-page", true)
         .unwrap();
     let crate::access::Admission::Granted {
         ref cookie,
@@ -250,7 +250,7 @@ async fn new_admission_and_logout_end_the_lock_lifetime() {
         )
         .unwrap();
     crate::access_transport::admitted(&state, admission, true).unwrap();
-    assert!(!state.auth.access.terminal_locked(&owner).unwrap());
+    assert!(state.auth.access.terminal_locked(&owner).unwrap());
     assert!(
         state
             .auth

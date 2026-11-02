@@ -100,3 +100,15 @@ it("does not fetch settings before a locked refresh reaches the lock boundary",a
   await act(async()=>{mocks.presence.mock.calls[0][0]();});
   expect(view.result.current.phase).toBe("workspace");expect(mocks.theme).not.toHaveBeenCalled();
 });
+
+it("checks the new takeover lock before fetching workspace settings", async () => {
+  mocks.api.mockResolvedValueOnce({authenticated:false,takeoverTicket:"ticket"}).mockResolvedValueOnce({authenticated:true,accessKey:"new-key"});
+  mocks.lock.mockResolvedValue({locked:true});
+  const view = renderHook(useServerAccess);
+  await act(() => view.result.current.login("password"));
+  await act(() => view.result.current.takeover());
+  await act(async () => mocks.presence.mock.calls[0][0]());
+  expect(view.result.current.phase).toBe("workspace");
+  expect(mocks.lock).toHaveBeenCalledOnce();
+  expect(mocks.theme).not.toHaveBeenCalled();
+});

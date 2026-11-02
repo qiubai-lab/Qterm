@@ -168,12 +168,12 @@ impl Access {
         );
         Ok(Admission::Occupied { ticket })
     }
-    fn grant(&self, inner: &mut Inner, client: &str) -> Result<Admission> {
+    fn grant(&self, inner: &mut Inner, client: &str, terminal_locked: bool) -> Result<Admission> {
         let cookie = random_token()?;
         let key = random_token()?;
         let owner = random_token()?;
         inner.login = Some(Login {
-            terminal_locked: false,
+            terminal_locked,
             cookie: cookie.clone(),
             key: key.clone(),
             client: client.into(),
@@ -192,7 +192,7 @@ impl Access {
         if inner.login.as_ref().is_some_and(occupied) {
             Self::pending(&mut inner, client)
         } else {
-            self.grant(&mut inner, client)
+            self.grant(&mut inner, client, false)
         }
     }
     pub fn resume(&self, cookie: &str, proof: &Proof) -> Result<Admission> {
@@ -227,7 +227,7 @@ impl Access {
         }
         Ok(result)
     }
-    pub fn takeover(&self, ticket: &str, client: &str) -> Result<Admission> {
+    pub fn takeover(&self, ticket: &str, client: &str, terminal_locked: bool) -> Result<Admission> {
         valid_client(client)?;
         let mut inner = self.inner.lock().unwrap();
         let pending = inner.pending.remove(ticket).ok_or_else(|| {
@@ -247,7 +247,7 @@ impl Access {
                 "连接状态已变化，请重新登录后再确认接管",
             ));
         }
-        self.grant(&mut inner, client)
+        self.grant(&mut inner, client, terminal_locked)
     }
     pub fn revoke(&self) {
         let mut inner = self.inner.lock().unwrap();

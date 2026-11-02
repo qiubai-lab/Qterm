@@ -34,7 +34,7 @@ fn confirmed_takeover_revokes_old_http_and_socket_identity_even_with_shared_cook
     let (cookie, key) = granted(access.login("first").unwrap());
     let old = access.authorize(&cookie, &proof(&key, "first")).unwrap();
     let pending = ticket(access.login("second").unwrap());
-    let (new_cookie, new_key) = granted(access.takeover(&pending, "second").unwrap());
+    let (new_cookie, new_key) = granted(access.takeover(&pending, "second", false).unwrap());
     assert!(!access.valid(&old));
     assert_eq!(
         access.cookie_owner(&cookie).unwrap_err().code,
@@ -58,7 +58,7 @@ fn confirmed_takeover_revokes_old_http_and_socket_identity_even_with_shared_cook
             .authorize(&new_cookie, &proof(&new_key, "second"))
             .is_ok()
     );
-    assert!(access.takeover(&pending, "second").is_err());
+    assert!(access.takeover(&pending, "second", false).is_err());
 }
 
 #[test]
@@ -157,7 +157,7 @@ fn concurrent_confirmation_has_one_winner_and_late_requests_cannot_steal_it() {
             let barrier = barrier.clone();
             std::thread::spawn(move || {
                 barrier.wait();
-                access.takeover(&ticket, client).is_ok()
+                access.takeover(&ticket, client, false).is_ok()
             })
         })
         .collect::<Vec<_>>();
@@ -183,7 +183,7 @@ fn expired_confirmation_does_not_affect_current_owner() {
         .get_mut(&pending)
         .unwrap()
         .expires = Instant::now() - Duration::from_secs(1);
-    assert!(access.takeover(&pending, "second").is_err());
+    assert!(access.takeover(&pending, "second", false).is_err());
     assert!(access.authorize(&cookie, &proof(&key, "first")).is_ok());
 }
 #[test]

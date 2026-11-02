@@ -61,3 +61,19 @@ it("keeps readers unmounted when the initial lock check fails and permits retry"
   fireEvent.click(screen.getByRole("button",{name:"重试"}));
   await screen.findByLabelText("文件草稿");expect(mocks.mount).toHaveBeenCalledOnce();
 });
+
+it("opens a locked takeover only after successful master-password verification", async () => {
+  mocks.api.mockResolvedValueOnce({locked:true}).mockResolvedValueOnce({locked:false});
+  render(<ServerWorkbench onLogout={vi.fn()}/>);
+  await screen.findByRole("heading", {name:"终端已锁定"});
+  expect(dataPaused()).toBe(true);
+  expect(mocks.mount).not.toHaveBeenCalled();
+  expect(mocks.restore).not.toHaveBeenCalled();
+  fireEvent.change(screen.getByLabelText("主密码"), {target:{value:"takeover-master-password"}});
+  fireEvent.click(screen.getByRole("button", {name:"解锁终端和凭证"}));
+  await screen.findByLabelText("文件草稿");
+  expect(mocks.api).toHaveBeenLastCalledWith("/terminal-lock/unlock", "POST", {masterPassword:"takeover-master-password"});
+  expect(dataPaused()).toBe(false);
+  expect(mocks.mount).toHaveBeenCalledOnce();
+  expect(mocks.restore).toHaveBeenCalledOnce();
+});

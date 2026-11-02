@@ -249,7 +249,7 @@
 ### Web 独占接管
 
 - `crates/qterm-server/src/access.rs`、`access_tests.rs`：唯一页面访问所有者、限时确认票据、并发接管、恢复与心跳宽限；不拥有终端进程。
-- `access_transport.rs`、`access_socket.rs`：接管/恢复 HTTP 边界与页面在线 WebSocket；`auth.rs` 统一验证 HTTP 页面凭证，终端握手另行验证同一身份。
+- `access_transport.rs`、`access_takeover_tests.rs`、`access_socket.rs`：接管/恢复 HTTP 边界、接管主密码验证门禁回归与页面在线 WebSocket；`auth.rs` 统一验证 HTTP 页面凭证，终端握手另行验证同一身份。
 - `src/server/useServerAccess.ts`、`accessIdentity.ts`、`accessPresence.ts`：页面身份、登录/恢复/确认生命周期与撤销后的重连停止；`AccessTakeoverDialog.tsx` 复用共享对话框；`AccessReplacedDialog.tsx` 区分断线重连、登录失效与接管原因，以不同标题图标阻断旧工作台交互；网络恢复自动返回，确认后回登录页并停止重连。
 - `scripts/test-server-takeover.py`：跨平台原生/容器接管验收，覆盖旧页面拒绝与原终端、布局、草稿保留。
 
@@ -272,7 +272,7 @@
 
 ### Web 终端锁恢复
 
-- `crates/qterm-server/src/access.rs`：登录会话内存中的终端锁标记，跨文档 resume 保留，新登录/接管/撤销重置；不进入 Workspace 文件。`terminal_lock.rs` 提供受当前 owner 保护的读/锁/解锁端点，与凭证库使用同一 vault gate；`vault.rs` 共享主密码验证路径。
+- `crates/qterm-server/src/access.rs`：登录会话内存中的终端锁标记，跨文档 resume 保留，新登录/撤销结束旧锁；接管已初始化且非旧版的凭证库时原子创建锁定的新会话，不进入 Workspace 文件。`terminal_lock.rs` 提供受当前 owner 保护的读/锁/解锁端点，与凭证库使用同一 vault gate；`vault.rs` 共享主密码验证路径。
 - `src/workspace/useTerminalLock.ts`：桌面挂载期锁与可注入 Web 后端的恢复/操作状态，未知状态保持遮挡，丢失响应后重新确认；`useTerminalAutoLock.ts` 保留页面活动和空闲计时。`src/server/terminalLock.ts` 映射 HTTP、验证响应并切换浏览器数据准入；`ServerWorkbench` 在首次挂载工作区前确认锁状态，后续锁定保留草稿，组合锁屏与共享 `workbenchActivity`。桌面 `WorkspaceShell` 保留原挂载期锁行为。
 
 - `src/server/dataAccess.ts`：Web 业务请求可撤销信号、暂停订阅与控制请求白名单；`http.ts`、`uploadRequest.ts` 和 `sessionTransport.ts` 分别约束 HTTP、XHR 和数据 WebSocket，`accessPresence.ts` 保留访问存活及锁变更通知。`src/files/useFileLocationLoad.ts` 在工作台恢复后同步当前目录，不卸载编辑草稿。
