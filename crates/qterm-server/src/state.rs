@@ -4,10 +4,7 @@ use crate::{
     error::{ApiError, Result},
 };
 use qterm_core::{
-    application::{
-        credential_lifecycle::CredentialLifecycle, profile_service::ProfileService,
-        workspace_service::WorkspaceService,
-    },
+    application::{profile_service::ProfileService, workspace_service::WorkspaceService},
     infrastructure::{
         persistence::{
             json_credential_vault::JsonCredentialVault,
@@ -39,6 +36,7 @@ pub struct ServerState {
             qterm_core::infrastructure::git_cli::SystemGitExecutor,
         >,
     >,
+    pub git_observations: crate::git_observation::Observations,
     pub git_operations: Arc<tokio::sync::Semaphore>,
     pub config: Config,
     pub settings: crate::settings::ServerSettings,
@@ -47,7 +45,7 @@ pub struct ServerState {
     pub profiles: ProfileService<JsonProfileRepository>,
     pub workspaces: WorkspaceService<JsonWorkspaceRepository>,
     pub workspace_revision: Mutex<u64>,
-    pub vault: Arc<CredentialLifecycle<JsonCredentialVault>>,
+    pub vault: Arc<crate::vault_events::ObservedVault>,
     pub credential_workflow:
         Mutex<qterm_core::application::credential_workflow::CredentialWorkflowState>,
     pub sessions: Arc<SshSessionManager>,
@@ -98,6 +96,7 @@ impl ServerState {
             network_gate: Default::default(),
             network_running: Default::default(),
             git: Arc::new(qterm_core::application::git_service::GitService::new(qterm_core::infrastructure::git_cli::SystemGitExecutor::discover())),
+            git_observations: Default::default(),
             git_operations: Arc::new(tokio::sync::Semaphore::new(4)),
             workspace_runtime: Default::default(),
             retained: Default::default(),
@@ -110,7 +109,7 @@ impl ServerState {
                 config.data.join("device/workspaces.json"),
             )),
             workspace_revision: Mutex::new(0),
-            vault: Arc::new(CredentialLifecycle::new(JsonCredentialVault::new(
+            vault: Arc::new(crate::vault_events::ObservedVault::new(JsonCredentialVault::new(
                 config.data.join("data/secrets.vault"),
             ))),
             sessions: Arc::new(SshSessionManager::new(

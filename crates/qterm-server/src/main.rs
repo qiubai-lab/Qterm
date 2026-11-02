@@ -10,6 +10,10 @@ mod data_access;
 mod error;
 mod files;
 mod git;
+mod git_events_socket;
+mod git_local_watch;
+mod git_observation;
+mod git_observation_worker;
 mod git_remote;
 mod local_files;
 mod local_socket;
@@ -36,6 +40,7 @@ mod transfer_lifecycle;
 mod transfer_storage;
 mod transfers;
 mod vault;
+mod vault_events;
 mod workspace_recovery;
 mod workspace_runtime;
 

@@ -115,7 +115,7 @@ pub async fn guard(
     let socket_upgrade = *request.method() == axum::http::Method::GET
         && matches!(
             path,
-            "/access" | "/sessions" | "/local/sessions" | "/runtime/attach"
+            "/access" | "/git/events" | "/sessions" | "/local/sessions" | "/runtime/attach"
         )
         && request
             .headers()

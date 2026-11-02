@@ -108,3 +108,10 @@ Frontend -> Desktop Tauri Commands / Web HTTP+WebSocket -> Application -> Domain
 
 - Web 的 `ServerWorkbench` 在锁状态确认且已解锁后才首次挂载 WorkspaceProvider、面板与会话恢复；后续锁定保留组件状态和未保存草稿，但隐藏工作台及其 portal，暂停轮询、目录读取、草稿同步和通知。`dataAccess` 拥有可撤销的请求信号，锁定中止 HTTP/XHR 并拒绝迟到结果；`sessionTransport` 断开视图而不删除后台会话，解锁仅重新附着原 session ID，不重放输入或认证信息。
 - 服务端 `data_access` 在登录校验后按 HTTP 方法和精确路径放行最小控制接口：auth、access presence、terminal-lock 状态/锁定/解锁和 logout。业务接口返回独立的 423/terminalLocked，不触发登录过期。请求体、响应体与数据 WebSocket 使用可撤销访问代次，锁定/解锁后旧流仍失效。锁定取消文件传输并清除未领取下载票据；已接受的普通 mutation 不回滚或自动重放，解锁后重新同步状态和持久化 revision。已发送的字节及锁前浏览器历史无法撤回。
+
+
+### Web 凭证与 Git 观察通道
+
+`ObservedVault` 在真实生命周期状态变化后发布独立 watch revision；`access_socket` 在工作台未锁定时发送基础状态，禁止复用 Access 撤销代次，避免仅锁凭证库关闭现有终端。前端 observer 区分首次基线与后续变化，过滤迟到 HTTP 和旧 revision，重新连接时接受新的服务端基线。
+
+Git 使用独立、受 data permit 约束的 `/git/events`，不混入终端输出。`Observations` 按 owner + target 共享短期快照与采样任务，WS 只传失效通知，HTTP 读取缓存；缓存不持久化。Local 使用 native 文件监听（含 `.git` 指针和 commondir）、350ms 合并及低频校准，Remote 使用按订阅存活的 15 秒共享采样。应用内 mutation 的快照立即进入缓存，慢采样不能覆盖较新的 mutation 结果。最后一个订阅 drop 终止任务；锁定撤销 WS/HTTP，解锁重新建立订阅和基线。

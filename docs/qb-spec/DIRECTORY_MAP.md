@@ -226,7 +226,9 @@
 - `crates/qterm-server`: HTTP/WebSocket composition, login/session ownership, process configuration, data lock and bounded transfer staging.
 - `crates/qterm-server/src/login_password.rs`: bounded deployment password-file loading, plaintext-to-Argon2id conversion and supplied hash validation; shared by startup configuration and the optional hash CLI, without rewriting source secrets.
 - `src/server`: authentication entry and browser service adapters; mounts the same WorkspaceShell, dialogs, xterm and Files components as desktop. `server.css` only styles login.
-- `src/server/services/vaultStatusObserver.ts`: shared vault polling lifecycle, initial status baseline, change-only notifications and stale-response protection; credential mutations retain immediate notifications through `services/credentials.ts`.
+- `src/server/services/vaultStatusObserver.ts` / `vaultStatus.ts`: `/access` vault event baseline, monotonic revision filtering, reconnect reconciliation and one-shot HTTP fallback; initial state never becomes a lock event. `crates/qterm-server/src/vault_events.rs` observes lifecycle transitions independently of access revocation.
+- `src/git/useGitSnapshotRefresh.ts`: visible-pane subscription lifecycle and deferred invalidation reads; desktop retains its focus/15-second refresh policy. `src/server/gitObservationTransport.ts` multiplexes owner-authenticated Git subscriptions, shares HTTP cache reads, and stops/reconnects with data access.
+- `crates/qterm-server/src/git_events_socket.rs` / `git_observation.rs`: authenticated Git invalidations and owner-scoped cached snapshots. `git_observation_worker.rs` shares one sampler per subscribed target; `git_local_watch.rs` watches local worktree/Git metadata, including linked worktrees. Last unsubscribe releases the worker and native watcher.
 - `vite.web.config.ts`, `web/index.html`: explicit real-browser build, independent of desktop and demo.
 
 - `src/workspace/WorkspaceChrome.tsx`: shared workspace header and desktop window gestures; browser logout occupies the native control area.
@@ -248,7 +250,7 @@
 
 - `crates/qterm-server/src/access.rs`、`access_tests.rs`：唯一页面访问所有者、限时确认票据、并发接管、恢复与心跳宽限；不拥有终端进程。
 - `access_transport.rs`、`access_socket.rs`：接管/恢复 HTTP 边界与页面在线 WebSocket；`auth.rs` 统一验证 HTTP 页面凭证，终端握手另行验证同一身份。
-- `src/server/useServerAccess.ts`、`accessIdentity.ts`、`accessPresence.ts`：页面身份、登录/恢复/确认生命周期与撤销后的重连停止；`AccessTakeoverDialog.tsx` 复用共享对话框；`AccessReplacedDialog.tsx` 阻断旧工作台交互，等待确认后回登录页。
+- `src/server/useServerAccess.ts`、`accessIdentity.ts`、`accessPresence.ts`：页面身份、登录/恢复/确认生命周期与撤销后的重连停止；`AccessTakeoverDialog.tsx` 复用共享对话框；`AccessReplacedDialog.tsx` 区分断线重连、登录失效与接管原因，以不同标题图标阻断旧工作台交互；网络恢复自动返回，确认后回登录页并停止重连。
 - `scripts/test-server-takeover.py`：跨平台原生/容器接管验收，覆盖旧页面拒绝与原终端、布局、草稿保留。
 
 ### Web 文件、Git 与网络

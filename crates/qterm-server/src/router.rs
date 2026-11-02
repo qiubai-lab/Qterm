@@ -15,6 +15,8 @@ pub fn router(state: Arc<ServerState>) -> Router {
         .route("/network/rules/{id}",axum::routing::put(crate::network::update).delete(crate::network::delete))
         .route("/network/start",post(crate::network::start))
         .route("/network/stop",post(crate::network::stop))
+        .route("/git/events",get(crate::git_events_socket::upgrade))
+        .route("/git/observations/snapshot",post(crate::git_events_socket::snapshot))
         .route("/git/available",get(crate::git::available))
         .route("/git/snapshot",post(crate::git::git_snapshot))
         .route("/git/initialize",post(crate::git::git_initialize))

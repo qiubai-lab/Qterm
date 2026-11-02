@@ -1,3 +1,4 @@
+import { vaultStatus } from "./vaultStatus";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { VaultStatus } from "../lib/contracts/credentials";
@@ -11,7 +12,9 @@ vi.mock("@qterm/services/credentials", () => vi.importActual("./services/credent
 vi.mock("../lib/runtime/environment", () => ({ isServer: true, isDemo: false }));
 
 let status: VaultStatus;
+let revision=0;
 beforeEach(() => {
+  vaultStatus.reset(); revision=0;
   vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
   status = { initialized: false, unlocked: false, legacy: false };
   transport.api.mockImplementation(async (path: string) => {
@@ -29,28 +32,28 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.clearAllMocks(); });
 
-async function poll() {
-  await act(async () => { await vi.advanceTimersByTimeAsync(6000); });
+async function pushStatus() {
+  await act(async () => { vaultStatus.receive({...status,revision:++revision,reason:"manual"}); await vi.advanceTimersByTimeAsync(6000); });
 }
 
-it("preserves initialization and recovery confirmation across polls, then completes initialization", async () => {
+it("preserves initialization and recovery confirmation across status synchronization, then completes initialization", async () => {
   render(<CredentialDialog onClose={vi.fn()}/>);
   const dialog = await screen.findByRole("dialog", { name: "初始化密码保险库" });
   fireEvent.change(within(dialog).getByLabelText("主密码"), { target: { value: "test-master-password" } });
   fireEvent.change(within(dialog).getByLabelText("确认主密码"), { target: { value: "test-master-password" } });
-  await poll();
+  await pushStatus();
   expect(dialog).toBeInTheDocument();
   expect(within(dialog).getByLabelText("主密码")).toHaveValue("test-master-password");
   expect(within(dialog).getByLabelText("确认主密码")).toHaveValue("test-master-password");
   fireEvent.click(within(dialog).getByRole("button", { name: "初始化" }));
   const recovery = screen.getByRole("dialog", { name: "保存恢复密钥" });
-  await poll();
+  await pushStatus();
   expect(recovery).toBeInTheDocument();
   const confirm = within(recovery).getByRole("button", { name: "确认保存并初始化" });
   expect(confirm).toBeDisabled();
   fireEvent.click(within(recovery).getByRole("button", { name: "下载恢复密钥" }));
   fireEvent.click(await within(recovery).findByRole("checkbox"));
-  await poll();
+  await pushStatus();
   expect(confirm).toBeEnabled();
   fireEvent.click(confirm);
   expect(await screen.findByText("选择或创建凭证")).toBeInTheDocument();
@@ -61,13 +64,13 @@ it("preserves initialization and recovery confirmation across polls, then comple
   });
 });
 
-it("preserves an unlock password across unchanged polls and unlocks successfully", async () => {
+it("preserves an unlock password across unchanged status messages and unlocks successfully", async () => {
   status = { ...status, initialized: true };
   render(<CredentialDialog onClose={vi.fn()}/>);
   fireEvent.click(await screen.findByRole("button", { name: "解锁凭证库" }));
   const dialog = screen.getByRole("dialog", { name: "解锁密码保险库" });
   fireEvent.change(within(dialog).getByLabelText("主密码"), { target: { value: "test-master-password" } });
-  await poll();
+  await pushStatus();
   expect(dialog).toBeInTheDocument();
   expect(within(dialog).getByLabelText("主密码")).toHaveValue("test-master-password");
   fireEvent.click(within(dialog).getByRole("button", { name: "验证" }));
@@ -75,7 +78,7 @@ it("preserves an unlock password across unchanged polls and unlocks successfully
   expect(transport.api).toHaveBeenCalledWith("/vault/unlock", "POST", { masterPassword: "test-master-password" });
 });
 
-it("still clears a sensitive draft when polling detects a real lock", async () => {
+it("still clears a sensitive draft when a pushed status reports a real lock", async () => {
   status = { ...status, initialized: true, unlocked: true };
   render(<CredentialDialog onClose={vi.fn()}/>);
   await screen.findByText("选择或创建凭证");
@@ -83,11 +86,11 @@ it("still clears a sensitive draft when polling detects a real lock", async () =
   const password = await screen.findByLabelText("密码");
   fireEvent.change(password, { target: { value: "test-secret-draft" } });
   status = { ...status, unlocked: false };
-  await poll();
+  await pushStatus();
   expect(screen.getByRole("heading", { name: "凭证库已锁定" })).toBeInTheDocument();
   expect(password).not.toBeInTheDocument();
   status = { ...status, unlocked: true };
-  await poll();
+  await pushStatus();
   fireEvent.click(screen.getByRole("button", { name: "新建密码" }));
   await waitFor(() => expect(screen.getByLabelText("密码")).toHaveValue(""));
 });

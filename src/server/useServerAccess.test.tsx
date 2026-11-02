@@ -48,8 +48,42 @@ it("refresh resumes with the stored proof and no password replay or takeover",as
   expect(mocks.api).toHaveBeenCalledWith("/access/resume","POST",{accessKey:"stored",clientId:"page"});
   expect(mocks.api).toHaveBeenCalledTimes(1);
   act(()=>window.dispatchEvent(new CustomEvent("expired",{detail:"unauthorized"})));
-  expect(view.result.current.phase).toBe("login");
+  expect(view.result.current.phase).toBe("disconnected");
   expect(view.result.current.error).toBe("登录已失效，请重新登录");
+  act(()=>view.result.current.acknowledgeReplaced());
+  expect(view.result.current.phase).toBe("login");
+});
+
+it("distinguishes reconnecting from takeover and restores the workspace when presence recovers", async () => {
+  mocks.api.mockResolvedValue({authenticated:true,accessKey:"key"});
+  const view = renderHook(useServerAccess);
+  await act(() => view.result.current.login("password"));
+  const [ready, disconnected] = mocks.presence.mock.calls[0];
+  await act(async () => ready());
+  act(() => disconnected());
+  expect(view.result.current.phase).toBe("reconnecting");
+  expect(mocks.key).toBe("key");
+  await act(async () => ready());
+  expect(view.result.current.phase).toBe("workspace");
+  act(() => disconnected());
+  act(() => window.dispatchEvent(new CustomEvent("expired", {detail:"sessionReplaced"})));
+  expect(view.result.current.phase).toBe("replaced");
+  await act(async () => ready());
+  expect(view.result.current.phase).toBe("replaced");
+});
+
+it("stops reconnecting on confirmation and ignores late presence callbacks", async () => {
+  mocks.api.mockResolvedValue({authenticated:true,accessKey:"key"});
+  const view = renderHook(useServerAccess);
+  await act(() => view.result.current.login("password"));
+  const [ready, disconnected] = mocks.presence.mock.calls[0];
+  await act(async () => ready());
+  act(() => disconnected());
+  act(() => view.result.current.acknowledgeReplaced());
+  expect(mocks.stop).toHaveBeenCalled();
+  expect(mocks.key).toBe("");
+  await act(async () => { ready(); disconnected(); });
+  expect(view.result.current.phase).toBe("login");
 });
 it("expired or competing takeover returns to login without silently retrying",async()=>{
   mocks.api.mockResolvedValueOnce({authenticated:false,takeoverTicket:"ticket"}).mockRejectedValueOnce(new Error("连接状态已变化"));

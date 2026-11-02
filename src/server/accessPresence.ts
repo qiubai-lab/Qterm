@@ -1,3 +1,4 @@
+import { vaultStatus } from "./vaultStatus";
 import { pauseData } from "./dataAccess";
 import { accessProof } from "./accessIdentity";
 import { API, api, AUTH_EXPIRED } from "./http";
@@ -20,11 +21,12 @@ export function openAccessPresence(onReady: () => void, onDisconnected: () => vo
       if (stopped || socket !== current) return;
       try {
         const value = JSON.parse(String(event.data));
-        if (value.type === "ready") { window.clearTimeout(timeout);onReady(); }
+        if (value.type === "vaultStatus") vaultStatus.receive(value.status);
+        if (value.type === "ready") { vaultStatus.beginConnection(); window.clearTimeout(timeout);onReady(); }
         if (value.type === "terminalLock" && value.locked === true) pauseData();
         if (value.type === "revoked") {
           stop();
-          window.dispatchEvent(new CustomEvent(AUTH_EXPIRED,{detail:"sessionReplaced"}));
+          window.dispatchEvent(new CustomEvent(AUTH_EXPIRED,{detail:value.reason === "sessionReplaced" ? "sessionReplaced" : "unauthorized"}));
         }
       } catch { current.close(); }
     };

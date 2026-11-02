@@ -15,7 +15,9 @@ export function ServerApp() {
   useBrowserContextMenuGuard();
   const access = useServerAccess();
   const replaced = access.phase === "replaced";
-  const authenticated = access.phase === "workspace" || replaced;
+  const disconnected = access.phase === "disconnected" || access.phase === "reconnecting";
+  const interrupted = replaced || disconnected;
+  const authenticated = access.phase === "workspace" || interrupted;
   const checking = access.phase === "checking";
   const [password,setPassword] = useState("");
   const {busy,error} = access;
@@ -23,7 +25,7 @@ export function ServerApp() {
     event.preventDefault();const submitted=password;setPassword("");await access.login(submitted);
   }
   return <AppThemeProvider key={authenticated ? "workspace" : "login"}><ThemedTitleTooltipProvider>
-    {authenticated ? <div className="server-workspace" inert={replaced}><ServerWorkbench onLogout={access.logout}/></div> :
+    {authenticated ? <div className="server-workspace" inert={interrupted}><ServerWorkbench onLogout={access.logout}/></div> :
       <main className="server-login"><form className="server-login-card" onSubmit={event => void login(event)}>
         <div className="server-wordmark">›_ <strong>Qterm</strong><span>Server</span></div>
         <h1>连接你的工作空间</h1><p>登录后使用服务主机终端、远程连接与文件管理。</p>
@@ -33,6 +35,6 @@ export function ServerApp() {
         <p className="server-login-note">单用户实例 · 关闭页面后后台任务继续运行</p>
       </form></main>}
     {access.phase === "occupied" && <AccessTakeoverDialog busy={busy} onCancel={access.cancel} onTakeover={()=>void access.takeover()}/>}
-    {replaced && <AccessReplacedDialog onConfirm={access.acknowledgeReplaced}/>}
+    {interrupted && <AccessReplacedDialog reason={replaced ? "replaced" : "disconnected"} reconnecting={access.phase === "reconnecting"} onConfirm={access.acknowledgeReplaced}/>}
   </ThemedTitleTooltipProvider></AppThemeProvider>;
 }

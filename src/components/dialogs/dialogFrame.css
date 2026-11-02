@@ -16,4 +16,5 @@
 .dialog-header-copy{min-width:0}.dialog-header-actions{display:flex;flex:none;gap:6px;align-items:center}
 .dialog-header h2 { margin:0; color:var(--text); font-size:15px; letter-spacing:-.01em; }.dialog-header p{margin:4px 0 0;color:var(--dim);font-size:10px}
 .dialog-content { min-height:0; padding:18px; overflow:auto; }
+.dialog-title-icon { display:inline-flex; vertical-align:middle; margin-right:8px; }
 @media(prefers-reduced-motion:reduce){.dialog-frame,.dialog-scrim,.dialog-frame[data-state="closing"],.dialog-scrim[data-state="closing"]{animation:none}.dialog-frame{transform:none}}

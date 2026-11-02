@@ -1,13 +1,12 @@
-import { dataLease, dataPaused, subscribeDataAccess } from "../dataAccess";
+import { dataLease } from "../dataAccess";
 import type * as Desktop from "../../lib/tauri/credentials";
 import { api, request } from "../http";
 import { saveBrowserResponse, selectBrowserFile } from "../browserFiles";
-import { createVaultStatusObserver } from "./vaultStatusObserver";
+import { readVaultStatus, vaultStatus } from "../vaultStatus";
 export type * from "../../lib/tauri/credentials";
 let recoveryId: string | undefined;
 let resetId: string | undefined;
-export const getVaultStatus: typeof Desktop.getVaultStatus = () => api("/vault");
-const vaultStatus = createVaultStatusObserver(getVaultStatus, {paused: dataPaused, subscribe: subscribeDataAccess});
+export const getVaultStatus: typeof Desktop.getVaultStatus = readVaultStatus;
 async function mutate<T>(path:string,method:string,body?:unknown):Promise<T> {const value=await api<T>(path,method,body);await vaultStatus.refreshAfterMutation();return value;}
 export const onVaultStatusChanged: typeof Desktop.onVaultStatusChanged = async listener => vaultStatus.subscribe(listener);
 export async function downloadVaultRecovery():Promise<void> {

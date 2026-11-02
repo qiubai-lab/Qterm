@@ -27,21 +27,26 @@ pub async fn available(State(state): State<Arc<ServerState>>) -> Json<bool> {
     Json(state.git.available())
 }
 async fn run<F>(
+    state: Arc<ServerState>,
     permit: tokio::sync::OwnedSemaphorePermit,
     operation: F,
 ) -> Result<Json<GitSnapshotDto>>
 where
     F: FnOnce() -> std::result::Result<GitSnapshot, GitError> + Send + 'static,
 {
-    tokio::task::spawn_blocking(move || {
+    let snapshot = tokio::task::spawn_blocking(move || {
         let _permit = permit;
         operation()
     })
     .await
     .map_err(|_| git_error(GitError::Io))?
     .map(GitSnapshotDto::from)
-    .map(Json)
-    .map_err(git_error)
+    .map_err(git_error)?;
+    state.git_observations.publish(
+        None,
+        serde_json::to_value(&snapshot).map_err(|_| ApiError::storage())?,
+    );
+    Ok(Json(snapshot))
 }
 pub async fn git_snapshot(
     State(state): State<Arc<ServerState>>,
@@ -57,7 +62,7 @@ pub async fn git_snapshot(
         return Err(ApiError::unauthorized());
     }
     let service = Arc::clone(&state.git);
-    run(_permit, move || service.snapshot(input.path)).await
+    run(state, _permit, move || service.snapshot(input.path)).await
 }
 
 pub async fn git_initialize(
@@ -74,7 +79,7 @@ pub async fn git_initialize(
         return Err(ApiError::unauthorized());
     }
     let service = Arc::clone(&state.git);
-    run(_permit, move || service.initialize(input.path)).await
+    run(state, _permit, move || service.initialize(input.path)).await
 }
 
 pub async fn git_stage(
@@ -91,7 +96,7 @@ pub async fn git_stage(
         return Err(ApiError::unauthorized());
     }
     let service = Arc::clone(&state.git);
-    run(_permit, move || {
+    run(state, _permit, move || {
         service.stage(input.repository, input.paths)
     })
     .await
@@ -111,7 +116,7 @@ pub async fn git_initialize_submodule(
         return Err(ApiError::unauthorized());
     }
     let service = Arc::clone(&state.git);
-    run(_permit, move || {
+    run(state, _permit, move || {
         service.initialize_submodule(input.repository, input.path)
     })
     .await
@@ -131,7 +136,7 @@ pub async fn git_checkout_submodule(
         return Err(ApiError::unauthorized());
     }
     let service = Arc::clone(&state.git);
-    run(_permit, move || {
+    run(state, _permit, move || {
         service.checkout_submodule(input.repository, input.path)
     })
     .await
@@ -151,7 +156,7 @@ pub async fn git_stage_all(
         return Err(ApiError::unauthorized());
     }
     let service = Arc::clone(&state.git);
-    run(_permit, move || service.stage_all(input.repository)).await
+    run(state, _permit, move || service.stage_all(input.repository)).await
 }
 
 pub async fn git_unstage(
@@ -168,7 +173,7 @@ pub async fn git_unstage(
         return Err(ApiError::unauthorized());
     }
     let service = Arc::clone(&state.git);
-    run(_permit, move || {
+    run(state, _permit, move || {
         service.unstage(input.repository, input.paths)
     })
     .await
@@ -188,7 +193,10 @@ pub async fn git_unstage_all(
         return Err(ApiError::unauthorized());
     }
     let service = Arc::clone(&state.git);
-    run(_permit, move || service.unstage_all(input.repository)).await
+    run(state, _permit, move || {
+        service.unstage_all(input.repository)
+    })
+    .await
 }
 
 pub async fn git_discard(
@@ -205,7 +213,7 @@ pub async fn git_discard(
         return Err(ApiError::unauthorized());
     }
     let service = Arc::clone(&state.git);
-    run(_permit, move || {
+    run(state, _permit, move || {
         service.discard(input.repository, input.paths)
     })
     .await
@@ -225,7 +233,7 @@ pub async fn git_commit(
         return Err(ApiError::unauthorized());
     }
     let service = Arc::clone(&state.git);
-    run(_permit, move || {
+    run(state, _permit, move || {
         service.commit(input.repository, input.message)
     })
     .await
@@ -345,7 +353,7 @@ pub async fn git_resolve_conflict(
         return Err(ApiError::unauthorized());
     }
     let service = Arc::clone(&state.git);
-    run(_permit, move || {
+    run(state, _permit, move || {
         service.resolve_conflict(input.repository, input.path, input.resolution.into())
     })
     .await
@@ -365,7 +373,7 @@ pub async fn git_create_branch(
         return Err(ApiError::unauthorized());
     }
     let service = Arc::clone(&state.git);
-    run(_permit, move || {
+    run(state, _permit, move || {
         service.create_branch(input.repository, input.name)
     })
     .await
@@ -385,7 +393,7 @@ pub async fn git_create_branch_from(
         return Err(ApiError::unauthorized());
     }
     let service = Arc::clone(&state.git);
-    run(_permit, move || {
+    run(state, _permit, move || {
         service.create_branch_from(input.repository, input.name, input.source_ref)
     })
     .await
@@ -405,7 +413,7 @@ pub async fn git_create_branch_from_commit(
         return Err(ApiError::unauthorized());
     }
     let service = Arc::clone(&state.git);
-    run(_permit, move || {
+    run(state, _permit, move || {
         service.create_branch_from_commit(input.repository, input.name, input.oid)
     })
     .await
@@ -425,7 +433,7 @@ pub async fn git_rename_branch(
         return Err(ApiError::unauthorized());
     }
     let service = Arc::clone(&state.git);
-    run(_permit, move || {
+    run(state, _permit, move || {
         service.rename_branch(input.repository, input.ref_name, input.new_name)
     })
     .await
@@ -445,7 +453,7 @@ pub async fn git_delete_branch(
         return Err(ApiError::unauthorized());
     }
     let service = Arc::clone(&state.git);
-    run(_permit, move || {
+    run(state, _permit, move || {
         service.delete_branch(input.repository, input.ref_name)
     })
     .await
@@ -465,7 +473,7 @@ pub async fn git_switch_branch(
         return Err(ApiError::unauthorized());
     }
     let service = Arc::clone(&state.git);
-    run(_permit, move || {
+    run(state, _permit, move || {
         service.switch_branch(input.repository, input.name)
     })
     .await
@@ -485,7 +493,7 @@ pub async fn git_fetch(
         return Err(ApiError::unauthorized());
     }
     let service = Arc::clone(&state.git);
-    run(_permit, move || service.fetch(input.repository)).await
+    run(state, _permit, move || service.fetch(input.repository)).await
 }
 
 pub async fn git_pull(
@@ -502,7 +510,7 @@ pub async fn git_pull(
         return Err(ApiError::unauthorized());
     }
     let service = Arc::clone(&state.git);
-    run(_permit, move || service.pull(input.repository)).await
+    run(state, _permit, move || service.pull(input.repository)).await
 }
 
 pub async fn git_push(
@@ -519,7 +527,7 @@ pub async fn git_push(
         return Err(ApiError::unauthorized());
     }
     let service = Arc::clone(&state.git);
-    run(_permit, move || {
+    run(state, _permit, move || {
         service.push(input.repository, input.remote)
     })
     .await
@@ -539,7 +547,7 @@ pub async fn git_track_remote_branch(
         return Err(ApiError::unauthorized());
     }
     let service = Arc::clone(&state.git);
-    run(_permit, move || {
+    run(state, _permit, move || {
         service.track_remote_branch(input.repository, input.ref_name)
     })
     .await
@@ -559,7 +567,7 @@ pub async fn git_merge_branch(
         return Err(ApiError::unauthorized());
     }
     let service = Arc::clone(&state.git);
-    run(_permit, move || {
+    run(state, _permit, move || {
         service.merge_branch(input.repository, input.source_ref)
     })
     .await
@@ -579,7 +587,10 @@ pub async fn git_continue_merge(
         return Err(ApiError::unauthorized());
     }
     let service = Arc::clone(&state.git);
-    run(_permit, move || service.continue_merge(input.repository)).await
+    run(state, _permit, move || {
+        service.continue_merge(input.repository)
+    })
+    .await
 }
 
 pub async fn git_abort_merge(
@@ -596,5 +607,8 @@ pub async fn git_abort_merge(
         return Err(ApiError::unauthorized());
     }
     let service = Arc::clone(&state.git);
-    run(_permit, move || service.abort_merge(input.repository)).await
+    run(state, _permit, move || {
+        service.abort_merge(input.repository)
+    })
+    .await
 }

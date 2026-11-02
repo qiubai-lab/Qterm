@@ -1,7 +1,7 @@
 import { useEffect, type ReactNode } from "react";
-import { render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ServerApp } from "./ServerApp";
 
 const state = vi.hoisted(() => ({
@@ -25,17 +25,21 @@ vi.mock("../workspace/WorkspaceShell", () => ({ WorkspaceShell: function Workspa
   return <main>当前终端画面</main>;
 } }));
 
-it("retains the same inert workbench behind the notice until confirmation", async () => {
+beforeEach(() => { vi.clearAllMocks(); state.phase = "workspace"; });
+afterEach(cleanup);
+
+it.each(["replaced", "disconnected", "reconnecting"])("retains the same inert workbench behind the %s notice until confirmation", async phase => {
   const user = userEvent.setup();
   const view = render(<ServerApp/>);
   const terminal = await screen.findByText("当前终端画面");
-  state.phase = "replaced";
+  state.phase = phase;
   view.rerender(<ServerApp/>);
   expect(screen.getByText("当前终端画面")).toBe(terminal);
   expect(terminal.closest(".server-workspace")).toHaveAttribute("inert");
   expect(state.mount).toHaveBeenCalledOnce();
   expect(state.unmount).not.toHaveBeenCalled();
   expect(screen.queryByLabelText("访问密码")).not.toBeInTheDocument();
+  expect(screen.getByRole("dialog", {name: phase === "replaced" ? "连接已被接管" : "连接已断开"})).toBeInTheDocument();
   await user.click(screen.getByRole("button", { name: "确认" }));
   expect(state.acknowledgeReplaced).toHaveBeenCalledOnce();
   expect(state.logout).not.toHaveBeenCalled();

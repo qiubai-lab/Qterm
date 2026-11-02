@@ -1,3 +1,4 @@
+import { vaultStatus } from "./vaultStatus";
 import { pauseData } from "./dataAccess";
 import { resetServerTerminalLock, serverTerminalLock } from "./terminalLock";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -8,7 +9,7 @@ import { api, AUTH_EXPIRED, message } from "./http";
 import { closeAllSessions } from "./sessionTransport";
 
 type Admission = {authenticated:true;accessKey:string} | {authenticated:false;takeoverTicket:string};
-type Phase = "checking" | "login" | "occupied" | "workspace" | "replaced";
+type Phase = "checking" | "login" | "occupied" | "workspace" | "reconnecting" | "disconnected" | "replaced";
 export function useServerAccess() {
   const [phase,setPhase] = useState<Phase>("checking");
   const [busy,setBusy] = useState(false);
@@ -17,7 +18,7 @@ export function useServerAccess() {
   const epoch = useRef(0);
   const invalidate = useCallback(() => { epoch.current++; },[]);
   const stopPresence = useRef<(() => void) | undefined>(undefined);
-  const leave = useCallback(() => { resetServerTerminalLock(); stopPresence.current?.();stopPresence.current=undefined;closeAllSessions(); },[]);
+  const leave = useCallback(() => { vaultStatus.reset(); resetServerTerminalLock(); stopPresence.current?.();stopPresence.current=undefined;closeAllSessions(); },[]);
   const admit = useCallback((result: Admission, generation: number) => {
     if (generation !== epoch.current) return;
     if (!result.authenticated) {
@@ -30,7 +31,7 @@ export function useServerAccess() {
       void serverTerminalLock.read().catch(() => ({locked:true})).then(state => state.locked ? undefined : bootstrapAppTheme()).then(() => {
         if (generation===epoch.current) {setPhase("workspace");setError("");}
       }).catch(reason => {if(generation===epoch.current){setError(message(reason));setPhase("login");leave();}});
-    },() => {if(generation===epoch.current){resetServerTerminalLock();closeAllSessions();setPhase("checking");setError("连接中断，正在重新连接…");}});
+    },() => {if(generation===epoch.current){resetServerTerminalLock();closeAllSessions();setPhase(current => current === "workspace" || current === "reconnecting" ? "reconnecting" : "checking");setError("连接中断，正在重新连接…");}});
   },[leave]);
   useEffect(() => {
     const generation=++epoch.current;
@@ -39,7 +40,11 @@ export function useServerAccess() {
       epoch.current++;leave();rememberAccess("");ticket.current="";setBusy(false);
       // Keep the mounted workbench until acknowledgment. Late failed requests
       // must not dismiss this notice or restore the revoked connection.
-      setPhase(current => current === "replaced" || (replaced && current === "workspace") ? "replaced" : "login");
+      setPhase(current => {
+        if (current === "replaced") return current;
+        if (current === "workspace" || current === "reconnecting" || current === "disconnected") return replaced ? "replaced" : "disconnected";
+        return "login";
+      });
       setError(replaced ? "连接已被其他会话接管。后台任务继续运行。" : "登录已失效，请重新登录");
     };
     window.addEventListener(AUTH_EXPIRED,expire);
@@ -71,7 +76,7 @@ export function useServerAccess() {
     await api("/logout","POST");epoch.current++;leave();rememberAccess("");setPhase("login");setError("");
   }
   function cancel() {epoch.current++;ticket.current="";rememberAccess("");setPhase("login");setError("");}
-  function acknowledgeReplaced() {epoch.current++;setPhase("login");setError("");}
+  function acknowledgeReplaced() {epoch.current++;leave();rememberAccess("");setPhase("login");setError("");}
   return {phase,busy,error,logout,cancel,acknowledgeReplaced,
     login:(password:string)=>submit("/login",{password,clientId:accessProof().clientId}),
     takeover:()=>submit("/access/takeover",{ticket:ticket.current,clientId:accessProof().clientId}),

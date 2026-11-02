@@ -1,3 +1,4 @@
+import { useGitSnapshotRefresh } from "./useGitSnapshotRefresh";
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "../components/Button";
@@ -195,17 +196,19 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
     return true;
   }, [activeRepositoryPath, registerRepositorySnapshot, remote, remoteProfileId, repositoryPath]);
 
-  const refreshSnapshot = useCallback(async (clearErrorOnSuccess = false) => {
-    if (!activeRepositoryPath || !visible || !remoteReady || !available || document.visibilityState === "hidden") return;
-    if (busyRef.current || backgroundRequestRef.current !== null) return;
+  const refreshSnapshot = useCallback(async (clearErrorOnSuccess = false, observedRead?: () => Promise<GitSnapshot>) => {
+    if (!activeRepositoryPath || !visible || !remoteReady || !available || document.visibilityState === "hidden") return false;
+    if (busyRef.current || backgroundRequestRef.current !== null) return false;
     const request = ++epoch.current;
     backgroundRequestRef.current = request;
     setBackgroundRefreshing(true);
     try {
-      const next = await loadSnapshot(activeRepositoryPath);
+      const next = await (observedRead ? observedRead() : loadSnapshot(activeRepositoryPath));
       if (request === epoch.current) applySnapshot(next, { preserveEquivalent: true, preserveError: !clearErrorOnSuccess });
+      return true;
     } catch (cause) {
       if (request === epoch.current) setError(gitError(cause));
+      return false;
     } finally {
       if (backgroundRequestRef.current === request) {
         backgroundRequestRef.current = null;
@@ -242,30 +245,8 @@ export function GitPane({ blockId, target, runtime, visible, onTargetChange, onR
     if (remote) return;
     void gitAvailable().then(setLocalAvailable, () => setLocalAvailable(false));
   }, [remote]);
-  useEffect(() => {
-    if (!visible || !available) return;
-    const timer = window.setTimeout(() => void refreshSnapshot(), 0);
-    return () => window.clearTimeout(timer);
-  }, [available, refreshSnapshot, visible]);
-  useEffect(() => {
-    if (!visible) return;
-    const onFocus = () => void refreshSnapshot();
-    window.addEventListener("focus", onFocus);
-    return () => window.removeEventListener("focus", onFocus);
-  }, [refreshSnapshot, visible]);
-  useEffect(() => {
-    if (!visible || !available) return;
-    const onVisibilityChange = () => {
-      if (document.visibilityState === "visible") void refreshSnapshot();
-    };
-    document.addEventListener("visibilitychange", onVisibilityChange);
-    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
-  }, [available, refreshSnapshot, visible]);
-  useEffect(() => {
-    if (!visible || !available) return;
-    const timer = window.setInterval(() => void refreshSnapshot(), 15_000);
-    return () => window.clearInterval(timer);
-  }, [available, refreshSnapshot, visible]);
+  useGitSnapshotRefresh({ path: activeRepositoryPath, remote, sessionId: remoteSessionId, profileId: remoteProfileId,
+    enabled: visible && Boolean(available) && remoteReady, busy: Boolean(busy) || backgroundRefreshing, refresh: refreshSnapshot });
   useLayoutEffect(() => {
     const textarea = messageRef.current;
     if (!textarea) return;

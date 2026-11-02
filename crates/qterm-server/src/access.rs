@@ -80,6 +80,17 @@ pub fn replaced() -> ApiError {
         "连接已被其他会话接管，请重新登录",
     )
 }
+fn require_active_login(inner: &Inner) -> Result<()> {
+    if inner
+        .login
+        .as_ref()
+        .is_some_and(|login| login.expires > Instant::now())
+    {
+        Ok(())
+    } else {
+        Err(ApiError::unauthorized())
+    }
+}
 impl Access {
     pub fn subscribe(&self) -> watch::Receiver<u64> {
         self.changes.subscribe()
@@ -97,9 +108,9 @@ impl Access {
             .is_some_and(|s| s.owner == owner && s.expires > Instant::now())
     }
     pub fn cookie_owner(&self, cookie: &str) -> Result<String> {
-        self.inner
-            .lock()
-            .unwrap()
+        let inner = self.inner.lock().unwrap();
+        require_active_login(&inner)?;
+        inner
             .login
             .as_ref()
             .filter(|s| s.cookie == cookie && s.expires > Instant::now())
@@ -107,9 +118,9 @@ impl Access {
             .ok_or_else(replaced)
     }
     pub fn authorize(&self, cookie: &str, proof: &Proof) -> Result<String> {
-        self.inner
-            .lock()
-            .unwrap()
+        let inner = self.inner.lock().unwrap();
+        require_active_login(&inner)?;
+        inner
             .login
             .as_ref()
             .filter(|s| {
@@ -122,7 +133,9 @@ impl Access {
             .ok_or_else(replaced)
     }
     pub fn prove_owner(&self, owner: &str, proof: &Proof) -> Result<()> {
-        if self.inner.lock().unwrap().login.as_ref().is_some_and(|s| {
+        let inner = self.inner.lock().unwrap();
+        require_active_login(&inner)?;
+        if inner.login.as_ref().is_some_and(|s| {
             s.owner == owner
                 && s.key == proof.access_key
                 && s.client == proof.client_id
@@ -185,6 +198,7 @@ impl Access {
     pub fn resume(&self, cookie: &str, proof: &Proof) -> Result<Admission> {
         valid_client(&proof.client_id)?;
         let mut inner = self.inner.lock().unwrap();
+        require_active_login(&inner)?;
         let login = inner
             .login
             .as_ref()
@@ -242,6 +256,7 @@ impl Access {
     }
     pub fn terminal_locked(&self, owner: &str) -> Result<bool> {
         let inner = self.inner.lock().unwrap();
+        require_active_login(&inner)?;
         let login = inner
             .login
             .as_ref()
@@ -251,6 +266,7 @@ impl Access {
     }
     pub fn set_terminal_locked(&self, owner: &str, locked: bool) -> Result<()> {
         let mut inner = self.inner.lock().unwrap();
+        require_active_login(&inner)?;
         let login = inner
             .login
             .as_mut()
@@ -262,6 +278,7 @@ impl Access {
     }
     pub fn attach(&self, owner: &str) -> Result<String> {
         let mut inner = self.inner.lock().unwrap();
+        require_active_login(&inner)?;
         let login = inner
             .login
             .as_mut()

@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { basicSetup } from "codemirror";
-import { redo, redoDepth, undo, undoDepth } from "@codemirror/commands";
+import { indentLess, insertTab, redo, redoDepth, undo, undoDepth } from "@codemirror/commands";
 import { jsonParseLinter } from "@codemirror/lang-json";
 import { linter } from "@codemirror/lint";
 import { Compartment, EditorState, type Extension } from "@codemirror/state";
-import { EditorView, type Command } from "@codemirror/view";
+import { EditorView, keymap, type Command } from "@codemirror/view";
 import { readText as readClipboardText, writeText as writeClipboardText } from "@qterm/services/textClipboard";
 import { parseDocument } from "yaml";
 
@@ -81,6 +81,7 @@ export function CodeEditor({ value, language, readOnly = false, ariaLabel, exten
         doc: initialValue.current,
         extensions: [
           basicSetup,
+          readOnly ? [] : keymap.of([{ key: "Tab", run: insertTab, shift: indentLess }]),
           codeEditorSearch,
           EditorView.lineWrapping,
           EditorState.readOnly.of(readOnly),

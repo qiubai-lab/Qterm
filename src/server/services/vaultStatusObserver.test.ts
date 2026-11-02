@@ -1,117 +1,46 @@
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import type { VaultStatus } from "../../lib/contracts/credentials";
+import { afterEach, expect, it, vi } from "vitest";
 import { createVaultStatusObserver } from "./vaultStatusObserver";
-
-const empty = { initialized: false, unlocked: false, legacy: false };
-const locked = { ...empty, initialized: true };
-const unlocked = { ...locked, unlocked: true };
-const stops: Array<() => void> = [];
-
-function deferred() {
-  let resolve!: (status: VaultStatus) => void;
-  const promise = new Promise<VaultStatus>((done) => { resolve = done; });
-  return { promise, resolve };
-}
-
-beforeEach(() => vi.useFakeTimers());
-afterEach(() => { stops.splice(0).forEach((stop) => stop()); vi.useRealTimers(); });
-
-it.each([empty, locked, unlocked])("does not broadcast initial or unchanged snapshots (%j)", async (status) => {
-  const load = vi.fn().mockResolvedValue(status);
-  const listener = vi.fn();
-  const observer = createVaultStatusObserver(load);
-  stops.push(observer.subscribe(listener));
-  await vi.advanceTimersByTimeAsync(6000);
-  expect(load).toHaveBeenCalledTimes(4);
-  expect(listener).not.toHaveBeenCalled();
+const locked={initialized:true,unlocked:false,legacy:false},unlocked={...locked,unlocked:true};
+afterEach(()=>vi.useRealTimers());
+it("uses initial state as a baseline and never polls unchanged state",async()=>{
+  vi.useFakeTimers();const load=vi.fn().mockResolvedValue(locked),listener=vi.fn();
+  const observer=createVaultStatusObserver(load);observer.subscribe(listener);
+  observer.receive({...locked,revision:1,reason:"manual"});
+  expect(await observer.read()).toEqual(locked);
+  await vi.advanceTimersByTimeAsync(60000);
+  expect(load).not.toHaveBeenCalled();expect(listener).not.toHaveBeenCalled();
+  observer.receive({...unlocked,revision:2,reason:"manual"});
+  observer.receive({...unlocked,revision:2,reason:"manual"});
+  observer.receive({...locked,revision:1,reason:"manual"});
+  expect(listener).toHaveBeenCalledExactlyOnceWith({...unlocked,reason:"manual"});
 });
-
-it("shares polling and broadcasts each real transition once to all listeners", async () => {
-  const load = vi.fn().mockResolvedValue(empty);
-  const observer = createVaultStatusObserver(load);
-  const first = vi.fn(), second = vi.fn();
-  stops.push(observer.subscribe(first), observer.subscribe(second));
-  await vi.advanceTimersByTimeAsync(0);
-  for (const status of [unlocked, locked, empty, { ...empty, legacy: true }]) {
-    load.mockResolvedValue(status);
-    await vi.advanceTimersByTimeAsync(4000);
-    expect(first).toHaveBeenLastCalledWith({ ...status, reason: "manual" });
-    expect(second).toHaveBeenLastCalledWith({ ...status, reason: "manual" });
-  }
-  expect(first).toHaveBeenCalledTimes(4);
-  expect(second).toHaveBeenCalledTimes(4);
-  expect(load).toHaveBeenCalledTimes(9);
+it("shares one fallback read and rejects stale HTTP state after a pushed lock",async()=>{
+  let resolve!:(value:typeof unlocked)=>void;
+  const load=vi.fn(()=>new Promise<typeof unlocked>(done=>{resolve=done;}));
+  const observer=createVaultStatusObserver(load),listener=vi.fn();observer.subscribe(listener);
+  const first=observer.read(),second=observer.read();expect(load).toHaveBeenCalledOnce();
+  observer.receive({...unlocked,revision:1,reason:"manual"});
+  observer.receive({...locked,revision:2,reason:"timeout"});
+  resolve(unlocked);expect(await first).toEqual(locked);expect(await second).toEqual(locked);
+  expect(listener).toHaveBeenCalledExactlyOnceWith({...locked,reason:"timeout"});
 });
-
-it("notifies explicit mutations immediately even for an unchanged status", async () => {
-  const listener = vi.fn();
-  const observer = createVaultStatusObserver(vi.fn().mockResolvedValue(locked));
-  stops.push(observer.subscribe(listener));
-  await vi.advanceTimersByTimeAsync(0);
-  await observer.refreshAfterMutation();
-  expect(listener).toHaveBeenCalledExactlyOnceWith({ ...locked, reason: "manual" });
-  await vi.advanceTimersByTimeAsync(4000);
-  expect(listener).toHaveBeenCalledTimes(1);
+it("reconciles a reconnect or server restart without treating its baseline as a repeated event",()=>{
+  const observer=createVaultStatusObserver(vi.fn()),listener=vi.fn();observer.subscribe(listener);
+  observer.receive({...unlocked,revision:50,reason:"manual"});observer.beginConnection();
+  observer.receive({...unlocked,revision:1,reason:"manual"});expect(listener).not.toHaveBeenCalled();
+  observer.receive({...locked,revision:2,reason:"timeout"});expect(listener).toHaveBeenCalledOnce();
 });
-
-it("does not replay an older locked response after a successful unlock notification", async () => {
-  const pending = deferred();
-  const load = vi.fn().mockReturnValueOnce(pending.promise).mockResolvedValue(unlocked);
-  const listener = vi.fn();
-  const observer = createVaultStatusObserver(load);
-  stops.push(observer.subscribe(listener));
-  await observer.refreshAfterMutation();
-  pending.resolve(locked);
-  await vi.advanceTimersByTimeAsync(4000);
-  expect(listener).toHaveBeenCalledExactlyOnceWith({ ...unlocked, reason: "manual" });
-});
-
-it("retains the baseline after a failed poll and observes a later lock", async () => {
-  const load = vi.fn().mockResolvedValueOnce(unlocked).mockRejectedValueOnce(new Error("offline")).mockResolvedValue(locked);
-  const listener = vi.fn();
-  stops.push(createVaultStatusObserver(load).subscribe(listener));
-  await vi.advanceTimersByTimeAsync(2000);
-  expect(listener).not.toHaveBeenCalled();
-  await vi.advanceTimersByTimeAsync(2000);
-  expect(listener).toHaveBeenCalledExactlyOnceWith({ ...locked, reason: "manual" });
-});
-
-it("waits for slow polls instead of starting overlapping requests", async () => {
-  const pending = deferred();
-  const load = vi.fn().mockReturnValueOnce(pending.promise).mockResolvedValue(unlocked);
-  const listener = vi.fn();
-  stops.push(createVaultStatusObserver(load).subscribe(listener));
-  await vi.advanceTimersByTimeAsync(6000);
-  expect(load).toHaveBeenCalledTimes(1);
-  pending.resolve(locked);
-  await vi.advanceTimersByTimeAsync(2000);
-  expect(listener).toHaveBeenCalledExactlyOnceWith({ ...unlocked, reason: "manual" });
-});
-
-it("stops polling after the last unsubscribe and ignores replies from a previous subscription", async () => {
-  const pending = deferred();
-  const load = vi.fn().mockReturnValueOnce(pending.promise).mockResolvedValue(locked);
-  const observer = createVaultStatusObserver(load);
-  const oldListener = vi.fn(), newListener = vi.fn();
-  const stop = observer.subscribe(oldListener);
-  stop();
-  await vi.advanceTimersByTimeAsync(4000);
-  expect(load).toHaveBeenCalledTimes(1);
-  stops.push(observer.subscribe(newListener));
-  await vi.advanceTimersByTimeAsync(0);
-  pending.resolve(unlocked);
-  await vi.advanceTimersByTimeAsync(4000);
-  expect(oldListener).not.toHaveBeenCalled();
-  expect(newListener).not.toHaveBeenCalled();
-});
-
-it("stops polling while the workbench is locked and resynchronizes once on unlock",async()=>{
+it("defers notifications during terminal lock and synchronizes the latest state on resume",()=>{
   let paused=false,changed=()=>{};
-  const load=vi.fn().mockResolvedValue(unlocked),listener=vi.fn();
-  const observer=createVaultStatusObserver(load,{paused:()=>paused,subscribe:callback=>{changed=callback;return()=>{};}});
-  stops.push(observer.subscribe(listener));await vi.advanceTimersByTimeAsync(0);load.mockClear();
-  paused=true;changed();await vi.advanceTimersByTimeAsync(30000);
-  expect(load).not.toHaveBeenCalled();
-  paused=false;changed();await vi.advanceTimersByTimeAsync(0);
-  expect(load).toHaveBeenCalledOnce();expect(listener).toHaveBeenCalledExactlyOnceWith({...unlocked,reason:"manual"});
+  const observer=createVaultStatusObserver(vi.fn(),{paused:()=>paused,subscribe:fn=>{changed=fn;return()=>{};}}),listener=vi.fn();observer.subscribe(listener);
+  observer.receive({...unlocked,revision:1,reason:"manual"});paused=true;
+  observer.receive({...locked,revision:2,reason:"timeout"});expect(listener).not.toHaveBeenCalled();
+  paused=false;changed();expect(listener).toHaveBeenCalledExactlyOnceWith({...locked,reason:"timeout"});
+  observer.dispose();
+});
+it("does not emit unchanged explicit action results or malformed messages",async()=>{
+  const observer=createVaultStatusObserver(vi.fn().mockResolvedValue(locked)),listener=vi.fn();observer.subscribe(listener);
+  await observer.read();await observer.refreshAfterMutation();
+  observer.receive({...unlocked,revision:"3",reason:"manual"});observer.receive({...unlocked,revision:4,reason:"other"});
+  expect(listener).not.toHaveBeenCalled();
 });

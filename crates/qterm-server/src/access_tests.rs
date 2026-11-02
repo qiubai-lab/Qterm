@@ -36,6 +36,17 @@ fn confirmed_takeover_revokes_old_http_and_socket_identity_even_with_shared_cook
     let pending = ticket(access.login("second").unwrap());
     let (new_cookie, new_key) = granted(access.takeover(&pending, "second").unwrap());
     assert!(!access.valid(&old));
+    assert_eq!(
+        access.cookie_owner(&cookie).unwrap_err().code,
+        "sessionReplaced"
+    );
+    assert_eq!(
+        access
+            .prove_owner(&old, &proof(&key, "first"))
+            .unwrap_err()
+            .code,
+        "sessionReplaced"
+    );
     assert!(access.authorize(&cookie, &proof(&key, "first")).is_err());
     assert!(
         access
@@ -48,6 +59,49 @@ fn confirmed_takeover_revokes_old_http_and_socket_identity_even_with_shared_cook
             .is_ok()
     );
     assert!(access.takeover(&pending, "second").is_err());
+}
+
+#[test]
+fn expired_revoked_and_missing_logins_are_not_reported_as_takeovers() {
+    for cause in ["expired", "revoked", "restart"] {
+        let mut access = Access::default();
+        let (cookie, key) = granted(access.login("first").unwrap());
+        let proof = proof(&key, "first");
+        let owner = access.authorize(&cookie, &proof).unwrap();
+        match cause {
+            "expired" => {
+                access.inner.lock().unwrap().login.as_mut().unwrap().expires =
+                    Instant::now() - Duration::from_secs(1)
+            }
+            "revoked" => access.revoke(),
+            _ => access = Access::default(),
+        }
+        assert_eq!(
+            access.cookie_owner(&cookie).unwrap_err().code,
+            "unauthorized"
+        );
+        assert_eq!(
+            access.authorize(&cookie, &proof).unwrap_err().code,
+            "unauthorized"
+        );
+        assert_eq!(
+            access.prove_owner(&owner, &proof).unwrap_err().code,
+            "unauthorized"
+        );
+        assert_eq!(
+            access.resume(&cookie, &proof).err().unwrap().code,
+            "unauthorized"
+        );
+        assert_eq!(access.attach(&owner).unwrap_err().code, "unauthorized");
+        assert_eq!(
+            access.terminal_locked(&owner).unwrap_err().code,
+            "unauthorized"
+        );
+        assert_eq!(
+            access.set_terminal_locked(&owner, true).unwrap_err().code,
+            "unauthorized"
+        );
+    }
 }
 #[test]
 fn copied_tabs_need_confirmation_but_refresh_after_detach_preserves_login() {

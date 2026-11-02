@@ -217,6 +217,7 @@ export function WorkspaceShell({ onLogout, terminalLockBackend, terminalLockStat
   useEffect(() => {
     let disposed = false;
     let statusEventReceived = false;
+    if (!workbenchActive) return;
     let unlisten: (() => void) | undefined;
     void onVaultStatusChanged((event) => {
       if (disposed) return;
@@ -231,7 +232,7 @@ export function WorkspaceShell({ onLogout, terminalLockBackend, terminalLockStat
       }
     }).catch(() => undefined);
     return () => { disposed = true; unlisten?.(); };
-  }, [commitVaultStatus]);
+  }, [commitVaultStatus, workbenchActive]);
 
   const lockIdleTerminal = useCallback(() => applyLockScope("terminalAndVault"), [applyLockScope]);
   useTerminalAutoLock(securitySettings?.terminalAutoLockAfterSeconds, terminalLocked, vaultStatus, lockIdleTerminal);

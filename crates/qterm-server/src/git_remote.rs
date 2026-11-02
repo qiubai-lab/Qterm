@@ -23,7 +23,7 @@ pub async fn git_remote_execute(
         .try_acquire_owned()
         .map_err(|_| ApiError::invalid())?;
     let action: RemoteGitAction = input.action.into();
-    execute_remote_git(
+    let snapshot = execute_remote_git(
         state.sessions.as_ref(),
         &input.session_id,
         &input.profile_id,
@@ -31,8 +31,12 @@ pub async fn git_remote_execute(
     )
     .await
     .map(GitSnapshotDto::from)
-    .map(Json)
-    .map_err(git_error)
+    .map_err(git_error)?;
+    state.git_observations.publish(
+        Some((&input.session_id, &input.profile_id)),
+        serde_json::to_value(&snapshot).map_err(|_| ApiError::storage())?,
+    );
+    Ok(Json(snapshot))
 }
 
 pub async fn git_remote_commit_files(
@@ -144,7 +148,7 @@ pub async fn git_remote_resolve_conflict(
         .clone()
         .try_acquire_owned()
         .map_err(|_| ApiError::invalid())?;
-    execute_remote_git_resolve_conflict(
+    let snapshot = execute_remote_git_resolve_conflict(
         state.sessions.as_ref(),
         &input.session_id,
         &input.profile_id,
@@ -153,9 +157,13 @@ pub async fn git_remote_resolve_conflict(
         input.resolution.into(),
     )
     .await
-    .map(Into::into)
-    .map(Json)
-    .map_err(git_error)
+    .map(GitSnapshotDto::from)
+    .map_err(git_error)?;
+    state.git_observations.publish(
+        Some((&input.session_id, &input.profile_id)),
+        serde_json::to_value(&snapshot).map_err(|_| ApiError::storage())?,
+    );
+    Ok(Json(snapshot))
 }
 
 pub async fn git_remote_list_directory(

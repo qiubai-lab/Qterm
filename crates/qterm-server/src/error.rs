@@ -9,7 +9,7 @@ use qterm_core::{
 };
 use serde::Serialize;
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 pub struct ApiError {
     #[serde(skip)]
     pub status: StatusCode,

@@ -40,24 +40,37 @@ pub async fn upgrade(
         let _permit=permit;
         let Some(Ok(Message::Text(text)))=tokio::time::timeout(Duration::from_secs(5),socket.recv()).await.ok().flatten() else { return; };
         let Ok(proof)=serde_json::from_str::<Proof>(&text) else { return; };
-        if state.auth.access.prove_owner(&owner.0,&proof).is_err() { let _=send(&mut socket,Message::Text(json!({"type":"revoked"}).to_string().into())).await;finish(&mut socket).await;return; }
+        if let Err(error)=state.auth.access.prove_owner(&owner.0,&proof) { let _=send(&mut socket,Message::Text(json!({"type":"revoked","reason":error.code}).to_string().into())).await;finish(&mut socket).await;return; }
         let Ok(transport)=state.auth.access.attach(&owner.0) else { return; };
         let mut changes=state.auth.access.subscribe();
+        let mut vault_changes=state.vault.subscribe();
+        let mut vault_revision=None;
         let mut heartbeat=tokio::time::interval(Duration::from_secs(5));
         let mut seen=Instant::now();
         let mut terminal_locked=state.auth.access.terminal_locked(&owner.0).unwrap_or(true);
         if send(&mut socket,Message::Text(json!({"type":"ready"}).to_string().into())).await.is_ok() {
             loop {
-                if !state.auth.valid(&owner.0) {
-                    let _=send(&mut socket,Message::Text(json!({"type":"revoked"}).to_string().into())).await;break;
+                if let Err(error)=state.auth.access.prove_owner(&owner.0,&proof) {
+                    let _=send(&mut socket,Message::Text(json!({"type":"revoked","reason":error.code}).to_string().into())).await;break;
                 }
                 let locked=state.auth.access.terminal_locked(&owner.0).unwrap_or(true);
                 if locked != terminal_locked {
                     terminal_locked=locked;
                     if send(&mut socket,Message::Text(json!({"type":"terminalLock","locked":locked}).to_string().into())).await.is_err(){break;}
                 }
+                let vault_status=vault_changes.borrow_and_update().clone();
+                if locked { vault_revision=None; }
+                else if let Some(status)=vault_status
+                    && vault_revision != Some(status.revision) {
+                        let initial=vault_revision.is_none();
+                        if let Ok(permit)=crate::data_access::Permit::new(&state,&owner.0) {
+                            let message=Message::Text(json!({"type":"vaultStatus","initial":initial,"status":status}).to_string().into());
+                            if permit.run(send(&mut socket,message)).await.is_ok(){vault_revision=Some(status.revision);}
+                        }
+                }
                 tokio::select! {
                     _=changes.changed()=>{},
+                    _=vault_changes.changed()=>{},
                     _=heartbeat.tick()=>{
                         if seen.elapsed()>Duration::from_secs(30) { break; }
                         if send(&mut socket,Message::Ping(Vec::new().into())).await.is_err() { break; }
