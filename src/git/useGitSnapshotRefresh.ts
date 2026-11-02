@@ -4,6 +4,11 @@ import type { GitObservationTarget } from "../lib/contracts/gitObservation";
 import type { GitSnapshot } from "../lib/tauri/git";
 
 type Read = () => Promise<GitSnapshot>;
+function canRetryRead(error: unknown): boolean {
+  if (!error || typeof error !== "object") return true;
+  if ("retryable" in error && error.retryable === false) return false;
+  return !("code" in error && ["notGitRepository", "invalidGitPath", "gitMissing", "gitUnsupportedRemote"].includes(String(error.code)));
+}
 type Options = {
   path: string | null;
   remote: boolean;
@@ -31,16 +36,26 @@ export function useGitSnapshotRefresh({ path, remote, sessionId, profileId, enab
     let interval: ReturnType<typeof setInterval> | undefined;
     const flush = async () => {
       if (disposed || !dirty || running || latest.current.busy || document.visibilityState === "hidden") return;
+      clearTimeout(timer);
       dirty = false;
       running = true;
       const loader = read;
-      let ok = false;
-      try { ok = await latest.current.refresh(Boolean(loader), loader); }
+      let ok = false, retryable = true;
+      const observedRead = loader ? async () => {
+        try { return await loader(); }
+        catch (error) { retryable = canRetryRead(error); throw error; }
+      } : undefined;
+      try { ok = await latest.current.refresh(Boolean(loader), observedRead); }
       finally {
         running = false;
-        if (!disposed) {
-          if (!ok && loader) dirty = true;
-          if (dirty) timer = setTimeout(() => void flush(), 1000);
+        if (!disposed && document.visibilityState === "visible") {
+          // Only new invalidations are dirty immediately. Failed reads become
+          // eligible after the delay, so clearing busy cannot bypass backoff.
+          if (dirty || (!ok && loader && retryable)) timer = setTimeout(() => {
+            timer = undefined;
+            dirty = true;
+            void flush();
+          }, 1000);
         }
       }
     };
