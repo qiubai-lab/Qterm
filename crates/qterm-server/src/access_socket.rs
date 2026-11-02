@@ -22,6 +22,7 @@ pub async fn upgrade(
     State(state): State<Arc<ServerState>>,
     Extension(owner): Extension<Identity>,
     headers: HeaderMap,
+    Extension(mut audit): Extension<crate::access_log::Source>,
     ws: WebSocketUpgrade,
 ) -> Result<Response> {
     check_origin(&headers, &state.config.origin)?;
@@ -38,9 +39,10 @@ pub async fn upgrade(
         })?;
     Ok(ws.max_message_size(4096).max_frame_size(4096).on_upgrade(move |mut socket| async move {
         let _permit=permit;
-        let Some(Ok(Message::Text(text)))=tokio::time::timeout(Duration::from_secs(5),socket.recv()).await.ok().flatten() else { return; };
-        let Ok(proof)=serde_json::from_str::<Proof>(&text) else { return; };
-        if let Err(error)=state.auth.access.prove_owner(&owner.0,&proof) { let _=send(&mut socket,Message::Text(json!({"type":"revoked","reason":error.code}).to_string().into())).await;finish(&mut socket).await;return; }
+        let Some(Ok(Message::Text(text)))=tokio::time::timeout(Duration::from_secs(5),socket.recv()).await.ok().flatten() else { state.access_log.record(crate::access_log::Kind::AccessDenied, false, "requestRejected", audit); return; };
+        let Ok(proof)=serde_json::from_str::<Proof>(&text) else { state.access_log.record(crate::access_log::Kind::AccessDenied, false, "requestRejected", audit); return; };
+        if let Err(error)=state.auth.access.prove_owner(&owner.0,&proof) { state.access_log.record(crate::access_log::Kind::AccessDenied, false, if error.code == "sessionReplaced" { "sessionReplaced" } else { "sessionExpired" }, audit.clone()); let _=send(&mut socket,Message::Text(json!({"type":"revoked","reason":error.code}).to_string().into())).await;finish(&mut socket).await;return; }
+        audit.session = state.auth.access.audit_session_for_cookie(crate::auth::token(&headers, state.config.secure_cookie).unwrap_or_default());
         let Ok(transport)=state.auth.access.attach(&owner.0) else { return; };
         let mut changes=state.auth.access.subscribe();
         let mut vault_changes=state.vault.subscribe();
@@ -49,8 +51,10 @@ pub async fn upgrade(
         let mut seen=Instant::now();
         let mut terminal_locked=state.auth.access.terminal_locked(&owner.0).unwrap_or(true);
         if send(&mut socket,Message::Text(json!({"type":"ready"}).to_string().into())).await.is_ok() {
+            state.access_log.record(crate::access_log::Kind::Connected, true, "presenceReady", audit.clone());
             loop {
                 if let Err(error)=state.auth.access.prove_owner(&owner.0,&proof) {
+                    state.access_log.record(crate::access_log::Kind::Revoked, true, if error.code == "sessionReplaced" { "sessionReplaced" } else { "sessionExpired" }, audit.clone());
                     let _=send(&mut socket,Message::Text(json!({"type":"revoked","reason":error.code}).to_string().into())).await;break;
                 }
                 let locked=state.auth.access.terminal_locked(&owner.0).unwrap_or(true);
@@ -83,6 +87,7 @@ pub async fn upgrade(
                 }
             }
         }
+        state.access_log.record(crate::access_log::Kind::Disconnected, true, "connectionClosed", audit);
         state.auth.access.detach(&owner.0,&transport);
         finish(&mut socket).await;
     }))

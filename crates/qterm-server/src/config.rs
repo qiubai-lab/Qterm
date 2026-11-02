@@ -7,6 +7,7 @@ pub struct Config {
     pub assets: PathBuf,
     pub password_hash: String,
     pub secure_cookie: bool,
+    pub trusted_proxies: Vec<std::net::IpAddr>,
 }
 impl Config {
     pub fn from_env() -> Result<Self, String> {
@@ -29,6 +30,17 @@ impl Config {
             path("QTERM_PASSWORD_HASH_FILE"),
         )?;
         Ok(Self {
+            trusted_proxies: std::env::var("QTERM_TRUSTED_PROXIES")
+                .unwrap_or_default()
+                .split(',')
+                .filter(|value| !value.trim().is_empty())
+                .map(|value| {
+                    value
+                        .trim()
+                        .parse()
+                        .map_err(|_| "Invalid QTERM_TRUSTED_PROXIES IP address".to_string())
+                })
+                .collect::<Result<Vec<_>, _>>()?,
             listen: std::env::var("QTERM_LISTEN")
                 .unwrap_or_else(|_| "0.0.0.0:8080".into())
                 .parse()

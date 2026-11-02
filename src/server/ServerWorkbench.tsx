@@ -1,3 +1,4 @@
+import { AccessLogControl } from "./accessLog/AccessLogControl";
 import { useAppTheme } from "../app/theme/AppThemeProvider";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { useTerminalLock } from "../workspace/useTerminalLock";
@@ -26,7 +27,7 @@ export function ServerWorkbench({ onLogout }: { onLogout: () => Promise<void> })
     <WorkbenchActivity value={active}>
       <div className="server-workbench-content" hidden={!active} inert={!active} aria-hidden={!active || undefined}>
         {(mounted || active) && <WorkspaceProvider><OnboardingProvider mode="desktop"><TerminalNotificationProvider>
-          <WorkspaceShell onLogout={onLogout} terminalLockState={lock} onThemeRestored={commitTheme}/>
+          <WorkspaceShell webActions={<AccessLogControl/>} onLogout={onLogout} terminalLockState={lock} onThemeRestored={commitTheme}/>
           <ServerRuntimeRestore/>
           <WorkspaceTerminalLinkHost/>
         </TerminalNotificationProvider></OnboardingProvider></WorkspaceProvider>}

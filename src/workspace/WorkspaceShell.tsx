@@ -35,7 +35,7 @@ interface DisconnectRequest { owner: ConnectionOwner; blockId: string; name: str
 
 const TITLEBAR_DOUBLE_CLICK_MS = 350;
 
-export function WorkspaceShell({ onLogout, terminalLockBackend, terminalLockState, onThemeRestored }: { onLogout?: () => Promise<void>; terminalLockBackend?: TerminalLockBackend; terminalLockState?: ReturnType<typeof useTerminalLock>; onThemeRestored?: (theme: AppTheme) => void } = {}) {
+export function WorkspaceShell({ onLogout, webActions, terminalLockBackend, terminalLockState, onThemeRestored }: { webActions?: import("react").ReactNode; onLogout?: () => Promise<void>; terminalLockBackend?: TerminalLockBackend; terminalLockState?: ReturnType<typeof useTerminalLock>; onThemeRestored?: (theme: AppTheme) => void } = {}) {
   const desktopPlatform = currentDesktopPlatform();
   const { hydrated, document, activeWorkspace, dispatch, runtimes, fileRuntimes, networkRuntimes, gitRuntimes, clearTerminalOsc7State, connectBlock, connectFileBlock, connectNetworkBlock, connectGitBlock, disconnectBlock, disconnectFileBlock, disconnectNetworkBlock, disconnectGitBlock, isConnectionTargetCurrent, connectedCount, closeSessions, acceptBlockHostKey, rejectBlockHostKey, acceptFileHostKey, rejectFileHostKey, acceptNetworkHostKey, rejectNetworkHostKey, acceptGitHostKey, rejectGitHostKey, storageNotice, dismissStorageNotice } = useWorkspace();
   const [tool, setTool] = useState<Tool | null>(null);
@@ -332,7 +332,7 @@ export function WorkspaceShell({ onLogout, terminalLockBackend, terminalLockStat
           ? "请先初始化凭证库"
         : "锁定终端";
   return <main data-onboarding-ready={hydrated && terminalSettingsReady && !terminalLocked} className="app-shell" data-platform={onLogout ? "web" : desktopPlatform}>
-    <WorkspaceChrome onLogout={onLogout}>
+    <WorkspaceChrome onLogout={onLogout} webActions={webActions}>
       <WorkspaceTabs disabled={terminalLocked} requestClose={requestClose} onReorderSelection={order => { workspaceTransitionOrderOverrideRef.current = order; }}/>
     </WorkspaceChrome>
 

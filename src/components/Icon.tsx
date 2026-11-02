@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-export type IconName = "bookmark" | "history" | "workspace" | "plus" | "terminal" | "git" | "submodule" | "mergeConflict" | "browser" | "externalLink" | "computer" | "server" | "network" | "files" | "file" | "filePlus" | "folderPlus" | "edit" | "save" | "check" | "checkCircle" | "alertCircle" | "copy" | "upload" | "download" | "key" | "lock" | "trash" | "clear" | "back" | "forward" | "chevronDown" | "refresh" | "sync" | "search" | "disconnect" | "settings" | "help" | "splitHorizontal" | "splitVertical" | "menu" | "pin" | "windowMinimize" | "windowMaximize" | "close" | "more" | "eye" | "eyeOff";
+export type IconName = "bookmark" | "history" | "workspace" | "plus" | "terminal" | "git" | "submodule" | "mergeConflict" | "browser" | "externalLink" | "computer" | "server" | "network" | "files" | "file" | "filePlus" | "folderPlus" | "edit" | "save" | "check" | "checkCircle" | "alertCircle" | "copy" | "upload" | "download" | "key" | "lock" | "logout" | "trash" | "clear" | "back" | "forward" | "chevronDown" | "refresh" | "sync" | "search" | "disconnect" | "settings" | "help" | "splitHorizontal" | "splitVertical" | "menu" | "pin" | "windowMinimize" | "windowMaximize" | "close" | "more" | "eye" | "eyeOff";
 
 export function Icon({ name, size = 16 }: { name: IconName; size?: number }) {
   const paths: Record<IconName, ReactNode> = {
@@ -31,6 +31,7 @@ export function Icon({ name, size = 16 }: { name: IconName; size?: number }) {
     download: <><path d="M12 4v12M7 11l5 5 5-5"/><path d="M5 19h14"/></>,
     key: <><circle cx="8" cy="12" r="4"/><path d="M12 12h9M17 12v3M20 12v2"/></>,
     lock: <><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3"/></>,
+    logout: <path d="M9 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4M9 12h12m-4-4 4 4-4 4"/>,
     trash: <><path d="M4 7h16M9 7V4h6v3M7 7l1 14h8l1-14M10 11v6M14 11v6"/></>,
     clear: <><path d="m15 4 5 5-9 9H6l-2-2Z"/><path d="m12 17 3 3M4 20h16"/></>,
     back: <path d="m15 6-6 6 6 6"/>,

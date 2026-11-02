@@ -17,6 +17,7 @@ pub(super) fn fixture() -> (tempfile::TempDir, Arc<ServerState>, String) {
         assets: dir.path().join("assets"),
         password_hash: String::new(),
         secure_cookie: false,
+        trusted_proxies: vec![],
     })
     .unwrap();
     let token = state.auth.issue().unwrap();
@@ -154,6 +155,7 @@ fn data_root_is_exclusive() {
         assets: state.config.assets.clone(),
         password_hash: String::new(),
         secure_cookie: false,
+        trusted_proxies: vec![],
     };
     assert!(ServerState::new(config).is_err());
 }
@@ -187,6 +189,7 @@ async fn login_checks_password_and_sets_an_http_only_cookie() {
         assets: dir.path().join("assets"),
         password_hash: hash,
         secure_cookie: false,
+        trusted_proxies: vec![],
     })
     .unwrap();
     assert_eq!(

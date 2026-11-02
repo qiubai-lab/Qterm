@@ -22,6 +22,7 @@ pub struct Status {
 }
 
 pub struct ObservedVault {
+    access_log: std::sync::Arc<crate::access_log::AccessLog>,
     lifecycle: CredentialLifecycle<JsonCredentialVault>,
     changes: watch::Sender<Option<Status>>,
     mutation: Mutex<()>,
@@ -33,8 +34,12 @@ impl Deref for ObservedVault {
     }
 }
 impl ObservedVault {
-    pub fn new(vault: JsonCredentialVault) -> Self {
+    pub fn new(
+        vault: JsonCredentialVault,
+        access_log: std::sync::Arc<crate::access_log::AccessLog>,
+    ) -> Self {
         let value = Self {
+            access_log,
             lifecycle: CredentialLifecycle::new(vault),
             changes: watch::channel(None).0,
             mutation: Mutex::new(()),
@@ -118,7 +123,16 @@ impl ObservedVault {
         self.change(reason, |v| v.lock(reason))
     }
     pub fn lock_if_generation(&self, generation: u64) -> bool {
-        self.change(LockReason::Timeout, |v| v.lock_if_generation(generation))
+        let locked = self.change(LockReason::Timeout, |v| v.lock_if_generation(generation));
+        if locked {
+            self.access_log.record(
+                crate::access_log::Kind::VaultLock,
+                true,
+                "timeout",
+                Default::default(),
+            );
+        }
+        locked
     }
     pub fn clear(&self) -> Result<(), CredentialError> {
         self.change(LockReason::Manual, |v| v.clear())

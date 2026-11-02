@@ -9,7 +9,7 @@ interface TitlebarGesture { pointerId: number; x: number; y: number }
 interface TitlebarClick { at: number; x: number; y: number }
 
 /** Shared chrome; only native window operations and browser logout differ. */
-export function WorkspaceChrome({ children, onLogout }: { children: ReactNode; onLogout?: () => Promise<void> }) {
+export function WorkspaceChrome({ children, onLogout, webActions }: { children: ReactNode; webActions?: ReactNode; onLogout?: () => Promise<void> }) {
   const usesNativeWindowControls = currentDesktopPlatform() === "macos";
   const [windowAlwaysOnTop, setWindowAlwaysOnTop] = useState(false);
   const [windowPinBusy, setWindowPinBusy] = useState(false);
@@ -100,7 +100,7 @@ export function WorkspaceChrome({ children, onLogout }: { children: ReactNode; o
   return <header className="app-chrome" onPointerDown={onLogout ? undefined : beginWindowDrag}>
     <div className="app-brand" aria-label="Qterm"><Icon name="terminal" size={15}/><span>Qterm</span></div>
     {children}
-    {onLogout ? <WorkspaceLogoutControl onLogout={onLogout}/> : <>
+    {onLogout ? <WorkspaceLogoutControl onLogout={onLogout}>{webActions}</WorkspaceLogoutControl> : <>
       <div className="window-controls" aria-label="窗口控制">
         <button className="window-pin" aria-label={windowAlwaysOnTop ? "取消窗口置顶" : "置顶窗口"} aria-pressed={windowAlwaysOnTop} aria-busy={windowPinBusy || undefined} title={windowAlwaysOnTop ? "取消置顶" : "置顶窗口"} disabled={windowPinBusy} onClick={() => void toggleWindowAlwaysOnTop()}><Icon name="pin" size={14}/></button>
         {!usesNativeWindowControls && <>

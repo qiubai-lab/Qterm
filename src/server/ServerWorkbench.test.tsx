@@ -59,7 +59,7 @@ it("keeps readers unmounted when the initial lock check fails and permits retry"
   await screen.findByText("无法确认终端锁定状态，请重试。");
   expect(mocks.mount).not.toHaveBeenCalled();expect(dataPaused()).toBe(true);
   fireEvent.click(screen.getByRole("button",{name:"重试"}));
-  await screen.findByLabelText("文件草稿");expect(mocks.mount).toHaveBeenCalledOnce();
+  await screen.findByLabelText("文件草稿");await waitFor(()=>expect(mocks.mount).toHaveBeenCalledOnce());
 });
 
 it("opens a locked takeover only after successful master-password verification", async () => {

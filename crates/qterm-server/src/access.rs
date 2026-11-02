@@ -22,6 +22,7 @@ pub struct Proof {
     pub client_id: String,
 }
 struct Login {
+    audit_id: String,
     terminal_locked: bool,
     cookie: String,
     key: String,
@@ -92,6 +93,29 @@ fn require_active_login(inner: &Inner) -> Result<()> {
     }
 }
 impl Access {
+    pub fn audit_session(&self, cookie: &str, key: &str, client: &str) -> Option<String> {
+        self.inner
+            .lock()
+            .unwrap()
+            .login
+            .as_ref()
+            .filter(|s| {
+                s.cookie == cookie
+                    && s.key == key
+                    && s.client == client
+                    && s.expires > Instant::now()
+            })
+            .map(|s| s.audit_id.clone())
+    }
+    pub fn audit_session_for_cookie(&self, cookie: &str) -> Option<String> {
+        self.inner
+            .lock()
+            .unwrap()
+            .login
+            .as_ref()
+            .filter(|s| s.cookie == cookie)
+            .map(|s| s.audit_id.clone())
+    }
     pub fn subscribe(&self) -> watch::Receiver<u64> {
         self.changes.subscribe()
     }
@@ -173,6 +197,7 @@ impl Access {
         let key = random_token()?;
         let owner = random_token()?;
         inner.login = Some(Login {
+            audit_id: uuid::Uuid::new_v4().to_string(),
             terminal_locked,
             cookie: cookie.clone(),
             key: key.clone(),
@@ -319,6 +344,7 @@ impl Access {
         let token = random_token()?;
         let mut inner = self.inner.lock().unwrap();
         inner.login = Some(Login {
+            audit_id: uuid::Uuid::new_v4().to_string(),
             terminal_locked: false,
             cookie: token.clone(),
             key: token.clone(),

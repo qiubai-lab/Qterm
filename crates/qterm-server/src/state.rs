@@ -23,6 +23,7 @@ use std::{
 };
 
 pub struct ServerState {
+    pub access_log: Arc<crate::access_log::AccessLog>,
     pub workspace_runtime: Mutex<crate::workspace_runtime::Runtime>,
     pub retained: Mutex<HashMap<String, Arc<crate::retained_session::RetainedSession>>>,
     pub screen_worker: Arc<crate::screen_worker::ScreenWorker>,
@@ -91,7 +92,9 @@ impl ServerState {
                 std::fs::remove_file(entry.path()).map_err(|_| "Cannot clean transfer cache")?;
             }
         }
+        let access_log = crate::access_log::AccessLog::new(config.data.join("logs/access"));
         Ok(Arc::new(Self {
+            access_log: access_log.clone(),
             network: qterm_core::application::network_service::NetworkService::new(qterm_core::infrastructure::persistence::json_network_repository::JsonNetworkRepository::new(config.data.join("data/network-forwards.json"))),
             network_gate: Default::default(),
             network_running: Default::default(),
@@ -111,7 +114,7 @@ impl ServerState {
             workspace_revision: Mutex::new(0),
             vault: Arc::new(crate::vault_events::ObservedVault::new(JsonCredentialVault::new(
                 config.data.join("data/secrets.vault"),
-            ))),
+            ), access_log)),
             sessions: Arc::new(SshSessionManager::new(
                 JsonKnownHostRepository::new(config.data.join("device/known-hosts.json")),
                 JsonRemoteShellCache::new(config.data.join("cache/remote-shells.json")),

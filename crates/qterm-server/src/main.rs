@@ -1,4 +1,5 @@
 mod access;
+mod access_log;
 mod access_socket;
 mod access_transport;
 mod auth;
@@ -81,23 +82,26 @@ async fn serve() -> Result<(), String> {
         listener.local_addr().map_err(|_| "Listener unavailable")?
     );
     let shutdown_state = state.clone();
-    let result = axum::serve(listener, router::router(state.clone()))
-        .with_graceful_shutdown(async move {
-            #[cfg(unix)]
-            {
-                let mut terminate =
-                    tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
-                        .expect("signal handler");
-                tokio::select! {_=tokio::signal::ctrl_c()=>{},_=terminate.recv()=>{}}
-            }
-            #[cfg(not(unix))]
-            {
-                let _ = tokio::signal::ctrl_c().await;
-            }
-            shutdown_state.auth.revoke();
-            shutdown_state.close_all();
-        })
-        .await;
+    let result = axum::serve(
+        listener,
+        router::router(state.clone()).into_make_service_with_connect_info::<std::net::SocketAddr>(),
+    )
+    .with_graceful_shutdown(async move {
+        #[cfg(unix)]
+        {
+            let mut terminate =
+                tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+                    .expect("signal handler");
+            tokio::select! {_=tokio::signal::ctrl_c()=>{},_=terminate.recv()=>{}}
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = tokio::signal::ctrl_c().await;
+        }
+        shutdown_state.auth.revoke();
+        shutdown_state.close_all();
+    })
+    .await;
     maintenance.abort();
     state.auth.revoke();
     state.close_all();

@@ -11,6 +11,7 @@ use tower_http::{services::ServeDir, set_header::SetResponseHeaderLayer};
 
 pub fn router(state: Arc<ServerState>) -> Router {
     let protected=Router::new()
+        .route("/access-log", get(crate::access_log::transport::list))
         .route("/network/rules",get(crate::network::list).post(crate::network::create))
         .route("/network/rules/{id}",axum::routing::put(crate::network::update).delete(crate::network::delete))
         .route("/network/start",post(crate::network::start))
@@ -123,5 +124,6 @@ pub fn router(state: Arc<ServerState>) -> Router {
         .layer(SetResponseHeaderLayer::overriding(header::CACHE_CONTROL,HeaderValue::from_static("no-store")))
         .layer(SetResponseHeaderLayer::overriding(header::X_CONTENT_TYPE_OPTIONS,HeaderValue::from_static("nosniff")))
         .layer(SetResponseHeaderLayer::overriding(header::CONTENT_SECURITY_POLICY,HeaderValue::from_static("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; font-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'")))
+        .layer(middleware::from_fn_with_state(state.clone(), crate::access_log::transport::observe))
         .with_state(state)
 }

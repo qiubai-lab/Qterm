@@ -15,10 +15,22 @@ use serde::Deserialize;
 use serde_json::json;
 use std::sync::Arc;
 
+#[derive(Clone)]
+pub struct AdmissionOutcome {
+    pub pending: bool,
+    pub session: Option<String>,
+}
+
 pub fn admitted(state: &ServerState, admission: Admission, lock_vault: bool) -> Result<Response> {
     match admission {
         Admission::Occupied { ticket } => {
-            Ok(Json(json!({"authenticated":false,"takeoverTicket":ticket})).into_response())
+            let mut response =
+                Json(json!({"authenticated":false,"takeoverTicket":ticket})).into_response();
+            response.extensions_mut().insert(AdmissionOutcome {
+                pending: true,
+                session: None,
+            });
+            Ok(response)
         }
         Admission::Granted { cookie: token, key } => {
             if lock_vault {
@@ -27,14 +39,19 @@ pub fn admitted(state: &ServerState, admission: Admission, lock_vault: bool) -> 
                     .vault
                     .lock(qterm_core::application::credential_lifecycle::LockReason::Manual);
             }
-            Ok((
+            let mut response = (
                 [(
                     header::SET_COOKIE,
                     cookie(state.config.secure_cookie, &token, 8 * 3600),
                 )],
                 Json(json!({"authenticated":true,"accessKey":key})),
             )
-                .into_response())
+                .into_response();
+            response.extensions_mut().insert(AdmissionOutcome {
+                pending: false,
+                session: state.auth.access.audit_session_for_cookie(&token),
+            });
+            Ok(response)
         }
     }
 }

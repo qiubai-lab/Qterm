@@ -9,6 +9,10 @@ use qterm_core::{
 };
 use serde::Serialize;
 
+// Internal response metadata for observers; never serializes error internals.
+#[derive(Clone)]
+pub struct ResponseErrorCode(pub String);
+
 #[derive(Debug, Serialize, Clone)]
 pub struct ApiError {
     #[serde(skip)]
@@ -45,7 +49,10 @@ impl ApiError {
 }
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
-        (self.status, Json(self)).into_response()
+        let code = self.code.clone();
+        let mut response = (self.status, Json(self)).into_response();
+        response.extensions_mut().insert(ResponseErrorCode(code));
+        response
     }
 }
 impl From<ApplicationError> for ApiError {
