@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       publish_image:
-        description: Publish the tested branch image to GHCR
+        description: Publish the tested main image to GHCR (main only)
         type: boolean
         default: true
 
@@ -89,6 +89,7 @@ jobs:
   container:
     name: Container (linux/amd64)
     needs: verify
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     permissions:
@@ -138,14 +139,14 @@ jobs:
           python scripts/test-server-clipboard.py --container
           python scripts/test-server-compose.py
       - name: Log in to GHCR
-        if: github.event_name == 'workflow_dispatch' && inputs.publish_image && startsWith(github.ref, 'refs/heads/')
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish_image))
         uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Publish tested AMD64 image to GHCR
-        if: github.event_name == 'workflow_dispatch' && inputs.publish_image && startsWith(github.ref, 'refs/heads/')
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish_image))
         env:
           IMAGE: ${{ steps.image.outputs.name }}
           TAGS: ${{ steps.meta.outputs.tags }}

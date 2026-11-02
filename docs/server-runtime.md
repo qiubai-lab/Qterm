@@ -6,7 +6,7 @@ Web 运行时以单用户、单进程部署，浏览器与桌面端直接共用 
 
 ## 容器启动
 
-基础 `compose.yaml` 从 GHCR 拉取镜像；当前开发分支默认使用 `ghcr.io/qiubai-lab/qterm:dev-webruntime`，需要先通过 GitHub Actions 手动发布成功。仅发布 Linux AMD64 镜像。完整的准备、权限、源码构建、升级回滚与备份步骤见 [本地容器部署](container-deployment.md)。
+基础 `compose.yaml` 从 GHCR 拉取镜像，默认使用 `ghcr.io/qiubai-lab/qterm:main`。仅 `main` 的 push 在质量与容器验收通过后自动发布，也支持在 `main` 手动发布；开发分支只做质量与运行时检查。首次部署需等待镜像发布成功。仅发布 Linux AMD64 镜像。完整的准备、权限、源码构建、升级回滚与备份步骤见 [本地容器部署](container-deployment.md)。
 
 ```sh
 cp .env.example .env

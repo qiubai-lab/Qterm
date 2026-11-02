@@ -113,37 +113,36 @@ macOS 用户可以通过 Homebrew tap [qiubai-lab/homebrew-tap](https://github.c
 
 ## Web 容器镜像发布
 
-Web 镜像与桌面 `v*` 标签发布相互独立。普通 push（`main`、`dev`、`dev-webruntime`）和所有 PR 只验证，不向 GHCR 写入；发布由维护者手动触发。
+Web 镜像与桌面 `v*` 标签发布相互独立。推送到 `main` 后，先执行质量与运行时检查，再构建、验收容器并自动发布到 GHCR。`dev`、`dev-webruntime` 的 push 和所有 PR 只执行 **Linux quality and runtime acceptance**，跳过容器构建与发布。维护者也可以在 `main` 手动触发：
 
-1. 将待发布代码及 `.github/workflows/server.yml` 提交到目标分支。
-2. 打开仓库 Actions → **Web server runtime** → **Run workflow**，选择 **dev-webruntime**（或其他已包含该 workflow 的分支）。
+1. 将待发布代码及 `.github/workflows/server.yml` 合入 `main`（合并产生的 push 会自动发布，无需再手动运行）。
+2. 需要重新发布时，打开仓库 Actions → **Web server runtime** → **Run workflow**，选择 **main**。
 3. 保持 `publish_image` 勾选并启动。取消勾选则执行完整验收但不发布。
 4. 全部 job 成功后，从 **Container (linux/amd64)** 的 Summary 取得标签及 digest。使用该 digest 可以固定本地部署版本。
 
 也可以使用已登录的 GitHub CLI：
 
 ```sh
-gh workflow run server.yml --ref dev-webruntime -f publish_image=true
-gh run list --workflow server.yml --branch dev-webruntime --event workflow_dispatch --limit 5
+gh workflow run server.yml --ref main -f publish_image=true
+gh run list --workflow server.yml --branch main --event workflow_dispatch --limit 5
 gh run watch RUN_ID --exit-status
 ```
 
-GitHub 要求 workflow 文件存在于默认分支，才会提供标准 `workflow_dispatch` 入口；若该文件尚未合入 `main`，先将 workflow 配置合入默认分支，再选择开发分支运行。所选分支也必须包含新版 workflow 及其引用的脚本。
+GitHub 要求 workflow 文件存在于默认分支，才会提供网页的 **Run workflow** 入口。手动选择其他分支时只执行质量与运行时检查，即使勾选 `publish_image` 也不会构建或发布镜像。
 
-流水线使用当前仓库的 `GITHUB_TOKEN` 登录 GHCR，不需要额外保存 PAT。只有容器 job 声明 `packages: write`；PR 和普通 push 不执行登录或推送。仓库/组织策略必须允许 GitHub Actions 写入 packages；若同名包已有独立权限，在该包的 **Manage Actions access** 中授权此仓库写入。首次发布后如需匿名拉取，请将包 visibility 设为 public；流水线不修改包可见性。
+流水线使用当前仓库的 `GITHUB_TOKEN` 登录 GHCR，不需要额外保存 PAT。只有容器 job 声明 `packages: write`；非 `main` 分支、PR 和取消勾选 `publish_image` 的手动运行不执行登录或推送。仓库/组织策略必须允许 GitHub Actions 写入 packages；若同名包已有独立权限，在该包的 **Manage Actions access** 中授权此仓库写入。首次发布后如需匿名拉取，请将包 visibility 设为 public；流水线不修改包可见性。
 
 | 标签 | 行为 |
 | --- | --- |
-| `ghcr.io/qiubai-lab/qterm:dev-webruntime` | 手动发布该分支成功后更新，供预览部署 |
-| `ghcr.io/qiubai-lab/qterm:main` / `:latest` | 仅手动发布 `main` 成功后更新 |
+| `ghcr.io/qiubai-lab/qterm:main` / `:latest` | `main` 分支 push 自动发布或手动发布成功后更新 |
 | `ghcr.io/qiubai-lab/qterm:sha-<完整 commit SHA>` | 追踪源码版本；重跑同一提交可能因基础镜像变化得到不同 digest，严格固定版本使用 digest |
 
-其他手动选择的分支生成对应的规范化分支标签（不支持直接发布 Git tag）；最终标签以 Summary 为准。GHCR 仓库路径自动转为小写，fork 仓库会发布到自己的 owner/repository，需要相应修改部署的 `QTERM_IMAGE`。
+不再发布 `dev`、`dev-webruntime` 或其他分支标签，也不支持直接发布 Git tag；最终标签以 Summary 为准。GHCR 仓库路径自动转为小写，fork 仓库会发布到自己的 owner/repository，需要相应修改部署的 `QTERM_IMAGE`。
 
 Web 运行时 CI 仅针对 **Linux AMD64**，只有两个 job：
 
 1. **Linux quality and runtime acceptance**：源码尺寸检查、lint、共享工作台测试、`test:web` 和 `build:web`，以及 Rust fmt、test、Clippy 和真实 HTTP/WebSocket/SSH 验收。类型检查由 `build:web` 执行一次，不生成桌面前端 `dist/`。本地与 SSH 的 Git 实时观察、凭证状态及访问记录也纳入验收。前端构建产物保留 7 天供排查。
-2. **Container (linux/amd64)**：等待质量检查通过，构建并确认镜像为 `linux/amd64`，运行 PTY、会话保留、接管、文件/Git Block、剪贴板与 Compose 冒烟测试。Compose 验收包含健康检查、静态 JS、登录、非 root/只读根文件系统、仅回环端口及重建后数据持久化。手动触发且勾选 `publish_image` 时，在同一个 job 中将已测试镜像直接推送 GHCR，并输出标签和 digest。
+2. **Container (linux/amd64)**：仅在 `main` 的 push 或手动运行中执行。等待质量检查通过，构建并确认镜像为 `linux/amd64`，运行 PTY、会话保留、接管、文件/Git Block、剪贴板与 Compose 冒烟测试。Compose 验收包含健康检查、静态 JS、登录、非 root/只读根文件系统、仅回环端口及重建后数据持久化。push 或手动触发且勾选 `publish_image` 时，在同一个 job 中将已测试镜像直接推送 GHCR，并输出标签和 digest。
 
 不构建 Windows/macOS 原生 Web 服务，也不构建 ARM64 镜像；不再上传单架构临时标签、传递 digest artifacts 或执行多架构 manifest 汇总。推送使用验收过的本地镜像，不在验收后重新构建。开发分支不会覆盖 `latest`。
 

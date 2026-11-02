@@ -1,6 +1,6 @@
 services:
   qterm:
-    image: ${QTERM_IMAGE:-ghcr.io/qiubai-lab/qterm:dev-webruntime}
+    image: ${QTERM_IMAGE:-ghcr.io/qiubai-lab/qterm:main}
     platform: linux/amd64
     restart: unless-stopped
     ports:

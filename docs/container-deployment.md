@@ -22,7 +22,7 @@ chmod 644 .server-secrets/password
 `.env` 默认内容：
 
 ```dotenv
-QTERM_IMAGE=ghcr.io/qiubai-lab/qterm:dev-webruntime
+QTERM_IMAGE=ghcr.io/qiubai-lab/qterm:main
 QTERM_PORT=8080
 QTERM_PUBLIC_ORIGIN=http://localhost:8080
 QTERM_PASSWORD_SOURCE_FILE=./.server-secrets/password
@@ -35,7 +35,7 @@ QTERM_PASSWORD_SOURCE_FILE=./.server-secrets/password
 | `QTERM_PUBLIC_ORIGIN` | 浏览器实际访问的 origin，协议、主机名、端口必须匹配，不带路径或结尾 `/` |
 | `QTERM_PASSWORD_SOURCE_FILE` | 宿主机密码文件；可改为已有的 `.server-secrets/password.hash` |
 
-`dev-webruntime` 是当前开发分支的预览标签，必须先手动发布成功才可拉取。`main` 和 `latest` 仅在手动发布 `main` 后生成；不会因推送源码自动更新镜像。
+默认使用 `main` 标签，必须先发布成功才可拉取。推送源码到 `main` 后，流水线会在质量与容器验收通过后自动更新 `main`、`latest` 和提交 SHA 标签，也可以在 `main` 手动发布。`dev`、`dev-webruntime` 和 PR 只做质量与运行时检查，不构建或发布容器镜像。已有 `.env` 若仍指定开发分支标签，需将 `QTERM_IMAGE` 改为 `ghcr.io/qiubai-lab/qterm:main` 或已发布的 digest。
 
 ## 2. 拉取并启动
 
@@ -148,4 +148,4 @@ docker compose up -d --no-build --wait --wait-timeout 90
 | 更新后仍是旧版本 | 先 `pull` 再 `up`，确认没有加载 `compose.build.yaml` 或遗留 `COMPOSE_FILE` 环境变量 |
 | 主目录写入报权限错误 | 自定义 bind mount 需授予 UID/GID 10001 写权限；优先使用自带命名卷 |
 
-跨机器访问需 HTTPS 反向代理，不能把不受保护的 HTTP 直接开放到公网。HTTPS、WebSocket 代理和转发端口配置见 [Web 运行时](server-runtime.md#容器启动)；手动 GHCR 发布与 CI 闸门见 [发布流程](release.md#web-容器镜像发布)。
+跨机器访问需 HTTPS 反向代理，不能把不受保护的 HTTP 直接开放到公网。HTTPS、WebSocket 代理和转发端口配置见 [Web 运行时](server-runtime.md#容器启动)；GHCR 自动/手动发布与 CI 闸门见 [发布流程](release.md#web-容器镜像发布)。
