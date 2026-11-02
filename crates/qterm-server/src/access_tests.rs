@@ -22,18 +22,18 @@ fn proof(key: &str, client: &str) -> Proof {
 #[test]
 fn login_check_does_not_evict_the_current_page() {
     let access = Access::default();
-    let (cookie, key) = granted(access.login("first").unwrap());
+    let (cookie, key) = granted(access.login("first", false).unwrap());
     let owner = access.authorize(&cookie, &proof(&key, "first")).unwrap();
-    let _pending = ticket(access.login("second").unwrap());
+    let _pending = ticket(access.login("second", false).unwrap());
     assert!(access.valid(&owner));
     assert!(access.authorize(&cookie, &proof(&key, "second")).is_err());
 }
 #[test]
 fn confirmed_takeover_revokes_old_http_and_socket_identity_even_with_shared_cookie() {
     let access = Access::default();
-    let (cookie, key) = granted(access.login("first").unwrap());
+    let (cookie, key) = granted(access.login("first", false).unwrap());
     let old = access.authorize(&cookie, &proof(&key, "first")).unwrap();
-    let pending = ticket(access.login("second").unwrap());
+    let pending = ticket(access.login("second", false).unwrap());
     let (new_cookie, new_key) = granted(access.takeover(&pending, "second", false).unwrap());
     assert!(!access.valid(&old));
     assert_eq!(
@@ -65,7 +65,7 @@ fn confirmed_takeover_revokes_old_http_and_socket_identity_even_with_shared_cook
 fn expired_revoked_and_missing_logins_are_not_reported_as_takeovers() {
     for cause in ["expired", "revoked", "restart"] {
         let mut access = Access::default();
-        let (cookie, key) = granted(access.login("first").unwrap());
+        let (cookie, key) = granted(access.login("first", false).unwrap());
         let proof = proof(&key, "first");
         let owner = access.authorize(&cookie, &proof).unwrap();
         match cause {
@@ -89,10 +89,13 @@ fn expired_revoked_and_missing_logins_are_not_reported_as_takeovers() {
             "unauthorized"
         );
         assert_eq!(
-            access.resume(&cookie, &proof).err().unwrap().code,
+            access.resume(&cookie, &proof, false).err().unwrap().code,
             "unauthorized"
         );
-        assert_eq!(access.attach(&owner).unwrap_err().code, "unauthorized");
+        assert_eq!(
+            access.attach(&owner, false).unwrap_err().code,
+            "unauthorized"
+        );
         assert_eq!(
             access.terminal_locked(&owner).unwrap_err().code,
             "unauthorized"
@@ -106,26 +109,26 @@ fn expired_revoked_and_missing_logins_are_not_reported_as_takeovers() {
 #[test]
 fn copied_tabs_need_confirmation_but_refresh_after_detach_preserves_login() {
     let access = Access::default();
-    let (cookie, key) = granted(access.login("document-one").unwrap());
+    let (cookie, key) = granted(access.login("document-one", false).unwrap());
     let old = access
         .authorize(&cookie, &proof(&key, "document-one"))
         .unwrap();
-    let transport = access.attach(&old).unwrap();
+    let transport = access.attach(&old, false).unwrap();
     let _pending = ticket(
         access
-            .resume(&cookie, &proof(&key, "document-two"))
+            .resume(&cookie, &proof(&key, "document-two"), false)
             .unwrap(),
     );
     assert!(access.valid(&old));
-    access.detach(&old, &transport);
+    access.detach(&old, &transport, false);
     // Fresh password logins still need confirmation during the refresh grace.
     assert!(matches!(
-        access.login("third").unwrap(),
+        access.login("third", false).unwrap(),
         Admission::Occupied { .. }
     ));
     let (resumed_cookie, resumed_key) = granted(
         access
-            .resume(&cookie, &proof(&key, "document-two"))
+            .resume(&cookie, &proof(&key, "document-two"), false)
             .unwrap(),
     );
     assert_eq!(resumed_cookie, cookie);
@@ -134,9 +137,9 @@ fn copied_tabs_need_confirmation_but_refresh_after_detach_preserves_login() {
     let current = access
         .authorize(&cookie, &proof(&key, "document-two"))
         .unwrap();
-    access.detach(&old, &transport); // A late close must not release the replacement.
+    access.detach(&old, &transport, false); // A late close must not release the replacement.
     assert!(matches!(
-        access.login("third").unwrap(),
+        access.login("third", false).unwrap(),
         Admission::Occupied { .. }
     ));
     assert!(access.valid(&current));
@@ -144,10 +147,10 @@ fn copied_tabs_need_confirmation_but_refresh_after_detach_preserves_login() {
 #[test]
 fn concurrent_confirmation_has_one_winner_and_late_requests_cannot_steal_it() {
     let access = std::sync::Arc::new(Access::default());
-    granted(access.login("first").unwrap());
+    granted(access.login("first", false).unwrap());
     let tickets = [
-        ("second", ticket(access.login("second").unwrap())),
-        ("third", ticket(access.login("third").unwrap())),
+        ("second", ticket(access.login("second", false).unwrap())),
+        ("third", ticket(access.login("third", false).unwrap())),
     ];
     let barrier = std::sync::Arc::new(std::sync::Barrier::new(2));
     let tasks = tickets
@@ -173,8 +176,8 @@ fn concurrent_confirmation_has_one_winner_and_late_requests_cannot_steal_it() {
 #[test]
 fn expired_confirmation_does_not_affect_current_owner() {
     let access = Access::default();
-    let (cookie, key) = granted(access.login("first").unwrap());
-    let pending = ticket(access.login("second").unwrap());
+    let (cookie, key) = granted(access.login("first", false).unwrap());
+    let pending = ticket(access.login("second", false).unwrap());
     access
         .inner
         .lock()
@@ -189,25 +192,25 @@ fn expired_confirmation_does_not_affect_current_owner() {
 #[test]
 fn vanished_page_releases_occupancy_after_heartbeat_timeout() {
     let access = Access::default();
-    granted(access.login("first").unwrap());
+    granted(access.login("first", false).unwrap());
     access.inner.lock().unwrap().login.as_mut().unwrap().seen = Instant::now() - PRESENCE_TTL;
     assert!(matches!(
-        access.login("second").unwrap(),
+        access.login("second", false).unwrap(),
         Admission::Granted { .. }
     ));
 }
 #[test]
 fn cancelling_or_waiting_does_not_lock_out_the_owner_and_pending_memory_is_bounded() {
     let access = Access::default();
-    let (cookie, key) = granted(access.login("first").unwrap());
+    let (cookie, key) = granted(access.login("first", false).unwrap());
     for _ in 0..100 {
-        ticket(access.login("same-retrying-page").unwrap());
+        ticket(access.login("same-retrying-page", false).unwrap());
     }
     assert_eq!(access.inner.lock().unwrap().pending.len(), 1);
     for n in 0..31 {
-        ticket(access.login(&format!("page-{n}")).unwrap());
+        ticket(access.login(&format!("page-{n}"), false).unwrap());
     }
-    assert!(access.login("overflow").is_err());
+    assert!(access.login("overflow", false).is_err());
     assert!(access.authorize(&cookie, &proof(&key, "first")).is_ok());
 }
 

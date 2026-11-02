@@ -1,12 +1,10 @@
 //! Workbench privacy lock belongs to the login, not the lifetime of a browser document.
-use crate::{
-    auth::Identity,
-    error::{ApiError, Result},
-    state::ServerState,
-    vault,
+use crate::{auth::Identity, error::Result, state::ServerState, vault};
+use axum::{
+    Extension, Json,
+    extract::State,
+    response::{IntoResponse, Response},
 };
-use axum::{Extension, Json, extract::State};
-use qterm_core::application::credential_lifecycle::LockReason;
 use serde_json::{Value, json};
 use std::sync::Arc;
 
@@ -23,19 +21,11 @@ pub async fn status(
 pub async fn lock(
     State(state): State<Arc<ServerState>>,
     Extension(owner): Extension<Identity>,
-) -> Result<Json<Value>> {
-    let _gate = state.vault_gate.lock().await;
-    state.auth.access.terminal_locked(&owner.0)?;
-    let status = state.vault.status()?;
-    if !status.initialized || status.legacy {
-        return Err(ApiError::invalid());
-    }
-    state.vault.lock(LockReason::Manual);
-    *state.credential_workflow.lock().unwrap() = Default::default();
-    state.auth.access.set_terminal_locked(&owner.0, true)?;
-    state.downloads.lock().unwrap().clear();
-    state.transfer_tasks.clear();
-    Ok(Json(json!({"locked": true})))
+) -> Result<Response> {
+    let outcome = crate::access_lifecycle::lock(&state, &owner.0).await?;
+    let mut response = Json(json!({"locked": true})).into_response();
+    response.extensions_mut().insert(outcome);
+    Ok(response)
 }
 
 pub async fn unlock(

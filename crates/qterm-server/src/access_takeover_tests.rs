@@ -52,7 +52,7 @@ async fn body_json(response: Response) -> Value {
 }
 
 async fn take_over(state: &Arc<ServerState>) -> Page {
-    let Admission::Occupied { ticket } = state.auth.access.login("new-page").unwrap() else {
+    let Admission::Occupied { ticket } = state.auth.access.login("new-page", false).unwrap() else {
         panic!("expected occupied");
     };
     let request = Request::builder()
@@ -245,7 +245,7 @@ async fn invalid_takeover_ticket_does_not_lock_or_revoke_current_owner() {
 fn takeover_publishes_the_owner_already_locked() {
     let access = crate::access::Access::default();
     access.fixture().unwrap();
-    let Admission::Occupied { ticket } = access.login("new-page").unwrap() else {
+    let Admission::Occupied { ticket } = access.login("new-page", false).unwrap() else {
         panic!("expected occupied");
     };
     let changes = access.subscribe();

@@ -49,6 +49,8 @@ async def verify(f):
     f.api('/vault/recovery/'+recovery)
     f.api('/vault/initialize','POST',{'recoveryId':recovery,'masterPassword':master,'savedRecovery':True})
     first_presence=await presence(f)
+    assert f.api("/terminal-lock")["locked"]
+    f.api("/terminal-lock/unlock","POST",{"masterPassword":master})
     if f.windows:f.api('/settings/terminal','PUT',{'historyFreeBashEnabled':False})
     ws,identifier,_=await terminal(f)
     command=b'set QTERM_TAKEOVER=survived\recho ready-proof\r' if f.windows else b"export QTERM_TAKEOVER=survived; printf 'ready-%s\\n' proof\r"
@@ -63,6 +65,9 @@ async def verify(f):
     assert f.api('/workspace')==layout
     # Checking occupancy or cancelling the dialog leaves all original access intact.
     next_client=other(f)
+    next_client.api('/login','POST',{'password':'incorrect-access-password','clientId':next_client.client_id},status=401)
+    assert not f.api('/terminal-lock')['locked']
+    assert f.api('/vault')['unlocked']
     prompt=next_client.api('/login','POST',{'password':f.password,'clientId':next_client.client_id})
     assert not prompt['authenticated'] and not next_client.cookie
     assert f.api('/auth')['authenticated']
@@ -95,8 +100,8 @@ async def verify(f):
     assert next_client.api('/terminal-lock')['locked']
     assert next_client.api('/access/resume','POST',next_client.proof())['authenticated']
     assert next_client.api('/terminal-lock')['locked']
-    assert not next_client.api('/terminal-lock/unlock','POST',{'masterPassword':master})['locked']
     next_presence=await presence(next_client)
+    assert not next_client.api('/terminal-lock/unlock','POST',{'masterPassword':master})['locked']
     resumed,same_id,screen=await terminal(next_client)
     assert same_id==identifier and b'ready-proof' in screen
     assert next_client.api('/workspace')==layout
@@ -110,10 +115,52 @@ async def verify(f):
     assert reply['authenticated']
     refresh.access_key=reply['accessKey']
     refresh_presence=await presence(refresh)
+    assert refresh.api('/terminal-lock')['locked']
+    refresh.api('/workspace',status=423)
+    refresh.api('/terminal-lock/unlock','POST',{'masterPassword':master})
     refreshed,same_id,_=await terminal(refresh)
     assert same_id==identifier
-    await refreshed.close();await refresh_presence.close()
-    print('PASS: occupancy/cancel, copied tab isolation, takeover master-password lock, HTTP/WS denial before unlock, wrong password and locked resume, immediate revocation, same PTY/environment/layout/draft after unlock, refresh resume')
+    # A transient reconnect uses the same page proof without the resume endpoint.
+    await refresh_presence.close()
+    assert refresh.api('/terminal-lock')['locked']
+    await asyncio.wait_for(refreshed.wait_closed(),5)
+    reconnect=await presence(refresh)
+    assert refresh.api('/terminal-lock')['locked']
+    refresh.api('/terminal-lock/unlock','POST',{'masterPassword':master})
+    # A replacement transport locks once; its predecessor's close cannot re-lock it.
+    replacement=await presence(refresh)
+    assert refresh.api('/terminal-lock')['locked']
+    refresh.api('/terminal-lock/unlock','POST',{'masterPassword':master})
+    await reconnect.close()
+    assert not refresh.api('/terminal-lock')['locked']
+    assert refresh.api('/workspace')==layout
+    refresh.api('/logout','POST',status=204)
+    await replacement.close()
+    # An ordinary login after logout must start locked as well.
+    relogin=other(refresh)
+    relogin.login()
+    assert relogin.api('/terminal-lock')['locked']
+    relogin.api('/workspace',status=423)
+    relogin_presence=await presence(relogin)
+    relogin.api('/terminal-lock/unlock','POST',{'masterPassword':master})
+    restored,same_id,_=await terminal(relogin)
+    assert same_id==identifier
+    await restored.close();await relogin_presence.close()
+    if not f.container:
+        f.close()
+        restarted=local.Fixture(f.directory)
+        try:
+            restarted.login()
+            assert restarted.api('/terminal-lock')['locked']
+            restarted.api('/workspace',status=423)
+            restarted_presence=await presence(restarted)
+            restarted.api('/terminal-lock/unlock','POST',{'masterPassword':master})
+            restarted.api('/workspace')
+            assert restarted.api('/vault')['unlocked']
+            await restarted_presence.close()
+        finally:
+            restarted.close()
+    print('PASS: takeover/refresh/reconnect/relogin/restart lock, invalid proof and master-password denial, stale socket isolation, PTY/environment/layout/draft retention')
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser();parser.add_argument('--container',action='store_true');args=parser.parse_args()

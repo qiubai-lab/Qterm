@@ -39,8 +39,8 @@ async fn terminal_lock_survives_refresh_and_rejects_old_document_requests() {
         (StatusCode::OK, json!({"locked":true}))
     );
     assert!(!state.vault.status().unwrap().unlocked);
-    let transport = state.auth.access.attach(&token).unwrap();
-    state.auth.access.detach(&token, &transport);
+    let transport = state.auth.access.attach(&token, false).unwrap();
+    state.auth.access.detach(&token, &transport, false);
     let (status, resumed) = call(
         state.clone(),
         &token,
@@ -222,14 +222,12 @@ async fn takeover_starts_a_new_lock_and_logout_ends_its_lifetime() {
         Value::Null,
     )
     .await;
-    let pending = state.auth.access.login("takeover-page").unwrap();
+    let pending = state.auth.access.login("takeover-page", false).unwrap();
     let crate::access::Admission::Occupied { ticket } = pending else {
         panic!("expected occupied")
     };
-    let admission = state
-        .auth
-        .access
-        .takeover(&ticket, "takeover-page", true)
+    let admission = crate::access_lifecycle::takeover(&state, &ticket, "takeover-page")
+        .await
         .unwrap();
     let crate::access::Admission::Granted {
         ref cookie,
@@ -249,7 +247,7 @@ async fn takeover_starts_a_new_lock_and_logout_ends_its_lifetime() {
             },
         )
         .unwrap();
-    crate::access_transport::admitted(&state, admission, true).unwrap();
+    crate::access_transport::admitted(&state, admission).unwrap();
     assert!(state.auth.access.terminal_locked(&owner).unwrap());
     assert!(
         state
@@ -259,17 +257,26 @@ async fn takeover_starts_a_new_lock_and_logout_ends_its_lifetime() {
             .is_err()
     );
     assert!(!state.vault.status().unwrap().unlocked);
-    // A new login (including after server restart) starts with no terminal lock.
-    state.auth.revoke();
-    let next = state.auth.issue().unwrap();
-    state.auth.access.set_terminal_locked(&next, true).unwrap();
-    assert_eq!(
-        call(state.clone(), &next, "POST", "/api/v1/logout", Value::Null)
-            .await
-            .0,
-        StatusCode::NO_CONTENT
-    );
-    assert!(state.auth.access.terminal_locked(&next).is_err());
-    let next = state.auth.issue().unwrap();
-    assert!(!state.auth.access.terminal_locked(&next).unwrap());
+    crate::access_lifecycle::logout(&state, &owner)
+        .await
+        .unwrap();
+    assert!(state.auth.access.terminal_locked(&owner).is_err());
+    let admission = crate::access_lifecycle::login(&state, "next-page")
+        .await
+        .unwrap();
+    let crate::access::Admission::Granted { cookie, key } = admission else {
+        panic!("expected admission")
+    };
+    let next = state
+        .auth
+        .access
+        .authorize(
+            &cookie,
+            &Proof {
+                access_key: key,
+                client_id: "next-page".into(),
+            },
+        )
+        .unwrap();
+    assert!(state.auth.access.terminal_locked(&next).unwrap());
 }

@@ -1,11 +1,9 @@
 services:
   qterm:
-    build: .
-    image: qterm-server:local
-    init: true
+    image: ${QTERM_IMAGE:-ghcr.io/qiubai-lab/qterm:dev-webruntime}
     restart: unless-stopped
     ports:
-      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:${QTERM_PORT:-8080}:8080"
     environment:
       QTERM_PUBLIC_ORIGIN: ${QTERM_PUBLIC_ORIGIN:-http://localhost:8080}
       QTERM_PASSWORD_FILE: /run/secrets/qterm_password

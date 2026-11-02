@@ -55,9 +55,14 @@ async fn shares_worker_observes_atomic_writes_and_releases_last_subscription() {
         .unwrap()
         .unwrap();
     let revision = *changes.borrow_and_update();
+    // Git resolves symlinks and uses platform-specific path separators. Compare
+    // filesystem identities (not raw strings), including macOS's /var alias.
+    let snapshot = first.snapshot(revision).unwrap();
     assert_eq!(
-        first.snapshot(revision).unwrap()["repositoryPath"],
-        dir.path().to_string_lossy().as_ref()
+        Path::new(snapshot["repositoryPath"].as_str().unwrap())
+            .canonicalize()
+            .unwrap(),
+        dir.path().canonicalize().unwrap()
     );
     std::fs::write(dir.path().join("pending"), "hello").unwrap();
     std::fs::rename(dir.path().join("pending"), dir.path().join("new.txt")).unwrap();

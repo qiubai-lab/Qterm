@@ -1,6 +1,6 @@
 # 发布流程
 
-本文说明如何通过版本标签发布 Qterm 桌面安装包。相关流水线定义在 `.github/workflows/build-desktop.yml`。
+本文说明桌面安装包与 Web 容器镜像的发布。桌面流水线定义在 `.github/workflows/build-desktop.yml`；Web 流水线定义在 `.github/workflows/server.yml`。
 
 ## 触发方式
 
@@ -110,3 +110,41 @@ macOS 用户可以通过 Homebrew tap [qiubai-lab/homebrew-tap](https://github.c
 - 不要在 CI 未绿、Cargo 版本未提交的情况下打标签；标签推送即发布，没有二次确认。
 - workflow artifacts 仅用于调试，14 天后自动删除；对外分发一律以 GitHub Release 为准。
 - 涉及原生依赖、Tauri 配置或打包的改动，发布前应先用手动触发验证三平台构建。
+
+## Web 容器镜像发布
+
+Web 镜像与桌面 `v*` 标签发布相互独立。普通 push（`main`、`dev`、`dev-webruntime`）和所有 PR 只验证，不向 GHCR 写入；发布由维护者手动触发。
+
+1. 将待发布代码及 `.github/workflows/server.yml` 提交到目标分支。
+2. 打开仓库 Actions → **Web server runtime** → **Run workflow**，选择 **dev-webruntime**（或其他已包含该 workflow 的分支）。
+3. 保持 `publish_image` 勾选并启动。取消勾选则执行完整验收但不发布。
+4. 全部 job 成功后，从 **Publish multi-platform GHCR image** 的 Summary 取得标签及 digest。使用该 digest 可以固定本地部署版本。
+
+也可以使用已登录的 GitHub CLI：
+
+```sh
+gh workflow run server.yml --ref dev-webruntime -f publish_image=true
+gh run list --workflow server.yml --branch dev-webruntime --event workflow_dispatch --limit 5
+gh run watch RUN_ID --exit-status
+```
+
+GitHub 要求 workflow 文件存在于默认分支，才会提供标准 `workflow_dispatch` 入口；若该文件尚未合入 `main`，先将 workflow 配置合入默认分支，再选择开发分支运行。所选分支也必须包含新版 workflow 及其引用的脚本。
+
+流水线使用当前仓库的 `GITHUB_TOKEN` 登录 GHCR，不需要额外保存 PAT。只有容器及发布 job 声明 `packages: write`；PR 和普通 push 不执行登录或推送。仓库/组织策略必须允许 GitHub Actions 写入 packages；若同名包已有独立权限，在该包的 **Manage Actions access** 中授权此仓库写入。首次发布后如需匿名拉取，请将包 visibility 设为 public；流水线不修改包可见性。
+
+| 标签 | 行为 |
+| --- | --- |
+| `ghcr.io/qiubai-lab/qterm:dev-webruntime` | 手动发布该分支成功后更新，供预览部署 |
+| `ghcr.io/qiubai-lab/qterm:main` / `:latest` | 仅手动发布 `main` 成功后更新 |
+| `ghcr.io/qiubai-lab/qterm:sha-<完整 commit SHA>` | 追踪源码版本；重跑同一提交可能因基础镜像变化得到不同 digest，严格固定版本使用 digest |
+| `:build-<run ID>-<attempt>-amd64/arm64` | 验收后上传的内部单架构标签，用于组装最终 manifest；不用于日常部署 |
+
+其他手动选择的分支生成对应的规范化分支标签（不支持直接发布 Git tag）；最终标签以 Summary 为准。GHCR 仓库路径自动转为小写，fork 仓库会发布到自己的 owner/repository，需要相应修改部署的 `QTERM_IMAGE`。
+
+CI 分为 Linux 质量检查与真实 HTTP/WebSocket/SSH 验收、Windows/macOS 原生 PTY 验收、Linux AMD64/ARM64 原生 runner 容器验收，以及最终发布。前端执行 `pnpm check`、`test:web`、`build:web`；Rust 执行 fmt、test、Clippy。Linux 额外覆盖本地与 SSH 的 Git 实时观察、凭证状态及访问记录。前端构建产物保留 7 天供排查。
+
+两个容器 job 都会运行 PTY、会话保留、接管、文件/Git/网络 Block、剪贴板和实际 Compose 冒烟测试。Compose 验收包含健康检查、静态 JS、登录、非 root/只读根文件系统、仅回环端口及重建后数据持久化。推送的是验收过的本地镜像，不在验收后重新构建。最后等待包括 Windows/macOS 在内的全部 job 成功，按 digest 合并两种架构，再验证 manifest 并更新分支/SHA 标签；开发分支不会覆盖 `latest`。
+
+若构建或测试失败，修复失败项后重新运行；架构 job 已上传的内部镜像可能保留，但不会因此更新对外标签。若仅最终发布失败，可重跑失败 job；digest artifacts 保留 7 天，过期后需完整重跑。手动发布不会被同分支的普通 push 取消，同一分支的手动发布串行执行。
+
+部署步骤见 [本地容器部署](container-deployment.md)。

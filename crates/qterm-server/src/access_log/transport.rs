@@ -97,6 +97,14 @@ pub async fn observe(
     request.extensions_mut().insert(context.clone());
     let response = next.run(request).await;
     let status = response.status();
+    if status.is_success()
+        && response
+            .extensions()
+            .get::<crate::access_lifecycle::LockOutcome>()
+            .is_some_and(|outcome| !outcome.changed)
+    {
+        return response;
+    }
     let refused = api && matches!(status.as_u16(), 401 | 403 | 423 | 429);
     if let Some(kind) = kind.or(if refused {
         Some(Kind::AccessDenied)

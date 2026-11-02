@@ -211,16 +211,16 @@ impl Access {
         self.changed(inner);
         Ok(Admission::Granted { cookie, key })
     }
-    pub fn login(&self, client: &str) -> Result<Admission> {
+    pub fn login(&self, client: &str, terminal_locked: bool) -> Result<Admission> {
         valid_client(client)?;
         let mut inner = self.inner.lock().unwrap();
         if inner.login.as_ref().is_some_and(occupied) {
             Self::pending(&mut inner, client)
         } else {
-            self.grant(&mut inner, client, false)
+            self.grant(&mut inner, client, terminal_locked)
         }
     }
-    pub fn resume(&self, cookie: &str, proof: &Proof) -> Result<Admission> {
+    pub fn resume(&self, cookie: &str, proof: &Proof, terminal_locked: bool) -> Result<Admission> {
         valid_client(&proof.client_id)?;
         let mut inner = self.inner.lock().unwrap();
         require_active_login(&inner)?;
@@ -235,6 +235,7 @@ impl Access {
             return Self::pending(&mut inner, &proof.client_id);
         }
         let changed = login.client != proof.client_id;
+        let lock_changed = terminal_locked && !login.terminal_locked;
         let login = inner.login.as_mut().unwrap();
         if changed {
             login.client = proof.client_id.clone();
@@ -242,12 +243,13 @@ impl Access {
             login.transport = None;
         }
         login.claimed = true;
+        login.terminal_locked |= terminal_locked;
         login.seen = Instant::now();
         let result = Admission::Granted {
             cookie: login.cookie.clone(),
             key: login.key.clone(),
         };
-        if changed {
+        if changed || lock_changed {
             self.changed(&mut inner);
         }
         Ok(result)
@@ -289,7 +291,7 @@ impl Access {
             .ok_or_else(replaced)?;
         Ok(login.terminal_locked)
     }
-    pub fn set_terminal_locked(&self, owner: &str, locked: bool) -> Result<()> {
+    pub fn set_terminal_locked(&self, owner: &str, locked: bool) -> Result<bool> {
         let mut inner = self.inner.lock().unwrap();
         require_active_login(&inner)?;
         let login = inner
@@ -297,11 +299,14 @@ impl Access {
             .as_mut()
             .filter(|s| s.owner == owner && s.expires > Instant::now())
             .ok_or_else(replaced)?;
+        if login.terminal_locked == locked {
+            return Ok(false);
+        }
         login.terminal_locked = locked;
         self.changed(&mut inner);
-        Ok(())
+        Ok(true)
     }
-    pub fn attach(&self, owner: &str) -> Result<String> {
+    pub fn attach(&self, owner: &str, terminal_locked: bool) -> Result<String> {
         let mut inner = self.inner.lock().unwrap();
         require_active_login(&inner)?;
         let login = inner
@@ -313,7 +318,18 @@ impl Access {
         login.transport = Some(transport.clone());
         login.claimed = true;
         login.seen = Instant::now();
+        login.terminal_locked |= terminal_locked;
+        // Replacing a transport also invalidates outstanding readers and wakes the old socket.
+        self.changed(&mut inner);
         Ok(transport)
+    }
+    pub fn owns_transport(&self, owner: &str, transport: &str) -> bool {
+        self.inner
+            .lock()
+            .unwrap()
+            .login
+            .as_ref()
+            .is_some_and(|s| s.owner == owner && s.transport.as_deref() == Some(transport))
     }
     pub fn touch(&self, owner: &str, transport: &str) -> bool {
         let mut inner = self.inner.lock().unwrap();
@@ -327,17 +343,24 @@ impl Access {
         login.seen = Instant::now();
         true
     }
-    pub fn detach(&self, owner: &str, transport: &str) {
+    pub fn detach(&self, owner: &str, transport: &str, terminal_locked: bool) -> bool {
         let mut inner = self.inner.lock().unwrap();
         if let Some(login) = inner
             .login
             .as_mut()
             .filter(|s| s.owner == owner && s.transport.as_deref() == Some(transport))
         {
+            let lock_changed = terminal_locked && !login.terminal_locked;
+            login.terminal_locked |= terminal_locked;
             login.claimed = false;
             login.seen = Instant::now();
             login.transport = None;
+            if lock_changed {
+                self.changed(&mut inner);
+            }
+            return true;
         }
+        false
     }
     #[cfg(test)]
     pub fn fixture(&self) -> Result<String> {

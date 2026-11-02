@@ -1,0 +1,6 @@
+# Explicit source-build override; the base Compose file only pulls published images.
+services:
+  qterm:
+    image: qterm-server:local
+    build: .
+    pull_policy: build

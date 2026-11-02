@@ -186,24 +186,15 @@ pub async fn login(
             "密码不正确",
         ));
     }
-    let _gate = state.vault_gate.lock().await;
-    let admission = state.auth.access.login(&input.client_id)?;
-    crate::access_transport::admitted(&state, admission, true)
+    let admission = crate::access_lifecycle::login(&state, &input.client_id).await?;
+    crate::access_transport::admitted(&state, admission)
 }
 
 pub async fn logout(
     State(state): State<Arc<ServerState>>,
     axum::Extension(owner): axum::Extension<Identity>,
 ) -> Result<Response> {
-    let _gate = state.vault_gate.lock().await;
-    if !state.auth.valid(&owner.0) {
-        return Err(ApiError::unauthorized());
-    }
-    state.auth.revoke();
-    state.clear_login_secrets();
-    state
-        .vault
-        .lock(qterm_core::application::credential_lifecycle::LockReason::Manual);
+    crate::access_lifecycle::logout(&state, &owner.0).await?;
     Ok((
         [(
             header::SET_COOKIE,

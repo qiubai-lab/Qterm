@@ -53,7 +53,7 @@ class Fixture:
             command = ["docker", "run", "--rm", "--name", self.container_name,
                        "--read-only", "--tmpfs", "/tmp", "--cap-drop=ALL", "--security-opt=no-new-privileges:true",
                        "-p", f"127.0.0.1:{self.port}:8080", "-e", f"QTERM_PUBLIC_ORIGIN={self.origin}",
-                       "-e", "QTERM_PASSWORD_FILE=/fixture/password", "-v", f"{self.directory}:/fixture:ro", "qterm-server:local"]
+                       "-e", "QTERM_PASSWORD_FILE=/fixture/password", "-v", f"{self.directory}:/fixture:ro", os.environ.get("QTERM_TEST_IMAGE", "qterm-server:local")]
         with (self.directory / "server.log").open("wb") as log:
             self.process = subprocess.Popen(command, env=env, stdout=log, stderr=log)
         self.cwd = "/data/home" if container else str(self.directory)

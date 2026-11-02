@@ -21,7 +21,7 @@ pub struct AdmissionOutcome {
     pub session: Option<String>,
 }
 
-pub fn admitted(state: &ServerState, admission: Admission, lock_vault: bool) -> Result<Response> {
+pub fn admitted(state: &ServerState, admission: Admission) -> Result<Response> {
     match admission {
         Admission::Occupied { ticket } => {
             let mut response =
@@ -33,12 +33,6 @@ pub fn admitted(state: &ServerState, admission: Admission, lock_vault: bool) -> 
             Ok(response)
         }
         Admission::Granted { cookie: token, key } => {
-            if lock_vault {
-                state.clear_login_secrets();
-                state
-                    .vault
-                    .lock(qterm_core::application::credential_lifecycle::LockReason::Manual);
-            }
             let mut response = (
                 [(
                     header::SET_COOKIE,
@@ -62,8 +56,8 @@ pub async fn resume(
 ) -> Result<Response> {
     check_origin(&headers, &state.config.origin)?;
     let cookie = token(&headers, state.config.secure_cookie).ok_or_else(ApiError::unauthorized)?;
-    let _gate = state.vault_gate.lock().await;
-    admitted(&state, state.auth.access.resume(cookie, &proof)?, false)
+    let admission = crate::access_lifecycle::resume(&state, cookie, &proof).await?;
+    admitted(&state, admission)
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -77,18 +71,9 @@ pub async fn takeover(
     Json(input): Json<Takeover>,
 ) -> Result<Response> {
     check_origin(&headers, &state.config.origin)?;
-    let _gate = state.vault_gate.lock().await;
-    let vault = state.vault.status()?;
-    // Publish the new owner and its lock together, before any data request can be admitted.
-    let terminal_locked = vault.initialized && !vault.legacy;
-    admitted(
-        &state,
-        state
-            .auth
-            .access
-            .takeover(&input.ticket, &input.client_id, terminal_locked)?,
-        true,
-    )
+    let admission =
+        crate::access_lifecycle::takeover(&state, &input.ticket, &input.client_id).await?;
+    admitted(&state, admission)
 }
 
 #[cfg(test)]

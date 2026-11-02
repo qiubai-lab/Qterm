@@ -148,6 +148,7 @@ pnpm tauri dev
 | [开发指引](docs/DEVELOPMENT.md) | 环境准备、源码运行、测试、构建与贡献约定 |
 | [安全模型](docs/security-model.md) | 凭据、主机密钥、文件传输与信任边界 |
 | [故障排查](docs/troubleshooting.md) | SSH、私钥、SFTP 与开发环境常见问题 |
+| [本地容器部署](docs/container-deployment.md) | GHCR 镜像启动、源码构建、升级回滚与数据备份 |
 | [Web / 容器运行时](docs/server-runtime.md) | 单用户服务部署、HTTPS 代理、数据持久化与能力边界 |
 | [发布流程](docs/release.md) | 版本检查、标签发布、CI 产物与失败处理 |
 | [产品目标](docs/qb-spec/context/PRODUCT_SPEC.md) | 目标用户、核心流程与产品原则 |

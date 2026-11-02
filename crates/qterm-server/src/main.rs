@@ -1,4 +1,5 @@
 mod access;
+mod access_lifecycle;
 mod access_log;
 mod access_socket;
 mod access_transport;

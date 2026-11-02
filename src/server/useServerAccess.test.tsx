@@ -112,3 +112,22 @@ it("checks the new takeover lock before fetching workspace settings", async () =
   expect(mocks.lock).toHaveBeenCalledOnce();
   expect(mocks.theme).not.toHaveBeenCalled();
 });
+
+
+it("requires the server lock check for initial login and reconnect before loading settings", async () => {
+  mocks.api.mockResolvedValue({authenticated:true,accessKey:"key"});
+  mocks.lock.mockResolvedValue({locked:true});
+  const view = renderHook(useServerAccess);
+  await act(() => view.result.current.login("password"));
+  const [ready, disconnected] = mocks.presence.mock.calls[0];
+  await act(async () => ready());
+  expect(view.result.current.phase).toBe("workspace");
+  expect(mocks.lock).toHaveBeenCalledTimes(1);
+  expect(mocks.theme).not.toHaveBeenCalled();
+  act(() => disconnected());
+  expect(view.result.current.phase).toBe("reconnecting");
+  await act(async () => ready());
+  expect(view.result.current.phase).toBe("workspace");
+  expect(mocks.lock).toHaveBeenCalledTimes(2);
+  expect(mocks.theme).not.toHaveBeenCalled();
+});
