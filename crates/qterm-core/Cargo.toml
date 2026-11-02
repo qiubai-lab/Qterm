@@ -24,7 +24,7 @@ uuid = { version = "1.24.1", features = ["v4"] }
 russh = { version = "=0.62.6", default-features = false, features = ["ring", "rsa"] }
 russh-sftp = "=2.4.0"
 ssh2-config-rs = { version = "=0.7.2", features = ["nolog"] }
-tokio = { version = "1.53.1", features = ["full"] }
+tokio = { version = "1.53.3", features = ["full"] }
 portable-pty = "=0.9.0"
 tempfile = "=3.27.0"
 url = "2"

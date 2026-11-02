@@ -157,7 +157,7 @@ cargo install cargo-audit --version 0.22.2 --locked
 pnpm audit:rust
 ```
 
-`cargo audit` 可能列出由 Tauri 间接引入的维护状态警告；应区分当前平台目标依赖和可利用漏洞，并持续跟随上游版本处理。
+在仓库根目录运行 `pnpm audit:rust`，会审计两个 Rust 锁文件并读取 `.cargo/audit.toml`。该配置仅记录项目已接受的 RSA 风险例外 `RUSTSEC-2023-0071`，不关闭其他漏洞检查；原因、限制和移除条件见 [安全模型](security-model.md#已知残余风险)。`cargo audit` 仍可能列出由 Tauri 间接引入的维护状态警告，应持续跟随上游版本处理。
 
 ## 构建安装包
 

@@ -8,7 +8,7 @@ license.workspace = true
 qterm-protocol = { path = "../qterm-protocol" }
 qterm-core = { path = "../qterm-core" }
 axum = { version = "0.8", features = ["ws", "multipart"] }
-tokio = { version = "1.53.1", features = ["full"] }
+tokio = { version = "1.53.3", features = ["full"] }
 tower-http = { version = "0.6", features = ["fs", "limit", "set-header"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

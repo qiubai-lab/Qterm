@@ -1,0 +1,9 @@
+[advisories]
+# Existing RSA compatibility exception: docs/security-model.md (SSH authentication).
+# russh/ssh-key require rsa for RSA private-key authentication; upstream has no
+# patched version for this advisory. This is accepted risk, not a vulnerability fix.
+# Keep the UI's unsafe-RSA warning and RSA-SHA2-only policy. Reassess this exception
+# when russh/ssh-key/rsa changes; remove it once a patched release is available or
+# RSA support is removed. Reviewed 2026-11-02.
+# https://rustsec.org/advisories/RUSTSEC-2023-0071
+ignore = ["RUSTSEC-2023-0071"]
