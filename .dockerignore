@@ -4,6 +4,8 @@ node_modules
 dist*
 .server-secrets
 .server-data
+/data/
+/backups/
 .env*
 .codex
 .agents

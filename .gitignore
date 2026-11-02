@@ -44,6 +44,8 @@ dist-site
 dist-web
 .server-secrets/
 .server-data/
+/data/
+/backups/
 **/target/
 
 __pycache__/

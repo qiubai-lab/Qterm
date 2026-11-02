@@ -1,18 +1,18 @@
 services:
   qterm:
-    image: ${QTERM_IMAGE:-ghcr.io/qiubai-lab/qterm:main}
+    image: ${QTERM_IMAGE:-ghcr.io/qiubai-lab/qterm:latest}
     platform: linux/amd64
     restart: unless-stopped
-    ports:
-      - "${QTERM_BIND_HOST:-127.0.0.1}:${QTERM_PORT:-8080}:8080"
+    network_mode: host
     environment:
+      QTERM_LISTEN: ${QTERM_BIND_HOST:-0.0.0.0}:${QTERM_PORT:-8080}
       QTERM_PUBLIC_ORIGIN: ${QTERM_PUBLIC_ORIGIN:-http://localhost:8080}
-      QTERM_ALLOW_INSECURE_HTTP: ${QTERM_ALLOW_INSECURE_HTTP:-false}
+      QTERM_ALLOW_INSECURE_HTTP: ${QTERM_ALLOW_INSECURE_HTTP:-true}
       QTERM_PASSWORD_FILE: /run/secrets/qterm_password
     secrets:
       - qterm_password
     volumes:
-      - qterm-data:/data
+      - ./data:/data
     pids_limit: ${QTERM_PIDS_LIMIT:--1}
     mem_limit: ${QTERM_MEMORY_LIMIT:-0}
     cpus: ${QTERM_CPU_LIMIT:-0}
@@ -20,6 +20,3 @@ services:
 secrets:
   qterm_password:
     file: ${QTERM_PASSWORD_SOURCE_FILE:-./.server-secrets/password}
-
-volumes:
-  qterm-data:

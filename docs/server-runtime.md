@@ -6,10 +6,11 @@ Web 运行时以单用户、单进程部署，浏览器与桌面端直接共用 
 
 ## 容器启动
 
-基础 `compose.yaml` 从 GHCR 拉取镜像，默认使用 `ghcr.io/qiubai-lab/qterm:main`。仅 `main` 的 push 在质量与容器验收通过后自动发布，也支持在 `main` 手动发布；开发分支只做质量与运行时检查。首次部署需等待镜像发布成功。仅发布 Linux AMD64 镜像。完整的准备、权限、源码构建、升级回滚与备份步骤见 [本地容器部署](container-deployment.md)。
+基础 `compose.yaml` 从 GHCR 拉取镜像，默认使用 `ghcr.io/qiubai-lab/qterm:latest`。仅 `main` 的 push 在质量与容器验收通过后自动发布，也支持在 `main` 手动发布；开发分支只做质量与运行时检查。首次部署需等待镜像发布成功。仅发布 Linux AMD64 镜像。完整的准备、权限、源码构建、升级回滚与备份步骤见 [本地容器部署](container-deployment.md)。
 
 ```sh
 cp .env.example .env
+mkdir -p ./data
 mkdir -p .server-secrets
 chmod 700 .server-secrets
 vi .server-secrets/password
@@ -21,26 +22,9 @@ docker compose up -d --no-build --wait --wait-timeout 90
 
 密码文件允许末尾换行，明文两端空格保留。服务启动时将明文转为内存中的随机盐哈希，原文件不变。容器基于 Ubuntu 24.04 LTS，默认以 root 运行，因此示例使用文件 `600`、父目录 `700`；切换服务 UID 后需调整密码文件读取权限。已有哈希文件可在 `.env` 设置 `QTERM_PASSWORD_SOURCE_FILE=./.server-secrets/password.hash`。修改密码文件后重新创建容器生效。
 
-默认仅绑定 `127.0.0.1:8080`，打开 `http://localhost:8080`。访问地址必须与 `QTERM_PUBLIC_ORIGIN` 完全一致，不能用 `127.0.0.1` 代替 `localhost`。需要从源码构建时运行 `docker compose -f compose.yaml -f compose.build.yaml up -d --build --wait`。
+默认 Compose 使用 `network_mode: host`，监听宿主机 `0.0.0.0:8080`，并传入 `QTERM_ALLOW_INSECURE_HTTP=true`。`QTERM_BIND_HOST` / `QTERM_PORT` 控制服务实际监听地址，健康检查同步跟随；不再配置 Docker `ports`。默认浏览器入口为 `http://localhost:8080`，内网直连时将 `QTERM_PUBLIC_ORIGIN` 改为真实的 `http://服务器IP:端口`。访问地址必须与该 origin 完全一致。
 
-远程访问时，在同一服务器上配置 HTTPS 反向代理，设置 `QTERM_PUBLIC_ORIGIN=https://qterm.example.com`。代理必须转发 WebSocket Upgrade、保留 Origin，允许最长 10 分钟文件请求，上传请求体上限至少 129 MiB。服务只信任显式配置的公开 origin，不根据转发头推断访问地址。HTTP 默认只允许 localhost/loopback；受信任内网可以显式设置 `QTERM_ALLOW_INSECURE_HTTP=true`，并将 `QTERM_PUBLIC_ORIGIN` 设为实际 HTTP 地址。Compose 直连还需设置 `QTERM_BIND_HOST`；配置示例和剪贴板限制见 [容器部署](container-deployment.md#通过服务器-ip-使用-http)。
-
-Nginx 示例（TLS 证书配置自行补充）：
-
-```nginx
-location / {
-    proxy_pass http://127.0.0.1:8080;
-    proxy_http_version 1.1;
-    proxy_set_header Host $host;
-    proxy_set_header Upgrade $http_upgrade;
-    proxy_set_header Connection "upgrade";
-    proxy_read_timeout 650s;
-    proxy_send_timeout 650s;
-    client_max_body_size 129m;
-    proxy_request_buffering off;
-    proxy_buffering off;
-}
-```
+两种完整部署方式见 [内网 IP 直连 HTTP](container-deployment.md#案例一内网-ip-直连-http) 和 [域名 HTTPS 与同机 Nginx](container-deployment.md#案例二域名-https-与同机-nginx)。HTTPS 场景将 Qterm 绑定到 `127.0.0.1`、关闭 HTTP origin 许可，由代理加载证书并转发 WebSocket Upgrade、Origin；设置 HTTPS origin 本身不会启用服务端 TLS。直接运行二进制或 `docker run` 时，HTTP 许可开关仍默认关闭，需要自行传入。源码构建使用 `docker compose -f compose.yaml -f compose.build.yaml up -d --build --wait`。
 
 ## 首次使用
 
@@ -73,7 +57,7 @@ location / {
 
 Network Block 的 SSH 会话和正在运行的规则保留在服务端内存。刷新、关闭标签、退出登录或被接管后转发继续运行，重登接回原会话并恢复运行标记。运行中的规则需先停止才能修改或删除；关闭对应 Block/工作区、断开其 SSH 会话或停止服务会结束转发。规则配置写入磁盘，但服务重启后不会自动启动规则。远程 Git 会话同样保留并重新接入，本地 Git 从已保存的仓库路径重新读取状态。
 
-容器转发端口必须自行发布，例如规则在容器内监听 `0.0.0.0:15432`，Compose 增加 `127.0.0.1:15432:15432` 后，宿主机才能通过 `127.0.0.1:15432` 访问。仅监听容器 `127.0.0.1` 的端口不能通过普通 Docker 端口发布访问。HTTP 反向代理只代理 Web 工作台，不会自动代理 TCP 转发或 SOCKS5。远程转发的实际监听范围仍由远端 SSH GatewayPorts 和防火墙决定。
+默认 host 网络下，容器转发规则直接监听宿主机端口，无需另加端口映射。例如绑定 `127.0.0.1:15432` 仅供本机访问，绑定 `0.0.0.0:15432` 会监听所有宿主机 IPv4 接口；需避免与宿主机进程冲突。容器内 `localhost` 也指向宿主机网络。若自行改为 bridge 网络，则需另行发布转发端口。HTTP 反向代理只代理 Web 工作台，不会自动代理 TCP 转发或 SOCKS5。远程转发的实际监听范围仍由远端 SSH GatewayPorts 和防火墙决定。
 
 终端支持粘贴浏览器提供的文件和截图：Windows/Linux 用 Ctrl+V、macOS 用 Cmd+V。Ctrl+Shift+V 在部分浏览器中是纯文本粘贴，不会携带图片。文件会先上传到当前终端所在的服务主机或 SSH 远端，再将已正确引用的路径插入输入位置，不自动回车执行。上传期间可取消，后续键盘输入按顺序等待；文本仍保留多行粘贴确认。一次最多 128 个文件、128 MiB。服务端本地文件存于私有运行缓存，重启服务时清理；SSH 使用原有远端临时文件流程。需要长期保留的文件应复制到自己的工作目录。
 
@@ -95,7 +79,7 @@ Web 右上角退出登录左侧的「访问记录」打开日志列表，可按�
 
 ## 数据与边界
 
-`qterm-data` 卷保留 `data/connections.json`、`data/network-forwards.json`、`data/secrets.vault`、`device/known-hosts.json`、`device/workspaces.json`，主题、安全及终端设置也写入数据卷，临时文件在 `cache/`。容器默认以 root 运行，Shell 使用 `/data/home` 作为持久化主目录；内置 UID/GID 10001 的 `qterm` 账户使用 `/data/users/qterm`。容器启动时会为旧数据卷补建这些目录。镜像不预装开发工具；按需安装、账户切换与备份细节见 [本地容器部署](container-deployment.md#精简运行环境)。同一数据目录只允许一个服务进程。停止容器后备份整个卷，恢复到空卷；同时离线保存恢复密钥及登录密码配置文件。升级前先备份，不能让桌面与服务器同时写入同一目录。
+部署目录的 `./data` 绑定到容器 `/data`，其中保留 `data/connections.json`、`data/network-forwards.json`、`data/secrets.vault`、`device/known-hosts.json`、`device/workspaces.json`，主题、安全及终端设置也写入该目录，临时文件在 `cache/`。容器默认以 root 运行，Shell 使用 `/data/home` 作为持久化主目录；内置 UID/GID 10001 的 `qterm` 账户使用 `/data/users/qterm`。容器启动时会为已有数据目录补建这些 HOME。镜像不预装开发工具；按需安装、账户切换与备份细节见 [本地容器部署](container-deployment.md#精简运行环境)。同一数据目录只允许一个服务进程。停止容器后备份宿主机整个 `./data`，恢复到空目录；同时离线保存恢复密钥及登录密码配置文件。升级前先备份，不能让桌面与服务器同时写入同一目录。
 
 登录 Cookie 为 HttpOnly、SameSite=Strict；HTTPS 下使用 Secure / `__Host-` Cookie。登录有效期 8 小时；主密码解锁仍遵循共享凭证库自动锁定规则。登录限流、Origin 检查、页面访问凭证与 WebSocket 身份/会话所有权检查均在服务端执行。接管同时阻止旧页面之后的终端输入、尺寸调整、文件/配置修改和退出请求；已被服务端接受的操作可能完成，不做事务回滚。下载使用短期、一次性且绑定当前访问代次的票据，接管时清除。
 

@@ -99,7 +99,7 @@ Frontend -> Desktop Tauri Commands / Web HTTP+WebSocket -> Application -> Domain
 
 ## Web Runtime Boundary
 
-- 登录与 vault 解锁独立；服务要求显式 origin（默认 HTTPS 或回环 HTTP；远程 HTTP 需要 QTERM_ALLOW_INSECURE_HTTP=true）、Argon2id 密码哈希、HttpOnly Cookie、mutation/WS Origin 验证和会话所有权检查。单实例新登录撤销旧登录、锁定凭证库，但保留后台会话；数据目录具有进程独占锁。
+- 登录与 vault 解锁独立；服务要求显式 origin（二进制默认 HTTPS 或回环 HTTP；Compose 默认通过 QTERM_ALLOW_INSECURE_HTTP=true 允许远程 HTTP）、Argon2id 密码哈希、HttpOnly Cookie、mutation/WS Origin 验证和会话所有权检查。单实例新登录撤销旧登录、锁定凭证库，但保留后台会话；数据目录具有进程独占锁。
 - 会话由服务端注册表按稳定 Block ID 持有，与 WebSocket 视图生命周期分离；headless xterm 子进程维护屏幕/滚动历史并回答终端查询。接入在同一锁下读取屏幕和订阅后续输出；慢客户端重新接入最新屏幕，不重放输入。整个工作台由服务端 Access 注册表授予单页面独占访问，密码验证只检查占用，明确确认后原子接管；Cookie、页面恢复凭证和文档身份共同校验 HTTP/WS。在线心跳与断线宽限支持刷新恢复；撤销通知使旧页面停止重连，不提供只读模式。工作区权威快照和文件草稿留在服务内存，版本号防止旧页面覆盖。明确关闭和服务退出才结束进程；服务重启不能恢复内存运行状态。
 - HTTP 文件传输使用限定大小的临时文件、所有者绑定的取消标记及一次性短期下载票据。启动只清理独立传输缓存。
 - Web 直接复用桌面 WorkspaceShell、管理弹窗和主题；本地 PTY 和本地文件运行于服务账户/容器内部，受相同登录、Origin 和会话生命周期约束。Git/network DTO 由 qterm-protocol 共用，服务端显式路由委托核心 GitService/NetworkService；Git/Network SSH 按稳定 Block ID 保留，网络运行标记由服务端提供，本地/远端转发与 SOCKS5 端点位于服务主机/容器或 SSH 远端。文件适配器负责浏览器选择/拖放与目录 tar 下载。系统 Agent、浏览器 Block 尚未接入 Web（浏览器按需求暂缓）；具体范围、部署和验证入口见 `docs/server-runtime.md`。

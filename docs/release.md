@@ -142,7 +142,7 @@ GitHub 要求 workflow 文件存在于默认分支，才会提供网页的 **Run
 Web 运行时 CI 仅针对 **Linux AMD64**，只有两个 job：
 
 1. **Linux quality and runtime acceptance**：源码尺寸检查、lint、共享工作台测试、`test:web` 和 `build:web`，以及 Rust fmt、test、Clippy 和真实 HTTP/WebSocket/SSH 验收。类型检查由 `build:web` 执行一次，不生成桌面前端 `dist/`。本地与 SSH 的 Git 实时观察、凭证状态及访问记录也纳入验收。前端构建产物保留 7 天供排查。
-2. **Container (linux/amd64)**：仅在 `main` 的 push 或手动运行中执行。等待质量检查通过，构建并确认镜像为 `linux/amd64`，运行 PTY、会话保留、接管、文件/Git Block、剪贴板与 Compose 冒烟测试。Compose 验收包含健康检查、静态 JS、登录、精简 Ubuntu/root 环境、apt 安装、UID 切换、默认回环端口及重建后数据持久化。push 或手动触发且勾选 `publish_image` 时，在同一个 job 中将已测试镜像直接推送 GHCR，并输出标签和 digest。
+2. **Container (linux/amd64)**：仅在 `main` 的 push 或手动运行中执行。等待质量检查通过，构建并确认镜像为 `linux/amd64`，运行 PTY、会话保留、接管、文件/Git Block、剪贴板与 Compose 冒烟测试。Compose 验收包含健康检查、静态 JS、登录、精简 Ubuntu/root 环境、apt 安装、UID 切换、host 网络、自定义监听端口与健康检查及重建后数据持久化。push 或手动触发且勾选 `publish_image` 时，在同一个 job 中将已测试镜像直接推送 GHCR，并输出标签和 digest。
 
 不构建 Windows/macOS 原生 Web 服务，也不构建 ARM64 镜像；不再上传单架构临时标签、传递 digest artifacts 或执行多架构 manifest 汇总。推送使用验收过的本地镜像，不在验收后重新构建。开发分支不会覆盖 `latest`。
 

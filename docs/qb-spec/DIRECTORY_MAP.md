@@ -240,7 +240,7 @@
 - `crates/qterm-server/src/local_files.rs` / `settings.rs` / `credential_management.rs`: service-account files, persistent settings and shared credential workflows exposed through narrow authenticated routes.
 - `crates/qterm-core/src/application/local_file_listing.rs`: shared desktop/server local directory listing.
 - `scripts/test-server-local.py`: native and container local PTY/file/lifecycle acceptance; Web runtime CI targets Linux AMD64 only, with native and container acceptance.
-- `Dockerfile`、`compose.yaml`、`scripts/server-container-entrypoint.sh`：精简 Ubuntu/root 运行镜像、持久化 HOME；`scripts/test-server-compose.py` / `server_container_runtime_checks.py` 验证精简运行依赖、apt、UID 切换和重建持久化。
+- `Dockerfile`、`compose.yaml`、`scripts/server-container-entrypoint.sh` / `server-container-healthcheck.sh`：精简 Ubuntu/root 运行镜像、host 网络、随监听地址变化的健康检查与 `./data` 绑定目录中的持久化 HOME；`scripts/test-server-compose.py` / `server_container_runtime_checks.py` 验证精简运行依赖、apt、UID 切换和重建持久化。
 - `scripts/test-server-fixtures.py`: acceptance-client regressions for ConPTY cursor output, split WebSocket frames, output acknowledgements, and bounded timeout/error diagnostics; runs in the Linux Web runtime quality job.
 
 ### Web 会话保留

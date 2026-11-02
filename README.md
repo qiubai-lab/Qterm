@@ -75,6 +75,16 @@ xattr -cr /Applications/Qterm.app
 
 从 [Releases](https://github.com/qiubai-lab/Qterm/releases/latest) 下载对应平台的安装包：Windows 使用 `.msi` 或 NSIS `.exe` 安装程序，Linux 使用 `.AppImage`、`.deb` 或 `.rpm`。
 
+### 容器部署
+
+Web 运行时提供精简 Ubuntu 24.04 镜像，默认 root、host 网络，允许内网 HTTP 访问；开发工具可自行安装。部署步骤与配置索引：
+
+- [部署准备与配置参数](docs/container-deployment.md#1-准备部署文件)
+- [案例一：内网 IP 直连 HTTP](docs/container-deployment.md#案例一内网-ip-直连-http)
+- [案例二：域名 HTTPS 与同机 Nginx](docs/container-deployment.md#案例二域名-https-与同机-nginx)
+- [从源码构建镜像](docs/container-deployment.md#3-从本地源码构建)
+- [升级与回滚](docs/container-deployment.md#4-升级与回滚)、[数据备份与恢复](docs/container-deployment.md#5-数据备份与恢复)
+
 ## ✨ 功能特性
 
 ### Workspace 与终端
@@ -148,7 +158,7 @@ pnpm tauri dev
 | [开发指引](docs/DEVELOPMENT.md) | 环境准备、源码运行、测试、构建与贡献约定 |
 | [安全模型](docs/security-model.md) | 凭据、主机密钥、文件传输与信任边界 |
 | [故障排查](docs/troubleshooting.md) | SSH、私钥、SFTP 与开发环境常见问题 |
-| [本地容器部署](docs/container-deployment.md) | GHCR 镜像启动、源码构建、升级回滚与数据备份 |
+| [本地容器部署](docs/container-deployment.md) | host 网络、配置参数、内网 IP / HTTPS 两种案例、源码构建与备份 |
 | [Web / 容器运行时](docs/server-runtime.md) | 单用户服务部署、HTTPS 代理、数据持久化与能力边界 |
 | [发布流程](docs/release.md) | 版本检查、标签发布、CI 产物与失败处理 |
 | [产品目标](docs/qb-spec/context/PRODUCT_SPEC.md) | 目标用户、核心流程与产品原则 |
