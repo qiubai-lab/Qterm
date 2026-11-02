@@ -1,8 +1,8 @@
 # 本地容器部署
 
-Qterm Web 运行时是单用户服务。容器内包含 Web 静态资源、Rust 服务、Node.js 屏幕组件、Git 和 OpenSSH 客户端，无需在宿主机安装 Node/Rust。支持 `linux/amd64` 和 `linux/arm64`；Docker Desktop 会为 Apple Silicon 选择 ARM64 镜像。
+Qterm Web 运行时是单用户服务。容器内包含 Web 静态资源、Rust 服务、Node.js 屏幕组件、Git 和 OpenSSH 客户端，无需在宿主机安装 Node/Rust。GHCR 仅发布 **`linux/amd64`** 镜像，Compose 显式指定该平台。Apple Silicon/ARM64 主机需要 Docker 的 AMD64 模拟执行支持，可能较慢；当前不提供原生 ARM64 镜像。
 
-本文使用 Docker Engine / Docker Desktop 和带 `up --wait` 的 Docker Compose v2 或更新版本。命令在 Linux/macOS 的 POSIX shell 中执行；Windows 可在 WSL 中执行，并使用 Docker Desktop 的 Linux 容器模式。
+本文以 AMD64 Linux 宿主机为部署目标，使用 Docker Engine / Docker Desktop 和带 `up --wait` 的 Docker Compose v2 或更新版本。命令在 Linux/macOS 的 POSIX shell 中执行；Windows 可在 WSL 中执行，并使用 Docker Desktop 的 Linux 容器模式。
 
 ## 1. 准备部署文件
 
@@ -76,7 +76,7 @@ docker compose down
 docker compose -f compose.yaml -f compose.build.yaml up -d --build --wait --wait-timeout 90
 ```
 
-覆盖文件强制使用 `qterm-server:local` 并从当前源码构建；基础 `compose.yaml` 只使用镜像，因此独立部署目录不需要 Dockerfile。源码构建后的日志、停止及移除命令也应带上同样的两个 `-f` 参数。不要同时在同一个 project 中运行源码版与 GHCR 版。
+覆盖文件强制使用 `qterm-server:local` 并按基础文件指定的 `linux/amd64` 从当前源码构建；基础 `compose.yaml` 只使用镜像，因此独立部署目录不需要 Dockerfile。源码构建后的日志、停止及移除命令也应带上同样的两个 `-f` 参数。不要同时在同一个 project 中运行源码版与 GHCR 版。
 
 回到 GHCR 版时使用基础文件即可：
 

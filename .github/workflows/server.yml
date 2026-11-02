@@ -52,7 +52,12 @@ jobs:
       - name: Verify acceptance client regressions
         run: python scripts/test-server-fixtures.py
       - run: pnpm install --frozen-lockfile
-      - run: pnpm check
+      - name: Check shared frontend code
+        # Keep shared-workbench coverage; build:web below owns type checking and bundling.
+        run: |
+          pnpm check:source-size
+          pnpm lint
+          pnpm test
       - run: pnpm test:web
       - run: pnpm build:web
       - run: pnpm check:server
@@ -81,60 +86,10 @@ jobs:
           overwrite: true
           retention-days: 7
 
-  native-server:
-    name: Native server (${{ matrix.os }})
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [windows-2025, macos-26]
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-      - uses: jdx/mise-action@v4
-      - name: Install Rust check components
-        shell: bash
-        run: |
-          rustup component add rustfmt clippy
-          cargo fmt --version
-          cargo clippy --version
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: crates
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.12'
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm build:server-screen
-      - run: python -m pip install websockets==13.1
-      - name: Verify acceptance client regressions
-        run: python scripts/test-server-fixtures.py
-      - run: cargo build --manifest-path crates/Cargo.toml --locked -p qterm-server
-      - run: cargo test --manifest-path crates/Cargo.toml --locked -p qterm-server
-      - run: cargo clippy --manifest-path crates/Cargo.toml --locked -p qterm-server --all-targets -- -D warnings
-      - name: Verify native runtime behavior
-        shell: bash
-        run: |
-          python scripts/test-server-local.py
-          python scripts/test-server-retention.py
-          python scripts/test-server-takeover.py
-          python scripts/test-server-blocks.py
-          python scripts/test-server-clipboard.py
-
   container:
-    name: Container (${{ matrix.arch }})
+    name: Container (linux/amd64)
     needs: verify
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: amd64
-            runner: ubuntu-24.04
-          - arch: arm64
-            runner: ubuntu-24.04-arm
-    runs-on: ${{ matrix.runner }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     permissions:
       contents: read
@@ -156,21 +111,26 @@ jobs:
         uses: docker/metadata-action@v6
         with:
           images: ${{ steps.image.outputs.name }}
-          tags: type=sha,format=long
+          flavor: latest=false
+          tags: |
+            type=ref,event=branch
+            type=sha,format=long
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
       - name: Build and load the image for acceptance
         uses: docker/build-push-action@v7
         with:
           context: .
-          platforms: linux/${{ matrix.arch }}
+          platforms: linux/amd64
           load: true
           # The Docker exporter loads one runnable image for the acceptance tests.
           provenance: false
           tags: qterm-server:local
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=web-server-${{ matrix.arch }}
-          cache-to: type=gha,mode=max,scope=web-server-${{ matrix.arch }}
+          cache-from: type=gha,scope=web-server-amd64
+          cache-to: type=gha,mode=max,scope=web-server-amd64
       - name: Verify container behavior and Compose deployment
         run: |
+          test "$(docker image inspect qterm-server:local --format '{{.Os}}/{{.Architecture}}')" = 'linux/amd64'
           python scripts/test-server-local.py --container
           python scripts/test-server-retention.py --container
           python scripts/test-server-takeover.py --container
@@ -184,84 +144,24 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Push the tested image and record its digest
+      - name: Publish tested AMD64 image to GHCR
         if: github.event_name == 'workflow_dispatch' && inputs.publish_image && startsWith(github.ref, 'refs/heads/')
-        env:
-          IMAGE: ${{ steps.image.outputs.name }}
-          ARCH: ${{ matrix.arch }}
-        run: |
-          # Push the exact image tested above; never rebuild after acceptance.
-          tag="$IMAGE:build-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-$ARCH"
-          docker tag qterm-server:local "$tag"
-          docker push "$tag"
-          digest="$(docker image inspect "$tag" --format '{{index .RepoDigests 0}}')"
-          test "${digest%%@*}" = "$IMAGE"
-          mkdir -p digests
-          printf '%s\n' "$digest" > "digests/$ARCH.txt"
-      - name: Upload image digest
-        if: github.event_name == 'workflow_dispatch' && inputs.publish_image && startsWith(github.ref, 'refs/heads/')
-        uses: actions/upload-artifact@v7
-        with:
-          name: server-digest-${{ matrix.arch }}
-          path: digests/*.txt
-          if-no-files-found: error
-          overwrite: true
-          retention-days: 7
-
-  publish:
-    name: Publish multi-platform GHCR image
-    needs: [verify, native-server, container]
-    if: github.event_name == 'workflow_dispatch' && inputs.publish_image && startsWith(github.ref, 'refs/heads/')
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - uses: docker/setup-buildx-action@v4
-      - uses: actions/download-artifact@v8
-        with:
-          pattern: server-digest-*
-          path: digests
-          merge-multiple: true
-      - name: Set image name
-        id: image
-        run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
-      - name: Generate public tags
-        id: meta
-        uses: docker/metadata-action@v6
-        with:
-          images: ${{ steps.image.outputs.name }}
-          flavor: latest=false
-          tags: |
-            type=ref,event=branch
-            type=sha,format=long
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
-      - uses: docker/login-action@v4
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Publish and verify the manifest
         env:
           IMAGE: ${{ steps.image.outputs.name }}
           TAGS: ${{ steps.meta.outputs.tags }}
         run: |
-          args=()
-          while IFS= read -r tag; do args+=(--tag "$tag"); done <<< "$TAGS"
-          ref="$IMAGE:sha-$GITHUB_SHA"
-          docker buildx imagetools create --tag "$ref" \
-            "$(cat digests/amd64.txt)" "$(cat digests/arm64.txt)"
-          docker buildx imagetools inspect "$ref" --raw > manifest.json
-          jq -e '[.manifests[].platform | .os + "/" + .architecture] | sort == ["linux/amd64", "linux/arm64"]' manifest.json
-          # Move branch/latest aliases only after validating both architectures.
-          docker buildx imagetools create "${args[@]}" "$ref"
-          docker buildx imagetools inspect "$ref" | tee image-summary.txt
+          # Push the exact image tested above; never rebuild after acceptance.
+          while IFS= read -r tag; do
+            docker tag qterm-server:local "$tag"
+            docker push "$tag"
+          done <<< "$TAGS"
+          digest="$(docker image inspect "$IMAGE:sha-$GITHUB_SHA" --format '{{index .RepoDigests 0}}')"
+          test "${digest%%@*}" = "$IMAGE"
           {
-            echo '### Published GHCR image'
+            echo '### Published GHCR image (linux/amd64)'
             echo '```text'
             echo "$TAGS"
-            cat image-summary.txt
+            echo "$digest"
             echo '```'
             echo 'Deploy with QTERM_IMAGE=<tag or image@sha256:digest> docker compose up -d --no-build --wait.'
           } >> "$GITHUB_STEP_SUMMARY"

@@ -237,8 +237,8 @@
 - `crates/qterm-server/src/local_socket.rs` / `socket_io.rs`: local PTY admission and shared bounded SSH/local WebSocket transport; logout closes browser transports while retained runtime processes keep running.
 - `crates/qterm-server/src/local_files.rs` / `settings.rs` / `credential_management.rs`: service-account files, persistent settings and shared credential workflows exposed through narrow authenticated routes.
 - `crates/qterm-core/src/application/local_file_listing.rs`: shared desktop/server local directory listing.
-- `scripts/test-server-local.py`: cross-platform native and container local PTY/file/lifecycle acceptance; native CI includes Linux, Windows and macOS.
-- `scripts/test-server-fixtures.py`: acceptance-client regressions for ConPTY cursor output, split WebSocket frames, output acknowledgements, and bounded timeout/error diagnostics; runs on every native CI platform.
+- `scripts/test-server-local.py`: native and container local PTY/file/lifecycle acceptance; Web runtime CI targets Linux AMD64 only, with native and container acceptance.
+- `scripts/test-server-fixtures.py`: acceptance-client regressions for ConPTY cursor output, split WebSocket frames, output acknowledgements, and bounded timeout/error diagnostics; runs in the Linux Web runtime quality job.
 
 ### Web 会话保留
 

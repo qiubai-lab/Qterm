@@ -1,12 +1,12 @@
 # Qterm Web 运行时
 
-Web 运行时以单用户、单进程部署，浏览器与桌面端直接共用 `WorkspaceShell`、工作区布局、终端、连接管理、凭证管理、文件管理、Git、网络管理及设置组件和 CSS；不再维护单独的 Web 工作台。Rust 服务直接使用桌面端相同的配置、主机密钥验证、凭证加密及 SSH/SFTP 核心，不启动桌面环境或 WebView。服务可原生运行在 Windows、Linux、macOS，也可运行在 Linux 容器中。
+Web 运行时以单用户、单进程部署，浏览器与桌面端直接共用 `WorkspaceShell`、工作区布局、终端、连接管理、凭证管理、文件管理、Git、网络管理及设置组件和 CSS；不再维护单独的 Web 工作台。Rust 服务直接使用桌面端相同的配置、主机密钥验证、凭证加密及 SSH/SFTP 核心，不启动桌面环境或 WebView。当前 Web 运行时的构建、CI 验收和镜像发布范围为 Linux AMD64；Windows/macOS 上建议使用 Docker Desktop 的 Linux 容器。
 
 “本地终端”和“本地文件”始终指 **运行服务的账户与文件系统**：原生部署时是服务主机；Docker 部署时是容器，不是访问网页的电脑，也不会自动进入宿主机。
 
 ## 容器启动
 
-基础 `compose.yaml` 从 GHCR 拉取镜像；当前开发分支默认使用 `ghcr.io/qiubai-lab/qterm:dev-webruntime`，需要先通过 GitHub Actions 手动发布成功。支持 Linux AMD64 / ARM64。完整的准备、权限、源码构建、升级回滚与备份步骤见 [本地容器部署](container-deployment.md)。
+基础 `compose.yaml` 从 GHCR 拉取镜像；当前开发分支默认使用 `ghcr.io/qiubai-lab/qterm:dev-webruntime`，需要先通过 GitHub Actions 手动发布成功。仅发布 Linux AMD64 镜像。完整的准备、权限、源码构建、升级回滚与备份步骤见 [本地容器部署](container-deployment.md)。
 
 ```sh
 cp .env.example .env
@@ -108,7 +108,7 @@ Web 右上角退出登录左侧的「访问记录」打开日志列表，可按�
 - 浏览器没有原生窗口最小化/最大化/关闭按钮；相同标题栏位置提供访问记录和退出登录。字体栅格化及浏览器保留快捷键受浏览器/操作系统影响。
 - 登录用户可通过本地终端及文件接口操作服务账户有权访问的文件；部署账户应按实际用途配置权限。容器默认只暴露自身文件系统，不挂载宿主机根目录或 Docker socket。
 
-## 在 Windows / Linux / macOS 上原生提供 Web 服务
+## 在 Linux 上原生提供 Web 服务
 
 服务端需要 Rust 二进制、Node.js 24（mise 提供）和打包后的屏幕组件，不依赖 Tauri、GTK 或 WebView。Docker 镜像已包含 Node 和屏幕组件。从源码构建：
 
@@ -117,7 +117,7 @@ mise exec -- pnpm build:web
 mise exec -- cargo build --manifest-path crates/Cargo.toml --release --locked -p qterm-server
 ```
 
-Linux/macOS（在项目根目录运行）：
+在 Linux 项目根目录运行：
 
 ```sh
 QTERM_PUBLIC_ORIGIN=http://localhost:8080 \
@@ -127,19 +127,9 @@ QTERM_SCREEN_WORKER="$PWD/dist-server/screen.mjs" \
 mise exec -- ./crates/target/release/qterm-server
 ```
 
-Windows PowerShell：
+打开 `http://localhost:8080`。可以将二进制、`dist-web/` 和 `dist-server/` 一起复制到对应架构的 Linux 主机，并安装 Node.js 24；用 `QTERM_SCREEN_WORKER` 指定 `screen.mjs`，`QTERM_NODE` 可指定 Node 可执行文件绝对路径（默认查找 `node`）。用 `QTERM_ASSETS_DIR` 指定静态文件目录、`QTERM_DATA_DIR` 指定可写的数据目录。未指定数据目录时使用系统应用数据目录下的 `QtermServer`。
 
-```powershell
-$env:QTERM_PUBLIC_ORIGIN = "http://localhost:8080"
-$env:QTERM_PASSWORD_FILE = "$PWD\.server-secrets\password"
-$env:QTERM_ASSETS_DIR = "$PWD\dist-web"
-$env:QTERM_SCREEN_WORKER = "$PWD\dist-server\screen.mjs"
-mise exec -- .\crates\target\release\qterm-server.exe
-```
-
-打开 `http://localhost:8080`。可以将二进制、`dist-web/` 和 `dist-server/` 一起复制部署，并安装 Node.js 24；用 `QTERM_SCREEN_WORKER` 指定 `screen.mjs`，`QTERM_NODE` 可指定 Node 可执行文件绝对路径（默认查找 `node`）。用 `QTERM_ASSETS_DIR` 指定静态文件目录、`QTERM_DATA_DIR` 指定可写的数据目录。未指定数据目录时使用系统应用数据目录下的 `QtermServer`。Windows 使用 ConPTY 和默认 `cmd.exe`，可以在终端中启动 PowerShell；Linux/macOS 使用账户默认 Shell。Make 开发入口要求 POSIX shell，Windows 可直接使用上述命令。
-
-当前开发环境已实测 Linux 与 Linux 容器；Windows/macOS 已配置原生 CI 构建与 PTY 验收矩阵，实际通过状态以 CI 为准。
+CI 验证 Linux AMD64 原生服务及容器。源码中的 Windows/macOS 兼容实现仍保留，但不再作为 Web 服务的构建和发布支持范围；桌面应用的跨平台构建由独立流水线负责。
 
 ## 本地开发与检查
 

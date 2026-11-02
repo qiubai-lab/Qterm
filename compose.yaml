@@ -1,6 +1,7 @@
 services:
   qterm:
     image: ${QTERM_IMAGE:-ghcr.io/qiubai-lab/qterm:dev-webruntime}
+    platform: linux/amd64
     restart: unless-stopped
     ports:
       - "127.0.0.1:${QTERM_PORT:-8080}:8080"

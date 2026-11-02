@@ -118,7 +118,7 @@ Web 镜像与桌面 `v*` 标签发布相互独立。普通 push（`main`、`dev`
 1. 将待发布代码及 `.github/workflows/server.yml` 提交到目标分支。
 2. 打开仓库 Actions → **Web server runtime** → **Run workflow**，选择 **dev-webruntime**（或其他已包含该 workflow 的分支）。
 3. 保持 `publish_image` 勾选并启动。取消勾选则执行完整验收但不发布。
-4. 全部 job 成功后，从 **Publish multi-platform GHCR image** 的 Summary 取得标签及 digest。使用该 digest 可以固定本地部署版本。
+4. 全部 job 成功后，从 **Container (linux/amd64)** 的 Summary 取得标签及 digest。使用该 digest 可以固定本地部署版本。
 
 也可以使用已登录的 GitHub CLI：
 
@@ -130,21 +130,31 @@ gh run watch RUN_ID --exit-status
 
 GitHub 要求 workflow 文件存在于默认分支，才会提供标准 `workflow_dispatch` 入口；若该文件尚未合入 `main`，先将 workflow 配置合入默认分支，再选择开发分支运行。所选分支也必须包含新版 workflow 及其引用的脚本。
 
-流水线使用当前仓库的 `GITHUB_TOKEN` 登录 GHCR，不需要额外保存 PAT。只有容器及发布 job 声明 `packages: write`；PR 和普通 push 不执行登录或推送。仓库/组织策略必须允许 GitHub Actions 写入 packages；若同名包已有独立权限，在该包的 **Manage Actions access** 中授权此仓库写入。首次发布后如需匿名拉取，请将包 visibility 设为 public；流水线不修改包可见性。
+流水线使用当前仓库的 `GITHUB_TOKEN` 登录 GHCR，不需要额外保存 PAT。只有容器 job 声明 `packages: write`；PR 和普通 push 不执行登录或推送。仓库/组织策略必须允许 GitHub Actions 写入 packages；若同名包已有独立权限，在该包的 **Manage Actions access** 中授权此仓库写入。首次发布后如需匿名拉取，请将包 visibility 设为 public；流水线不修改包可见性。
 
 | 标签 | 行为 |
 | --- | --- |
 | `ghcr.io/qiubai-lab/qterm:dev-webruntime` | 手动发布该分支成功后更新，供预览部署 |
 | `ghcr.io/qiubai-lab/qterm:main` / `:latest` | 仅手动发布 `main` 成功后更新 |
 | `ghcr.io/qiubai-lab/qterm:sha-<完整 commit SHA>` | 追踪源码版本；重跑同一提交可能因基础镜像变化得到不同 digest，严格固定版本使用 digest |
-| `:build-<run ID>-<attempt>-amd64/arm64` | 验收后上传的内部单架构标签，用于组装最终 manifest；不用于日常部署 |
 
 其他手动选择的分支生成对应的规范化分支标签（不支持直接发布 Git tag）；最终标签以 Summary 为准。GHCR 仓库路径自动转为小写，fork 仓库会发布到自己的 owner/repository，需要相应修改部署的 `QTERM_IMAGE`。
 
-CI 分为 Linux 质量检查与真实 HTTP/WebSocket/SSH 验收、Windows/macOS 原生 PTY 验收、Linux AMD64/ARM64 原生 runner 容器验收，以及最终发布。前端执行 `pnpm check`、`test:web`、`build:web`；Rust 执行 fmt、test、Clippy。Linux 额外覆盖本地与 SSH 的 Git 实时观察、凭证状态及访问记录。前端构建产物保留 7 天供排查。
+Web 运行时 CI 仅针对 **Linux AMD64**，只有两个 job：
 
-两个容器 job 都会运行 PTY、会话保留、接管、文件/Git/网络 Block、剪贴板和实际 Compose 冒烟测试。Compose 验收包含健康检查、静态 JS、登录、非 root/只读根文件系统、仅回环端口及重建后数据持久化。推送的是验收过的本地镜像，不在验收后重新构建。最后等待包括 Windows/macOS 在内的全部 job 成功，按 digest 合并两种架构，再验证 manifest 并更新分支/SHA 标签；开发分支不会覆盖 `latest`。
+1. **Linux quality and runtime acceptance**：源码尺寸检查、lint、共享工作台测试、`test:web` 和 `build:web`，以及 Rust fmt、test、Clippy 和真实 HTTP/WebSocket/SSH 验收。类型检查由 `build:web` 执行一次，不生成桌面前端 `dist/`。本地与 SSH 的 Git 实时观察、凭证状态及访问记录也纳入验收。前端构建产物保留 7 天供排查。
+2. **Container (linux/amd64)**：等待质量检查通过，构建并确认镜像为 `linux/amd64`，运行 PTY、会话保留、接管、文件/Git Block、剪贴板与 Compose 冒烟测试。Compose 验收包含健康检查、静态 JS、登录、非 root/只读根文件系统、仅回环端口及重建后数据持久化。手动触发且勾选 `publish_image` 时，在同一个 job 中将已测试镜像直接推送 GHCR，并输出标签和 digest。
 
-若构建或测试失败，修复失败项后重新运行；架构 job 已上传的内部镜像可能保留，但不会因此更新对外标签。若仅最终发布失败，可重跑失败 job；digest artifacts 保留 7 天，过期后需完整重跑。手动发布不会被同分支的普通 push 取消，同一分支的手动发布串行执行。
+不构建 Windows/macOS 原生 Web 服务，也不构建 ARM64 镜像；不再上传单架构临时标签、传递 digest artifacts 或执行多架构 manifest 汇总。推送使用验收过的本地镜像，不在验收后重新构建。开发分支不会覆盖 `latest`。
+
+若构建或测试失败，推送步骤不会执行；修复后对新提交触发 workflow。如果推送中途失败，部分标签可能已更新，可重跑失败的容器 job；它会重新构建和验收，成功后再次推送。手动运行不会被同分支的普通 push 取消，同一分支的手动运行串行执行。
 
 部署步骤见 [本地容器部署](container-deployment.md)。
+
+### Web 流水线范围与重复检查
+
+- `dev-webruntime` 的普通推送只匹配 `server.yml`；桌面 `ci.yml` 的 push 范围为 `main/dev`，站点 `site.yml` 的 push 范围为 `main`，桌面安装包仅由 `v*` 标签或手动触发。
+- 提交到 `main` 的 PR 会同时运行 Web、桌面和站点检查，其中共享前端测试有重叠；这是不同产品入口的独立闸门。本次仅收敛 Web 运行时范围，桌面和站点流程继续负责各自产物。
+- `pnpm test` 与 `pnpm test:web` 使用不同服务适配器：前者验证共享组件的桌面适配，后者验证 Web 适配，不能仅因测试文件重叠就删除其中一项。
+- Linux 原生验收验证服务行为和真实 SSH；AMD64 容器验收额外验证 release 二进制、镜像依赖、非 root/只读环境及数据卷，因此保留这两层验收。
+- Dockerfile 为独立源码构建保留了前端构建步骤，因此镜像 job 仍会再构建一次 Web 资源。以后可通过消费同一次 CI 的前端 artifact 减少此部分重复；当前上传的 artifact 用于排查，不是镜像构建输入。
