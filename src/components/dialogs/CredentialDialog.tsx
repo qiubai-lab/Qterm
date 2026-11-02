@@ -448,7 +448,7 @@ export function CredentialDialog({ onClose }: { onClose: () => void }) {
       </div>
     </DialogFrame>
     <CredentialSecurityTooltip id={securityTooltipId} target={inspectedSecurityTarget?.element ?? null}/>
-    {masterMode && <MasterPasswordDialog mode={masterMode} onSuccess={masterSucceeded} onClose={onClose}/>}
+    {masterMode && <MasterPasswordDialog mode={masterMode} onSuccess={masterSucceeded} onClose={() => setMasterMode(null)}/>}
     {changeRequested && <ChangeMasterPasswordDialog
       onClose={() => setChangeRequested(false)}
       onSuccess={async () => {
