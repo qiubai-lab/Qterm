@@ -49,6 +49,8 @@ jobs:
           sudo apt-get install --no-install-recommends --yes openssh-server
           sudo mkdir -p /run/sshd
           python -m pip install websockets==13.1
+      - name: Verify acceptance client regressions
+        run: python scripts/test-server-fixtures.py
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
       - run: pnpm test:web
@@ -107,6 +109,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm build:server-screen
       - run: python -m pip install websockets==13.1
+      - name: Verify acceptance client regressions
+        run: python scripts/test-server-fixtures.py
       - run: cargo build --manifest-path crates/Cargo.toml --locked -p qterm-server
       - run: cargo test --manifest-path crates/Cargo.toml --locked -p qterm-server
       - run: cargo clippy --manifest-path crates/Cargo.toml --locked -p qterm-server --all-targets -- -D warnings

@@ -43,7 +43,10 @@ async def verify(f,ssh):
     assert f.api('/transfers/'+task+'/progress')['transferredBytes']==len(b'qterm-clipboard-proof')
     command=('type ' if not ssh and f.windows else 'cat ')+path+(' & echo. & echo CLIPBOARD-READ-DONE\r' if not ssh and f.windows else '; printf "\\nCLIPBOARD-READ-DONE\\n"\n')
     await ws.send(command.encode())
-    output=await local.output_until(ws,b'qterm-clipboard-proof[\r\n]+CLIPBOARD-READ-DONE')
+    # On ConPTY, cursor movement can replace literal line breaks. File content
+    # is absent from the input command, so matching it cannot pass on echo alone.
+    pattern=b'qterm-clipboard-proof' if not ssh and f.windows else b'qterm-clipboard-proof[\r\n]+CLIPBOARD-READ-DONE'
+    output=await local.output_until(ws,pattern)
     assert b'qterm-clipboard-proof' in output
     cancelled=str(uuid.uuid4());f.api('/transfers/'+cancelled+'/cancel','POST')
     upload(f,session,cancelled,status=400)

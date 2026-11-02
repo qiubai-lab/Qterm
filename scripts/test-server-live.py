@@ -177,6 +177,18 @@ async def output_contains(ws, marker):
     return output
 
 
+def unlock_after_login(f, master):
+    # A successful login with an initialized vault admits only control requests.
+    assert f.api("/terminal-lock")["locked"]
+    for path in ("/vault", "/runtime/sessions"):
+        assert f.api(path, status=423)["code"] == "terminalLocked"
+    f.api("/vault/unlock", "POST", {"masterPassword": master}, status=423)
+    f.api("/terminal-lock/unlock", "POST", {"masterPassword": "incorrect-master"}, status=400)
+    assert f.api("/terminal-lock")["locked"]
+    assert not f.api("/terminal-lock/unlock", "POST", {"masterPassword": master})["locked"]
+    assert f.api("/vault")["unlocked"]
+
+
 async def exercise(f):
     f.api("/profiles", status=401)
     f.api("/login", "POST", {"password": f.password,"clientId":f.client_id}, origin="https://attacker.test", status=403)
@@ -246,7 +258,7 @@ async def exercise(f):
     await asyncio.wait_for(terminal.wait_closed(), 10)
     f.api("/profiles", status=401)
     f.login()
-    assert not f.api("/vault")["unlocked"]
+    unlock_after_login(f, master)
     terminal = await websockets.connect(f"ws://localhost:{f.http_port}/api/v1/runtime/attach", origin=f.origin, extra_headers={"Cookie":f.cookie})
     await terminal.send(json.dumps({**f.proof(),"version":2,"sessionId":terminal_id}))
     ready = await receive(terminal)
@@ -262,10 +274,9 @@ async def exercise(f):
     f.server.wait(timeout=10)
     f.start_server()
     f.login()
+    unlock_after_login(f, master)
     assert f.api("/runtime/sessions") == []
     assert f.api("/profiles")[0]["id"] == profile
-    assert not f.api("/vault")["unlocked"]
-    f.api("/vault/unlock", "POST", {"masterPassword": master})
     ws, _, confirmations = await connect(f, profile, credential, "files")
     assert confirmations == 0
     await ws.close()

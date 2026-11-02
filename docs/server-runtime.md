@@ -59,6 +59,10 @@ location / {
 
 终端状态由 Rust 会话注册表和服务端 headless xterm 维护；浏览器离线期间仍持续读取 PTY 输出并响应终端查询，因此 Codex 等全屏 CLI 能继续运行并恢复备用屏幕、颜色和光标。普通屏幕历史采用有界滚动缓冲，并非无限日志。浏览器尚未提交到服务端的最后一次操作无法保证恢复；同步失败或编辑版本冲突会在界面提示。
 
+画面组件退出、通信失败或请求超时后，服务端会尝试重建组件，使用内存中的画面检查点和后续解析操作恢复各终端；不会重建 PTY、重发用户输入或重复已回答的终端查询。每 256 KiB 解析操作或 128 次操作更新检查点；故障期间每个终端最多暂存 8 MiB / 4,096 次操作。超过缓冲上限或单个画面无法恢复时会明确报错，不将不完整画面当作成功恢复，也不阻断其他终端。持续故障的重试间隔至少 1 秒，单次通信与一次完整重建各限时 10 秒。
+
+后端日志以 `Qterm screen worker:` 开头，记录启动失败、通信关闭、超时、协议错误或操作失败，以及可识别的 Node 内存不足/组件缺失/语法错误；不输出终端内容、请求正文或原始 stderr。补齐缺失的 Node 或恢复组件文件后，可重连触发恢复，无需为画面组件重启整个后端；修改后端进程的环境变量仍需重新启动。已经运行旧版本后端的故障实例仍需安排后端更新，进程内画面恢复数据无法从新二进制补回。
+
 同一浏览器的不同标签页也分别识别；共享 Cookie 或复制标签页不能绕过接管确认。不提供只读模式。原页面刷新凭页面恢复凭证接回，短暂断线自动重连；断开后保留约 30 秒占用宽限，避免刷新期间被新登录静默替换，期间其他页面仍可明确接管。接管确认 2 分钟有效，若已被另一页面先行接管，需重新登录确认。工作区和文件草稿使用版本号防止旧页面覆盖新内容。明确点击停止终端、关闭终端/工作区会结束相应任务；退出登录不会结束任务。
 
 ## 文件、Git 与网络 Block
@@ -194,6 +198,7 @@ Linux 实机验收（需要 `openssh-server`、`python3-websockets`，且 `/run/
 
 ```sh
 mise exec -- cargo build --manifest-path crates/Cargo.toml --locked -p qterm-server
+python3 scripts/test-server-fixtures.py
 python3 scripts/test-server-live.py
 python3 scripts/test-server-local.py
 python3 scripts/test-server-retention.py
@@ -224,3 +229,5 @@ python3 scripts/test-server-takeover.py --container
 本地仓库监听工作区、Git 元数据和 linked worktree 的共享 refs，文件事件合并窗口为 350ms；每 60 秒进行一次低频校准，监听不可用时回退到 15 秒采样。远程仓库仅在存在订阅时每 15 秒共享采样；Qterm 内 Git 操作会立即发布返回的快照。快照计算失败会通知界面，并每 5 秒重试。最后一个订阅退出后释放后台采样和文件监听；页面隐藏、面板不可见、终端锁定会退订，恢复后重新同步。锁定同时由服务端撤销数据 WS 和快照读取权限。
 
 验收：构建 Web 资源和 qterm-server 后运行 `python3 scripts/test-server-observation.py`，使用隔离临时仓库与测试凭证验证事件、变更、退订、锁定和重连。安装 OpenSSH 的环境可再运行 `python3 scripts/test-server-observation-ssh.py`，验证远端授权、共享采样和应用内操作通知。
+
+画面故障验收：`python3 scripts/test-server-screen-recovery.py` 在 Linux 隔离服务中主动终止画面子进程，验证多终端恢复、原 PTY/PID/环境保留及新建终端；`cargo test --manifest-path crates/Cargo.toml -p qterm-server screen_worker` 覆盖检查点、半截 ANSI/UTF-8、查询去重、超时与错误隔离。

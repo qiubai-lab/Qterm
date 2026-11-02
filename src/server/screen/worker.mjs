@@ -6,7 +6,11 @@ import { SerializeAddon } from '@xterm/addon-serialize';
 const { Terminal } = headless;
 const terminals = new Map();
 async function request(input) {
-  if (input.op === 'create') {
+  if (input.op === 'destroy') { terminals.get(input.id)?.terminal.dispose(); terminals.delete(input.id); return {}; }
+  if (input.op === 'create' || input.op === 'restore') {
+    terminals.get(input.id)?.terminal.dispose();
+    const snapshot = input.op === 'restore' ? input.snapshot : null;
+    if (snapshot) input = {...input,columns:snapshot.columns,rows:snapshot.rows};
     const terminal = new Terminal({cols:input.columns,rows:input.rows,scrollback:Math.min(2000,Math.floor(65536/input.columns)),allowProposedApi:true,...(input.windowsPty?{windowsPty:input.windowsPty}:{})});
     const serialize = new SerializeAddon();
     terminal.loadAddon(serialize);
@@ -17,6 +21,17 @@ async function request(input) {
       return true;
     });
     terminals.set(input.id,entry);
+    if (snapshot) {
+      // Restore only parser state, never route replayed terminal queries to the PTY.
+      await new Promise(resolve => terminal.write(snapshot.data,resolve));
+      const pending = Buffer.from(snapshot.pending || '', 'base64');
+      if (pending.length) {
+        entry.pending.feed(pending);
+        await new Promise(resolve => terminal.write(pending,resolve));
+      }
+      entry.cwd = snapshot.cwd;
+      entry.responses = [];
+    }
     return {};
   }
   const entry = terminals.get(input.id);
@@ -34,7 +49,6 @@ async function request(input) {
     // Serialize state, not raw historic escape sequences (no replayed OSC side effects).
     return {data:serialize.serialize({scrollback:2000}),pending:entry.pending.snapshot(),columns:terminal.cols,rows:terminal.rows,cwd:entry.cwd};
   }
-  if (input.op === 'destroy') { terminal.dispose(); terminals.delete(input.id); return {}; }
   throw new Error('invalidScreenOperation');
 }
 for await (const line of readline.createInterface({input:process.stdin,crlfDelay:Infinity})) {

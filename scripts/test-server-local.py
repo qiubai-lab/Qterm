@@ -26,7 +26,9 @@ BINARY = Path(os.environ.get("QTERM_TEST_BINARY", ROOT / "crates/target/debug" /
 
 class Fixture:
     def __init__(self, directory, container=False):
-        self.directory = Path(directory)
+        # macOS temp roots can include /var -> /private/var. Upload tests must
+        # not mistake that host alias for an allowed relative symlink traversal.
+        self.directory = Path(directory).resolve()
         self.container = container
         self.windows = os.name == "nt" and not container
         with socket.socket() as listener:
@@ -126,13 +128,18 @@ async def open_terminal(f):
     return ws
 
 
-async def output_until(ws, pattern):
+async def output_until(ws, pattern, timeout=20):
     output = b""
-    async with asyncio.timeout(20):
-        while not re.search(pattern, output):
-            message = await receive(ws)
-            if isinstance(message, bytes):
-                output += message
+    try:
+        async with asyncio.timeout(timeout):
+            while not re.search(pattern, output):
+                message = await receive(ws)
+                if isinstance(message, bytes):
+                    output += message
+                elif message.get("type") in ("error", "exit", "resync"):
+                    raise AssertionError(f"Terminal event while waiting for {pattern!r}: {message}; output tail={output[-2000:]!r}")
+    except (TimeoutError, ConnectionClosed) as error:
+        raise AssertionError(f"Terminal {type(error).__name__} waiting for {pattern!r}; output tail={output[-2000:]!r}") from error
     return output
 
 
@@ -148,9 +155,12 @@ async def verify(f):
     # Headless terminal answers ConPTY queries even with no browser attached.
     await ws.send(json.dumps({"type":"resize","columns":111,"rows":37}))
     if f.windows:
-        await ws.send(b"echo local-pty-proof>pty-proof.txt\r")
+        # ConPTY emits cursor positioning, not necessarily CRLF. The complete
+        # marker must come from `type`, never from the echoed input command.
+        await ws.send(b"set QTERM_PROOF=local-pty\r")
+        await ws.send(b"echo %QTERM_PROOF%-proof>pty-proof.txt\r")
         await ws.send(b"type pty-proof.txt\r")
-        await output_until(ws, rb"local-pty-proof\r\n")
+        await output_until(ws, rb"local-pty-proof")
     else:
         await ws.send(b"printf 'local-%s-proof\\n' pty >pty-proof.txt; cat pty-proof.txt; stty size\r")
         await output_until(ws, rb"37 111\r?\n")
@@ -159,7 +169,7 @@ async def verify(f):
     assert document["content"].strip() == "local-pty-proof", document
     f.api("/local/files/write", "POST", {"path":filepath,"content":"edited-through-web\n","expectedRevision":document["revision"]})
     await ws.send(b"type pty-proof.txt\r" if f.windows else b"cat pty-proof.txt\r")
-    await output_until(ws, rb"edited-through-web\r?\n")
+    await output_until(ws, rb"edited-through-web" if f.windows else rb"edited-through-web\r?\n")
     pid = None
     if not f.windows and not f.container:
         await ws.send(b"printf 'shell-pid=%s\\n' $$; sleep 120\r")
@@ -214,6 +224,9 @@ def main():
         fixture = Fixture(directory, args.container)
         try:
             asyncio.run(verify(fixture))
+        except Exception:
+            print("server.log", (fixture.directory / "server.log").read_text(errors="replace")[-4000:], flush=True)
+            raise
         finally:
             fixture.close()
 

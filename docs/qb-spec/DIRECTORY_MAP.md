@@ -238,15 +238,16 @@
 - `crates/qterm-server/src/local_files.rs` / `settings.rs` / `credential_management.rs`: service-account files, persistent settings and shared credential workflows exposed through narrow authenticated routes.
 - `crates/qterm-core/src/application/local_file_listing.rs`: shared desktop/server local directory listing.
 - `scripts/test-server-local.py`: cross-platform native and container local PTY/file/lifecycle acceptance; native CI includes Linux, Windows and macOS.
+- `scripts/test-server-fixtures.py`: acceptance-client regressions for ConPTY cursor output, split WebSocket frames, output acknowledgements, and bounded timeout/error diagnostics; runs on every native CI platform.
 
 ### Web 会话保留
 
 - `crates/qterm-server/src/retained_session.rs`、`retained_socket.rs`：进程所有权、稳定 Block 标识、画面接入、写入控制权和输出流控。
-- `crates/qterm-server/src/screen_worker.rs` 与 `src/server/screen/`：私有 stdio headless-xterm 屏幕状态工作进程；`scripts/build-server-screen.mjs` 打包。
+- `crates/qterm-server/src/screen_worker.rs`：画面组件重试和恢复编排；`screen_worker/process.rs` 拥有有界 stdio、覆盖写入的超时与脱敏诊断，`screen_worker/recovery.rs` 拥有仅内存的检查点、解析操作尾部及查询回复去重；相邻测试覆盖崩溃和错误隔离。`src/server/screen/` 拥有 headless-xterm 解析、快照和恢复，`scripts/build-server-screen.mjs` 打包。
 - `workspace_runtime.rs`、`workspace_recovery.rs`：服务端工作区快照、版本化内存草稿、未保存布局中的会话找回。
 - `src/server/sessionTransport.ts`、`ServerRuntimeRestore.tsx`：浏览器接入、断线重连与已有 SSH/SFTP/Git/Network 会话及网络规则运行状态恢复。
 - `src/files/useRetainedFilePreview.ts`：文件预览/编辑草稿加载与顺序同步。
-- `scripts/test-server-retention.py`、`scripts/server-screen.node-test.mjs`：真实 PTY 和屏幕状态恢复验收。
+- `scripts/test-server-retention.py`、`scripts/test-server-screen-recovery.py`、`scripts/server-screen.node-test.mjs`：真实 PTY 和屏幕状态恢复验收。
 
 ### Web 独占接管
 

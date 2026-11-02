@@ -1,118 +1,172 @@
-//! One bounded, private headless-xterm process shared by all retained terminals.
+//! Recoverable headless screens; process failure never owns or terminates a PTY.
+mod process;
+mod recovery;
 use crate::error::{ApiError, Result};
+use process::{Config, Failure, Process};
+use recovery::Screen;
 use serde_json::{Value, json};
 use std::{
-    io::{BufRead, BufReader, Write},
-    path::PathBuf,
-    process::{Child, ChildStdin, Command, Stdio},
-    sync::{Mutex, mpsc},
-    time::Duration,
+    collections::BTreeMap,
+    sync::Mutex,
+    time::{Duration, Instant},
 };
 
 #[derive(Default)]
-pub struct ScreenWorker(Mutex<WorkerState>);
+pub struct ScreenWorker {
+    state: Mutex<WorkerState>,
+    config: Config,
+}
 #[derive(Default)]
 struct WorkerState {
     process: Option<Process>,
-    failed: bool,
+    screens: BTreeMap<String, Screen>,
+    retry_at: Option<Instant>,
 }
-struct Process {
-    child: Child,
-    input: ChildStdin,
-    replies: mpsc::Receiver<Value>,
-}
-impl Drop for Process {
-    fn drop(&mut self) {
-        let _ = self.child.kill();
-        let _ = self.child.wait();
+impl WorkerState {
+    fn discard(&mut self, failure: Failure) {
+        if let Some(mut process) = self.process.take() {
+            process.report(failure);
+        } else {
+            eprintln!("Qterm screen worker: reason={}", failure.reason());
+        }
+    }
+    fn recover(&mut self, config: &Config) -> std::result::Result<(), Failure> {
+        if self.process.is_some() {
+            return Ok(());
+        }
+        let mut process = Process::start(config)?;
+        let deadline = Instant::now() + config.timeout;
+        let result = (|| {
+            for screen in self.screens.values_mut().filter(|screen| !screen.lost) {
+                screen.replies.clear();
+                let restored = (|| {
+                    process.call_until(&screen.restore(), deadline)?;
+                    for entry in &screen.tail {
+                        let result = process.call_until(&entry.request, deadline)?;
+                        // Only previously undelivered query responses may go back to the PTY.
+                        if entry.pending_reply
+                            && let Some(replies) = result["responses"].as_array()
+                        {
+                            screen.replies.extend(replies.iter().cloned());
+                        }
+                    }
+                    Ok(())
+                })();
+                match restored {
+                    Ok(()) => {}
+                    Err(Failure::Rejected) => {
+                        process.report(Failure::Rejected);
+                        screen.invalidate();
+                    }
+                    Err(error) => return Err(error),
+                }
+            }
+            Ok(())
+        })();
+        self.process = Some(process);
+        result
     }
 }
 impl ScreenWorker {
     pub fn call(&self, request: Value) -> Result<Value> {
-        let mut slot = self.0.lock().unwrap();
-        if slot.failed {
+        let id = request["id"]
+            .as_str()
+            .ok_or_else(ApiError::invalid)?
+            .to_owned();
+        let op = request["op"]
+            .as_str()
+            .ok_or_else(ApiError::invalid)?
+            .to_owned();
+        let mut state = self.state.lock().unwrap();
+        // Cleanup is idempotent and must never launch a process just to destroy a screen.
+        if op == "destroy" {
+            state.screens.remove(&id);
+            if let Some(process) = state.process.as_mut()
+                && let Err(error) = process.call(&request)
+            {
+                state.discard(error);
+            }
+            return Ok(json!({"ok":true}));
+        }
+        if !matches!(op.as_str(), "create" | "write" | "resize" | "snapshot") {
+            return Err(ApiError::invalid());
+        }
+        if op != "create" && !state.screens.contains_key(&id) {
+            return Err(ApiError::invalid());
+        }
+        if op == "create" && state.screens.contains_key(&id) {
+            return Err(ApiError::invalid());
+        }
+        if state.screens.get(&id).is_some_and(|screen| screen.lost) {
+            return Err(state_lost());
+        }
+        let mut response = None;
+        if state.retry_at.is_none_or(|when| Instant::now() >= when) {
+            // One retry, after reconstructing committed parser state. Never replay PTY input.
+            for _ in 0..2 {
+                let recovered = state.recover(&self.config);
+                if recovered.is_ok() && state.screens.get(&id).is_some_and(|screen| screen.lost) {
+                    return Err(state_lost());
+                }
+                let result =
+                    recovered.and_then(|()| state.process.as_mut().unwrap().call(&request));
+                match result {
+                    Ok(value) => {
+                        response = Some(value);
+                        state.retry_at = None;
+                        break;
+                    }
+                    Err(error) => state.discard(error),
+                }
+            }
+            if response.is_none() {
+                state.retry_at = Some(Instant::now() + Duration::from_secs(1));
+            }
+        }
+        let Some(mut response) = response else {
+            if let Some(screen) = state.screens.get_mut(&id) {
+                screen.record(request, false);
+            }
             return Err(unavailable());
-        }
-        if slot.process.is_none() {
-            slot.process = Some(Process::start()?);
-        }
-        let process = slot.process.as_mut().unwrap();
-        let result = (|| {
-            serde_json::to_writer(&mut process.input, &request).map_err(|_| unavailable())?;
-            process.input.write_all(b"\n").map_err(|_| unavailable())?;
-            process.input.flush().map_err(|_| unavailable())?;
-            let response = process
-                .replies
-                .recv_timeout(Duration::from_secs(10))
-                .map_err(|_| unavailable())?;
-            if response["ok"] != true {
-                return Err(unavailable());
+        };
+        if op == "create" {
+            state.screens.insert(id.clone(), Screen::new(request));
+        } else {
+            let screen = state.screens.get_mut(&id).unwrap();
+            screen.record(request, true);
+            if matches!(op.as_str(), "write" | "snapshot") {
+                screen.complete(&mut response);
             }
-            Ok(response)
-        })();
-        if result.is_err() {
-            slot.failed = true;
-            slot.process.take();
         }
-        // Never silently restart and pretend the old screen state survived.
-        result
-    }
-}
-impl Process {
-    fn start() -> Result<Self> {
-        let worker = std::env::var_os("QTERM_SCREEN_WORKER")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| {
-                PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../dist-server/screen.mjs")
-            });
-        let node = std::env::var_os("QTERM_NODE").unwrap_or_else(|| "node".into());
-        let mut child = Command::new(node)
-            .arg("--max-old-space-size=256")
-            .arg(worker)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .spawn()
-            .map_err(|_| unavailable())?;
-        let input = child.stdin.take().unwrap();
-        let output = child.stdout.take().unwrap();
-        let (sender, replies) = mpsc::sync_channel(1);
-        std::thread::spawn(move || {
-            let mut reader = BufReader::new(output);
-            loop {
-                let mut line = String::new();
-                // Snapshots are bounded by screen dimensions and 2,000 history rows.
-                if reader
-                    .read_line(&mut line)
-                    .ok()
-                    .filter(|n| *n > 0)
-                    .is_none()
-                {
-                    break;
-                }
-                let Ok(value) = serde_json::from_str(&line) else {
-                    break;
-                };
-                if sender.send(value).is_err() {
-                    break;
-                }
+        if state.screens[&id].needs_checkpoint() {
+            match state
+                .process
+                .as_mut()
+                .unwrap()
+                .call(&json!({"op":"snapshot","id":id}))
+            {
+                Ok(snapshot) => state.screens.get_mut(&id).unwrap().checkpoint(snapshot),
+                // The completed operation remains in the replay tail if checkpointing fails.
+                Err(error) => state.discard(error),
             }
-        });
-        Ok(Self {
-            child,
-            input,
-            replies,
-        })
+        }
+        Ok(response)
     }
 }
 fn unavailable() -> ApiError {
     ApiError::new(
         axum::http::StatusCode::SERVICE_UNAVAILABLE,
         "screenUnavailable",
-        "终端画面服务不可用；请确认 Node.js 和屏幕组件已安装，后台进程不会因此被结束",
+        "终端画面暂时不可用，请稍后重连；后台任务仍在运行。若持续失败，请检查服务端画面组件诊断日志",
     )
 }
-
+fn state_lost() -> ApiError {
+    ApiError::new(
+        axum::http::StatusCode::SERVICE_UNAVAILABLE,
+        "screenStateLost",
+        "终端画面状态异常或中断期间输出超过恢复缓冲上限，无法完整恢复此画面；后台任务仍在运行，可另开终端检查",
+    )
+}
 pub fn create(
     worker: &ScreenWorker,
     id: &str,
@@ -125,3 +179,7 @@ pub fn create(
     )?;
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "screen_worker/tests.rs"]
+mod tests;

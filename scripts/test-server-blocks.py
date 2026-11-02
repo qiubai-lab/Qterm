@@ -22,6 +22,11 @@ def verify_files(f):
     upload(f,'folder/nested/file.txt')
     upload(f,'folder/empty',b'',True)
     upload(f,'../escape',status=400)
+    if not f.container and not f.windows:
+        link=f.directory/'upload-link'
+        link.symlink_to(f.directory/'folder',target_is_directory=True)
+        upload(f,'upload-link/rejected.txt',status=400)
+        assert not (f.directory/'folder/rejected.txt').exists()
     doc=f.api('/local/files/read','POST',{'path':f.cwd+'/folder/nested/file.txt'})
     assert doc['content']=='block-transfer'
     for directory,path in [(False,'folder/nested/file.txt'),(True,'folder')]:

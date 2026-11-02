@@ -27,7 +27,8 @@ async def probe(port,target=None):
 
 async def verify(f):
     f.login(); recovery=f.api('/vault/recovery','POST')['id']; f.api('/vault/recovery/'+recovery)
-    f.api('/vault/initialize','POST',dict(recoveryId=recovery,masterPassword=secrets.token_urlsafe(24),savedRecovery=True))
+    master=secrets.token_urlsafe(24)
+    f.api('/vault/initialize','POST',dict(recoveryId=recovery,masterPassword=master,savedRecovery=True))
     credential=f.api('/credentials/generate','POST',{'name':'Block SSH'})['id']
     (f.directory/'authorized_keys').write_text(f.api('/credentials/'+credential+'/public-key')+'\n')
     profile=f.api('/profiles','POST',dict(name='Block SSH',host='127.0.0.1',port=f.ssh_port,username=pwd.getpwuid(os.getuid()).pw_name,authPreference='privateKey',credentialId=credential,groupId=None,jumpProfileIds=[]))['id']
@@ -65,6 +66,10 @@ async def verify(f):
             f.api('/network/rules/'+rule['id'],'DELETE',status=409)
         await net_ws.close();await git_ws.close()
         f.api('/logout','POST',status=204);f.login()
+        assert f.api('/terminal-lock')['locked']
+        # Existing TCP listeners survive even while browser access is locked.
+        for rule,port,kind in rules:await probe(port,target if kind=='socks5' else None)
+        live.unlock_after_login(f,master)
         sessions=f.api('/runtime/sessions');network=next(s for s in sessions if s['runtimeKey']=='network-block')
         assert network['sessionId']==net_id and len(network['ruleStates'])==3
         assert next(s for s in sessions if s['runtimeKey']=='git-block')['sessionId']==git_id
@@ -78,7 +83,7 @@ async def verify(f):
             f.api('/network/stop','POST',dict(sessionId=net_id,ruleId=rule))
             f.api('/network/rules/'+rule,'DELETE')
         assert f.api('/network/rules')==[]
-        # Existing SSH Git still works after logout vault lock.
+        # Unlock restores access to the existing SSH Git session.
         assert git(dict(type='snapshot',path=str(repo)))['head']['oid']==snap['head']['oid']
         print('PASS: real remote Git; local/remote/SOCKS5 TCP; active-rule protection; logout/reattach same sessions and listeners; stop/delete')
     finally:

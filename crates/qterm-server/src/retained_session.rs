@@ -119,6 +119,13 @@ impl RetainedSession {
                 .call(json!({"op":"write","id":self.screen_id,"data":STANDARD.encode(&data)}))
             {
                 Ok(result) => {
+                    if state
+                        .failure
+                        .as_ref()
+                        .is_some_and(|failure| failure["code"] == "screenUnavailable")
+                    {
+                        state.failure = None;
+                    }
                     if let Some(cwd) = result["cwd"].as_str() {
                         state.cwd = Some(cwd.into());
                     }
@@ -135,9 +142,9 @@ impl RetainedSession {
                         }
                     }
                 }
-                Err(_) => {
+                Err(error) => {
                     state.failure = Some(
-                        json!({"type":"failed","code":"screenUnavailable","message":"终端画面服务不可用，后台进程仍保留","node":null,"stage":null}),
+                        json!({"type":"failed","code":error.code,"message":error.message,"node":null,"stage":null}),
                     );
                 }
             }
@@ -180,6 +187,24 @@ impl RetainedSession {
             let snapshot = self
                 .worker
                 .call(json!({"op":"snapshot","id":self.screen_id}))?;
+            if let Some(cwd) = snapshot["cwd"].as_str() {
+                s.cwd = Some(cwd.to_owned());
+            }
+            if s.failure
+                .as_ref()
+                .is_some_and(|failure| failure["code"] == "screenUnavailable")
+            {
+                s.failure = None;
+            }
+            if let Some(replies) = snapshot["responses"].as_array() {
+                for reply in replies.iter().filter_map(Value::as_str) {
+                    if s.id.is_empty() {
+                        s.replies.push(reply.as_bytes().to_vec());
+                    } else {
+                        let _ = self.control.write_now(&s.id, reply.as_bytes().to_vec());
+                    }
+                }
+            }
             let mut bytes = snapshot["data"]
                 .as_str()
                 .ok_or_else(ApiError::invalid)?
