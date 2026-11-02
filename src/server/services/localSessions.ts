@@ -1,5 +1,6 @@
 import type * as Desktop from "../../lib/tauri/localSessions";
 import { api } from "../http";
+import { readText } from "./textClipboard";
 import { closeSession, control, openSocket } from "../sessionTransport";
 export type * from "../../lib/tauri/localSessions";
 export const getLocalTerminalCapabilities: typeof Desktop.getLocalTerminalCapabilities = () => api("/local/capabilities");
@@ -14,4 +15,4 @@ export const connectLocalSession: typeof Desktop.connectLocalSession = async (co
 export const writeLocalSession: typeof Desktop.writeLocalSession = async (id, data) => control(id, data);
 export const resizeLocalSession: typeof Desktop.resizeLocalSession = async (id, columns, rows) => control(id, {type:"resize", columns, rows});
 export const closeLocalSession: typeof Desktop.closeLocalSession = async id => closeSession(id);
-export const prepareLocalTerminalClipboardPaste: typeof Desktop.prepareLocalTerminalClipboardPaste = async () => ({ kind: "text", text: await navigator.clipboard.readText() });
+export const prepareLocalTerminalClipboardPaste: typeof Desktop.prepareLocalTerminalClipboardPaste = async () => ({ kind: "text", text: await readText() });

@@ -1,3 +1,4 @@
+import { randomId } from "../lib/randomId";
 import type { TerminalClipboardInput, TerminalClipboardPasteStart, TerminalStagingEvent } from "../lib/contracts/sessions";
 import { api } from "./http";
 import { uploadRequest } from "./uploadRequest";
@@ -23,7 +24,7 @@ export async function startClipboard(session: string, onEvent: (event: TerminalS
   if (!data.files.length) return data.text ? {kind:"text",text:data.text} : {kind:"empty"};
   const totalBytes = data.files.reduce((sum,file)=>sum+file.size,0);
   if (data.files.length > 128 || totalBytes > 128*1024*1024) throw new Error("一次粘贴最多 128 个文件、128 MiB");
-  const taskId = crypto.randomUUID(), controller = new AbortController();
+  const taskId = randomId(), controller = new AbortController();
   const body = new FormData();
   for (const file of data.files) body.append("file", file, file.name);
   tasks.set(taskId, {session,controller});

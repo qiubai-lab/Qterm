@@ -14,16 +14,16 @@ mkdir -p .server-secrets
 chmod 700 .server-secrets
 vi .server-secrets/password
 # 填入一行 12–1024 字节明文密码，或完整 Argon2id PHC 哈希。
-chmod 644 .server-secrets/password
+chmod 600 .server-secrets/password
 docker compose pull qterm
 docker compose up -d --no-build --wait --wait-timeout 90
 ```
 
-密码文件允许末尾换行，明文两端空格保留。服务启动时将明文转为内存中的随机盐哈希，原文件不变。容器使用 UID/GID 10001，因此示例使用文件 `644`、父目录 `700`；本地原生开发可用文件 `600`。已有哈希文件可在 `.env` 设置 `QTERM_PASSWORD_SOURCE_FILE=./.server-secrets/password.hash`。修改密码文件后重新创建容器生效。
+密码文件允许末尾换行，明文两端空格保留。服务启动时将明文转为内存中的随机盐哈希，原文件不变。容器基于 Ubuntu 24.04 LTS，默认以 root 运行，因此示例使用文件 `600`、父目录 `700`；切换服务 UID 后需调整密码文件读取权限。已有哈希文件可在 `.env` 设置 `QTERM_PASSWORD_SOURCE_FILE=./.server-secrets/password.hash`。修改密码文件后重新创建容器生效。
 
 默认仅绑定 `127.0.0.1:8080`，打开 `http://localhost:8080`。访问地址必须与 `QTERM_PUBLIC_ORIGIN` 完全一致，不能用 `127.0.0.1` 代替 `localhost`。需要从源码构建时运行 `docker compose -f compose.yaml -f compose.build.yaml up -d --build --wait`。
 
-远程访问时，在同一服务器上配置 HTTPS 反向代理，设置 `QTERM_PUBLIC_ORIGIN=https://qterm.example.com`。代理必须转发 WebSocket Upgrade、保留 Origin，允许最长 10 分钟文件请求，上传请求体上限至少 129 MiB。服务只信任显式配置的公开 origin，不根据转发头推断访问地址。HTTP 只允许 localhost/loopback 开发地址。
+远程访问时，在同一服务器上配置 HTTPS 反向代理，设置 `QTERM_PUBLIC_ORIGIN=https://qterm.example.com`。代理必须转发 WebSocket Upgrade、保留 Origin，允许最长 10 分钟文件请求，上传请求体上限至少 129 MiB。服务只信任显式配置的公开 origin，不根据转发头推断访问地址。HTTP 默认只允许 localhost/loopback；受信任内网可以显式设置 `QTERM_ALLOW_INSECURE_HTTP=true`，并将 `QTERM_PUBLIC_ORIGIN` 设为实际 HTTP 地址。Compose 直连还需设置 `QTERM_BIND_HOST`；配置示例和剪贴板限制见 [容器部署](container-deployment.md#通过服务器-ip-使用-http)。
 
 Nginx 示例（TLS 证书配置自行补充）：
 
@@ -95,7 +95,7 @@ Web 右上角退出登录左侧的「访问记录」打开日志列表，可按�
 
 ## 数据与边界
 
-`qterm-data` 卷保留 `data/connections.json`、`data/network-forwards.json`、`data/secrets.vault`、`device/known-hosts.json`、`device/workspaces.json`，主题、安全及终端设置也写入数据卷，临时文件在 `cache/`。容器 Shell 使用 `/data/home` 作为持久化主目录（服务账户 UID/GID 10001）。容器启动时会为旧数据卷补建该目录。同一数据目录只允许一个服务进程。停止容器后备份整个卷，恢复到空卷；同时离线保存恢复密钥及登录密码配置文件。升级前先备份，不能让桌面与服务器同时写入同一目录。
+`qterm-data` 卷保留 `data/connections.json`、`data/network-forwards.json`、`data/secrets.vault`、`device/known-hosts.json`、`device/workspaces.json`，主题、安全及终端设置也写入数据卷，临时文件在 `cache/`。容器默认以 root 运行，Shell 使用 `/data/home` 作为持久化主目录；内置 UID/GID 10001 的 `qterm` 账户使用 `/data/users/qterm`。容器启动时会为旧数据卷补建这些目录。镜像不预装开发工具；按需安装、账户切换与备份细节见 [本地容器部署](container-deployment.md#精简运行环境)。同一数据目录只允许一个服务进程。停止容器后备份整个卷，恢复到空卷；同时离线保存恢复密钥及登录密码配置文件。升级前先备份，不能让桌面与服务器同时写入同一目录。
 
 登录 Cookie 为 HttpOnly、SameSite=Strict；HTTPS 下使用 Secure / `__Host-` Cookie。登录有效期 8 小时；主密码解锁仍遵循共享凭证库自动锁定规则。登录限流、Origin 检查、页面访问凭证与 WebSocket 身份/会话所有权检查均在服务端执行。接管同时阻止旧页面之后的终端输入、尺寸调整、文件/配置修改和退出请求；已被服务端接受的操作可能完成，不做事务回滚。下载使用短期、一次性且绑定当前访问代次的票据，接管时清除。
 

@@ -1,3 +1,4 @@
+import { randomId } from "../lib/randomId";
 import { useCallback, useLayoutEffect, useRef, useState, type ComponentProps, type PointerEvent } from "react";
 import { createPortal } from "react-dom";
 import { WebBrowserPane } from "./WebBrowserPane";
@@ -11,7 +12,7 @@ import type { WebTabSessionStore } from "./webTabSessionStore";
 
 export interface WebTabMetadata { title: string; address: string; loading: boolean }
 interface Tab extends WebTabMetadata { id: string; initialAddress?: string; initialPopup?: WebPopupRequest; restored?: boolean }
-const emptyTab = (): Tab => ({ id: crypto.randomUUID(), title: "", address: "", loading: false });
+const emptyTab = (): Tab => ({ id: randomId(), title: "", address: "", loading: false });
 type Props = ComponentProps<typeof WebBrowserPane> & { header: HTMLElement | null; active?: boolean; sessionStore?: WebTabSessionStore; blockId?: string; registerOpener?: (open: (url: string) => void) => () => void; onHeaderPointerDown?: (event: PointerEvent<HTMLElement>) => void };
 
 /** Tabs own page lifetime; the connection environment owns shared browser data. */

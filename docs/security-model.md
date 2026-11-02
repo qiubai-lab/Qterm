@@ -1,5 +1,11 @@
 # Security Model
 
+## Web 传输边界
+
+- 远程访问默认要求 HTTPS；受信任内网可显式设置 `QTERM_ALLOW_INSECURE_HTTP=true` 允许 HTTP。此开关不关闭登录、主密码、精确 Origin 校验、页面凭证或会话所有权校验。
+- HTTP 不提供传输加密，登录密码、Cookie、文件和终端内容可被网络上的观察者读取或篡改。HTTPS Cookie 使用 Secure / `__Host-`；HTTP Cookie 保留 HttpOnly、SameSite=Strict，使用非 Secure 名称。
+- 浏览器 UUID 使用 `randomUUID` 或 `getRandomValues` 生成，禁止使用 `Math.random` 等可预测回退。HTTP 不解禁浏览器的安全上下文 API；剪贴板按钮可能不可用，应使用键盘粘贴或文件上传。
+
 ## 凭据边界
 
 - 密码和私钥口令仅用于当前认证请求，不写入 profile、JSON、日志或 telemetry。

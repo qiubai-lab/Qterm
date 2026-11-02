@@ -1,3 +1,4 @@
+import { randomId } from "../lib/randomId";
 export type SplitDirection = "horizontal" | "vertical";
 
 export interface TerminalNode {
@@ -69,7 +70,7 @@ export interface WorkspaceDocument {
 }
 
 export function createId(prefix: string): string {
-  return `${prefix}-${crypto.randomUUID()}`;
+  return `${prefix}-${randomId()}`;
 }
 
 export function createTerminalNode(profileId: string | null = null, blockId = createId("block")): TerminalNode {

@@ -49,11 +49,10 @@ class Fixture:
                    QTERM_PASSWORD_FILE=str(password_file))
         command = [str(BINARY)]
         if container:
-            # Test-only password; enable the image's unprivileged user to read it.
+            # Test-only password, mounted read-only in the development container.
             self.directory.chmod(0o755)
             password_file.chmod(0o644)
             command = ["docker", "run", "--rm", "--name", self.container_name,
-                       "--read-only", "--tmpfs", "/tmp", "--cap-drop=ALL", "--security-opt=no-new-privileges:true",
                        "-p", f"127.0.0.1:{self.port}:8080", "-e", f"QTERM_PUBLIC_ORIGIN={self.origin}",
                        "-e", "QTERM_PASSWORD_FILE=/fixture/password", "-v", f"{self.directory}:/fixture:ro", os.environ.get("QTERM_TEST_IMAGE", "qterm-server:local")]
         with (self.directory / "server.log").open("wb") as log:

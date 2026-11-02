@@ -1,3 +1,4 @@
+import { randomId } from "../../lib/randomId";
 import { dataLease } from "../dataAccess";
 import type * as Desktop from "../../lib/tauri/transfers";
 import { API, api, message } from "../http";
@@ -12,14 +13,14 @@ export const selectDownloadPath: typeof Desktop.selectDownloadPath = async name 
 export const selectDownloadDirectory: typeof Desktop.selectDownloadDirectory = async name => `${name}.tar`;
 function start(onEvent: (event: Desktop.TransferEvent) => void, operation: (signal: AbortSignal, active: Set<string>) => Promise<void>, totalBytes = 0): string {
   const lease = dataLease();
-  const id = crypto.randomUUID(); const controller = new AbortController(); const active = new Set<string>(); tasks.set(id, { controller, active });
+  const id = randomId(); const controller = new AbortController(); const active = new Set<string>(); tasks.set(id, { controller, active });
   onEvent({ type: "started", totalBytes });
   void operation(AbortSignal.any([controller.signal, lease.signal]), active).then(() => onEvent({ type: "completed" }), error => onEvent(controller.signal.aborted ? { type: "cancelled" } : { type: "failed", message: message(error) })).finally(() => tasks.delete(id));
   return id;
 }
 async function upload(sessionId: string, entry: UploadEntry, path: string, relative: boolean, signal: AbortSignal, active: Set<string>, progress: (bytes: number) => void) {
   const body = new FormData(); body.append("file", entry.file ?? new Blob([]));
-  const taskId = crypto.randomUUID(); active.add(taskId);
+  const taskId = randomId(); active.add(taskId);
   const query = new URLSearchParams({ sessionId, path, taskId });
   if (relative) query.set("relativePath", entry.path);
   if (!entry.file) query.set("directory", "true");
@@ -41,7 +42,7 @@ export const uploadSelectedEntries: typeof Desktop.uploadSelectedEntries = async
   }, totalBytes);
 };
 async function download(sessionId: string, path: string, name: string, directory: boolean, onEvent: (event: Desktop.TransferEvent) => void): Promise<string> { return start(onEvent, async (signal, active) => {
-  const taskId = crypto.randomUUID(); active.add(taskId);
+  const taskId = randomId(); active.add(taskId);
   let id: string;
   try { ({ id } = await api<{ id: string }>("/transfers/download", "POST", { sessionId, path, taskId, directory }, signal)); } finally { active.delete(taskId); }
   signal.throwIfAborted();

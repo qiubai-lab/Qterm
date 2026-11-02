@@ -1,3 +1,4 @@
+import { randomId } from "../lib/randomId";
 /** Browser-selected handles only; never interprets client OS paths as server paths. */
 export interface UploadEntry { path: string; file?: File }
 const selections = new Map<string, UploadEntry[] | Error>();
@@ -5,11 +6,11 @@ export function registerUpload(entries: UploadEntry[]): string {
   if (entries.length > 10000 || entries.reduce((sum, e) => sum + (e.file?.size ?? 0), 0) > 128 * 1024 * 1024) throw new Error("一次上传最多 10,000 项、128 MiB");
   for (const entry of entries) if (!entry.path || entry.path.length > 4096 || entry.path.split("/").some(p => !p || p === "." || p === ".." || /[\\:\0]/.test(p))) throw new Error("上传目录包含无效路径");
   if (selections.size >= 32) selections.delete(selections.keys().next().value!);
-  const id = crypto.randomUUID(); selections.set(id, entries); return id;
+  const id = randomId(); selections.set(id, entries); return id;
 }
 export function registerUploadError(reason: unknown): string {
   if (selections.size >= 32) selections.delete(selections.keys().next().value!);
-  const id = crypto.randomUUID();
+  const id = randomId();
   selections.set(id, reason instanceof Error ? reason : new Error("读取上传文件失败"));
   return id;
 }

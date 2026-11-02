@@ -142,7 +142,7 @@ GitHub 要求 workflow 文件存在于默认分支，才会提供网页的 **Run
 Web 运行时 CI 仅针对 **Linux AMD64**，只有两个 job：
 
 1. **Linux quality and runtime acceptance**：源码尺寸检查、lint、共享工作台测试、`test:web` 和 `build:web`，以及 Rust fmt、test、Clippy 和真实 HTTP/WebSocket/SSH 验收。类型检查由 `build:web` 执行一次，不生成桌面前端 `dist/`。本地与 SSH 的 Git 实时观察、凭证状态及访问记录也纳入验收。前端构建产物保留 7 天供排查。
-2. **Container (linux/amd64)**：仅在 `main` 的 push 或手动运行中执行。等待质量检查通过，构建并确认镜像为 `linux/amd64`，运行 PTY、会话保留、接管、文件/Git Block、剪贴板与 Compose 冒烟测试。Compose 验收包含健康检查、静态 JS、登录、非 root/只读根文件系统、仅回环端口及重建后数据持久化。push 或手动触发且勾选 `publish_image` 时，在同一个 job 中将已测试镜像直接推送 GHCR，并输出标签和 digest。
+2. **Container (linux/amd64)**：仅在 `main` 的 push 或手动运行中执行。等待质量检查通过，构建并确认镜像为 `linux/amd64`，运行 PTY、会话保留、接管、文件/Git Block、剪贴板与 Compose 冒烟测试。Compose 验收包含健康检查、静态 JS、登录、精简 Ubuntu/root 环境、apt 安装、UID 切换、默认回环端口及重建后数据持久化。push 或手动触发且勾选 `publish_image` 时，在同一个 job 中将已测试镜像直接推送 GHCR，并输出标签和 digest。
 
 不构建 Windows/macOS 原生 Web 服务，也不构建 ARM64 镜像；不再上传单架构临时标签、传递 digest artifacts 或执行多架构 manifest 汇总。推送使用验收过的本地镜像，不在验收后重新构建。开发分支不会覆盖 `latest`。
 
@@ -155,5 +155,5 @@ Web 运行时 CI 仅针对 **Linux AMD64**，只有两个 job：
 - `dev-webruntime` 的普通推送只匹配 `server.yml`；桌面 `ci.yml` 的 push 范围为 `main/dev`，站点 `site.yml` 的 push 范围为 `main`，桌面安装包仅由 `v*` 标签或手动触发。
 - 提交到 `main` 的 PR 会同时运行 Web、桌面和站点检查，其中共享前端测试有重叠；这是不同产品入口的独立闸门。本次仅收敛 Web 运行时范围，桌面和站点流程继续负责各自产物。
 - `pnpm test` 与 `pnpm test:web` 使用不同服务适配器：前者验证共享组件的桌面适配，后者验证 Web 适配，不能仅因测试文件重叠就删除其中一项。
-- Linux 原生验收验证服务行为和真实 SSH；AMD64 容器验收额外验证 release 二进制、镜像依赖、非 root/只读环境及数据卷，因此保留这两层验收。
+- Linux 原生验收验证服务行为和真实 SSH；AMD64 容器验收额外验证 release 二进制、Ubuntu 运行依赖、root/跨 UID 使用及持久化卷，因此保留这两层验收。
 - Dockerfile 为独立源码构建保留了前端构建步骤，因此镜像 job 仍会再构建一次 Web 资源。以后可通过消费同一次 CI 的前端 artifact 减少此部分重复；当前上传的 artifact 用于排查，不是镜像构建输入。

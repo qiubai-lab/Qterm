@@ -1,3 +1,4 @@
+import { randomId } from "../lib/randomId";
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { clearWebData, type WebDataSelection, closeWeb, listenWebFocus, listenWebPages, openWeb, webAction, type WebLoadState, type WebMetrics } from "../lib/tauri/web";
 import { normalizeWebAddress, webSurfaceVisible } from "./webModel";
@@ -31,7 +32,7 @@ export function useWebBrowser(surface: RefObject<HTMLDivElement | null>, session
 
   useEffect(() => {
     if (!request || (profileId !== null && !sessionId)) { setReady(false); setLoading(false); return; }
-    const id = crypto.randomUUID();
+    const id = randomId();
     let disposed = false;
     let unregisterSurface: (() => void) | undefined;
     let unlisten: (() => void) | undefined;

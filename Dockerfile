@@ -8,7 +8,6 @@ COPY src ./src
 COPY web ./web
 COPY scripts/build-server-screen.mjs ./scripts/build-server-screen.mjs
 RUN pnpm build:web
-RUN mkdir -p /node-libs && cp /usr/lib/*/libstdc++.so.6 /node-libs/
 
 FROM rust:1.97.1-bookworm AS backend
 WORKDIR /build
@@ -20,22 +19,24 @@ RUN --mount=type=secret,id=cargo_config,target=/usr/local/cargo/config.toml \
     cargo build --manifest-path crates/Cargo.toml --release --locked -p qterm-server \
     && cp /build/crates/target/release/qterm-server /build/qterm-server
 
-FROM debian:bookworm-slim AS runtime
-RUN apt-get update && apt-get install --yes --no-install-recommends ca-certificates curl tini git openssh-client \
-    && rm -rf /var/lib/apt/lists/* \
-    && groupadd --gid 10001 qterm && useradd --uid 10001 --gid 10001 --no-create-home qterm \
-    && mkdir -p /data /app && chown 10001:10001 /data
-RUN usermod --home /data/home --shell /bin/bash qterm \
-    && mkdir -p /data/home && chown 10001:10001 /data/home
+FROM ubuntu:24.04 AS runtime
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install --yes --no-install-recommends \
+    bash ca-certificates curl tini git openssh-client libstdc++6 \
+    && rm -rf /var/lib/apt/lists/*
+# Preserve the existing persistent HOME; usermod rejects root while PID 1 uses it.
+RUN groupadd --gid 10001 qterm \
+    && useradd --uid 10001 --gid 10001 --home-dir /data/users/qterm --shell /bin/bash --no-create-home qterm \
+    && sed -i 's#^root:[^:]*:0:0:[^:]*:[^:]*:[^:]*$#root:x:0:0:root:/data/home:/bin/bash#' /etc/passwd \
+    && mkdir -p /data/home /data/users /app /opt/qterm/bin \
+    && install -d -o qterm -g qterm /data/users/qterm
 COPY --from=backend /build/qterm-server /usr/local/bin/qterm-server
 COPY --from=frontend /build/dist-web /app/public
 COPY --from=frontend /build/dist-server /app/runtime
-COPY --from=frontend /usr/local/bin/node /usr/local/bin/node
-COPY --from=frontend /node-libs/ /usr/local/lib/
-ENV LD_LIBRARY_PATH=/usr/local/lib QTERM_SCREEN_WORKER=/app/runtime/screen.mjs
+COPY --from=frontend /usr/local/bin/node /opt/qterm/bin/node
+ENV LANG=C.UTF-8 QTERM_NODE=/opt/qterm/bin/node QTERM_SCREEN_WORKER=/app/runtime/screen.mjs
 COPY --chmod=755 scripts/server-container-entrypoint.sh /usr/local/bin/qterm-server-entrypoint
 ENV HOME=/data/home QTERM_LISTEN=0.0.0.0:8080 QTERM_DATA_DIR=/data QTERM_ASSETS_DIR=/app/public
-USER 10001:10001
+USER root
 EXPOSE 8080
 VOLUME ["/data"]
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s CMD curl --fail --silent http://127.0.0.1:8080/healthz || exit 1

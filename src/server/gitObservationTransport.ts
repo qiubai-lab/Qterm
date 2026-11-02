@@ -1,3 +1,4 @@
+import { randomId } from "../lib/randomId";
 import type { GitObservationTarget } from "../lib/contracts/gitObservation";
 import type { GitSnapshot } from "../lib/tauri/git";
 import { accessProof } from "./accessIdentity";
@@ -106,7 +107,7 @@ export function createGitObservationTransport() {
       const id = key(target);
       let entry = entries.get(id);
       if (!entry) {
-        entry = { id: crypto.randomUUID(), target, revision: 0, listeners: new Set() };
+        entry = { id: randomId(), target, revision: 0, listeners: new Set() };
         entries.set(id, entry);
         send({ type: "subscribe", id: entry.id, target });
       }

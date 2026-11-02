@@ -231,6 +231,8 @@
 - `src/server/services/vaultStatusObserver.ts` / `vaultStatus.ts`: `/access` vault event baseline, monotonic revision filtering, reconnect reconciliation and one-shot HTTP fallback; initial state never becomes a lock event. `crates/qterm-server/src/vault_events.rs` observes lifecycle transitions independently of access revocation.
 - `src/git/useGitSnapshotRefresh.ts`: visible-pane subscription lifecycle and deferred invalidation reads; desktop retains its focus/15-second refresh policy. `src/server/gitObservationTransport.ts` multiplexes owner-authenticated Git subscriptions, shares HTTP cache reads, and stops/reconnects with data access.
 - `crates/qterm-server/src/git_events_socket.rs` / `git_observation.rs`: authenticated Git invalidations and owner-scoped cached snapshots. `git_observation_worker.rs` shares one sampler per subscribed target; `git_local_watch.rs` watches local worktree/Git metadata, including linked worktrees. Last unsubscribe releases the worker and native watcher.
+- `src/lib/randomId.ts`: UUID v4 using native randomUUID or cryptographic getRandomValues for HTTP; shared by page identities, workspace IDs and browser operations.
+- `crates/qterm-server/src/config.rs`: exact public-origin validation and explicit remote HTTP opt-in; authentication still enforces the configured origin.
 - `vite.web.config.ts`, `web/index.html`: explicit real-browser build, independent of desktop and demo.
 
 - `src/workspace/WorkspaceChrome.tsx`: shared workspace header and desktop window gestures; browser logout occupies the native control area.
@@ -238,6 +240,7 @@
 - `crates/qterm-server/src/local_files.rs` / `settings.rs` / `credential_management.rs`: service-account files, persistent settings and shared credential workflows exposed through narrow authenticated routes.
 - `crates/qterm-core/src/application/local_file_listing.rs`: shared desktop/server local directory listing.
 - `scripts/test-server-local.py`: native and container local PTY/file/lifecycle acceptance; Web runtime CI targets Linux AMD64 only, with native and container acceptance.
+- `Dockerfile`、`compose.yaml`、`scripts/server-container-entrypoint.sh`：精简 Ubuntu/root 运行镜像、持久化 HOME；`scripts/test-server-compose.py` / `server_container_runtime_checks.py` 验证精简运行依赖、apt、UID 切换和重建持久化。
 - `scripts/test-server-fixtures.py`: acceptance-client regressions for ConPTY cursor output, split WebSocket frames, output acknowledgements, and bounded timeout/error diagnostics; runs in the Linux Web runtime quality job.
 
 ### Web 会话保留

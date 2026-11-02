@@ -13,13 +13,11 @@ impl Config {
     pub fn from_env() -> Result<Self, String> {
         let origin =
             std::env::var("QTERM_PUBLIC_ORIGIN").map_err(|_| "QTERM_PUBLIC_ORIGIN is required")?;
-        let url = url::Url::parse(&origin).map_err(|_| "Invalid QTERM_PUBLIC_ORIGIN")?;
-        let loopback = matches!(url.host_str(), Some("localhost" | "127.0.0.1" | "[::1]"));
-        if (!matches!(url.scheme(), "https") && !(url.scheme() == "http" && loopback))
-            || url.origin().ascii_serialization() != origin
-        {
-            return Err("Public origin must be an HTTPS origin (HTTP allowed only for loopback development)".into());
-        }
+        let allow_http = std::env::var("QTERM_ALLOW_INSECURE_HTTP")
+            .unwrap_or_else(|_| "false".into())
+            .parse::<bool>()
+            .map_err(|_| "QTERM_ALLOW_INSECURE_HTTP must be true or false")?;
+        let url = public_origin(&origin, allow_http)?;
         let path = |name| {
             std::env::var_os(name)
                 .filter(|value| !value.is_empty())
@@ -61,3 +59,18 @@ impl Config {
         })
     }
 }
+
+fn public_origin(origin: &str, allow_http: bool) -> Result<url::Url, String> {
+    let url = url::Url::parse(origin).map_err(|_| "Invalid QTERM_PUBLIC_ORIGIN")?;
+    let loopback = matches!(url.host_str(), Some("localhost" | "127.0.0.1" | "[::1]"));
+    if !(url.scheme() == "https" || url.scheme() == "http" && (loopback || allow_http))
+        || url.origin().ascii_serialization() != origin
+    {
+        return Err("Public origin must be an HTTPS origin; remote HTTP requires QTERM_ALLOW_INSECURE_HTTP=true".into());
+    }
+    Ok(url)
+}
+
+#[cfg(test)]
+#[path = "config_tests.rs"]
+mod tests;
