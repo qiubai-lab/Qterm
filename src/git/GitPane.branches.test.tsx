@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { describe, expect, it, vi } from "vitest";
 
 import type { GitSnapshot } from "../lib/tauri/git";
+import { ThemedTitleTooltipProvider } from "../components/ThemedTitleTooltipProvider";
 import { api, deferred, setupGitPaneTests, snapshot } from "./GitPane.testHarness";
 import { GitPane } from "./GitPane";
 
@@ -228,17 +229,19 @@ describe("GitPane branches and repository actions", () => {
       changes: [],
       remotes: [],
     });
-    render(<GitPane blockId="git-no-remote" target={{ type: "local", path: "D:/work/project" }} visible onTargetChange={vi.fn()}/>);
+    render(<ThemedTitleTooltipProvider><GitPane blockId="git-no-remote" target={{ type: "local", path: "D:/work/project" }} visible onTargetChange={vi.fn()}/></ThemedTitleTooltipProvider>);
     await screen.findByText("project");
 
     const aggregate = screen.getByRole("button", { name: "未配置远端" });
     expect(aggregate).toHaveAttribute("data-remote-configuration-required", "true");
     expect(aggregate).toHaveAttribute("aria-disabled", "true");
     expect(aggregate).not.toBeDisabled();
-    fireEvent.pointerEnter(aggregate);
+    fireEvent.pointerOver(aggregate);
     expect(screen.getByRole("tooltip")).toHaveTextContent("请先配置远端仓库地址");
-    fireEvent.pointerLeave(aggregate);
+    expect(aggregate).toHaveAccessibleDescription("请先配置远端仓库地址，再进行拉取、推送或同步。");
+    fireEvent.pointerOut(aggregate);
     expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+    expect(aggregate).not.toHaveAttribute("aria-describedby");
 
     fireEvent.click(screen.getByRole("button", { name: "Git 仓库操作" }));
     const menu = screen.getByRole("menu", { name: "存储库操作" });
@@ -247,9 +250,15 @@ describe("GitPane branches and repository actions", () => {
       expect(item).toHaveAttribute("data-remote-configuration-required", "true");
       expect(item).toHaveAttribute("aria-disabled", "true");
       expect(item).not.toBeDisabled();
+      fireEvent.pointerOver(item);
+      expect(screen.getByRole("tooltip")).toHaveTextContent("请先配置远端仓库地址，再进行拉取、推送或同步。");
+      expect(item).toHaveAccessibleDescription("请先配置远端仓库地址，再进行拉取、推送或同步。");
+      fireEvent.pointerOut(item);
+      expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
     }
     fireEvent.focus(unavailableItems[1]);
     expect(screen.getByRole("tooltip")).toHaveTextContent("请先配置远端仓库地址，再进行拉取、推送或同步。");
+    expect(unavailableItems[1]).toHaveAccessibleDescription("请先配置远端仓库地址，再进行拉取、推送或同步。");
     fireEvent.click(unavailableItems[1]);
     expect(screen.queryByRole("dialog", { name: "发布分支" })).not.toBeInTheDocument();
   });

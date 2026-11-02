@@ -12,6 +12,10 @@ export function GitRemoteConfigurationHint({ active, children }: { active: boole
 
   useLayoutEffect(() => {
     if (!showTooltip || !anchorRef.current || !tooltipRef.current) return;
+    const anchor = anchorRef.current.querySelector<HTMLElement>("button");
+    if (!anchor) return;
+    const describedBy = anchor.getAttribute("aria-describedby");
+    anchor.setAttribute("aria-describedby", [describedBy, tooltipId].filter(Boolean).join(" "));
     const updatePosition = () => {
       const anchor = anchorRef.current?.querySelector<HTMLElement>("button");
       const tooltip = tooltipRef.current;
@@ -30,10 +34,12 @@ export function GitRemoteConfigurationHint({ active, children }: { active: boole
     window.addEventListener("resize", updatePosition);
     window.addEventListener("scroll", updatePosition, true);
     return () => {
+      if (describedBy === null) anchor.removeAttribute("aria-describedby");
+      else anchor.setAttribute("aria-describedby", describedBy);
       window.removeEventListener("resize", updatePosition);
       window.removeEventListener("scroll", updatePosition, true);
     };
-  }, [showTooltip]);
+  }, [showTooltip, tooltipId]);
 
   return <><span
     ref={anchorRef}

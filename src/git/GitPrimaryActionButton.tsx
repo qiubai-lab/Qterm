@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 
 import { Icon, type IconName } from "../components/Icon";
 import type { GitPrimaryAction, GitPrimaryAlternativeAction, GitPrimaryActionKind } from "./gitPrimaryAction";
-import { GitRemoteConfigurationHint, gitRemoteConfigurationHint } from "./GitRemoteConfigurationHint";
+import { GitRemoteConfigurationHint } from "./GitRemoteConfigurationHint";
 
 interface MenuPosition {
   left: number;
@@ -85,7 +85,7 @@ export function GitPrimaryActionButton({ action, onAction }: {
 
   return <>
     <div ref={splitRef} className="git-primary-action-split" data-has-alternative={Boolean(alternative) || undefined}>
-      <GitRemoteConfigurationHint active={remoteConfigurationRequired}><button type="button" className="git-primary-action" data-updating={action.updating || undefined} data-remote-configuration-required={remoteConfigurationRequired || undefined} aria-busy={action.updating || undefined} aria-disabled={action.disabled || undefined} disabled={action.disabled && !remoteConfigurationRequired} title={remoteConfigurationRequired ? gitRemoteConfigurationHint : action.title} onClick={() => onAction(action)}>
+      <GitRemoteConfigurationHint active={remoteConfigurationRequired}><button type="button" className="git-primary-action" data-updating={action.updating || undefined} data-remote-configuration-required={remoteConfigurationRequired || undefined} aria-busy={action.updating || undefined} aria-disabled={action.disabled || undefined} disabled={action.disabled && !remoteConfigurationRequired} title={remoteConfigurationRequired ? undefined : action.title} onClick={() => onAction(action)}>
         <Icon name={actionIcon(action.kind, action.updating)} size={12}/><span>{action.label}</span>
       </button></GitRemoteConfigurationHint>
       {alternative && <button
