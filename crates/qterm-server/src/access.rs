@@ -22,6 +22,7 @@ pub struct Proof {
     pub client_id: String,
 }
 struct Login {
+    terminal_locked: bool,
     cookie: String,
     key: String,
     client: String,
@@ -159,6 +160,7 @@ impl Access {
         let key = random_token()?;
         let owner = random_token()?;
         inner.login = Some(Login {
+            terminal_locked: false,
             cookie: cookie.clone(),
             key: key.clone(),
             client: client.into(),
@@ -238,6 +240,26 @@ impl Access {
         inner.login = None;
         self.changed(&mut inner);
     }
+    pub fn terminal_locked(&self, owner: &str) -> Result<bool> {
+        let inner = self.inner.lock().unwrap();
+        let login = inner
+            .login
+            .as_ref()
+            .filter(|s| s.owner == owner && s.expires > Instant::now())
+            .ok_or_else(replaced)?;
+        Ok(login.terminal_locked)
+    }
+    pub fn set_terminal_locked(&self, owner: &str, locked: bool) -> Result<()> {
+        let mut inner = self.inner.lock().unwrap();
+        let login = inner
+            .login
+            .as_mut()
+            .filter(|s| s.owner == owner && s.expires > Instant::now())
+            .ok_or_else(replaced)?;
+        login.terminal_locked = locked;
+        self.changed(&mut inner);
+        Ok(())
+    }
     pub fn attach(&self, owner: &str) -> Result<String> {
         let mut inner = self.inner.lock().unwrap();
         let login = inner
@@ -280,6 +302,7 @@ impl Access {
         let token = random_token()?;
         let mut inner = self.inner.lock().unwrap();
         inner.login = Some(Login {
+            terminal_locked: false,
             cookie: token.clone(),
             key: token.clone(),
             client: "test-client".into(),

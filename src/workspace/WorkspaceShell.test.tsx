@@ -502,6 +502,50 @@ describe("WorkspaceShell utility rail", () => {
     expect(document.querySelector(".workspace-stage-content")).not.toHaveAttribute("inert");
   });
 
+  it("restores a Web terminal lock before exposing the workbench and unlocks through its backend", async () => {
+    let locked = false;
+    const backend = {
+      read: vi.fn(async () => ({ locked })),
+      lock: vi.fn(async () => { locked = true; return { locked }; }),
+      unlock: vi.fn(async () => { locked = false; return { locked }; }),
+    };
+    const view = render(<WorkspaceShell terminalLockBackend={backend}/>);
+    expect(document.querySelector(".workspace-stage-content")).toHaveAttribute("data-lock-covered", "true");
+    await waitFor(() => expect(document.querySelector(".workspace-stage-content")).not.toHaveAttribute("inert"));
+    fireEvent.click(screen.getByRole("button", { name: "锁定终端" }));
+    fireEvent.click(screen.getByRole("button", { name: "锁定终端和凭证" }));
+    await screen.findByRole("dialog", { name: "终端已锁定" });
+    expect(backend.lock).toHaveBeenCalledOnce();
+    expect(mocks.lockVault).not.toHaveBeenCalled();
+    view.unmount();
+    render(<WorkspaceShell terminalLockBackend={backend}/>);
+    expect(document.querySelector(".workspace-stage-content")).toHaveAttribute("data-lock-covered", "true");
+    await screen.findByRole("dialog", { name: "终端已锁定" });
+    expect(document.querySelector(".workspace-stage-content")).toHaveAttribute("inert");
+    backend.unlock.mockRejectedValueOnce(new Error("密码不正确"));
+    fireEvent.change(screen.getByLabelText("主密码"), { target: { value: "wrong-password" } });
+    fireEvent.click(screen.getByRole("button", { name: "解锁终端和凭证" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("密码不正确");
+    expect(document.querySelector(".workspace-stage-content")).toHaveAttribute("data-lock-covered", "true");
+    fireEvent.change(screen.getByLabelText("主密码"), { target: { value: "correct-password" } });
+    fireEvent.click(screen.getByRole("button", { name: "解锁终端和凭证" }));
+    await waitFor(() => expect(document.querySelector(".workspace-stage-content")).not.toHaveAttribute("inert"));
+    expect(document.querySelector(".workspace-stage-content")).not.toHaveAttribute("data-lock-covered");
+    expect(backend.unlock).toHaveBeenLastCalledWith("correct-password");
+    expect(mocks.unlockVault).not.toHaveBeenCalled();
+  });
+
+  it("keeps the Web workbench covered when its lock state cannot be loaded", async () => {
+    const backend = { read: vi.fn().mockRejectedValueOnce(new Error("offline")).mockResolvedValue({ locked: true }), lock: vi.fn(), unlock: vi.fn() };
+    render(<WorkspaceShell terminalLockBackend={backend}/>);
+    expect(await screen.findByRole("alert")).toHaveTextContent("无法确认终端锁定状态");
+    expect(document.querySelector(".workspace-stage-content")).toHaveAttribute("data-lock-covered", "true");
+    expect(document.querySelector(".workspace-stage-content")).toHaveAttribute("inert");
+    fireEvent.click(screen.getByRole("button", { name: "重试" }));
+    await screen.findByRole("dialog", { name: "终端已锁定" });
+    expect(document.querySelector(".workspace-stage-content")).toHaveAttribute("data-lock-covered", "true");
+  });
+
   it("opens local files and terminal blocks from the active block", async () => {
     const user = userEvent.setup();
     render(<WorkspaceShell/>);

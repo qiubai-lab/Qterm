@@ -161,12 +161,16 @@ pub async fn attach(
     owner: String,
     session: Arc<RetainedSession>,
 ) {
+    let Ok(permit) = crate::data_access::Permit::new(&state, &owner) else {
+        return;
+    };
     let prepared = {
         let session = session.clone();
         tokio::task::spawn_blocking(move || session.attach()).await
     };
     let Ok(Ok((client, ready, snapshot, mut output))) = prepared else {
-        let _ = send(
+        let _ = send_data(
+            &permit,
             &mut socket,
             Message::Text(
                 json!({"type":"error","error":{"message":"无法恢复终端画面，后台任务仍在运行"}})
@@ -178,9 +182,13 @@ pub async fn attach(
         return;
     };
     let id = session.id();
-    if send(&mut socket, Message::Text(ready.to_string().into()))
-        .await
-        .is_err()
+    if send_data(
+        &permit,
+        &mut socket,
+        Message::Text(ready.to_string().into()),
+    )
+    .await
+    .is_err()
     {
         session.detach(client);
         return;
@@ -193,12 +201,12 @@ pub async fn attach(
     let mut heartbeat = tokio::time::interval(Duration::from_secs(1));
     let mut access_changes = state.auth.access.subscribe();
     loop {
-        if !state.auth.valid(&owner) || !session.writable(client) {
+        if permit.check().is_err() || !session.writable(client) {
             break;
         }
         if !snapshot_done && outstanding < 256 * 1024 {
             if let Some(chunk) = initial.next() {
-                if send(&mut socket, Message::Binary(chunk.to_vec().into()))
+                if send_data(&permit, &mut socket, Message::Binary(chunk.to_vec().into()))
                     .await
                     .is_err()
                 {
@@ -208,7 +216,8 @@ pub async fn attach(
                 continue;
             }
             snapshot_done = true;
-            if send(
+            if send_data(
+                &permit,
                 &mut socket,
                 Message::Text(json!({"type":"restored"}).to_string().into()),
             )
@@ -218,7 +227,8 @@ pub async fn attach(
                 break;
             }
             // Restore current connection/host-key state after its screen.
-            let _ = send(
+            let _ = send_data(
+                &permit,
                 &mut socket,
                 Message::Text(
                     json!({"type":"event","event":{"type":"stateChanged","state":ready["status"]}})
@@ -232,7 +242,8 @@ pub async fn attach(
                 .flatten()
                 .filter(|v| !v.is_null())
             {
-                let _ = send(
+                let _ = send_data(
+                    &permit,
                     &mut socket,
                     Message::Text(json!({"type":"event","event":event}).to_string().into()),
                 )
@@ -243,20 +254,21 @@ pub async fn attach(
             _=access_changes.changed()=>{},
             _=heartbeat.tick()=>{
                 if !state.auth.valid(&owner)||last_seen.elapsed()>Duration::from_secs(30)||state.authorize(&owner,&id).is_err(){break;}
-                if send(&mut socket,Message::Ping(Vec::new().into())).await.is_err(){break;}
+                if send_data(&permit, &mut socket,Message::Ping(Vec::new().into())).await.is_err(){break;}
             }
             next=output.recv(),if snapshot_done && outstanding<256*1024=>{
                 match next{
-                    Ok(message)=>{if let Message::Binary(bytes)=&message{outstanding+=bytes.len();}
-                        if send(&mut socket,message).await.is_err(){break;}}
+                    Ok(message)=>{if permit.check().is_err(){break;}
+                        if let Message::Binary(bytes)=&message{outstanding+=bytes.len();}
+                        if send_data(&permit, &mut socket,message).await.is_err(){break;}}
                     Err(broadcast::error::RecvError::Lagged(_))=>{
-                        let _=send(&mut socket,Message::Text(json!({"type":"resync"}).to_string().into())).await;break;
+                        let _=send_data(&permit, &mut socket,Message::Text(json!({"type":"resync"}).to_string().into())).await;break;
                     }
                     Err(_)=>break,
                 }
             }
             input=socket.recv()=>{
-                if !state.auth.valid(&owner){break;}
+                if permit.check().is_err(){break;}
                 last_seen=Instant::now();
                 let result=match input{
                     Some(Ok(Message::Binary(bytes))) if !bytes.is_empty() && session.writable(client)=>session.control.write(&id,bytes.to_vec()).await,
@@ -268,7 +280,7 @@ pub async fn attach(
                         Ok(Control::RejectHostKey) if session.writable(client)=>session.control.host_key(&id,false),
                         _=>Err(ApiError::invalid()),
                     },
-                    Some(Ok(Message::Pong(_)))=>Ok(()),Some(Ok(Message::Ping(bytes)))=>send(&mut socket,Message::Pong(bytes)).await,
+                    Some(Ok(Message::Pong(_)))=>Ok(()),Some(Ok(Message::Ping(bytes)))=>send_data(&permit, &mut socket,Message::Pong(bytes)).await,
                     _=>break,
                 };
                 if result.is_err(){break;}
@@ -277,4 +289,12 @@ pub async fn attach(
     }
     session.detach(client);
     crate::socket_io::finish(&mut socket).await;
+}
+
+async fn send_data(
+    permit: &crate::data_access::Permit,
+    socket: &mut WebSocket,
+    message: Message,
+) -> Result<()> {
+    permit.run(send(socket, message)).await
 }

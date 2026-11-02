@@ -1,15 +1,15 @@
+import { dataLease, dataPaused, subscribeDataAccess } from "../dataAccess";
 import type * as Desktop from "../../lib/tauri/credentials";
 import { api, request } from "../http";
 import { saveBrowserResponse, selectBrowserFile } from "../browserFiles";
+import { createVaultStatusObserver } from "./vaultStatusObserver";
 export type * from "../../lib/tauri/credentials";
 let recoveryId: string | undefined;
 let resetId: string | undefined;
-const listeners = new Set<(value: Desktop.VaultStatusChanged) => void>();
-let poll: ReturnType<typeof setInterval> | undefined;
 export const getVaultStatus: typeof Desktop.getVaultStatus = () => api("/vault");
-async function notify() { const value=await getVaultStatus(); for (const listener of listeners) listener({...value,reason:"manual"}); }
-async function mutate<T>(path:string,method:string,body?:unknown):Promise<T> {const value=await api<T>(path,method,body);await notify();return value;}
-export const onVaultStatusChanged: typeof Desktop.onVaultStatusChanged = async listener => { listeners.add(listener); poll ??= setInterval(()=>void notify().catch(()=>undefined),2000); return () => {listeners.delete(listener);if(!listeners.size){clearInterval(poll);poll=undefined;}}; };
+const vaultStatus = createVaultStatusObserver(getVaultStatus, {paused: dataPaused, subscribe: subscribeDataAccess});
+async function mutate<T>(path:string,method:string,body?:unknown):Promise<T> {const value=await api<T>(path,method,body);await vaultStatus.refreshAfterMutation();return value;}
+export const onVaultStatusChanged: typeof Desktop.onVaultStatusChanged = async listener => vaultStatus.subscribe(listener);
 export async function downloadVaultRecovery():Promise<void> {
   const {id}=await api<{id:string}>("/vault/recovery","POST"); recoveryId=id;
   await saveBrowserResponse(await request(`/vault/recovery/${id}`),"qterm-recovery.key");
@@ -39,7 +39,8 @@ export const commitPrivateKeyCredential: typeof Desktop.commitPrivateKeyCredenti
 export const cancelPrivateKeyCredential: typeof Desktop.cancelPrivateKeyCredential = id => api(`/credentials/drafts/${encodeURIComponent(id)}`,"DELETE");
 export const prepareMasterPasswordReset: typeof Desktop.prepareMasterPasswordReset = async () => {
   const file=await selectBrowserFile();if(!file)return {completed:false};if(file.size>1024*1024)throw new Error("恢复文件过大");
-  const response=await request("/vault/reset/prepare",{method:"POST",body:file});resetId=(await response.json() as {id:string}).id;return {completed:true};
+  const lease=dataLease();
+  const response=await request("/vault/reset/prepare",{method:"POST",body:file});const value=await response.json() as {id:string};lease.check();resetId=value.id;return {completed:true};
 };
 export async function downloadResetRecovery():Promise<void>{if(!resetId)throw new Error("请重新选择恢复文件");await saveBrowserResponse(await request(`/vault/recovery/${resetId}`),"qterm-recovery.key");}
 export const resetMasterPassword: typeof Desktop.resetMasterPassword = async newPassword => {if(!resetId)throw new Error("请重新选择恢复文件");const result=await mutate<Desktop.FileOperationResult>("/vault/reset","POST",{masterPassword:newPassword,recoveryId:resetId,savedRecovery:true});resetId=undefined;return result;};

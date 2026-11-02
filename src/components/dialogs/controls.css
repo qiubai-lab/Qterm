@@ -31,3 +31,28 @@
 .segmented{background:var(--surface)}
 .segmented button.selected{color:var(--text-strong);background:var(--selection-surface);box-shadow:inset 0 -2px var(--selection-marker)}
 progress,progress::-webkit-progress-bar{background:var(--subtle)}
+
+.browser-recovery-confirmation { display:grid; gap:8px; }
+.browser-recovery-confirmation > button { justify-self:start; }
+.browser-recovery-acknowledgement {
+  display:flex;
+  min-height:22px;
+  gap:7px;
+  align-items:flex-start;
+  margin:0;
+  color:var(--muted);
+  font-size:10px;
+  line-height:1.5;
+  letter-spacing:normal;
+  text-transform:none;
+  cursor:pointer;
+}
+.browser-recovery-acknowledgement > input[type="checkbox"] {
+  flex:none;
+  width:14px;
+  height:14px;
+  margin:1px 0 0;
+  padding:0;
+  accent-color:var(--selection-marker);
+  box-shadow:none;
+}

@@ -226,6 +226,7 @@
 - `crates/qterm-server`: HTTP/WebSocket composition, login/session ownership, process configuration, data lock and bounded transfer staging.
 - `crates/qterm-server/src/login_password.rs`: bounded deployment password-file loading, plaintext-to-Argon2id conversion and supplied hash validation; shared by startup configuration and the optional hash CLI, without rewriting source secrets.
 - `src/server`: authentication entry and browser service adapters; mounts the same WorkspaceShell, dialogs, xterm and Files components as desktop. `server.css` only styles login.
+- `src/server/services/vaultStatusObserver.ts`: shared vault polling lifecycle, initial status baseline, change-only notifications and stale-response protection; credential mutations retain immediate notifications through `services/credentials.ts`.
 - `vite.web.config.ts`, `web/index.html`: explicit real-browser build, independent of desktop and demo.
 
 - `src/workspace/WorkspaceChrome.tsx`: shared workspace header and desktop window gestures; browser logout occupies the native control area.
@@ -266,3 +267,11 @@
 - `crates/qterm-server/src/terminal_clipboard.rs`：验证终端身份，受限 multipart 临时文件落地，本地私有运行缓存与核心 RemoteTerminalStagingStore 对接；客户端文件名不作为服务端路径。
 - `transfer_lifecycle.rs` 的任务记录持有所有者绑定的目标字节进度；进度查询不隐式注册任务。
 - `scripts/test-server-clipboard.py`：本地/容器与真实 SSH 的文件粘贴、路径内容、进度、取消及会话隔离验收。
+
+### Web 终端锁恢复
+
+- `crates/qterm-server/src/access.rs`：登录会话内存中的终端锁标记，跨文档 resume 保留，新登录/接管/撤销重置；不进入 Workspace 文件。`terminal_lock.rs` 提供受当前 owner 保护的读/锁/解锁端点，与凭证库使用同一 vault gate；`vault.rs` 共享主密码验证路径。
+- `src/workspace/useTerminalLock.ts`：桌面挂载期锁与可注入 Web 后端的恢复/操作状态，未知状态保持遮挡，丢失响应后重新确认；`useTerminalAutoLock.ts` 保留页面活动和空闲计时。`src/server/terminalLock.ts` 映射 HTTP、验证响应并切换浏览器数据准入；`ServerWorkbench` 在首次挂载工作区前确认锁状态，后续锁定保留草稿，组合锁屏与共享 `workbenchActivity`。桌面 `WorkspaceShell` 保留原挂载期锁行为。
+
+- `src/server/dataAccess.ts`：Web 业务请求可撤销信号、暂停订阅与控制请求白名单；`http.ts`、`uploadRequest.ts` 和 `sessionTransport.ts` 分别约束 HTTP、XHR 和数据 WebSocket，`accessPresence.ts` 保留访问存活及锁变更通知。`src/files/useFileLocationLoad.ts` 在工作台恢复后同步当前目录，不卸载编辑草稿。
+- `crates/qterm-server/src/data_access.rs`：服务端工作台锁的业务准入与流撤销；`auth.rs` 完成身份校验后委托，`retained_socket.rs` 每个数据视图使用独立 permit，`transfer_lifecycle.rs` 防止旧传输跨锁继续。后台 PTY/SSH/SFTP/Network 生命周期不由该模块终止。

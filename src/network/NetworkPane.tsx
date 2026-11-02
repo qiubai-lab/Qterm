@@ -1,3 +1,4 @@
+import { useWorkbenchActive } from "../workspace/workbenchActivity";
 import { isServer } from "../lib/runtime/environment";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
 import { createPortal } from "react-dom";
@@ -26,6 +27,7 @@ type ContextMenuState = {
 };
 
 export function NetworkPane({ profileId, profileHost = "", runtimeStates = {}, lockedRuleIds = new Set(), onStart, onStop }: { profileId: string | null; profileHost?: string; runtimeStates?: Record<string, NetworkRuleRuntimeState>; lockedRuleIds?: ReadonlySet<string>; onStart?: (rule: NetworkRule) => void; onStop?: (rule: NetworkRule) => void }) {
+  const active = useWorkbenchActive();
   const [rules, setRules] = useState<NetworkRule[]>([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
@@ -39,13 +41,14 @@ export function NetworkPane({ profileId, profileHost = "", runtimeStates = {}, l
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
 
   const refresh = useCallback(async () => {
+    if (!active) return;
     if (!profileId) { setRules([]); return; }
     if (!hasWorkspaceRuntime()) { setRules([]); return; }
     setLoading(true); setMessage("");
     try { setRules(await listNetworkRules(profileId)); }
     catch (error) { setMessage(errorMessage(error)); }
     finally { setLoading(false); }
-  }, [profileId]);
+  }, [active, profileId]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void refresh(), 0);

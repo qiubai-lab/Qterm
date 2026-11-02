@@ -72,3 +72,30 @@ it("reports a stopped server session without opening a replacement process",asyn
   expect(events).toHaveBeenCalledWith({type:"stateChanged",state:"failed"});
   await vi.advanceTimersByTimeAsync(20000);expect(Socket.instances).toHaveLength(1);
 });
+
+it("suspends all output, input and retries until unlock, then attaches the same process once", async () => {
+  const {pauseData,resumeData}=await import("./dataAccess");
+  const output=vi.fn(consume), events=vi.fn();
+  const pending=openSession("terminal",input,events,output);
+  const socket=Socket.instances[0];socket.onopen?.();socket.message({type:"ready",sessionId:"one"});await pending;
+  socket.message({type:"restored"});output.mockClear();events.mockClear();
+  pauseData();
+  try {
+    socket.message(new Uint8Array([65]).buffer);
+    socket.message({type:"event",event:{type:"stateChanged",state:"failed"}});
+    await vi.advanceTimersByTimeAsync(60000);
+    expect(output).not.toHaveBeenCalled();expect(events).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();expect(Socket.instances).toHaveLength(1);
+    expect(()=>control("one",new Uint8Array([13]))).toThrow("终端已锁定");
+  } finally { resumeData(); }
+  await vi.advanceTimersByTimeAsync(0);
+  expect(Socket.instances).toHaveLength(2);
+  const restored=Socket.instances[1];restored.onopen?.();
+  expect(()=>control("one",new Uint8Array([13]))).toThrow("画面正在恢复");
+  expect(restored.send).toHaveBeenCalledWith(JSON.stringify({version:2,sessionId:"one",...proof}));
+  // Queued messages from the old socket stay stale after unlock.
+  socket.message(new Uint8Array([66]).buffer);expect(output).not.toHaveBeenCalled();
+  restored.message({type:"ready",sessionId:"one"});restored.message({type:"restored"});
+  control("one",new Uint8Array([13]));
+  expect(fetchMock.mock.calls.every(([,init])=>init.method!=="DELETE")).toBe(true);
+});

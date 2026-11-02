@@ -10,8 +10,9 @@ const state = vi.hoisted(() => ({
   mount: vi.fn(), unmount: vi.fn(),
 }));
 function PassThrough({ children }: { children: ReactNode }) { return children; }
+vi.mock("./terminalLock", () => ({serverTerminalLock:{read:async()=>({locked:false})}}));
 vi.mock("./useServerAccess", () => ({ useServerAccess: () => state }));
-vi.mock("../app/theme/AppThemeProvider", () => ({ AppThemeProvider: PassThrough }));
+vi.mock("../app/theme/AppThemeProvider", () => ({ AppThemeProvider: PassThrough, useAppTheme: () => ({commitTheme:vi.fn()}) }));
 vi.mock("../components/ThemedTitleTooltipProvider", () => ({ ThemedTitleTooltipProvider: PassThrough }));
 vi.mock("../workspace/WorkspaceProvider", () => ({ WorkspaceProvider: PassThrough }));
 vi.mock("../onboarding/OnboardingProvider", () => ({ OnboardingProvider: PassThrough }));
@@ -27,7 +28,7 @@ vi.mock("../workspace/WorkspaceShell", () => ({ WorkspaceShell: function Workspa
 it("retains the same inert workbench behind the notice until confirmation", async () => {
   const user = userEvent.setup();
   const view = render(<ServerApp/>);
-  const terminal = screen.getByText("当前终端画面");
+  const terminal = await screen.findByText("当前终端画面");
   state.phase = "replaced";
   view.rerender(<ServerApp/>);
   expect(screen.getByText("当前终端画面")).toBe(terminal);

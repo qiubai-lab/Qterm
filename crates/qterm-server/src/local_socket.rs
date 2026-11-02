@@ -83,7 +83,7 @@ async fn run(mut socket: WebSocket, state: Arc<ServerState>, owner: String) {
         return;
     }
     let gate = state.vault_gate.lock().await;
-    if !state.auth.valid(&owner) {
+    if crate::data_access::Permit::new(&state, &owner).is_err() {
         return;
     }
     if let Some(existing) = open

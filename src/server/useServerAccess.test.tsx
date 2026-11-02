@@ -1,13 +1,14 @@
 import { act, renderHook, waitFor, cleanup } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { useServerAccess } from "./useServerAccess";
-const mocks=vi.hoisted(()=>({api:vi.fn(),key:"",presence:vi.fn(),stop:vi.fn(),close:vi.fn(),theme:vi.fn()}));
+const mocks=vi.hoisted(()=>({api:vi.fn(),key:"",presence:vi.fn(),stop:vi.fn(),close:vi.fn(),theme:vi.fn(),lock:vi.fn()}));
+vi.mock("./terminalLock",()=>({serverTerminalLock:{read:mocks.lock},resetServerTerminalLock:vi.fn()}));
 vi.mock("./http",()=>({api:mocks.api,AUTH_EXPIRED:"expired",message:(error:Error)=>error.message}));
 vi.mock("./accessIdentity",()=>({accessProof:()=>({clientId:"page",accessKey:mocks.key}),rememberAccess:(key:string)=>{mocks.key=key;}}));
 vi.mock("./accessPresence",()=>({openAccessPresence:mocks.presence}));
 vi.mock("./sessionTransport",()=>({closeAllSessions:mocks.close}));
 vi.mock("../app/theme/AppThemeProvider",()=>({bootstrapAppTheme:mocks.theme}));
-beforeEach(()=>{vi.clearAllMocks();mocks.key="";mocks.theme.mockResolvedValue(undefined);mocks.presence.mockReturnValue(mocks.stop);});
+beforeEach(()=>{vi.clearAllMocks();mocks.key="";mocks.lock.mockResolvedValue({locked:false});mocks.theme.mockResolvedValue(undefined);mocks.presence.mockReturnValue(mocks.stop);});
 afterEach(cleanup);
 it("checks occupancy without mounting a workspace and cancellation makes no takeover request",async()=>{
   mocks.api.mockResolvedValue({authenticated:false,takeoverTicket:"ticket"});
@@ -56,4 +57,12 @@ it("expired or competing takeover returns to login without silently retrying",as
   await act(()=>view.result.current.login("test password"));await act(()=>view.result.current.takeover());
   expect(view.result.current.phase).toBe("login");expect(view.result.current.error).toBe("连接状态已变化");
   expect(mocks.api).toHaveBeenCalledTimes(2);expect(mocks.presence).not.toHaveBeenCalled();
+});
+
+it("does not fetch settings before a locked refresh reaches the lock boundary",async()=>{
+  mocks.key="stored";mocks.api.mockResolvedValue({authenticated:true,accessKey:"stored"});mocks.lock.mockResolvedValue({locked:true});
+  const view=renderHook(useServerAccess);
+  await waitFor(()=>expect(mocks.presence).toHaveBeenCalledOnce());
+  await act(async()=>{mocks.presence.mock.calls[0][0]();});
+  expect(view.result.current.phase).toBe("workspace");expect(mocks.theme).not.toHaveBeenCalled();
 });

@@ -1,3 +1,4 @@
+import { useWorkbenchActive } from "./workbenchActivity";
 import { useEffect, type RefObject } from "react";
 import { listRetainedSessions } from "@qterm/services/runtimeSessions";
 import { isServer } from "../lib/runtime/environment";
@@ -5,8 +6,9 @@ import type { ConnectionProfile } from "@qterm/services/profiles";
 
 /** Existing server sessions restore without asking for credentials again. */
 export function useFileAutoConnect(profile: ConnectionProfile | undefined, status: string, blockId: string, requestedRef: RefObject<string | null>, connect: (kind: "files", block: string, profile: ConnectionProfile) => void) {
+  const enabled = useWorkbenchActive();
   useEffect(() => {
-    if (!profile || status !== "closed" || requestedRef.current === profile.id) return;
+    if (!enabled || !profile || status !== "closed" || requestedRef.current === profile.id) return;
     let active = true;
     const start = () => {
       if (!active) return;
@@ -19,5 +21,5 @@ export function useFileAutoConnect(profile: ConnectionProfile | undefined, statu
       }).catch(() => undefined);
     } else start();
     return () => { active = false; };
-  }, [blockId, connect, profile, requestedRef, status]);
+  }, [enabled, blockId, connect, profile, requestedRef, status]);
 }

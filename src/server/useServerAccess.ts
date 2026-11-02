@@ -1,3 +1,5 @@
+import { pauseData } from "./dataAccess";
+import { resetServerTerminalLock, serverTerminalLock } from "./terminalLock";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { bootstrapAppTheme } from "../app/theme/AppThemeProvider";
 import { accessProof, rememberAccess } from "./accessIdentity";
@@ -15,19 +17,20 @@ export function useServerAccess() {
   const epoch = useRef(0);
   const invalidate = useCallback(() => { epoch.current++; },[]);
   const stopPresence = useRef<(() => void) | undefined>(undefined);
-  const leave = useCallback(() => { stopPresence.current?.();stopPresence.current=undefined;closeAllSessions(); },[]);
+  const leave = useCallback(() => { resetServerTerminalLock(); stopPresence.current?.();stopPresence.current=undefined;closeAllSessions(); },[]);
   const admit = useCallback((result: Admission, generation: number) => {
     if (generation !== epoch.current) return;
     if (!result.authenticated) {
       ticket.current=result.takeoverTicket;setPhase("occupied");return;
     }
-    rememberAccess(result.accessKey);ticket.current="";setPhase("checking");
+    pauseData();rememberAccess(result.accessKey);ticket.current="";setPhase("checking");
     stopPresence.current?.();
     stopPresence.current=openAccessPresence(() => {
-      void bootstrapAppTheme().then(() => {
+      if (generation !== epoch.current) return;
+      void serverTerminalLock.read().catch(() => ({locked:true})).then(state => state.locked ? undefined : bootstrapAppTheme()).then(() => {
         if (generation===epoch.current) {setPhase("workspace");setError("");}
       }).catch(reason => {if(generation===epoch.current){setError(message(reason));setPhase("login");leave();}});
-    },() => {if(generation===epoch.current){closeAllSessions();setPhase("checking");setError("连接中断，正在重新连接…");}});
+    },() => {if(generation===epoch.current){resetServerTerminalLock();closeAllSessions();setPhase("checking");setError("连接中断，正在重新连接…");}});
   },[leave]);
   useEffect(() => {
     const generation=++epoch.current;

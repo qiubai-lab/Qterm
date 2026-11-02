@@ -45,10 +45,16 @@ pub async fn upgrade(
         let mut changes=state.auth.access.subscribe();
         let mut heartbeat=tokio::time::interval(Duration::from_secs(5));
         let mut seen=Instant::now();
+        let mut terminal_locked=state.auth.access.terminal_locked(&owner.0).unwrap_or(true);
         if send(&mut socket,Message::Text(json!({"type":"ready"}).to_string().into())).await.is_ok() {
             loop {
                 if !state.auth.valid(&owner.0) {
                     let _=send(&mut socket,Message::Text(json!({"type":"revoked"}).to_string().into())).await;break;
+                }
+                let locked=state.auth.access.terminal_locked(&owner.0).unwrap_or(true);
+                if locked != terminal_locked {
+                    terminal_locked=locked;
+                    if send(&mut socket,Message::Text(json!({"type":"terminalLock","locked":locked}).to_string().into())).await.is_err(){break;}
                 }
                 tokio::select! {
                     _=changes.changed()=>{},

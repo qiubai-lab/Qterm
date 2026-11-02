@@ -8,3 +8,6 @@
 .server-login-card label { display: grid; gap: 7px; color: var(--muted); font-size: 11px; }
 .server-login-card input { box-sizing: border-box; width: 100%; min-width: 0; height: 32px; padding: 6px 9px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); font: inherit; }
 .server-status { min-height: 20px; }
+
+.server-workbench-content:not([hidden]) { display: contents; }
+html[data-web-data-paused] body > :not(#root) { visibility: hidden !important; pointer-events: none !important; }

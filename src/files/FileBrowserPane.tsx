@@ -1,3 +1,4 @@
+import { useFileLocationLoad } from "./useFileLocationLoad";
 import { isServer } from "../lib/runtime/environment";
 import { useRetainedFilePreview } from "./useRetainedFilePreview";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FocusEvent, type FormEvent, type KeyboardEvent, type MouseEvent } from "react";
@@ -187,15 +188,8 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange, persistenc
     }
   }, [kind, prepareDirectoryLocation, rememberDirectoryLocation]);
 
-  useEffect(() => {
-    const runtimeKey = `${kind ?? "unknown"}:${sessionId ?? ""}`;
-    const sameLoadedLocation = !showLocalRootsRef.current
-      && lastLoadedRuntime.current === runtimeKey
-      && (initialPath === pathRef.current || initialPath === lastLoadedInputPath.current);
-    if (sameLoadedLocation) return;
-    const frame = requestAnimationFrame(() => void load(initialPath));
-    return () => { cancelAnimationFrame(frame); };
-  }, [initialPath, kind, load, sessionId]);
+  useFileLocationLoad(`${kind ?? "unknown"}:${sessionId ?? ""}`, initialPath,
+    { roots: showLocalRootsRef, runtime: lastLoadedRuntime, path: pathRef, inputPath: lastLoadedInputPath }, load);
 
   useEffect(() => () => { request.current += 1; }, []);
 

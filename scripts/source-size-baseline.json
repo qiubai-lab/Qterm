@@ -10,7 +10,7 @@
     "src/components/dialogs/ConnectionDialog.tsx": 682,
     "src/components/dialogs/CredentialDialog.tsx": 476,
     "src/files/FileBrowserPane.test.tsx": 1104,
-    "src/files/FileBrowserPane.tsx": 727,
+    "src/files/FileBrowserPane.tsx": 721,
     "src/git/GitPane.tsx": 1138,
     "src/git/styles/gitBranchOverlays.css": 643,
     "src/git/styles/gitChangePreview.css": 574,
@@ -19,7 +19,6 @@
     "src/git/styles/gitShell.css": 824,
     "src/terminal/TerminalPanel.tsx": 553,
     "src/workspace/LayoutView.test.tsx": 808,
-    "src/workspace/LayoutView.tsx": 545,
-    "src/workspace/WorkspaceShell.tsx": 458
+    "src/workspace/LayoutView.tsx": 545
   }
 }

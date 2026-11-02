@@ -1,3 +1,4 @@
+import { useWorkbenchActive } from "./workbenchActivity";
 import { CONFIGURATION_MERGED } from "@qterm/services/configurationMerge";
 import { hasWorkspaceRuntime, isServer } from "../lib/runtime/environment";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type Dispatch } from "react";
@@ -13,6 +14,7 @@ import { createWebTabSessionStore } from "../web/webTabSessionStore";
 import { createWorkspaceSaveQueue } from "./workspaceSaveQueue";
 
 export function useWorkspacePersistence(document: WorkspaceDocument, dispatch: Dispatch<WorkspaceAction>) {
+  const active = useWorkbenchActive();
   const [hydrated, setHydrated] = useState(() => !hasWorkspaceRuntime());
   const [profiles, setProfiles] = useState<ConnectionProfile[]>([]);
   const [profileGroups, setProfileGroups] = useState<ProfileGroup[]>([]);
@@ -26,11 +28,11 @@ export function useWorkspacePersistence(document: WorkspaceDocument, dispatch: D
   }, [document, hydrated, webTabSessions]);
 
   const refreshProfiles = useCallback(async () => {
-    if (!hasWorkspaceRuntime()) return;
+    if (!active || !hasWorkspaceRuntime()) return;
     const [items, groups] = await Promise.all([listProfiles(), listProfileGroups()]);
     setProfiles(items);
     setProfileGroups(groups);
-  }, []);
+  }, [active]);
 
   useEffect(() => {
     const refresh = () => { void refreshProfiles().catch(() => setStorageNotice("配置已合并，但列表刷新失败，请重新打开应用")); };
@@ -39,15 +41,15 @@ export function useWorkspacePersistence(document: WorkspaceDocument, dispatch: D
   }, [refreshProfiles]);
 
   useEffect(() => {
-    if (!hasWorkspaceRuntime()) return;
-    let active = true;
+    if (!active || hydrated || !hasWorkspaceRuntime()) return;
+    let live = true;
     const cache = loadWebTabCache().catch((error: unknown) => {
-      if (active) setStorageNotice(`无法恢复浏览器标签：${workspaceErrorMessage(error)}`);
+      if (live) setStorageNotice(`无法恢复浏览器标签：${workspaceErrorMessage(error)}`);
       return null;
     });
     void Promise.all([loadWorkspaces(), listProfiles(), listProfileGroups(), cache]).then(
       ([stored, items, groups, tabs]) => {
-        if (!active) return;
+        if (!live) return;
         if (tabs) webTabSessions.restore(tabs, stored ?? documentRef.current);
         if (stored) dispatch({ type: "hydrate", document: stored });
         setProfiles(items);
@@ -55,20 +57,21 @@ export function useWorkspacePersistence(document: WorkspaceDocument, dispatch: D
         setHydrated(true);
       },
       (error: unknown) => {
-        if (!active) return;
+        if (!live) return;
         setStorageNotice(`无法读取本地工作区：${workspaceErrorMessage(error)}`);
         setHydrated(true);
       },
     );
-    return () => { active = false; };
-  }, [dispatch, webTabSessions]);
+    return () => { live = false; };
+  }, [active, hydrated, dispatch, webTabSessions]);
 
   const flush = useCallback(async () => {
+    if (!active) return;
     webTabSessions.reconcile(documentRef.current);
     await save(documentRef.current, webTabSessions.snapshot()).catch((error: unknown) => {
       setStorageNotice(`无法保存工作区或浏览器标签：${workspaceErrorMessage(error)}`);
     });
-  }, [save, webTabSessions]);
+  }, [active, save, webTabSessions]);
 
   useEffect(() => {
     if (!hydrated || !hasWorkspaceRuntime()) return;

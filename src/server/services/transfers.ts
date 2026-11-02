@@ -1,3 +1,4 @@
+import { dataLease } from "../dataAccess";
 import type * as Desktop from "../../lib/tauri/transfers";
 import { API, api, message } from "../http";
 import { selectUpload, takeUpload, type UploadEntry } from "../uploadSelection";
@@ -10,9 +11,10 @@ export const selectUploadFolder: typeof Desktop.selectUploadFolder = async () =>
 export const selectDownloadPath: typeof Desktop.selectDownloadPath = async name => name ?? "qterm-download";
 export const selectDownloadDirectory: typeof Desktop.selectDownloadDirectory = async name => `${name}.tar`;
 function start(onEvent: (event: Desktop.TransferEvent) => void, operation: (signal: AbortSignal, active: Set<string>) => Promise<void>, totalBytes = 0): string {
+  const lease = dataLease();
   const id = crypto.randomUUID(); const controller = new AbortController(); const active = new Set<string>(); tasks.set(id, { controller, active });
   onEvent({ type: "started", totalBytes });
-  void operation(controller.signal, active).then(() => onEvent({ type: "completed" }), error => onEvent(controller.signal.aborted ? { type: "cancelled" } : { type: "failed", message: message(error) })).finally(() => tasks.delete(id));
+  void operation(AbortSignal.any([controller.signal, lease.signal]), active).then(() => onEvent({ type: "completed" }), error => onEvent(controller.signal.aborted ? { type: "cancelled" } : { type: "failed", message: message(error) })).finally(() => tasks.delete(id));
   return id;
 }
 async function upload(sessionId: string, entry: UploadEntry, path: string, relative: boolean, signal: AbortSignal, active: Set<string>, progress: (bytes: number) => void) {

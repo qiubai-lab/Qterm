@@ -47,3 +47,18 @@ it("keeps a large file visibly below 100% until the server confirms success",asy
   expect(Math.round(progress.mock.lastCall![0]/size*100)).toBe(99);
   Xhr.last.onload();await promise;expect(progress).toHaveBeenLastCalledWith(size);
 });
+
+it("aborts uploads and progress polling on lock without replaying them after unlock",async()=>{
+  const {pauseData,resumeData}=await import("./dataAccess");
+  const progress=vi.fn();
+  const promise=uploadRequest("/upload",new FormData(),"task",100,new AbortController().signal,progress);
+  const rejected=expect(promise).rejects.toThrow("终端已锁定");
+  Xhr.last.upload.onload!();await vi.advanceTimersByTimeAsync(0);
+  api.mockClear();progress.mockClear();pauseData();
+  try {
+    await rejected;await vi.advanceTimersByTimeAsync(30000);
+    Xhr.last.onload();expect(progress).not.toHaveBeenCalled();expect(api).not.toHaveBeenCalled();
+    expect(Xhr.last.abort).toHaveBeenCalledOnce();
+  } finally { resumeData(); }
+  await vi.advanceTimersByTimeAsync(1000);expect(Xhr.last.send).toHaveBeenCalledOnce();
+});

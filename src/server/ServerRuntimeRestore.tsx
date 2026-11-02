@@ -1,3 +1,4 @@
+import { useWorkbenchActive } from "../workspace/workbenchActivity";
 import { useEffect, useRef } from "react";
 import { useWorkspace } from "../workspace/WorkspaceProvider";
 import { findLeaf } from "../workspace/layout";
@@ -5,15 +6,18 @@ import { listRetainedSessions } from "./services/runtimeSessions";
 
 /** Wait for hydration and mounted terminal writers; never create replacement SSH sessions. */
 export function ServerRuntimeRestore() {
+  const enabled = useWorkbenchActive();
   const {hydrated,document,restoreTerminalBlock,restoreFileBlock,restoreGitBlock,restoreNetworkBlock}=useWorkspace();
   const restored=useRef(false);
   useEffect(()=>{
+    if (!enabled) { restored.current = false; return; }
     if(!hydrated || restored.current)return;
     let active=true;
     void listRetainedSessions().then(async sessions=>{
       if(!active)return;
       restored.current=true;
       for(const session of sessions){
+        if (!active) return;
         if(!session.runtimeKey)continue;
         const leaf=document.workspaces.map(w=>findLeaf(w.layout,session.runtimeKey!)).find(Boolean);
         if(leaf?.type==="terminal" && leaf.profileId===session.profileId && session.kind==="terminal")await restoreTerminalBlock(session);
@@ -23,6 +27,6 @@ export function ServerRuntimeRestore() {
       }
     }).catch(()=>{ /* API authentication handling owns login expiry. */ });
     return()=>{active=false;};
-  },[document,hydrated,restoreFileBlock,restoreGitBlock,restoreNetworkBlock,restoreTerminalBlock]);
+  },[enabled,document,hydrated,restoreFileBlock,restoreGitBlock,restoreNetworkBlock,restoreTerminalBlock]);
   return null;
 }

@@ -140,9 +140,9 @@ pub async fn guard(
         };
         state.auth.access.authorize(cookie, &proof)?
     };
-    let identity = Identity(owner);
+    let identity = Identity(owner.clone());
     request.extensions_mut().insert(identity);
-    Ok(next.run(request).await)
+    crate::data_access::serve(state, owner, request, next).await
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]

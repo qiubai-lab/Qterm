@@ -1,17 +1,12 @@
-import { ServerRuntimeRestore } from "./ServerRuntimeRestore";
+import { ServerWorkbench } from "./ServerWorkbench";
 import { useState } from "react";
 import { AppThemeProvider } from "../app/theme/AppThemeProvider";
 import { Button } from "../components/Button";
 import { RequiredFieldLabel } from "../components/RequiredFieldLabel";
 import { ThemedTitleTooltipProvider } from "../components/ThemedTitleTooltipProvider";
-import { WorkspaceProvider } from "../workspace/WorkspaceProvider";
-import { WorkspaceTerminalLinkHost } from "../workspace/WorkspaceTerminalLinkHost";
 import { useServerAccess } from "./useServerAccess";
 import { AccessTakeoverDialog } from "./AccessTakeoverDialog";
 import { AccessReplacedDialog } from "./AccessReplacedDialog";
-import { WorkspaceShell } from "../workspace/WorkspaceShell";
-import { OnboardingProvider } from "../onboarding/OnboardingProvider";
-import { TerminalNotificationProvider } from "../terminal/notifications/TerminalNotificationProvider";
 import { useBrowserContextMenuGuard } from "../app/useBrowserContextMenuGuard";
 import "../app/app.css";
 import "./server.css";
@@ -28,7 +23,7 @@ export function ServerApp() {
     event.preventDefault();const submitted=password;setPassword("");await access.login(submitted);
   }
   return <AppThemeProvider key={authenticated ? "workspace" : "login"}><ThemedTitleTooltipProvider>
-    {authenticated ? <div className="server-workspace" inert={replaced}><WorkspaceProvider><OnboardingProvider mode="desktop"><TerminalNotificationProvider><WorkspaceShell onLogout={access.logout}/><ServerRuntimeRestore/><WorkspaceTerminalLinkHost/></TerminalNotificationProvider></OnboardingProvider></WorkspaceProvider></div> :
+    {authenticated ? <div className="server-workspace" inert={replaced}><ServerWorkbench onLogout={access.logout}/></div> :
       <main className="server-login"><form className="server-login-card" onSubmit={event => void login(event)}>
         <div className="server-wordmark">›_ <strong>Qterm</strong><span>Server</span></div>
         <h1>连接你的工作空间</h1><p>登录后使用服务主机终端、远程连接与文件管理。</p>

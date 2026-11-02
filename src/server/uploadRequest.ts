@@ -1,9 +1,12 @@
+import { dataLease, pauseData } from "./dataAccess";
 import { accessHeaders, accessProof } from "./accessIdentity";
 import { API, AUTH_EXPIRED, api, RequestError } from "./http";
 
 /** Both legs count equally: browser -> service, then service -> destination. */
 export function uploadRequest<T>(path: string, body: FormData, taskId: string, bytes: number, signal: AbortSignal, progress: (bytes: number) => void): Promise<T> {
   return new Promise((resolve, reject) => {
+    const lease = dataLease();
+    signal = AbortSignal.any([signal, lease.signal]);
     signal.throwIfAborted();
     const xhr = new XMLHttpRequest(), proof = accessProof().accessKey;
     const polling = new AbortController();
@@ -15,7 +18,7 @@ export function uploadRequest<T>(path: string, body: FormData, taskId: string, b
     };
     const cleanup = () => { finished = true; clearTimeout(timer); polling.abort(); signal.removeEventListener("abort", abort); };
     const fail = (error: unknown) => { if (!finished) { cleanup(); reject(error); xhr.abort(); } };
-    const abort = () => fail(new DOMException("上传已取消", "AbortError"));
+    const abort = () => fail(lease.signal.aborted ? lease.signal.reason : new DOMException("上传已取消", "AbortError"));
     async function poll() {
       try {
         const value = await api<{transferredBytes:number}>(`/transfers/${taskId}/progress`, "GET", undefined, polling.signal);
@@ -36,6 +39,7 @@ export function uploadRequest<T>(path: string, body: FormData, taskId: string, b
       if (finished) return;
       let value: T & {code?:string;message?:string};
       try { value = JSON.parse(xhr.responseText); } catch { fail(new Error("服务端返回了无效的上传结果")); return; }
+      if (value.code === "terminalLocked") pauseData();
       if (xhr.status < 200 || xhr.status >= 300) {
         if (xhr.status === 401 && proof === accessProof().accessKey) window.dispatchEvent(new CustomEvent(AUTH_EXPIRED,{detail:value.code}));
         fail(new RequestError(value.code ?? "uploadFailed", value.message ?? "上传失败", xhr.status)); return;

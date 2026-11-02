@@ -27,11 +27,11 @@ export function BrowserRecoveryConfirmation({ download, onSavedChange }: Props) 
     }
   }
 
-  return <div className="master-password-form">
+  return <div className="browser-recovery-confirmation">
     <Button loading={busy} onClick={() => void prepare()}>下载恢复密钥</Button>
-    {downloaded && <label>
+    {downloaded && <label className="browser-recovery-acknowledgement">
       <input type="checkbox" onChange={event => onSavedChange(event.target.checked)}/>
-      我已保存恢复密钥，并确认可以访问该文件
+      <span>我已保存恢复密钥，并确认可以访问该文件</span>
     </label>}
     {error && <p role="alert" className="inline-message">{error}</p>}
   </div>;

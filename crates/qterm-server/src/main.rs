@@ -6,6 +6,7 @@ mod catalog;
 mod config;
 mod connection;
 mod credential_management;
+mod data_access;
 mod error;
 mod files;
 mod git;
@@ -27,6 +28,7 @@ mod socket;
 mod socket_io;
 mod state;
 mod terminal_clipboard;
+mod terminal_lock;
 #[cfg(test)]
 mod tests;
 mod transfer_archive;

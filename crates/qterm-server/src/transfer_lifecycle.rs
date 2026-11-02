@@ -122,6 +122,7 @@ pub async fn progress(
 }
 
 pub struct Operation {
+    permit: crate::data_access::Permit,
     state: Arc<ServerState>,
     id: String,
     owner: String,
@@ -131,6 +132,7 @@ pub struct Operation {
 impl Operation {
     pub fn start(state: &Arc<ServerState>, owner: &str, id: String) -> Result<Self> {
         Ok(Self {
+            permit: crate::data_access::Permit::new(state, owner)?,
             cancelled: state.transfer_tasks.start(owner, &id)?,
             progress: state.transfer_tasks.progress(owner, &id)?,
             state: state.clone(),
@@ -139,6 +141,7 @@ impl Operation {
         })
     }
     pub fn check(&self) -> Result<()> {
+        self.permit.check()?;
         if !self.state.auth.valid(&self.owner) {
             return Err(ApiError::unauthorized());
         }

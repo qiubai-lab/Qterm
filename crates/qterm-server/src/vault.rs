@@ -137,7 +137,7 @@ pub async fn initialize(
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Unlock {
-    master_password: String,
+    pub(crate) master_password: String,
 }
 pub async fn unlock(
     State(state): State<Arc<ServerState>>,
@@ -145,10 +145,20 @@ pub async fn unlock(
     Json(input): Json<Unlock>,
 ) -> Result<Json<Value>> {
     let _gate = state.vault_gate.lock().await;
-    if !state.auth.valid(&owner.0) {
+    unlock_for_owner(&state, &owner.0, input.master_password).await?;
+    Ok(Json(Value::Null))
+}
+
+// Callers hold vault_gate through verification and any associated lock-state change.
+pub(crate) async fn unlock_for_owner(
+    state: &ServerState,
+    owner: &str,
+    master_password: String,
+) -> Result<()> {
+    if !state.auth.valid(owner) {
         return Err(ApiError::unauthorized());
     }
-    if input.master_password.len() > 1024 {
+    if master_password.len() > 1024 {
         return Err(ApiError::invalid());
     }
     let permit = state
@@ -158,7 +168,7 @@ pub async fn unlock(
         .try_acquire_owned()
         .map_err(|_| ApiError::new(StatusCode::TOO_MANY_REQUESTS, "busy", "请稍后重试"))?;
     let vault = state.vault.clone();
-    let password = SecretText::new(input.master_password);
+    let password = SecretText::new(master_password);
     let settings = state.settings.security();
     let schedule = tokio::task::spawn_blocking(move || {
         let _permit = permit;
@@ -166,12 +176,12 @@ pub async fn unlock(
     })
     .await
     .map_err(|_| ApiError::storage())??;
-    if !state.auth.valid(&owner.0) {
+    if !state.auth.valid(owner) {
         state.vault.lock(LockReason::Manual);
         return Err(ApiError::unauthorized());
     }
-    schedule_lock(&state, schedule);
-    Ok(Json(Value::Null))
+    schedule_lock(state, schedule);
+    Ok(())
 }
 pub(crate) fn schedule_lock(state: &ServerState, schedule: Option<LockSchedule>) {
     if let Some(schedule) = schedule {

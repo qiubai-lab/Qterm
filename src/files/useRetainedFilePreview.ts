@@ -1,3 +1,4 @@
+import { useWorkbenchActive } from "../workspace/workbenchActivity";
 import { useEffect,useRef,useState } from "react";
 import { loadPaneState,savePaneState } from "@qterm/services/paneState";
 import { readBinaryFile } from "@qterm/services/files";
@@ -7,12 +8,13 @@ import type { FilePreviewState } from "./FilePreviewDocument";
 import { imageMime } from "./fileBrowserModel";
 
 export function useRetainedFilePreview(key:string|undefined,runtime:FileRuntime) {
+  const enabled = useWorkbenchActive();
   const [preview,setPreview]=useState<FilePreviewState|null>(null);
   const [restored,setRestored]=useState(!isServer || !key);
   const [error,setError]=useState("");
   const queue=useRef<{pending?:{key:string;value:unknown;signature:string};busy:boolean;last:string}>({busy:false,last:"null"});
   useEffect(()=>{
-    if(!isServer || !key || restored || (runtime.kind==="sftp" && runtime.status!=="connected"))return;
+    if(!enabled || !isServer || !key || restored || (runtime.kind==="sftp" && runtime.status!=="connected"))return;
     let active=true;
     void loadPaneState(key).then(async value=>{
       const saved=value as FilePreviewState|null;
@@ -28,9 +30,9 @@ export function useRetainedFilePreview(key:string|undefined,runtime:FileRuntime)
       if(active)setRestored(true);
     }).catch(()=>{if(active){setError("未能恢复服务端文件草稿，请刷新后重试");}});
     return()=>{active=false;};
-  },[key,restored,runtime.kind,runtime.sessionId,runtime.status]);
+  },[enabled,key,restored,runtime.kind,runtime.sessionId,runtime.status]);
   useEffect(()=>{
-    if(!isServer || !key || !restored || preview?.loading)return;
+    if(!enabled || !isServer || !key || !restored || preview?.loading)return;
     const value=preview?{...preview,imageUrl:"",error:""}:null;
     const signature=JSON.stringify(value);
     if(signature===queue.current.last)return;
@@ -45,6 +47,6 @@ export function useRetainedFilePreview(key:string|undefined,runtime:FileRuntime)
       }
       queue.current.busy=false;
     })();
-  },[key,preview,restored]);
+  },[enabled,key,preview,restored]);
   return [preview,setPreview,error] as const;
 }

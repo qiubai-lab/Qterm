@@ -100,7 +100,11 @@ export function useNetworkWorkspaceController(state: WorkspaceRuntimeState, disp
   }, [networkRuntimesRef, updateNetworkRuntime]);
   const restoreNetworkBlock = useCallback(async (session: RetainedSession) => {
     const blockId = session.runtimeKey;
-    if (!blockId || networkRuntimesRef.current[blockId]?.sessionId) return;
+    if (!blockId) return;
+    if (networkRuntimesRef.current[blockId]?.sessionId) {
+      updateNetworkRuntime(blockId, runtime => ({...runtime, ruleStates: session.ruleStates ?? {}}));
+      return;
+    }
     const epoch = nextEpoch(blockId);
     updateNetworkRuntime(blockId, () => ({...defaultNetworkRuntime,status:"connecting",ruleStates:session.ruleStates ?? {}}));
     try {

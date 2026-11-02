@@ -21,7 +21,7 @@ export function TerminalLockChoiceDialog({ vaultUnlocked, busy, message, onClose
   </DialogFrame>;
 }
 
-export function TerminalLockScreen({ onUnlocked }: { onUnlocked: () => void | Promise<void> }) {
+export function TerminalLockScreen({ onUnlocked, unlock = unlockVault, description = "顶部工作区与窗口控制仍可使用；终端和文件会话继续在后台运行。" }: { onUnlocked: () => void | Promise<void>; unlock?: (password: string) => Promise<void>; description?: string }) {
   const [masterPassword, setMasterPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
@@ -38,15 +38,22 @@ export function TerminalLockScreen({ onUnlocked }: { onUnlocked: () => void | Pr
       setMessage(errorMessage(error));
       setSubmitting(false);
     };
-    void unlockVault(secret).then(onUnlocked, fail).catch(fail);
+    void unlock(secret).then(onUnlocked, fail).catch(fail);
   }
 
   return <DialogFrame title="终端已锁定" subtitle="输入主密码以同时解锁终端和凭证库" onClose={() => undefined} compact dismissible={false} modal={false} className="terminal-lock-dialog" scrimClassName="terminal-lock-scrim">
     <form className="terminal-unlock-form" onSubmit={submit}>
-      <div className="terminal-lock-identity"><span><Icon name="lock" size={21}/></span><div><strong>终端区域操作已暂停</strong><p>顶部工作区与窗口控制仍可使用；终端和文件会话继续在后台运行。</p></div></div>
+      <div className="terminal-lock-identity"><span><Icon name="lock" size={21}/></span><div><strong>终端区域操作已暂停</strong><p>{description}</p></div></div>
       <label>主密码<input data-dialog-autofocus type="password" autoComplete="current-password" value={masterPassword} disabled={submitting} onChange={(event) => setMasterPassword(event.target.value)}/></label>
       <footer className="dialog-actions dialog-actions-with-status"><DialogActionStatus message={message}/><Button type="submit" variant="primary" loading={submitting}>{submitting ? "正在验证…" : "解锁终端和凭证"}</Button></footer>
     </form>
+  </DialogFrame>;
+}
+
+export function TerminalLockRestore({ error, onRetry }: { error: string; onRetry: () => void }) {
+  return <DialogFrame title="正在恢复终端锁状态" subtitle="确认锁定状态后恢复工作区" onClose={() => undefined} compact dismissible={false} modal={false} className="terminal-lock-dialog" scrimClassName="terminal-lock-scrim">
+    <p role={error ? "alert" : "status"} className="dialog-note">{error || "正在确认工作区锁定状态…"}</p>
+    {error && <footer className="dialog-actions end"><Button variant="primary" onClick={onRetry}>重试</Button></footer>}
   </DialogFrame>;
 }
 

@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+import { WorkbenchActivity } from "../workspace/workbenchActivity";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 import { useRetainedFilePreview } from "./useRetainedFilePreview";
@@ -35,4 +37,16 @@ it("serializes updates and keeps the latest edit while an earlier save is in fli
   await act(async()=>release());
   await waitFor(()=>expect(mocks.save).toHaveBeenCalledTimes(2));
   expect(mocks.save.mock.calls[1][1].content).toBe("latest");
+});
+
+it("preserves drafts while locked and retries the pending synchronization after unlock",async()=>{
+  let active=true;
+  const view=renderHook(()=>useRetainedFilePreview("block:local",defaultFileRuntime),{wrapper:({children}:{children:ReactNode})=><WorkbenchActivity value={active}>{children}</WorkbenchActivity>});
+  await waitFor(()=>expect(view.result.current[0]?.content).toBe("unsaved"));
+  active=false;view.rerender();
+  act(()=>view.result.current[1](current=>({...current!,content:"preserved draft"})));
+  expect(mocks.save).not.toHaveBeenCalled();
+  active=true;view.rerender();
+  await waitFor(()=>expect(mocks.save).toHaveBeenCalledWith("block:local",expect.objectContaining({content:"preserved draft"})));
+  expect(mocks.load).toHaveBeenCalledOnce();
 });

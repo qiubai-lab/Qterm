@@ -1,3 +1,6 @@
+import { useWorkbenchActive } from "./workbenchActivity";
+import { useTerminalLock, type TerminalLockBackend } from "./useTerminalLock";
+import { useTerminalAutoLock } from "./useTerminalAutoLock";
 import { WorkspaceToolRail } from "./WorkspaceToolRail";
 import { WorkspaceTabs } from "./WorkspaceTabs";
 import { createBlockCloseRequest, type CloseRequest } from "./workspaceClose";
@@ -13,10 +16,10 @@ import { HelpDialog } from "../components/dialogs/InfoDialogs";
 import { SettingsDialog } from "../components/dialogs/SettingsDialog";
 import { ConnectionAuthDialog } from "../components/dialogs/ConnectionAuthDialog";
 import { MasterPasswordDialog, type MasterPasswordMode } from "../components/dialogs/MasterPasswordDialog";
-import { TerminalLockChoiceDialog, TerminalLockScreen } from "../components/dialogs/TerminalLockDialogs";
+import { TerminalLockChoiceDialog, TerminalLockScreen, TerminalLockRestore } from "../components/dialogs/TerminalLockDialogs";
 import { getVaultStatus, lockVault, onVaultStatusChanged, type VaultStatus } from "@qterm/services/credentials";
 import { getProfileRouteRequirements, type ConnectionProfile } from "@qterm/services/profiles";
-import { getSettings, updateUpdateSettings, type SecuritySettings, type TerminalSettings, type UpdateSettings } from "@qterm/services/settings";
+import { getSettings, updateUpdateSettings, type AppTheme, type SecuritySettings, type TerminalSettings, type UpdateSettings } from "@qterm/services/settings";
 import { checkForUpdateOnStartupOnce } from "../lib/updateCheck";
 import { currentDesktopPlatform } from "../lib/tauri/window";
 import { WorkspaceChrome } from "./WorkspaceChrome";
@@ -32,7 +35,7 @@ interface DisconnectRequest { owner: ConnectionOwner; blockId: string; name: str
 
 const TITLEBAR_DOUBLE_CLICK_MS = 350;
 
-export function WorkspaceShell({ onLogout }: { onLogout?: () => Promise<void> } = {}) {
+export function WorkspaceShell({ onLogout, terminalLockBackend, terminalLockState, onThemeRestored }: { onLogout?: () => Promise<void>; terminalLockBackend?: TerminalLockBackend; terminalLockState?: ReturnType<typeof useTerminalLock>; onThemeRestored?: (theme: AppTheme) => void } = {}) {
   const desktopPlatform = currentDesktopPlatform();
   const { hydrated, document, activeWorkspace, dispatch, runtimes, fileRuntimes, networkRuntimes, gitRuntimes, clearTerminalOsc7State, connectBlock, connectFileBlock, connectNetworkBlock, connectGitBlock, disconnectBlock, disconnectFileBlock, disconnectNetworkBlock, disconnectGitBlock, isConnectionTargetCurrent, connectedCount, closeSessions, acceptBlockHostKey, rejectBlockHostKey, acceptFileHostKey, rejectFileHostKey, acceptNetworkHostKey, rejectNetworkHostKey, acceptGitHostKey, rejectGitHostKey, storageNotice, dismissStorageNotice } = useWorkspace();
   const [tool, setTool] = useState<Tool | null>(null);
@@ -44,7 +47,10 @@ export function WorkspaceShell({ onLogout }: { onLogout?: () => Promise<void> } 
   const [vaultLockBusy, setVaultLockBusy] = useState(false);
   const [vaultLockError, setVaultLockError] = useState("");
   const [lockChoiceOpen, setLockChoiceOpen] = useState(false);
-  const [terminalLocked, setTerminalLocked] = useState(false);
+  const workbenchActive = useWorkbenchActive();
+  const localTerminalLock = useTerminalLock(terminalLockBackend);
+  const terminalLock = terminalLockState ?? localTerminalLock;
+  const { locked: terminalLocked, lock: lockTerminal } = terminalLock;
   const [securitySettings, setSecuritySettings] = useState<SecuritySettings | null>(null);
   const [remoteShellIntegrationEnabled, setRemoteShellIntegrationEnabled] = useState(false);
   const [terminalSettingsReady, setTerminalSettingsReady] = useState(false);
@@ -57,8 +63,6 @@ export function WorkspaceShell({ onLogout }: { onLogout?: () => Promise<void> } 
   const automaticAttemptsRef = useRef(new Set<string>());
   const vaultStatusRef = useRef<VaultStatus | null>(null);
   const vaultLockBusyRef = useRef(false);
-  const terminalLastActivityRef = useRef<number | null>(null);
-  const previousTerminalLockedRef = useRef(false);
   const previousRemoteShellIntegrationEnabledRef = useRef<boolean | null>(null);
   const localTerminalAttentionTimerRef = useRef<number | null>(null);
   const startupAttentionShownRef = useRef(false);
@@ -153,13 +157,13 @@ export function WorkspaceShell({ onLogout }: { onLogout?: () => Promise<void> } 
     setVaultLockBusy(true);
     setVaultLockError("");
     try {
-      if (currentStatus.unlocked) await lockVault();
+      if (scope === "terminalAndVault") await lockTerminal(currentStatus.unlocked);
+      else if (currentStatus.unlocked) await lockVault();
       const lockedStatus = { initialized: true, unlocked: false, legacy: false };
       commitVaultStatus(lockedStatus);
       setLockChoiceOpen(false);
       if (scope === "terminalAndVault") {
         setTool(null);
-        setTerminalLocked(true);
       }
       return true;
     } catch (error) {
@@ -169,12 +173,14 @@ export function WorkspaceShell({ onLogout }: { onLogout?: () => Promise<void> } 
       vaultLockBusyRef.current = false;
       setVaultLockBusy(false);
     }
-  }, [commitVaultStatus]);
+  }, [commitVaultStatus, lockTerminal]);
 
   useEffect(() => {
+    if (!workbenchActive) return;
     let disposed = false;
     void getSettings().then(async (snapshot) => {
       if (disposed) return;
+      onThemeRestored?.(snapshot.appearance.theme);
       setSecuritySettings(snapshot.security);
       setRemoteShellIntegrationEnabled(snapshot.terminal?.remoteShellIntegrationEnabled ?? false);
       setTerminalSettingsReady(true);
@@ -188,7 +194,7 @@ export function WorkspaceShell({ onLogout }: { onLogout?: () => Promise<void> } 
       if (!disposed) setTerminalSettingsReady(true);
     });
     return () => { disposed = true; };
-  }, []);
+  }, [workbenchActive, onThemeRestored]);
 
   useEffect(() => {
     if (!terminalSettingsReady) return;
@@ -227,60 +233,8 @@ export function WorkspaceShell({ onLogout }: { onLogout?: () => Promise<void> } 
     return () => { disposed = true; unlisten?.(); };
   }, [commitVaultStatus]);
 
-  useEffect(() => {
-    terminalLastActivityRef.current = Date.now();
-  }, [securitySettings?.terminalAutoLockAfterSeconds]);
-
-  useEffect(() => {
-    if (previousTerminalLockedRef.current && !terminalLocked) terminalLastActivityRef.current = Date.now();
-    previousTerminalLockedRef.current = terminalLocked;
-  }, [terminalLocked]);
-
-  useEffect(() => {
-    const seconds = securitySettings?.terminalAutoLockAfterSeconds;
-    if (seconds === null || seconds === undefined || terminalLocked || !vaultStatus?.initialized || vaultStatus.legacy) return;
-    let timer: number | undefined;
-    let locking = false;
-    const attemptLock = () => {
-      if (locking) return;
-      locking = true;
-      void applyLockScope("terminalAndVault").finally(() => { locking = false; });
-    };
-    const schedule = () => {
-      if (timer !== undefined) window.clearTimeout(timer);
-      const lastActivity = terminalLastActivityRef.current ?? Date.now();
-      const remaining = Math.max(0, lastActivity + seconds * 1000 - Date.now());
-      timer = window.setTimeout(attemptLock, remaining);
-    };
-    const recordActivity = () => {
-      if (locking) return;
-      terminalLastActivityRef.current = Date.now();
-      schedule();
-    };
-    const checkDeadline = () => {
-      const lastActivity = terminalLastActivityRef.current ?? Date.now();
-      if (Date.now() >= lastActivity + seconds * 1000) {
-        if (timer !== undefined) window.clearTimeout(timer);
-        attemptLock();
-      } else {
-        schedule();
-      }
-    };
-    window.addEventListener("keydown", recordActivity);
-    window.addEventListener("pointerdown", recordActivity);
-    window.addEventListener("wheel", recordActivity, { passive: true });
-    window.addEventListener("focus", checkDeadline);
-    globalThis.document.addEventListener("visibilitychange", checkDeadline);
-    schedule();
-    return () => {
-      if (timer !== undefined) window.clearTimeout(timer);
-      window.removeEventListener("keydown", recordActivity);
-      window.removeEventListener("pointerdown", recordActivity);
-      window.removeEventListener("wheel", recordActivity);
-      window.removeEventListener("focus", checkDeadline);
-      globalThis.document.removeEventListener("visibilitychange", checkDeadline);
-    };
-  }, [applyLockScope, securitySettings?.terminalAutoLockAfterSeconds, terminalLocked, vaultStatus?.initialized, vaultStatus?.legacy]);
+  const lockIdleTerminal = useCallback(() => applyLockScope("terminalAndVault"), [applyLockScope]);
+  useTerminalAutoLock(securitySettings?.terminalAutoLockAfterSeconds, terminalLocked, vaultStatus, lockIdleTerminal);
 
   useWorkspaceShortcuts({
     platform: desktopPlatform, activeWorkspace, workspaces: document.workspaces, terminalLocked,
@@ -382,12 +336,12 @@ export function WorkspaceShell({ onLogout }: { onLogout?: () => Promise<void> } 
     </WorkspaceChrome>
 
     <section className="workspace-stage">
-      <div className="workspace-stage-content" inert={terminalLocked ? true : undefined} aria-hidden={terminalLocked || undefined}>
+      <div className="workspace-stage-content" data-lock-covered={Boolean(terminalLockBackend && terminalLocked) || undefined} inert={terminalLocked ? true : undefined} aria-hidden={terminalLocked || undefined}>
         <div className="workspace-canvases">
           {document.workspaces.map((workspace) => {
             const visible = workspace.id === activeWorkspace.id;
             const transitionDirection = visible && workspaceTransition.workspaceId === workspace.id ? workspaceTransition.direction : null;
-            return <div key={workspace.id} className={`workspace-canvas-stage${visible ? " visible" : ""}${transitionDirection ? ` workspace-transition-${transitionDirection}` : ""}`} aria-hidden={!visible}><WorkspaceCanvas workspace={workspace} visible={visible} localTerminalAttention={localTerminalAttentionWorkspaceId === workspace.id} remoteShellIntegrationEnabled={remoteShellIntegrationEnabled} terminalSettingsReady={terminalSettingsReady} onRequestClose={closeBlock} onRequestDisconnect={(owner, blockId, name, local) => setDisconnectRequest({ owner, blockId, name, local })} onRequestAuthConnection={(owner, blockId, profile) => void requestConfiguredConnection(owner, blockId, profile)} onOpenConnectionManager={() => setTool("connections")}/></div>;
+            return <div key={workspace.id} className={`workspace-canvas-stage${visible ? " visible" : ""}${transitionDirection ? ` workspace-transition-${transitionDirection}` : ""}`} aria-hidden={!visible}><WorkspaceCanvas workspace={workspace} visible={visible && !(terminalLockState && terminalLocked)} localTerminalAttention={localTerminalAttentionWorkspaceId === workspace.id} remoteShellIntegrationEnabled={remoteShellIntegrationEnabled} terminalSettingsReady={terminalSettingsReady && workbenchActive} onRequestClose={closeBlock} onRequestDisconnect={(owner, blockId, name, local) => setDisconnectRequest({ owner, blockId, name, local })} onRequestAuthConnection={(owner, blockId, profile) => void requestConfiguredConnection(owner, blockId, profile)} onOpenConnectionManager={() => setTool("connections")}/></div>;
           })}
         </div>
         <WorkspaceToolRail remoteShellIntegrationEnabled={remoteShellIntegrationEnabled} controls={{
@@ -399,10 +353,9 @@ export function WorkspaceShell({ onLogout }: { onLogout?: () => Promise<void> } 
         }}/>
 
       </div>
-      {terminalLocked && (
-        <TerminalLockScreen onUnlocked={() => {
+      {terminalLocked && !terminalLockState && (terminalLock.checking ? <TerminalLockRestore error={terminalLock.error} onRetry={() => void terminalLock.restore()}/> :
+        <TerminalLockScreen unlock={terminalLock.unlock} onUnlocked={() => {
           commitVaultStatus({ initialized: true, unlocked: true, legacy: false });
-          setTerminalLocked(false);
         }}/>
       )}
     </section>
