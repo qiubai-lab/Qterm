@@ -10,4 +10,4 @@
 .server-status { min-height: 20px; }
 
 .server-workbench-content:not([hidden]) { display: contents; }
-html[data-web-data-paused] body > :not(#root) { visibility: hidden !important; pointer-events: none !important; }
+html[data-web-data-paused] body > :not(#root):not([data-runtime-control-plane="environment-menu"]) { visibility: hidden !important; pointer-events: none !important; }

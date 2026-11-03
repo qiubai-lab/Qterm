@@ -18,3 +18,6 @@ it("uses shared theme roles for remote surfaces without fixed palette colors", (
   expect(css("./runtimeManager.css")).toContain("var(--selection-surface)");
   expect(css("./runtimeMenu.css")).toContain("var(--menu-hover-background)");
 });
+it("keeps business portals hidden while allowing only the environment control menu during authentication", () => {
+  expect(css("../server/server.css")).toContain('html[data-web-data-paused] body > :not(#root):not([data-runtime-control-plane="environment-menu"]) { visibility: hidden !important; pointer-events: none !important; }');
+});

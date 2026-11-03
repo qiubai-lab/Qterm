@@ -12,7 +12,7 @@ export function EnvironmentMenu({anchor, current, status, servers, onChoose, onM
     document.addEventListener("pointerdown", outside); window.addEventListener("resize", onClose);
     return () => { document.removeEventListener("pointerdown", outside); window.removeEventListener("resize", onClose); };
   }, [onClose]);
-  return createPortal(<div ref={ref} className="runtime-menu" data-app-overlay="floating" role="menu" aria-label="切换运行环境" style={{right: Math.max(8, window.innerWidth - anchor.right), top: anchor.bottom + 5}} onKeyDown={event => {
+  return createPortal(<div ref={ref} className="runtime-menu" data-runtime-control-plane="environment-menu" data-app-overlay="floating" role="menu" aria-label="切换运行环境" style={{right: Math.max(8, window.innerWidth - anchor.right), top: anchor.bottom + 5}} onKeyDown={event => {
     if (event.key === "Escape" || event.key === "Tab") { event.preventDefault(); event.stopPropagation(); onClose(); return; }
     if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
       event.preventDefault(); const buttons = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>("button"));

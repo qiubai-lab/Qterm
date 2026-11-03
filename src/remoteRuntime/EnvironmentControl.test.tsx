@@ -1,10 +1,10 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { EnvironmentControl } from "./EnvironmentControl";
-const mocks = vi.hoisted(() => ({connect:vi.fn(),flush:vi.fn(),disconnect:vi.fn()}));
+const mocks = vi.hoisted(() => ({connect:vi.fn(),flush:vi.fn(),disconnect:vi.fn(),select:vi.fn()}));
 vi.mock("./transport",()=>({connectRuntime:mocks.connect,disconnectRuntime:mocks.disconnect}));
 vi.mock("./switchGuard",()=>({flushRuntime:mocks.flush,detachRuntime:vi.fn()}));
-vi.mock("./selection",()=>({selectedRuntime:{id:"a",name:"生产服务器",endpoint:"https://server.example"},listServers:()=>[],saveServers:vi.fn(),selectRuntime:vi.fn()}));
+vi.mock("./selection",()=>({selectedRuntime:{id:"a",name:"生产服务器",endpoint:"https://server.example"},listServers:()=>[],saveServers:vi.fn(),selectRuntime:mocks.select}));
 afterEach(()=>{cleanup();vi.resetAllMocks();});
 it("keeps remote identity during reconnect and opens a keyboard accessible menu", () => {
   render(<EnvironmentControl status="重连中"/>);
@@ -34,4 +34,17 @@ it("separates the connected identity tag from the icon-only menu entry", () => {
   fireEvent.click(trigger);
   expect(screen.getAllByRole("menuitem", {name:/本机/})).toHaveLength(1);
   expect(screen.getByRole("menuitem", {name:"管理服务器…"})).toBeInTheDocument();
+});
+
+it.each(["需要登录", "已锁定"])("keeps the environment menu usable while %s and allows returning locally", async status => {
+  document.documentElement.dataset.webDataPaused = "true";
+  try {
+    render(<EnvironmentControl status={status}/>);
+    fireEvent.click(screen.getByRole("button", {name:/运行环境/}));
+    expect(screen.getByRole("menu")).toHaveAttribute("data-runtime-control-plane", "environment-menu");
+    fireEvent.click(screen.getByRole("menuitem", {name:"切换到本机"}));
+    fireEvent.click(screen.getByRole("button", {name:"返回本机"}));
+    await waitFor(() => expect(mocks.disconnect).toHaveBeenCalledOnce());
+    await waitFor(() => expect(mocks.select).toHaveBeenCalledWith(null));
+  } finally { delete document.documentElement.dataset.webDataPaused; }
 });
