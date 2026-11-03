@@ -19,3 +19,18 @@ it("blocks auto-reconnect during detach and releases the guard on failure", asyn
   await expect(pending).rejects.toThrow("cleanup failed");
   expect(()=>assertRuntimeAttached()).not.toThrow();stop();
 });
+
+it("stops later cleanup and releases the detach guard after an expired switch settles", async () => {
+  const controller = new AbortController();
+  let finish!: () => void;
+  const removeFirst = registerRuntimeDetach(() => new Promise<void>(resolve => { finish = resolve; }));
+  const later = vi.fn(); const removeLater = registerRuntimeDetach(later);
+  try {
+    const pending = detachRuntime(controller.signal);
+    controller.abort(new Error("expired"));
+    finish();
+    await expect(pending).rejects.toThrow("expired");
+    expect(later).not.toHaveBeenCalled();
+    expect(() => assertRuntimeAttached()).not.toThrow();
+  } finally { removeFirst(); removeLater(); }
+});

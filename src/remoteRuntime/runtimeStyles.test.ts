@@ -21,3 +21,8 @@ it("uses shared theme roles for remote surfaces without fixed palette colors", (
 it("keeps business portals hidden while allowing only the environment control menu during authentication", () => {
   expect(css("../server/server.css")).toContain('html[data-web-data-paused] body > :not(#root):not([data-runtime-control-plane="environment-menu"]) { visibility: hidden !important; pointer-events: none !important; }');
 });
+it("keeps switch progress visible in the reserved status slot and respects reduced motion", () => {
+  const styles = css("./remoteRuntime.css");
+  expect(styles).toMatch(/\.dialog-action-status\.runtime-switch-status\s*\{[^}]*color:var\(--muted\)/);
+  expect(styles).toMatch(/@media \(prefers-reduced-motion:reduce\)[\s\S]*\.runtime-switch-spinner[^}]*animation:none/);
+});

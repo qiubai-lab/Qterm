@@ -4,3 +4,10 @@
 
 .runtime-startup { display:grid; height:100vh; place-content:center; gap:12px; padding:40px; background:var(--canvas); color:var(--text); }
 .runtime-startup p { color:var(--muted); }
+
+.runtime-switch-submit { display:inline-flex; align-items:center; gap:5px; }
+.runtime-switch-spinner { width:11px; height:11px; border:1.5px solid currentColor; border-right-color:transparent; border-radius:50%; animation:runtime-switch-spin 800ms linear infinite; }
+@keyframes runtime-switch-spin { to { transform:rotate(360deg); } }
+@media (prefers-reduced-motion:reduce) { .runtime-switch-spinner { animation:none; opacity:.65; } }
+
+.dialog-action-status.runtime-switch-status { color:var(--muted); }

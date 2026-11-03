@@ -55,7 +55,7 @@ impl RemoteRuntime {
             .timeout(std::time::Duration::from_secs(660))
             .build()
             .map_err(|_| "无法初始化远程连接")?;
-        let check = client
+        let mut check = client
             .get(endpoint.join("healthz").unwrap())
             .timeout(std::time::Duration::from_secs(10))
             .send()
@@ -63,6 +63,20 @@ impl RemoteRuntime {
             .map_err(|_| "无法连接服务器，请检查地址、网络与证书")?;
         if !check.status().is_success() {
             return Err("服务器不可用或地址需要重定向，请使用最终服务地址".into());
+        }
+        let mut health = Vec::new();
+        while let Some(chunk) = check
+            .chunk()
+            .await
+            .map_err(|_| "服务器健康检查响应超时或中断")?
+        {
+            if health.len() + chunk.len() > 16 {
+                return Err("地址未提供 Qterm 健康检查，请检查服务端口和 /healthz 代理配置".into());
+            }
+            health.extend_from_slice(&chunk);
+        }
+        if health != b"ok" {
+            return Err("地址未提供 Qterm 健康检查，请检查服务端口和 /healthz 代理配置".into());
         }
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
             .await

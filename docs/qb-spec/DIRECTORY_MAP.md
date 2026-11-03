@@ -300,6 +300,7 @@
 - `src/remoteRuntime/services/`: desktop service router; remote business operations reuse `src/server/services`, while clipboard, image export, notifications and native windows remain client-owned. Reload is the boundary between service graphs.
 - `src/workspace/NativeWindowControls.tsx`: window actions separated from runtime/logout controls. `RemoteDesktopApp` keeps connection identity and native controls available during login, lock and connection failure.
 - `src-tauri/src/infrastructure/remote_runtime/`: fixed-origin native Cookie jar, private loopback HTTP/WebSocket bridge, exact UI-Origin admission, TLS validation, redirect rejection and cancellation. `client_identity.rs` supplies the same product/version/platform User-Agent to HTTP and WebSocket requests. `commands/remote_runtime.rs` owns native bootstrap/save IPC; `remote_clipboard.rs` and `remote_drop.rs` accept only OS clipboard or approved drag/drop sources.
+- `src/remoteRuntime/switchOperation.ts`: bounded environment-switch sequencing, progress stages and late-result/overlap protection; timeout stops subsequent steps without pretending pending native work was cancelled.
 - `src/remoteRuntime/switchGuard.ts`: registration boundary for workspace save, dirty file guards, native surface teardown and local runtime shutdown; never substitutes for a workspace state owner.
 - `src-tauri/src/bootstrap_tests.rs`: composition-root path/flavor/window-state regression tests extracted from `lib.rs` to keep registration changes below its source-size limit.
 

@@ -141,11 +141,15 @@ pub fn local_session_resize(
 }
 
 #[tauri::command]
-pub fn local_session_close(
+pub async fn local_session_close(
     session_id: String,
     state: State<'_, LocalSessionState>,
 ) -> Result<(), IpcError> {
-    state.manager.close(&session_id).map_err(local_error)
+    let manager = Arc::clone(&state.manager);
+    tauri::async_runtime::spawn_blocking(move || manager.close(&session_id))
+        .await
+        .map_err(|_| local_error(LocalSessionError::ControlUnavailable))?
+        .map_err(local_error)
 }
 
 fn terminal_size(columns: u32, rows: u32) -> Result<PtySize, IpcError> {

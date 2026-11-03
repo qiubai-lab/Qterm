@@ -48,3 +48,17 @@ it.each(["需要登录", "已锁定"])("keeps the environment menu usable while 
     await waitFor(() => expect(mocks.select).toHaveBeenCalledWith(null));
   } finally { delete document.documentElement.dataset.webDataPaused; }
 });
+
+it("shows progress and a spinner while saving and recovers after failure", async () => {
+  let fail!: (error: Error) => void;
+  mocks.flush.mockImplementation(() => new Promise<void>((_resolve, reject) => { fail = reject; }));
+  render(<EnvironmentControl/>);
+  fireEvent.click(screen.getByRole("button", {name:/运行环境/}));
+  fireEvent.click(screen.getByRole("menuitem", {name:"切换到本机"}));
+  fireEvent.click(screen.getByRole("button", {name:"返回本机"}));
+  expect(screen.getByRole("status")).toHaveTextContent("正在保存工作台…");
+  expect(screen.getByRole("button", {name:"切换中…"})).toHaveAttribute("aria-busy", "true");
+  expect(document.querySelector(".runtime-switch-spinner")).toBeInTheDocument();
+  fail(new Error("保存失败"));
+  await waitFor(() => expect(screen.getByRole("button", {name:"取消"})).toBeEnabled());
+});

@@ -196,3 +196,20 @@ async fn websocket_forwards_text_and_binary_and_disconnect_revokes_it() {
     assert!(closed.is_none() || matches!(closed, Some(Ok(WsMessage::Close(_))) | Some(Err(_))));
     server.abort();
 }
+
+#[tokio::test]
+async fn rejects_spa_fallback_instead_of_treating_html_as_a_healthy_server() {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = format!("http://{}", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move {
+        axum::serve(
+            listener,
+            Router::new().fallback(|| async { "<!doctype html><html>Qterm</html>" }),
+        )
+        .await
+        .unwrap();
+    });
+    let result = RemoteRuntime::start(&address, "tauri://localhost".into()).await;
+    assert!(matches!(result, Err(message) if message.contains("健康检查")));
+    server.abort();
+}
