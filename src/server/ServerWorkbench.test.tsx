@@ -19,8 +19,20 @@ vi.mock("../workspace/WorkspaceShell",()=>({WorkspaceShell:function Shell({termi
   useEffect(()=>{mocks.mount();return mocks.unmount;},[]);
   return <><input aria-label="文件草稿" value={draft} onChange={e=>setDraft(e.target.value)}/><button onClick={()=>void lock.lock(true)}>锁定测试工作区</button></>;
 }}));
-beforeEach(()=>{vi.clearAllMocks();pauseData();});
+beforeEach(()=>{vi.resetAllMocks();pauseData();});
 afterEach(()=>{cleanup();resumeData();});
+
+// DOM commit can precede passive effects; wait for both runtime owners explicitly.
+async function expectRuntimeReady() {
+  const draft = await screen.findByLabelText("文件草稿");
+  await waitFor(() => {
+    expect(mocks.mount).toHaveBeenCalledOnce();
+    expect(mocks.restore).toHaveBeenCalledOnce();
+    expect(dataPaused()).toBe(false);
+    expect(draft).toBeVisible();
+  });
+  return draft;
+}
 
 it("mounts no workspace readers while checking, after failure, or on a locked refresh",async()=>{
   let resolve!:(value:unknown)=>void;
@@ -41,14 +53,14 @@ it("mounts no workspace readers while checking, after failure, or on a locked re
 it("preserves unsaved drafts across lock/unlock without remounting the runtime owners",async()=>{
   mocks.api.mockResolvedValueOnce({locked:false}).mockResolvedValueOnce({locked:true}).mockResolvedValueOnce({locked:false});
   render(<ServerWorkbench onLogout={vi.fn()}/>);
-  const draft=await screen.findByLabelText("文件草稿");
+  const draft=await expectRuntimeReady();
   fireEvent.change(draft,{target:{value:"unsaved content"}});
   fireEvent.click(screen.getByText("锁定测试工作区"));
   await screen.findByRole("heading",{name:"终端已锁定"});
   expect(draft.closest("[hidden]")).not.toBeNull();expect(dataPaused()).toBe(true);
   fireEvent.change(screen.getByLabelText("主密码"),{target:{value:"correct-master-password"}});
   fireEvent.click(screen.getByRole("button",{name:"解锁终端和凭证"}));
-  await waitFor(()=>expect(dataPaused()).toBe(false));
+  await expectRuntimeReady();
   expect(screen.getByLabelText("文件草稿")).toHaveValue("unsaved content");
   expect(mocks.mount).toHaveBeenCalledOnce();expect(mocks.unmount).not.toHaveBeenCalled();
 });
@@ -59,11 +71,14 @@ it("keeps readers unmounted when the initial lock check fails and permits retry"
   await screen.findByText("无法确认终端锁定状态，请重试。");
   expect(mocks.mount).not.toHaveBeenCalled();expect(dataPaused()).toBe(true);
   fireEvent.click(screen.getByRole("button",{name:"重试"}));
-  await screen.findByLabelText("文件草稿");await waitFor(()=>expect(mocks.mount).toHaveBeenCalledOnce());
+  await expectRuntimeReady();
 });
 
 it("opens a locked takeover only after successful master-password verification", async () => {
-  mocks.api.mockResolvedValueOnce({locked:true}).mockResolvedValueOnce({locked:false});
+  let finishVerification!: (value: {locked: boolean}) => void;
+  mocks.api.mockResolvedValueOnce({locked:true}).mockImplementationOnce(() =>
+    new Promise(resolve => { finishVerification = resolve; }),
+  );
   render(<ServerWorkbench onLogout={vi.fn()}/>);
   await screen.findByRole("heading", {name:"终端已锁定"});
   expect(dataPaused()).toBe(true);
@@ -71,7 +86,13 @@ it("opens a locked takeover only after successful master-password verification",
   expect(mocks.restore).not.toHaveBeenCalled();
   fireEvent.change(screen.getByLabelText("主密码"), {target:{value:"takeover-master-password"}});
   fireEvent.click(screen.getByRole("button", {name:"解锁终端和凭证"}));
-  await screen.findByLabelText("文件草稿");
+  await waitFor(() => expect(finishVerification).toBeTypeOf("function"));
+  expect(screen.queryByLabelText("文件草稿")).not.toBeInTheDocument();
+  expect(dataPaused()).toBe(true);
+  expect(mocks.mount).not.toHaveBeenCalled();
+  expect(mocks.restore).not.toHaveBeenCalled();
+  await act(async () => { finishVerification({locked:false}); });
+  await expectRuntimeReady();
   expect(mocks.api).toHaveBeenLastCalledWith("/terminal-lock/unlock", "POST", {masterPassword:"takeover-master-password"});
   expect(dataPaused()).toBe(false);
   expect(mocks.mount).toHaveBeenCalledOnce();
