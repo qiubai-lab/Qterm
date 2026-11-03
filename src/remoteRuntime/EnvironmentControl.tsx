@@ -1,4 +1,6 @@
 import { useCallback, useRef, useState } from "react";
+import { ThemedTooltipButton } from "../components/ThemedTooltipButton";
+import { RuntimeStatusTag } from "./RuntimeStatusTag";
 import { Icon } from "../components/Icon";
 import { Button } from "../components/Button";
 import { DialogActionStatus, DialogFrame } from "../components/dialogs/DialogFrame";
@@ -33,7 +35,10 @@ export function EnvironmentControl({status = "本机", onLogout}: {status?: stri
     } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
     finally { setBusy(false); }
   }
-  return <><button ref={trigger} className="runtime-trigger" data-status={status} aria-label={`运行环境：${selectedRuntime?.name ?? "本机"}，${status}`} aria-haspopup="menu" aria-expanded={!!anchor} onClick={() => setAnchor(anchor ? null : trigger.current!.getBoundingClientRect())}><Icon name={selectedRuntime ? "server" : "computer"} size={14}/><span>{selectedRuntime?.name ?? "本机"}</span>{selectedRuntime && <small>{status}</small>}<Icon name="chevronDown" size={12}/></button>
+  return <><div className="runtime-environment-control" role="group" aria-label="运行环境">
+    {selectedRuntime && <RuntimeStatusTag entry={selectedRuntime} status={status}/>}
+    <ThemedTooltipButton anchorRef={trigger} className="runtime-trigger" tooltip="远程服务器" tooltipDisabled={!!anchor} aria-label={`运行环境：${selectedRuntime?.name ?? "本机"}，${status}`} aria-haspopup="menu" aria-expanded={!!anchor} onClick={() => setAnchor(anchor ? null : trigger.current!.getBoundingClientRect())}><Icon name="server" size={15}/></ThemedTooltipButton>
+  </div>
     {anchor && <EnvironmentMenu anchor={anchor} current={selectedRuntime} status={status} servers={entries} onChoose={requestSwitch} onClose={closeMenu} onAdd={() => { closeMenu(); setManager("add"); }} onManage={() => { closeMenu(); setManager("manage"); }}/>} 
     {manager && <ServerManager entries={entries} initialNew={manager === "add"} activeId={selectedRuntime?.id} onSave={save} onClose={() => setManager(null)} onConnect={async entry => { setManager(null); requestSwitch(entry); }}/>} 
     {pending && <DialogFrame compact title={pending.entry ? `连接 ${pending.entry.name}` : "返回本机"} subtitle="切换工作台运行环境" onClose={() => setPending(null)} dismissible={!busy}>

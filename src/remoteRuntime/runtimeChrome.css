@@ -1,0 +1,23 @@
+.runtime-environment-control { display:flex; flex:none; align-items:center; gap:6px; padding:0 4px; min-width:0; }
+.runtime-trigger { display:grid; place-items:center; flex:none; width:28px; height:28px; padding:0; border:0; border-radius:5px; background:transparent; color:var(--icon); cursor:pointer; }
+.runtime-trigger:hover,.runtime-trigger[aria-expanded="true"] { color:var(--icon-hover); background:var(--chrome-action-hover); }
+.runtime-trigger:active { background:var(--chrome-action-pressed); }
+.runtime-trigger:focus-visible,.runtime-status-tag:focus-visible { outline:2px solid var(--focus); outline-offset:2px; }
+.runtime-status-tag { position:relative; isolation:isolate; display:flex; align-items:center; gap:5px; max-width:180px; height:20px; padding:0 6px; border-radius:4px; color:var(--navigation-accent); font-size:10px; line-height:1; }
+.runtime-status-tag::before { content:""; position:absolute; z-index:-1; inset:0; border-radius:inherit; background:currentColor; opacity:.1; }
+.runtime-tag-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.runtime-status-tag small { flex:none; font-size:9px; }
+.runtime-status-dot { position:relative; flex:none; width:4px; height:4px; border-radius:50%; background:currentColor; }
+.runtime-status-dot::after { content:""; position:absolute; inset:-2px; border-radius:inherit; background:currentColor; opacity:.16; }
+.runtime-status-tag[data-status="已连接"]::before { animation:runtime-tag-breathe 3.2s ease-in-out infinite; }
+.runtime-status-tag[data-status="已连接"] .runtime-status-dot::after { animation:runtime-dot-breathe 3.2s ease-in-out infinite; }
+.runtime-status-tag[data-status="重连中"],.runtime-status-tag[data-status="连接中"] { color:var(--warning); }
+.runtime-status-tag[data-status="已被接管"] { color:var(--danger); }
+.runtime-status-tag[data-status="已锁定"],.runtime-status-tag[data-status="需要登录"] { color:var(--muted); }
+.runtime-status-tag[data-paused]::before,.runtime-status-tag[data-paused] .runtime-status-dot::after { animation-play-state:paused; }
+.runtime-desktop-controls { position:fixed; right:0; top:0; height:40px; z-index:1001; display:flex; align-items:center; background:transparent; }
+.runtime-chrome-spacer { width:var(--runtime-chrome-width,250px); flex:none; }
+@keyframes runtime-tag-breathe { 0%,100% { opacity:.07; } 50% { opacity:.15; } }
+@keyframes runtime-dot-breathe { 0%,100% { opacity:.1; transform:scale(.8); } 50% { opacity:.25; transform:scale(1.15); } }
+@media (max-width:800px) { .runtime-status-tag { max-width:140px; } }
+@media (prefers-reduced-motion:reduce) { .runtime-status-tag[data-status]::before,.runtime-status-tag[data-status] .runtime-status-dot::after { animation:none; } }

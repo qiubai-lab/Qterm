@@ -24,3 +24,14 @@ it("does not log out or change transport when a draft cannot be saved", async ()
   await waitFor(()=>expect(screen.getByText("草稿尚未同步")).toBeInTheDocument());
   expect(logout).not.toHaveBeenCalled(); expect(mocks.disconnect).not.toHaveBeenCalled();
 });
+it("separates the connected identity tag from the icon-only menu entry", () => {
+  render(<EnvironmentControl status="已连接"/>);
+  const trigger = screen.getByRole("button", {name:"运行环境：生产服务器，已连接"});
+  expect(trigger).toHaveTextContent("");
+  const tag = screen.getByLabelText("生产服务器，已连接");
+  expect(tag.tagName).toBe("SPAN");
+  expect(tag).toHaveTextContent("生产服务器");
+  fireEvent.click(trigger);
+  expect(screen.getAllByRole("menuitem", {name:/本机/})).toHaveLength(1);
+  expect(screen.getByRole("menuitem", {name:"管理服务器…"})).toBeInTheDocument();
+});
