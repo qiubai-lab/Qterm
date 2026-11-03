@@ -96,7 +96,7 @@ async def verify(f):
         raise AssertionError('locked takeover admitted a terminal socket')
     except InvalidStatusCode as error:
         assert error.status_code==423
-    next_client.api('/terminal-lock/unlock','POST',{'masterPassword':'wrong-master-password'},status=400)
+    invalid_master=next_client.api('/terminal-lock/unlock','POST',{'masterPassword':'wrong-master-password'},status=400)
     assert next_client.api('/terminal-lock')['locked']
     assert next_client.api('/access/resume','POST',next_client.proof())['authenticated']
     assert next_client.api('/terminal-lock')['locked']
@@ -130,6 +130,16 @@ async def verify(f):
     # A replacement transport locks once; its predecessor's close cannot re-lock it.
     replacement=await presence(refresh)
     assert refresh.api('/terminal-lock')['locked']
+    # This is the sixth master-password attempt across the shared vault budget:
+    # initial unlock, wrong password, takeover, refresh, reconnect, replacement.
+    # Correct credentials must remain indistinguishable from a wrong password.
+    limited=refresh.api('/terminal-lock/unlock','POST',{'masterPassword':master},status=400)
+    assert limited==invalid_master,limited
+    assert refresh.api('/terminal-lock')['locked']
+    refresh.api('/workspace',status=423)
+    # Wait a full production window from the refusal, allowing WebSocket ping/pong
+    # tasks to run. Do not bypass the limiter, restart the server, or retry errors.
+    await asyncio.sleep(61)
     refresh.api('/terminal-lock/unlock','POST',{'masterPassword':master})
     await reconnect.close()
     assert not refresh.api('/terminal-lock')['locked']
@@ -160,7 +170,7 @@ async def verify(f):
             await restarted_presence.close()
         finally:
             restarted.close()
-    print('PASS: takeover/refresh/reconnect/relogin/restart lock, invalid proof and master-password denial, stale socket isolation, PTY/environment/layout/draft retention')
+    print('PASS: shared master-password limit/expiry, takeover/refresh/reconnect/relogin/restart lock, invalid proof and master-password denial, stale socket isolation, PTY/environment/layout/draft retention')
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser();parser.add_argument('--container',action='store_true');args=parser.parse_args()
