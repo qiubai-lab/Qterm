@@ -11,3 +11,5 @@
 @media (prefers-reduced-motion:reduce) { .runtime-switch-spinner { animation:none; opacity:.65; } }
 
 .dialog-action-status.runtime-switch-status { color:var(--muted); }
+.runtime-switch-actions .dialog-action-status { display:block; min-width:0; flex:1 1 0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; font-size:10px; line-height:30px; }
+.runtime-switch-actions > div { flex:none; }

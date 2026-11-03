@@ -24,8 +24,11 @@ export function ServerApp({renderChrome}: {renderChrome?: (access: ReturnType<ty
   async function login(event: React.FormEvent) {
     event.preventDefault();const submitted=password;setPassword("");await access.login(submitted);
   }
-  return <AppThemeProvider key={authenticated ? "workspace" : "login"}><ThemedTitleTooltipProvider>
+  // Desktop controls own operations that span logout. Keep them outside the
+  // keyed authentication/theme subtree so a phase change cannot cancel a switch.
+  return <ThemedTitleTooltipProvider>
     {renderChrome?.(access)}
+    <AppThemeProvider key={authenticated ? "workspace" : "login"}>
     {authenticated ? <div className="server-workspace" inert={interrupted}><ServerWorkbench onLogout={access.logout}/></div> :
       <main className="server-login"><form className="server-login-card" onSubmit={event => void login(event)}>
         <div className="server-wordmark">›_ <strong>Qterm</strong><span>Server</span></div>
@@ -35,5 +38,6 @@ export function ServerApp({renderChrome}: {renderChrome?: (access: ReturnType<ty
       </form></main>}
     {access.phase === "occupied" && <AccessTakeoverDialog busy={busy} onCancel={access.cancel} onTakeover={()=>void access.takeover()}/>}
     {interrupted && <AccessReplacedDialog reason={replaced ? "replaced" : "disconnected"} reconnecting={access.phase === "reconnecting"} onConfirm={access.acknowledgeReplaced}/>}
-  </ThemedTitleTooltipProvider></AppThemeProvider>;
+    </AppThemeProvider>
+  </ThemedTitleTooltipProvider>;
 }
