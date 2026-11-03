@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { isDemo } from "../runtime/environment";
+import { isDemo, isServer } from "../runtime/environment";
 
 let local = false;
 let remote = false;
@@ -9,7 +9,7 @@ export async function bootstrapWebCapabilities(): Promise<void> {
   local = false;
   remote = false;
   tunnelAddressMapping = false;
-  if (isDemo || !("__TAURI_INTERNALS__" in window)) return;
+  if (isDemo || isServer || !("__TAURI_INTERNALS__" in window)) return;
   try {
     const value = await invoke<{ local?: unknown; remote?: unknown; tunnelAddressMapping?: unknown } | null>("web_supported");
     local = value?.local === true;

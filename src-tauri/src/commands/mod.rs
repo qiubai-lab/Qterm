@@ -23,3 +23,9 @@ pub mod configuration_merge;
 pub mod web;
 pub mod web_library;
 pub mod web_tabs;
+
+pub mod remote_runtime;
+
+pub mod remote_clipboard;
+
+pub mod remote_drop;

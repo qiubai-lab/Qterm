@@ -1,0 +1,52 @@
+.runtime-trigger { display:flex; flex:none; align-items:center; gap:6px; max-width:240px; height:28px; margin:0 5px; padding:0 8px; border:1px solid var(--border); border-radius:6px; background:var(--surface); color:var(--text); font-size:11px; }
+.runtime-trigger:hover { background:var(--hover); }
+.runtime-trigger:focus-visible { outline:2px solid var(--focus); outline-offset:2px; }
+.runtime-trigger>span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.runtime-trigger>svg { flex:none; color:var(--muted); }
+.runtime-trigger>small { flex:none; color:var(--accent); font-size:10px; }
+.runtime-menu { position:fixed; z-index:1300; width:min(290px,calc(100vw - 16px)); max-height:calc(100vh - 65px); overflow:auto; padding:5px; border:1px solid var(--border); border-radius:8px; background:var(--raised); box-shadow:0 8px 24px var(--shadow-strong); animation:runtime-menu-in 150ms ease-out; }
+.runtime-menu-summary { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:6px; padding:9px; font-size:11px; }
+.runtime-menu-summary strong { overflow-wrap:anywhere; }
+.runtime-menu-summary span { color:var(--muted); }
+.runtime-menu-summary code { grid-column:1/-1; color:var(--muted); font-size:10px; overflow-wrap:anywhere; }
+.runtime-menu button { display:flex; justify-content:space-between; align-items:center; gap:10px; width:100%; min-height:31px; padding:6px 9px; border:0; border-radius:5px; background:transparent; color:var(--text); text-align:left; font-size:11px; }
+.runtime-menu button:hover,.runtime-menu button:focus-visible { background:var(--hover); outline:none; }
+.runtime-menu button:focus-visible { box-shadow:inset 0 0 0 2px var(--focus); }
+.runtime-menu button span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.runtime-menu button small { flex:none; max-width:140px; overflow:hidden; text-overflow:ellipsis; color:var(--muted); }
+.runtime-menu-divider { height:1px; margin:5px; background:var(--border); }
+.runtime-manager .dialog-content { padding:0; }
+.runtime-manager-grid { display:grid; grid-template-columns:210px minmax(0,1fr); min-height:320px; height:min(440px,calc(100vh - 160px)); }
+.runtime-manager-grid>aside { display:flex; flex-direction:column; min-height:0; padding:9px; gap:9px; border-right:1px solid var(--border); }
+.runtime-server-list { position:relative; min-height:0; overflow:auto; }
+.runtime-server-list>p { color:var(--muted); font-size:11px; padding:9px; }
+.runtime-server-list>button { position:relative; z-index:1; display:flex; width:100%; gap:7px; align-items:center; padding:9px 7px; border:1px solid transparent; border-radius:6px; color:var(--muted); background:transparent; text-align:left; }
+.runtime-server-list>button:hover { background:var(--hover); }
+.runtime-server-list>button[aria-pressed="true"] { border-color:transparent; background:transparent; color:var(--text); }
+.runtime-server-list>button span { min-width:0; flex:1; }
+.runtime-server-list strong,.runtime-server-list small { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:11px; }
+.runtime-server-list small { margin-top:3px; font-size:10px; color:var(--muted); }
+.runtime-server-editor { display:flex; min-width:0; min-height:0; flex-direction:column; }
+.runtime-server-fields { flex:1; min-height:0; overflow:auto; padding:20px; }
+.runtime-server-fields h3 { margin:0 0 18px; font-size:13px; }
+.runtime-server-fields label { display:flex; flex-direction:column; gap:6px; margin-bottom:14px; font-size:11px; color:var(--muted); }
+.runtime-server-fields input { width:100%; height:32px; padding:0 9px; border:1px solid var(--border); border-radius:6px; background:var(--surface); color:var(--text); font-size:11px; }
+.runtime-server-fields p { color:var(--muted); font-size:11px; line-height:1.6; }
+.runtime-server-fields .runtime-http-note { color:var(--warning); }
+.runtime-editor-footer { padding:10px 16px; border-top:1px solid var(--border); }
+.runtime-editor-footer>.dialog-action-status { height:26px; margin:0; }
+.runtime-editor-footer>div { display:flex; justify-content:flex-end; gap:7px; }
+.runtime-desktop-controls { position:fixed; right:0; top:0; height:40px; z-index:1001; display:flex; align-items:center; background:var(--chrome); }
+.runtime-chrome-spacer { width:400px; flex:none; }
+.runtime-startup { display:grid; height:100vh; place-content:center; gap:12px; padding:40px; background:var(--canvas); color:var(--text); }
+.runtime-startup p { color:var(--muted); }
+@keyframes runtime-menu-in { from { opacity:0; transform:translateY(-3px); } to { opacity:1; transform:translateY(0); } }
+@media (max-width:800px) { .runtime-trigger { max-width:180px; } .runtime-manager-grid { grid-template-columns:170px minmax(0,1fr); } .runtime-chrome-spacer { width:340px; } }
+@media (prefers-reduced-motion:reduce) { .runtime-menu { animation:none; } }
+
+.runtime-selection { position:absolute; top:0; left:0; right:0; border:1px solid var(--border); border-radius:6px; background:var(--raised); pointer-events:none; transition:transform 280ms cubic-bezier(.22,1,.36,1); }
+@media (prefers-reduced-motion:reduce) { .runtime-selection { transition:none; } }
+
+.runtime-trigger[data-status="重连中"]>small,.runtime-trigger[data-status="连接中"]>small { color:var(--warning); }
+.runtime-trigger[data-status="已被接管"]>small { color:var(--danger); }
+.runtime-trigger[data-status="已锁定"]>small,.runtime-trigger[data-status="需要登录"]>small { color:var(--muted); }

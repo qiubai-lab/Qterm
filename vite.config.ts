@@ -8,7 +8,10 @@ const host = process.env.TAURI_DEV_HOST;
 export default defineConfig(async () => ({
   plugins: [react()],
   define: { __QTERM_DEMO__: false },
-  resolve: { alias: { "@qterm/services": fileURLToPath(new URL("./src/lib/tauri", import.meta.url)) } },
+  resolve: { alias: [
+    { find: /^@qterm\/services\/(textClipboard|clipboard|terminalImage|notifications)$/, replacement: fileURLToPath(new URL("./src/lib/tauri", import.meta.url)) + "/$1" },
+    { find: "@qterm/services", replacement: fileURLToPath(new URL("./src/remoteRuntime/services", import.meta.url)) },
+  ] },
   test: {
     environment: "jsdom",
     setupFiles: "./src/test/setup.ts",

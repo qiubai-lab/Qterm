@@ -1,3 +1,4 @@
+import { registerRuntimeDetach } from "../remoteRuntime/switchGuard";
 import { randomId } from "../lib/randomId";
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { clearWebData, type WebDataSelection, closeWeb, listenWebFocus, listenWebPages, openWeb, webAction, type WebLoadState, type WebMetrics } from "../lib/tauri/web";
@@ -91,7 +92,12 @@ export function useWebBrowser(surface: RefObject<HTMLDivElement | null>, session
         visible: () => visibility.current, revision: () => documentRevision, url: () => latestUrl.current, snapshotReady: () => snapshotReady,
         onError: reason => { if (!disposed) setError(reason); } });
     })().catch(err => { if (!disposed) { setLoading(false); setError(String(err)); } });
+    const unregisterDetach = registerRuntimeDetach(async () => {
+      disposed = true; unregisterSurface?.(); metricWatcher?.dispose(); popupWatcher?.dispose();
+      await created; unlisten?.(); unlistenFocus?.(); await closeWeb(id);
+    });
     return () => {
+      unregisterDetach();
       disposed = true;
       if (current.current === id) current.current = null;
       unregisterSurface?.();

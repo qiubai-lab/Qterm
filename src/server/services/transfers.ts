@@ -1,7 +1,9 @@
+import { isRemoteDesktop } from "../../lib/runtime/environment";
+import { saveNativeDownload } from "../../remoteRuntime/transport";
 import { randomId } from "../../lib/randomId";
 import { dataLease } from "../dataAccess";
 import type * as Desktop from "../../lib/tauri/transfers";
-import { API, api, message } from "../http";
+import { API, api, message, request } from "../http";
 import { selectUpload, takeUpload, type UploadEntry } from "../uploadSelection";
 import { uploadRequest } from "../uploadRequest";
 const tasks = new Map<string, { controller: AbortController; active: Set<string> }>();
@@ -46,6 +48,7 @@ async function download(sessionId: string, path: string, name: string, directory
   let id: string;
   try { ({ id } = await api<{ id: string }>("/transfers/download", "POST", { sessionId, path, taskId, directory }, signal)); } finally { active.delete(taskId); }
   signal.throwIfAborted();
+  if (isRemoteDesktop) { await saveNativeDownload(await request(`/downloads/${encodeURIComponent(id)}`, {signal}), name, () => signal.throwIfAborted()); return; }
   const link = document.createElement("a"); link.href = `${API}/downloads/${encodeURIComponent(id)}`; link.download = name; document.body.append(link); link.click(); link.remove();
 }); }
 export const downloadFile: typeof Desktop.downloadFile = (session, path, name, events) => download(session,path,name,false,events);

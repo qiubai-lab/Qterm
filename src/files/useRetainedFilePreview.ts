@@ -1,3 +1,4 @@
+import { registerRuntimeFlush } from "../remoteRuntime/switchGuard";
 import { useWorkbenchActive } from "../workspace/workbenchActivity";
 import { useEffect,useRef,useState } from "react";
 import { loadPaneState,savePaneState } from "@qterm/services/paneState";
@@ -48,5 +49,13 @@ export function useRetainedFilePreview(key:string|undefined,runtime:FileRuntime)
       queue.current.busy=false;
     })();
   },[enabled,key,preview,restored]);
+  useEffect(() => registerRuntimeFlush(async () => {
+    if (!preview || preview.content === preview.original) return;
+    if (!isServer) throw new Error("请先保存或关闭本机文件编辑，再切换环境");
+    const signature = JSON.stringify({...preview,imageUrl:"",error:""});
+    if (queue.current.busy || queue.current.pending || queue.current.last !== signature || error) {
+      throw new Error("文件草稿尚未同步，请等待同步完成后再切换；断网时请先复制保存修改内容");
+    }
+  }), [preview, error]);
   return [preview,setPreview,error] as const;
 }

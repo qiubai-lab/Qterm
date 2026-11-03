@@ -11,7 +11,7 @@ import { useBrowserContextMenuGuard } from "../app/useBrowserContextMenuGuard";
 import "../app/app.css";
 import "./server.css";
 
-export function ServerApp() {
+export function ServerApp({renderChrome}: {renderChrome?: (access: ReturnType<typeof useServerAccess>) => React.ReactNode} = {}) {
   useBrowserContextMenuGuard();
   const access = useServerAccess();
   const replaced = access.phase === "replaced";
@@ -25,6 +25,7 @@ export function ServerApp() {
     event.preventDefault();const submitted=password;setPassword("");await access.login(submitted);
   }
   return <AppThemeProvider key={authenticated ? "workspace" : "login"}><ThemedTitleTooltipProvider>
+    {renderChrome?.(access)}
     {authenticated ? <div className="server-workspace" inert={interrupted}><ServerWorkbench onLogout={access.logout}/></div> :
       <main className="server-login"><form className="server-login-card" onSubmit={event => void login(event)}>
         <div className="server-wordmark">›_ <strong>Qterm</strong><span>Server</span></div>

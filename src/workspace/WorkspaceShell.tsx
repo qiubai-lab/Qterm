@@ -1,3 +1,4 @@
+import { isRemoteDesktop } from "../lib/runtime/environment";
 import { useWorkbenchActive } from "./workbenchActivity";
 import { useTerminalLock, type TerminalLockBackend } from "./useTerminalLock";
 import { useTerminalAutoLock } from "./useTerminalAutoLock";
@@ -331,7 +332,7 @@ export function WorkspaceShell({ onLogout, webActions, terminalLockBackend, term
         : !vaultStatus.initialized
           ? "请先初始化凭证库"
         : "锁定终端";
-  return <main data-onboarding-ready={hydrated && terminalSettingsReady && !terminalLocked} className="app-shell" data-platform={onLogout ? "web" : desktopPlatform}>
+  return <main data-onboarding-ready={hydrated && terminalSettingsReady && !terminalLocked} className="app-shell" data-platform={onLogout && !isRemoteDesktop ? "web" : desktopPlatform}>
     <WorkspaceChrome onLogout={onLogout} webActions={webActions}>
       <WorkspaceTabs disabled={terminalLocked} requestClose={requestClose} onReorderSelection={order => { workspaceTransitionOrderOverrideRef.current = order; }}/>
     </WorkspaceChrome>

@@ -1,3 +1,4 @@
+import { isRemoteDesktop } from "../lib/runtime/environment";
 import { vaultStatus } from "./vaultStatus";
 import { pauseData } from "./dataAccess";
 import { resetServerTerminalLock, serverTerminalLock } from "./terminalLock";
@@ -28,7 +29,13 @@ export function useServerAccess() {
     stopPresence.current?.();
     stopPresence.current=openAccessPresence(() => {
       if (generation !== epoch.current) return;
-      void serverTerminalLock.read().catch(() => ({locked:true})).then(state => state.locked ? undefined : bootstrapAppTheme()).then(() => {
+      void (async () => {
+        if (isRemoteDesktop) {
+          const info = await api<{runtime:string;protocolVersion:number}>("/auth");
+          if (info.runtime !== "web-server" || info.protocolVersion !== 1) throw new Error("服务器协议不兼容，请更新客户端或服务器");
+        }
+        return serverTerminalLock.read().catch(() => ({locked:true}));
+      })().then(state => state.locked ? undefined : bootstrapAppTheme()).then(() => {
         if (generation===epoch.current) {setPhase("workspace");setError("");}
       }).catch(reason => {if(generation===epoch.current){setError(message(reason));setPhase("login");leave();}});
     },() => {if(generation===epoch.current){resetServerTerminalLock();closeAllSessions();setPhase(current => current === "workspace" || current === "reconnecting" ? "reconnecting" : "checking");setError("连接中断，正在重新连接…");}});

@@ -52,7 +52,7 @@ describe("application shell", () => {
     expect(brand).toHaveTextContent("Qterm");
     expect(brand.querySelector("svg")).toBeInTheDocument();
     expect(brand.nextElementSibling).toBe(workspaceNavigation);
-    expect(workspaceNavigation.nextElementSibling).toBe(controls);
+    expect(workspaceNavigation.nextElementSibling).toBe(screen.getByRole("button", {name:/运行环境/})); expect(workspaceNavigation.nextElementSibling?.nextElementSibling).toBe(controls);
     expect(within(controls).getAllByRole("button").map((button) => button.getAttribute("aria-label"))).toEqual(["置顶窗口", "最小化窗口", "最大化或还原窗口", "关闭窗口"]);
     expect(within(controls).getByRole("button", { name: "置顶窗口" }).querySelector('[data-icon="pin"]')).toBeInTheDocument();
 
@@ -87,7 +87,7 @@ describe("application shell", () => {
     const controls = screen.getByLabelText("窗口控制");
     expect(within(controls).getAllByRole("button").map((button) => button.getAttribute("aria-label"))).toEqual(["置顶窗口"]);
     expect(brand.nextElementSibling).toBe(workspaceNavigation);
-    expect(workspaceNavigation.nextElementSibling).toBe(controls);
+    expect(workspaceNavigation.nextElementSibling).toBe(screen.getByRole("button", {name:/运行环境/})); expect(workspaceNavigation.nextElementSibling?.nextElementSibling).toBe(controls);
   });
 
   it("toggles the window always-on-top state and exposes the active state", async () => {

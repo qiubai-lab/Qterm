@@ -1,3 +1,4 @@
+import { registerRuntimeFlush } from "../remoteRuntime/switchGuard";
 import { useWorkbenchActive } from "./workbenchActivity";
 import { CONFIGURATION_MERGED } from "@qterm/services/configurationMerge";
 import { hasWorkspaceRuntime, isServer } from "../lib/runtime/environment";
@@ -95,6 +96,12 @@ export function useWorkspacePersistence(document: WorkspaceDocument, dispatch: D
       stop?.();
     };
   }, [hydrated, flush]);
+
+  useEffect(() => registerRuntimeFlush(async () => {
+    if (!hydrated || !active) return;
+    webTabSessions.reconcile(documentRef.current);
+    await save(documentRef.current, webTabSessions.snapshot());
+  }), [hydrated, active, save, webTabSessions]);
 
   const dismissStorageNotice = useCallback(() => setStorageNotice(""), []);
 

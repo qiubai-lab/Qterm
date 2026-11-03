@@ -52,6 +52,12 @@ arboard = { version = "=3.6.1", default-features = false, features = ["image-dat
 tempfile = "=3.27.0"
 tauri-plugin-notification = "=2.4.0"
 
+axum = { version = "0.8", features = ["ws"] }
+reqwest = { version = "0.13", features = ["cookies", "stream"] }
+tokio-tungstenite = { version = "0.29", features = ["rustls-tls-native-roots"] }
+futures-util = "0.3"
+tokio-util = "0.7"
+
 [target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
 tauri-plugin-window-state = "=2.4.1"
 

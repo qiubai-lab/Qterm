@@ -2,7 +2,7 @@ import { renderHook } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 import { useTerminalInputBindings } from "../terminal/useTerminalInputBindings";
 import type { TerminalView } from "../terminal/terminalView";
-vi.mock("../lib/runtime/environment",()=>({isServer:true}));
+vi.mock("../lib/runtime/environment",()=>({isServer:true,isRemoteDesktop:false}));
 it("lets browser shortcuts deliver file paste events on Linux and snapshots their data",()=>{
   const element=document.createElement("div"),paste=vi.fn().mockResolvedValue(undefined);
   const view={element,terminal:{selectAll:vi.fn()},onKey:()=>true} as unknown as TerminalView;

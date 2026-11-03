@@ -29,6 +29,12 @@ Frontend -> Desktop Tauri Commands / Web HTTP+WebSocket -> Application -> Domain
 
 开发桌面 flavor 由 `scripts/tauri.mjs`、macOS 专用的 `scripts/tauri-dev-runner.mjs`、`src-tauri/tauri.dev.conf.json` 与 `Info.dev.plist` 共同拥有：常规 `pnpm tauri dev` 自动合并 `Qterm Dev` / `com.qiubai.qterm.dev`；macOS 将热更新二进制原子放入 `target/tauri-dev/.../Qterm Dev.app` 后运行，使 LaunchServices 能读取唯一 identifier，Windows/Linux 继续使用 Tauri 默认 runner。其他 Tauri 子命令原样转发并继续使用 `tauri.conf.json` 的正式身份。开发配置不声明 `app.windows`，避免覆盖通用或平台窗口数组；组合根把主窗口标题同步为最终 productName。domain、application、IPC 与 React 不推断 flavor。
 
+## Desktop Remote Runtime
+
+Desktop selects one immutable runtime per page through `src/remoteRuntime/services`. Business services use either native IPC or the existing Web adapters; clipboard, notifications, window operations and image exports remain native client capabilities. Runtime changes flush layout/guard dirty drafts, detach local surfaces and reload the page to isolate module-scoped caches. Local sessions are explicitly closed after confirmation; remote processes remain server-owned.
+
+The remote desktop never loads remote HTML into the trusted main WebView. A native Rust adapter owns the fixed upstream endpoint and its in-memory Cookie jar, exposes only `/api/v1/` through an ephemeral loopback listener, and validates a random path capability plus the main UI Origin. HTTP cookies and redirects are not passed back to the WebView. The existing server admission, lock, takeover and session-ownership checks still apply; native connections do not introduce a second privileged API or bypass server ownership.
+
 ## Frontend Styling and Theme Boundary
 
 - `src/app/app.css` 是唯一顶层样式 manifest，只按固定顺序导入 application foundations、当前 theme 与 feature-local CSS；Workspace、Terminal、Files、Network 和 dialogs 各自拥有带前缀的规则。

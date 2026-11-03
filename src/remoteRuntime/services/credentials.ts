@@ -1,0 +1,28 @@
+// Each page has one immutable runtime; native device services stay outside this router.
+import * as local from "../../lib/tauri/credentials";
+import * as remote from "../../server/services/credentials";
+import { selectedRuntime } from "../selection";
+export type * from "../../lib/tauri/credentials";
+export const getVaultStatus: typeof local.getVaultStatus = (...args) => (selectedRuntime ? remote.getVaultStatus : local.getVaultStatus)(...args);
+export const initializeVault: typeof local.initializeVault = (...args) => (selectedRuntime ? remote.initializeVault : local.initializeVault)(...args);
+export const unlockVault: typeof local.unlockVault = (...args) => (selectedRuntime ? remote.unlockVault : local.unlockVault)(...args);
+export const lockVault: typeof local.lockVault = (...args) => (selectedRuntime ? remote.lockVault : local.lockVault)(...args);
+export const changeMasterPassword: typeof local.changeMasterPassword = (...args) => (selectedRuntime ? remote.changeMasterPassword : local.changeMasterPassword)(...args);
+export const prepareMasterPasswordReset: typeof local.prepareMasterPasswordReset = (...args) => (selectedRuntime ? remote.prepareMasterPasswordReset : local.prepareMasterPasswordReset)(...args);
+export const resetMasterPassword: typeof local.resetMasterPassword = (...args) => (selectedRuntime ? remote.resetMasterPassword : local.resetMasterPassword)(...args);
+export const cancelMasterPasswordReset: typeof local.cancelMasterPasswordReset = (...args) => (selectedRuntime ? remote.cancelMasterPasswordReset : local.cancelMasterPasswordReset)(...args);
+export const clearVault: typeof local.clearVault = (...args) => (selectedRuntime ? remote.clearVault : local.clearVault)(...args);
+export const onVaultStatusChanged: typeof local.onVaultStatusChanged = (...args) => (selectedRuntime ? remote.onVaultStatusChanged : local.onVaultStatusChanged)(...args);
+export const listCredentials: typeof local.listCredentials = (...args) => (selectedRuntime ? remote.listCredentials : local.listCredentials)(...args);
+export const createPasswordCredential: typeof local.createPasswordCredential = (...args) => (selectedRuntime ? remote.createPasswordCredential : local.createPasswordCredential)(...args);
+export const renameCredential: typeof local.renameCredential = (...args) => (selectedRuntime ? remote.renameCredential : local.renameCredential)(...args);
+export const preparePrivateKeyCredential: typeof local.preparePrivateKeyCredential = (...args) => (selectedRuntime ? remote.preparePrivateKeyCredential : local.preparePrivateKeyCredential)(...args);
+export const prepareDroppedPrivateKeyCredential: typeof local.prepareDroppedPrivateKeyCredential = (...args) => (selectedRuntime ? remote.prepareDroppedPrivateKeyCredential : local.prepareDroppedPrivateKeyCredential)(...args);
+export const prepareGeneratedPrivateKeyCredential: typeof local.prepareGeneratedPrivateKeyCredential = (...args) => (selectedRuntime ? remote.prepareGeneratedPrivateKeyCredential : local.prepareGeneratedPrivateKeyCredential)(...args);
+export const commitPrivateKeyCredential: typeof local.commitPrivateKeyCredential = (...args) => (selectedRuntime ? remote.commitPrivateKeyCredential : local.commitPrivateKeyCredential)(...args);
+export const cancelPrivateKeyCredential: typeof local.cancelPrivateKeyCredential = (...args) => (selectedRuntime ? remote.cancelPrivateKeyCredential : local.cancelPrivateKeyCredential)(...args);
+export const revealCredentialPassword: typeof local.revealCredentialPassword = (...args) => (selectedRuntime ? remote.revealCredentialPassword : local.revealCredentialPassword)(...args);
+export const getCredentialPublicKey: typeof local.getCredentialPublicKey = (...args) => (selectedRuntime ? remote.getCredentialPublicKey : local.getCredentialPublicKey)(...args);
+export const deleteCredential: typeof local.deleteCredential = (...args) => (selectedRuntime ? remote.deleteCredential : local.deleteCredential)(...args);
+export const downloadVaultRecovery: typeof local.downloadVaultRecovery = (...args) => (selectedRuntime ? remote.downloadVaultRecovery : local.downloadVaultRecovery)(...args);
+export const downloadResetRecovery: typeof local.downloadResetRecovery = (...args) => (selectedRuntime ? remote.downloadResetRecovery : local.downloadResetRecovery)(...args);

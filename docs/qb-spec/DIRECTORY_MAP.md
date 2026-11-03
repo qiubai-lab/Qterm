@@ -288,3 +288,12 @@
 
 - `src/server/dataAccess.ts`：Web 业务请求可撤销信号、暂停订阅与控制请求白名单；`http.ts`、`uploadRequest.ts` 和 `sessionTransport.ts` 分别约束 HTTP、XHR 和数据 WebSocket，`accessPresence.ts` 保留访问存活及锁变更通知。`src/files/useFileLocationLoad.ts` 在工作台恢复后同步当前目录，不卸载编辑草稿。
 - `crates/qterm-server/src/data_access.rs`：服务端工作台锁的业务准入与流撤销；`auth.rs` 完成身份校验后委托，`retained_socket.rs` 每个数据视图使用独立 permit，`transfer_lifecycle.rs` 防止旧传输跨锁继续。后台 PTY/SSH/SFTP/Network 生命周期不由该模块终止。
+
+### Desktop remote runtime
+
+- `src/remoteRuntime/`: right-titlebar environment menu, server manager, immutable per-page runtime selection, switch flush/detach ownership and native clipboard/drop/download adapters. Server records contain only identity/name/origin, never credentials.
+- `src/remoteRuntime/services/`: desktop service router; remote business operations reuse `src/server/services`, while clipboard, image export, notifications and native windows remain client-owned. Reload is the boundary between service graphs.
+- `src/workspace/NativeWindowControls.tsx`: window actions separated from runtime/logout controls. `RemoteDesktopApp` keeps connection identity and native controls available during login, lock and connection failure.
+- `src-tauri/src/infrastructure/remote_runtime/`: fixed-origin native Cookie jar, private loopback HTTP/WebSocket bridge, exact UI-Origin admission, TLS validation, redirect rejection and cancellation. `commands/remote_runtime.rs` owns native bootstrap/save IPC; `remote_clipboard.rs` and `remote_drop.rs` accept only OS clipboard or approved drag/drop sources.
+- `src/remoteRuntime/switchGuard.ts`: registration boundary for workspace save, dirty file guards, native surface teardown and local runtime shutdown; never substitutes for a workspace state owner.
+- `src-tauri/src/bootstrap_tests.rs`: composition-root path/flavor/window-state regression tests extracted from `lib.rs` to keep registration changes below its source-size limit.

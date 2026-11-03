@@ -91,7 +91,7 @@ impl TransferState {
         approved.extend(paths.iter().cloned());
     }
 
-    fn take_drop_paths(&self, paths: &[PathBuf]) -> bool {
+    pub(crate) fn take_drop_paths(&self, paths: &[PathBuf]) -> bool {
         let mut approved = self
             .dropped_paths
             .lock()

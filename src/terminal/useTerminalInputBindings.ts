@@ -1,4 +1,4 @@
-import { isServer } from "../lib/runtime/environment";
+import { isServer, isRemoteDesktop } from "../lib/runtime/environment";
 import type { TerminalClipboardInput } from "../lib/contracts/sessions";
 import { useEffect, type RefObject } from "react";
 import { resolveAppShortcut } from "../app/shortcuts";
@@ -13,7 +13,7 @@ export function useTerminalInputBindings(viewRef: RefObject<TerminalView | null>
     // Linux middle-click pastes PRIMARY, which is distinct from the clipboard
     // read by the staging API. Preserve xterm's existing selection paste path.
     const unbindClipboard = !isServer && clipboardPlatform === "linux" ? () => undefined
-      : bindTerminalClipboardEvents(view.element, inputEnabled, event => paste(isServer && event?.clipboardData ? {files:Array.from(event.clipboardData.files),text:event.clipboardData.getData("text/plain")} : undefined), () => view.terminal.selectAll());
+      : bindTerminalClipboardEvents(view.element, inputEnabled, event => paste(isServer && !isRemoteDesktop && event?.clipboardData ? {files:Array.from(event.clipboardData.files),text:event.clipboardData.getData("text/plain")} : undefined), () => view.terminal.selectAll());
     view.onKey = (event) => {
       if (resolveAppShortcut(event, desktopPlatform)?.type === "searchTerminal") {
         event.preventDefault();
@@ -22,7 +22,7 @@ export function useTerminalInputBindings(viewRef: RefObject<TerminalView | null>
         return false;
       }
       // Let browser paste deliver files; preventing keydown would suppress that event.
-      if (isServer && event.key.toLowerCase() === "v" && (event.ctrlKey || event.metaKey) && !event.altKey) return false;
+      if (isServer && !isRemoteDesktop && event.key.toLowerCase() === "v" && (event.ctrlKey || event.metaKey) && !event.altKey) return false;
       if (!handleClipboardShortcut(event, clipboardPlatform, view.terminal, inputEnabled, copy, paste)) return false;
       return handleMacWordNavigationShortcut(event, clipboardPlatform, (data) => { void view.inputScheduler.send(data); });
     };

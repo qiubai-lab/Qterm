@@ -1,6 +1,8 @@
 import { dataLease, isControlRequest, pauseData } from "./dataAccess";
 import { accessHeaders, accessProof } from "./accessIdentity";
-export const API = "/api/v1";
+export let API = "/api/v1";
+/** Called once before the desktop remote workbench mounts. */
+export function configureRuntimeApi(base: string) { API = base; }
 export const AUTH_EXPIRED = "qterm-server-auth-expired";
 
 export class RequestError extends Error {

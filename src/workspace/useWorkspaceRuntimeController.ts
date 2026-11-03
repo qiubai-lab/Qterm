@@ -1,6 +1,8 @@
+import { getVaultStatus, lockVault } from "@qterm/services/credentials";
+import { registerRuntimeDetach } from "../remoteRuntime/switchGuard";
 import { isServer } from "../lib/runtime/environment";
 import { releaseRetainedBlock } from "@qterm/services/runtimeSessions";
-import { useCallback, type Dispatch } from "react";
+import { useCallback, useEffect, type Dispatch } from "react";
 
 import { blockIds, findLeaf } from "./layout";
 import type { Workspace, WorkspaceDocument } from "./model";
@@ -81,6 +83,14 @@ export function useWorkspaceRuntimeController(state: WorkspaceRuntimeState, docu
       return next;
     });
   }, [clearers, connectionTargetIntents, fileRuntimesRef, files, git, gitRuntimesRef, network, networkRuntimesRef, pendingInitialDirectories, pendingTerminalOutput, runtimesRef, setFileRuntimes, setGitRuntimes, setNetworkRuntimes, setRuntimes, terminal, terminalSizeReaders, writerOwners, writers]);
+
+  useEffect(() => registerRuntimeDetach(async () => {
+    if (!isServer) {
+      await closeSessions(documentRef.current.workspaces.flatMap(workspace => blockIds(workspace.layout)));
+      const vault = await getVaultStatus();
+      if (vault.initialized && vault.unlocked) await lockVault();
+    }
+  }), [closeSessions, documentRef]);
 
   const activeWorkspace = document.workspaces.find((workspace) => workspace.id === document.activeWorkspaceId) ?? document.workspaces[0];
   return {

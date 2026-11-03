@@ -1,3 +1,5 @@
+import { isRemoteDesktop } from "../lib/runtime/environment";
+import { saveNativeDownload } from "../remoteRuntime/transport";
 import { dataLease } from "./dataAccess";
 export function selectBrowserFile(): Promise<File | null> {
   return new Promise(resolve => {
@@ -9,6 +11,7 @@ export function selectBrowserFile(): Promise<File | null> {
 }
 export async function saveBrowserResponse(response: Response, name: string): Promise<void> {
   const lease = dataLease();
+  if (isRemoteDesktop) { await saveNativeDownload(response, name, lease.check); lease.check(); return; }
   const blob = await response.blob(); lease.check(); const url = URL.createObjectURL(blob);
   const link = document.createElement("a"); link.href=url; link.download=name; document.body.append(link); link.click(); link.remove();
   window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
