@@ -12,23 +12,20 @@ use axum::{
 };
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use serde::Deserialize;
-use std::{
-    sync::{Arc, Mutex},
-    time::{Duration, Instant},
-};
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct Identity(pub String);
 pub struct Auth {
     pub access: crate::access::Access,
-    attempts: Mutex<(Instant, u32)>,
+    pub failures: crate::verification::Verification,
     pub verification: Arc<tokio::sync::Semaphore>,
 }
 impl Default for Auth {
     fn default() -> Self {
         Self {
             access: Default::default(),
-            attempts: Mutex::new((Instant::now(), 0)),
+            failures: Default::default(),
             verification: Arc::new(tokio::sync::Semaphore::new(2)),
         }
     }
@@ -43,21 +40,6 @@ impl Auth {
     }
     pub fn revoke(&self) {
         self.access.revoke();
-    }
-    fn attempt(&self) -> Result<()> {
-        let mut attempts = self.attempts.lock().unwrap();
-        if attempts.0.elapsed() >= Duration::from_secs(60) {
-            *attempts = (Instant::now(), 0);
-        }
-        attempts.1 += 1;
-        if attempts.1 > 10 {
-            return Err(ApiError::new(
-                StatusCode::TOO_MANY_REQUESTS,
-                "rateLimited",
-                "尝试过于频繁，请稍后重试",
-            ));
-        }
-        Ok(())
     }
 }
 pub fn random_token() -> Result<String> {
@@ -157,7 +139,6 @@ pub async fn login(
     Json(input): Json<LoginInput>,
 ) -> Result<Response> {
     check_origin(&headers, &state.config.origin)?;
-    state.auth.attempt()?;
     if input.password.len() > 1024 {
         return Err(ApiError::invalid());
     }
@@ -231,13 +212,5 @@ mod tests {
             assert!(check_origin(&headers, "https://qterm.example").is_err());
         }
         assert!(check_origin(&HeaderMap::new(), "https://qterm.example").is_err());
-    }
-    #[test]
-    fn login_attempts_are_bounded() {
-        let auth = Auth::default();
-        for _ in 0..10 {
-            assert!(auth.attempt().is_ok());
-        }
-        assert!(auth.attempt().is_err());
     }
 }

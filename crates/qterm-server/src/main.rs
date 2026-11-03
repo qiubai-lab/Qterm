@@ -45,6 +45,7 @@ mod transfer_storage;
 mod transfers;
 mod vault;
 mod vault_events;
+mod verification;
 mod workspace_recovery;
 mod workspace_runtime;
 

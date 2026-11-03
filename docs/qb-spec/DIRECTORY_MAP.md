@@ -263,6 +263,8 @@
 
 ### Web 独占接管
 
+- `verification.rs`、`verification_tests.rs`：Web 验证入口的每实例滑动窗口预算、统一失败响应与异步时间填充；由 `Auth` 持有，保护登录、共享主密码验证、恢复密钥与导入私钥口令。
+
 - `crates/qterm-server/src/access.rs`、`access_tests.rs`：唯一页面访问所有者、限时确认票据、并发接管、恢复与心跳宽限；不拥有终端进程。
 - `access_lifecycle.rs`、`access_lifecycle_tests.rs`：登录、恢复、接管、页面连接建立/断开、退出与手动锁定的统一编排；与解锁共用 vault gate，原子发布锁状态，按所有者及连接标识屏蔽旧回调，幂等清理临时授权，不终止后台任务。
 - `access_transport.rs`、`access_takeover_tests.rs`、`access_socket.rs`：接管/恢复 HTTP 边界、接管主密码验证门禁回归与页面在线 WebSocket；`auth.rs` 统一验证 HTTP 页面凭证，终端握手另行验证同一身份。

@@ -115,10 +115,11 @@ pub fn router(state: Arc<ServerState>) -> Router {
         .route("/terminal/clipboard",post(crate::terminal_clipboard::upload).layer(DefaultBodyLimit::max(transfers::MAX_TRANSFER_BYTES as usize+1024*1024)))
         .route("/transfers/{id}/cancel",post(crate::transfer_lifecycle::cancel))
         .route("/downloads/{id}",get(transfers::download))
+        .route_layer(middleware::from_fn_with_state(state.clone(),crate::verification::serve))
         .route_layer(middleware::from_fn_with_state(state.clone(),auth::guard));
     Router::new()
         .route("/healthz",get(||async{"ok"}))
-        .nest("/api/v1",protected.route("/login",post(auth::login)).route("/access/resume",post(crate::access_transport::resume)).route("/access/takeover",post(crate::access_transport::takeover)))
+        .nest("/api/v1",protected.route("/login",post(auth::login).layer(middleware::from_fn_with_state(state.clone(),crate::verification::serve))).route("/access/resume",post(crate::access_transport::resume)).route("/access/takeover",post(crate::access_transport::takeover)))
         .fallback_service(ServeDir::new(&state.config.assets).append_index_html_on_directories(true))
         .layer(DefaultBodyLimit::max(4*1024*1024))
         .layer(SetResponseHeaderLayer::overriding(header::CACHE_CONTROL,HeaderValue::from_static("no-store")))

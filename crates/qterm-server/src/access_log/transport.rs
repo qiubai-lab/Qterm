@@ -134,6 +134,7 @@ pub async fn observe(
                 .get::<crate::error::ResponseErrorCode>()
                 .map(|error| error.0.as_str())
             {
+                Some("rateLimited") => "rateLimited",
                 Some("invalidLogin") => "invalidPassword",
                 Some("sessionReplaced") => "sessionReplaced",
                 Some("unauthorized") => "sessionExpired",
