@@ -3,10 +3,11 @@
 .runtime-trigger:hover,.runtime-trigger[aria-expanded="true"] { color:var(--icon-hover); background:var(--chrome-action-hover); }
 .runtime-trigger:active { background:var(--chrome-action-pressed); }
 .runtime-trigger:focus-visible,.runtime-status-tag:focus-visible { outline:2px solid var(--focus); outline-offset:2px; }
-.runtime-status-tag { position:relative; isolation:isolate; display:flex; align-items:center; gap:5px; max-width:180px; height:20px; padding:0 6px; border-radius:4px; color:var(--navigation-accent); font-size:10px; line-height:1; }
+.runtime-status-tag { position:relative; isolation:isolate; display:flex; align-items:center; gap:5px; min-width:0; max-width:180px; height:20px; padding:0 6px; border-radius:4px; color:var(--navigation-accent); font-size:10px; line-height:14px; }
 .runtime-status-tag::before { content:""; position:absolute; z-index:-1; inset:0; border-radius:inherit; background:currentColor; opacity:.1; }
-.runtime-tag-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.runtime-status-tag small { flex:none; font-size:9px; }
+/* Equal text metrics avoid platform-dependent baseline drift; leave room for CJK glyphs. */
+.runtime-tag-name { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.runtime-status-tag small { flex:none; font:inherit; white-space:nowrap; }
 .runtime-status-dot { position:relative; flex:none; width:4px; height:4px; border-radius:50%; background:currentColor; }
 .runtime-status-dot::after { content:""; position:absolute; inset:-2px; border-radius:inherit; background:currentColor; opacity:.16; }
 .runtime-status-tag[data-status="已连接"]::before { animation:runtime-tag-breathe 3.2s ease-in-out infinite; }

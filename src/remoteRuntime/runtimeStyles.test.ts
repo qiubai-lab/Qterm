@@ -2,6 +2,12 @@
 import { readFileSync } from "node:fs";
 import { expect, it } from "vitest";
 const css = (name: string) => readFileSync(new URL(name, import.meta.url), "utf8");
+it("gives status and name equal text metrics with room for Windows CJK glyphs", () => {
+  const chrome = css("./runtimeChrome.css");
+  expect(chrome).toMatch(/\.runtime-status-tag\s*\{[^}]*align-items:center[^}]*height:20px[^}]*font-size:10px; line-height:14px/);
+  expect(chrome).toMatch(/\.runtime-status-tag small\s*\{[^}]*flex:none; font:inherit; white-space:nowrap/);
+  expect(chrome).toMatch(/\.runtime-tag-name\s*\{[^}]*min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap/);
+});
 it("keeps chrome seamless and stops breathing for reduced motion", () => {
   const chrome = css("./runtimeChrome.css");
   expect(chrome).toMatch(/\.runtime-desktop-controls\s*\{[^}]*background:transparent/);
