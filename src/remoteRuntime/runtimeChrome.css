@@ -15,7 +15,9 @@
 .runtime-status-tag[data-status="已被接管"] { color:var(--danger); }
 .runtime-status-tag[data-status="已锁定"],.runtime-status-tag[data-status="需要登录"] { color:var(--muted); }
 .runtime-status-tag[data-paused]::before,.runtime-status-tag[data-paused] .runtime-status-dot::after { animation-play-state:paused; }
-.runtime-desktop-controls { position:fixed; right:0; top:0; height:40px; z-index:1001; display:flex; align-items:center; gap:4px; padding:0 10px 0 4px; background:transparent; }
+.runtime-window-drag-region { position:fixed; top:0; left:0; right:0; height:40px; z-index:1001; user-select:none; touch-action:none; }
+.runtime-window-drag-region[data-platform="macos"] { left:78px; }
+.runtime-desktop-controls { position:fixed; right:0; top:0; height:40px; z-index:1002; display:flex; align-items:center; gap:4px; padding:0 10px 0 4px; background:transparent; }
 /* Container boundaries must not add a second gap between the three chrome actions. */
 .runtime-desktop-controls .runtime-environment-control { padding:0; }
 .runtime-desktop-controls .window-controls { gap:4px; margin-left:0; padding:0; }

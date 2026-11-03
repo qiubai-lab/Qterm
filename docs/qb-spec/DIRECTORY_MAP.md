@@ -238,7 +238,9 @@
 - `crates/qterm-server/src/config.rs`: exact public-origin validation and explicit remote HTTP opt-in; authentication still enforces the configured origin.
 - `vite.web.config.ts`, `web/index.html`: explicit real-browser build, independent of desktop and demo.
 
-- `src/workspace/WorkspaceChrome.tsx`: shared workspace header and desktop window gestures; browser logout occupies the native control area.
+- `src/workspace/WorkspaceChrome.tsx`: shared workspace header; browser logout occupies the native control area.
+- `src/workspace/useWindowTitlebar.ts`: desktop drag threshold, stationary double-click maximize/restore, interactive-target exclusion and gesture cleanup, shared by workspace and remote authentication screens.
+- `src/remoteRuntime/RemoteWindowDragRegion.tsx`: transparent top drag region for startup, login, lock and connection interruption; yields to native controls and is removed when the workbench becomes active.
 - `crates/qterm-server/src/local_socket.rs` / `socket_io.rs`: local PTY admission and shared bounded SSH/local WebSocket transport; logout closes browser transports while retained runtime processes keep running.
 - `crates/qterm-server/src/local_files.rs` / `settings.rs` / `credential_management.rs`: service-account files, persistent settings and shared credential workflows exposed through narrow authenticated routes.
 - `crates/qterm-core/src/application/local_file_listing.rs`: shared desktop/server local directory listing.
