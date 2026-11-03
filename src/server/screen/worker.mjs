@@ -1,4 +1,5 @@
 // Private stdio protocol. No terminal output or credentials are written to stderr.
+import { serializeMouseEncoding } from './mouseEncoding.mjs';
 import { PendingSequence } from './pendingSequence.mjs';
 import readline from 'node:readline';
 import headless from '@xterm/headless/lib-headless/xterm-headless.js';
@@ -47,7 +48,7 @@ async function request(input) {
   if (input.op === 'resize') { terminal.resize(input.columns,input.rows); terminal.options.scrollback=Math.min(2000,Math.floor(65536/input.columns)); return {}; }
   if (input.op === 'snapshot') {
     // Serialize state, not raw historic escape sequences (no replayed OSC side effects).
-    return {data:serialize.serialize({scrollback:2000}),pending:entry.pending.snapshot(),columns:terminal.cols,rows:terminal.rows,cwd:entry.cwd};
+    return {data:serialize.serialize({scrollback:2000}) + serializeMouseEncoding(terminal),pending:entry.pending.snapshot(),columns:terminal.cols,rows:terminal.rows,cwd:entry.cwd};
   }
   throw new Error('invalidScreenOperation');
 }

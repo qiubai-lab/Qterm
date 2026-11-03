@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
     loadAddon: ReturnType<typeof vi.fn>;
     keyHandler: ((event: KeyboardEvent) => boolean) | null;
     dataHandler: ((data: string) => void) | null;
+    binaryHandler: ((data: string) => void) | null;
     osc7Handler: ((data: string) => boolean) | null;
   }>,
   fits: [] as Array<{ fit: ReturnType<typeof vi.fn>; proposeDimensions: ReturnType<typeof vi.fn> }>,
@@ -125,6 +126,12 @@ vi.mock("@xterm/xterm", () => ({
     onData(handler: (data: string) => void) {
       this.dataHandler = handler;
       return { dispose: vi.fn() };
+    }
+
+    binaryHandler: ((data: string) => void) | null = null;
+    onBinary(handler: (data: string) => void) {
+      this.binaryHandler = handler;
+      return { dispose: () => { this.binaryHandler = null; } };
     }
 
     attachCustomKeyEventHandler(handler: (event: KeyboardEvent) => boolean) {

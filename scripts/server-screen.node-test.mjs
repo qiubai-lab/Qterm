@@ -42,3 +42,40 @@ test('headless worker restores alternate screen, scrollback, cursor, pending inp
   await call('resize',{columns:100,rows:30});assert.equal((await call('snapshot')).columns,100);
   await call('destroy');
 });
+
+test('worker snapshots preserve mouse encoding across attach and worker recovery', async t => {
+  const { default: headless } = await import('@xterm/headless/lib-headless/xterm-headless.js');
+  const child = spawn(process.execPath, ['src/server/screen/worker.mjs'], {stdio:['pipe','pipe','inherit']});
+  t.after(() => child.kill());
+  const lines = createInterface({input:child.stdout})[Symbol.asyncIterator]();
+  async function call(op, values = {}) {
+    child.stdin.write(JSON.stringify({id:'mouse',op,...values})+'\n');
+    const result = JSON.parse((await lines.next()).value);
+    assert.equal(result.ok,true);
+    return result;
+  }
+  for (const [mode, encoding] of [['', 'DEFAULT'], ['\x1b[?1006h','SGR'], ['\x1b[?1016h','SGR_PIXELS'], ['\x1b[?1006h\x1b[?1006l','DEFAULT'], ['\x1b[?1016h\x1b[?1016l','DEFAULT']]) {
+    await call('create',{columns:80,rows:24});
+    const data = '\x1b[?1049h\x1b[?1002h' + mode;
+    await call('write',{data:Buffer.from(data).toString('base64')});
+    const snapshot = await call('snapshot');
+    const terminal = new headless.Terminal({allowProposedApi:true});
+    try {
+      await new Promise(resolve => terminal.write(snapshot.data,resolve));
+      assert.equal(terminal.modes.mouseTrackingMode,'drag');
+      assert.equal(terminal._core.coreMouseService.activeEncoding,encoding);
+      const reports = [];
+      terminal.onData(data => reports.push(['text',data]));
+      terminal.onBinary(data => reports.push(['binary',data]));
+      terminal._core.coreMouseService.triggerMouseEvent({col:10,row:5,x:110,y:60,button:0,action:1,ctrl:false,alt:false,shift:false});
+      assert.deepEqual(reports, encoding === 'DEFAULT' ? [['binary','\x1b[M +&']] : [['text',encoding === 'SGR' ? '\x1b[<0;11;6M' : '\x1b[<0;110;60M']]);
+    } finally { terminal.dispose(); }
+    await call('restore',{snapshot});
+    assert.equal((await call('snapshot')).data,snapshot.data);
+  }
+  await call('write',{data:Buffer.from('\x1bc').toString('base64')});
+  const reset = await call('snapshot');
+  assert.ok(!reset.data.includes('[?1002h'));
+  assert.ok(!reset.data.includes('[?1006h'));
+  assert.ok(!reset.data.includes('[?1016h'));
+});

@@ -1,10 +1,11 @@
+import { bindTerminalInput } from "./terminalInput";
 import { bindServerScreen } from "./serverScreenBinding";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { writeText as writeClipboardText } from "@qterm/services/textClipboard";
 import { parseOsc7Cwd } from "./osc7";
 import { createTerminalLayout, type TerminalLayout } from "./terminalLayout";
-import { createTerminalInputScheduler, type TerminalInputScheduler } from "./terminalInputScheduler";
+import { createTerminalInputScheduler, type TerminalInputScheduler, type TerminalInput } from "./terminalInputScheduler";
 import { createTerminalOsc52Addon } from "./terminalOsc52";
 import { createTerminalOsc8LinkHandler } from "./terminalOsc8Link";
 import { createTerminalWebLinksAddon } from "./terminalWebLinks";
@@ -19,7 +20,7 @@ export interface TerminalView extends TerminalSearchHost {
   osc7Enabled: boolean;
   onCwd: (cwd: string) => void;
   onKey: (event: KeyboardEvent) => boolean;
-  write: (data: string) => Promise<void>;
+  write: (data: TerminalInput) => Promise<void>;
   inputScheduler: TerminalInputScheduler;
   resize: { send: (columns: number, rows: number) => Promise<void> };
   layout: TerminalLayout;
@@ -72,7 +73,7 @@ export function acquireTerminalView(sessionKey: string, container: HTMLElement, 
   const layout = createTerminalLayout(terminal, fit, (columns, rows) => resize.send(columns, rows), resizeDelayMs);
   const serverScreen = bindServerScreen(terminal,getBlockId,()=>layout.restore(true),cwd=>{if(view.osc7Enabled)view.onCwd(cwd);});
   const themeBinding = bindTerminalTheme((theme) => { terminal.options.theme = theme; });
-  const writeTarget: { send: (data: string) => Promise<void> } = { send: () => Promise.resolve() };
+  const writeTarget: { send: (data: TerminalInput) => Promise<void> } = { send: () => Promise.resolve() };
   const inputScheduler = createTerminalInputScheduler((data) => writeTarget.send(data));
   const view: TerminalView = {
     terminal,
@@ -94,7 +95,7 @@ export function acquireTerminalView(sessionKey: string, container: HTMLElement, 
   };
   writeTarget.send = (data) => view.write(data);
   terminal.attachCustomKeyEventHandler((event) => view.onKey(event));
-  view.input = terminal.onData((data) => { void view.inputScheduler.send(data); });
+  view.input = bindTerminalInput(terminal, view.inputScheduler);
   view.cwdHandler = terminal.parser.registerOscHandler(7, (data) => {
     if (!view.osc7Enabled) return true;
     const cwd = parseOsc7Cwd(data);

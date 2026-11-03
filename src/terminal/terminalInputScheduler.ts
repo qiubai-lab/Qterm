@@ -1,17 +1,19 @@
+export type TerminalInput = string | Uint8Array;
+
 export type CaptureTerminalInput = (emit: () => void) => Promise<void>;
 
 export interface TerminalInputScheduler {
-  send: (data: string) => Promise<void>;
+  send: (data: TerminalInput) => Promise<void>;
   runExclusive: (operation: (capture: CaptureTerminalInput) => void | Promise<void>) => Promise<void>;
   dispose: () => void;
 }
 
 export function createTerminalInputScheduler(
-  write: (data: string) => Promise<void>,
+  write: (data: TerminalInput) => Promise<void>,
   onError: (error: unknown) => void = () => undefined,
 ): TerminalInputScheduler {
   let tail = Promise.resolve();
-  let capturedInput: string[] | null = null;
+  let capturedInput: TerminalInput[] | null = null;
   let disposed = false;
 
   const reportError = (error: unknown) => {
@@ -19,7 +21,7 @@ export function createTerminalInputScheduler(
     catch { /* Error reporting must not stall terminal input. */ }
   };
 
-  const deliver = async (data: string) => {
+  const deliver = async (data: TerminalInput) => {
     if (disposed || !data) return;
     try { await write(data); }
     catch (error) { reportError(error); }
@@ -37,7 +39,7 @@ export function createTerminalInputScheduler(
   const capture: CaptureTerminalInput = async (emit) => {
     if (disposed) return;
     if (capturedInput) throw new Error("terminal input capture is already active");
-    const batch: string[] = [];
+    const batch: TerminalInput[] = [];
     capturedInput = batch;
     let emitError: unknown;
     try { emit(); }

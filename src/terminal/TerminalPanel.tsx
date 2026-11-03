@@ -311,7 +311,7 @@ export function TerminalPanel({ blockId, sessionKey, visible, local, osc7Enabled
     const container = containerRef.current;
     if (!container) return;
     const view = acquireTerminalView(sessionKey, container, windowsPty, local ? 50 : 0);
-    view.write = (data) => writeRef.current(blockId, new TextEncoder().encode(data));
+    view.write = (data) => writeRef.current(blockId, typeof data === "string" ? new TextEncoder().encode(data) : data);
     view.resize.send = (columns, rows) => resizeRef.current(blockId, columns, rows);
     view.osc7Enabled = osc7EnabledRef.current;
     view.onCwd = (cwd) => setBlockCwd(blockId, cwd);

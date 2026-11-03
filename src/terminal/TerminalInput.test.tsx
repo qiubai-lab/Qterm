@@ -27,6 +27,13 @@ describe("TerminalPanel clipboard interaction", () => {
     vi.unstubAllGlobals();
   });
 
+  it("passes binary mouse coordinates to the session without UTF-8 re-encoding", async () => {
+    const view = render(<TerminalPanel blockId="block-keys" sessionKey="binary-mouse" local={false} visible/>);
+    await act(async () => { mocks.terminals[0].binaryHandler?.("\x1b[M\x20\xc8\xff"); });
+    expect(mocks.writeBlock).toHaveBeenCalledWith("block-keys", Uint8Array.from([27, 91, 77, 32, 200, 255]));
+    view.unmount();
+  });
+
   it("rebinds native edit events across session changes and removes them on unmount", async () => {
     vi.stubGlobal("navigator", { platform: "MacIntel", userAgent: "Macintosh" });
     mocks.startTerminalClipboardStaging.mockResolvedValue({ kind: "text", text: "new paste" });

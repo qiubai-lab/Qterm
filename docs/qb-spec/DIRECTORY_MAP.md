@@ -163,7 +163,7 @@
 - `.agents/skills/`：负责把长期工程与界面规范转成可执行的 agent 决策流程；不替代 qb-spec change、测试、linter 或源码门禁。
 - `src/app/`：负责顶层布局、feature 组合与应用级预设主题生命周期；不承载认证、连接或传输规则。
 - `src/workspace/`：负责工作区结构模型、布局树变换、顶部 Workspace 导航、按连接的有界 Git 仓库历史和 block runtime 编排；不读取本地文件、验证仓库有效性或实现 SSH/SFTP。
-- `src/terminal/`：负责 xterm 实例及终端 I/O 适配；不持久化 buffer 或拥有 Workspace 生命周期。`terminalView.ts` 拥有可重挂载的 xterm 视图与 addon 生命周期；`terminalOsc52.ts` 拥有有界、只写的剪贴板协议适配；`terminalClipboardShortcuts.ts` 拥有复制/粘贴快捷键与原生编辑事件分流；`useTerminalInputBindings.ts` 拥有视图绑定生命周期、搜索与词导航接线。macOS/Windows 的原生 paste 在 xterm 处理前接入既有暂存/确认流程；Linux 保持 PRIMARY 选区粘贴语义。`TerminalInput.test.tsx` 保护输入和上传行为，`terminalPanelTestFixture.ts` 提供测试专用 xterm/IPC fixture。
+- `src/terminal/`：负责 xterm 实例及终端 I/O 适配；不持久化 buffer 或拥有 Workspace 生命周期。`terminalView.ts` 拥有可重挂载的 xterm 视图与 addon 生命周期；`terminalInput.ts` 将文本与原始字节鼠标事件接入同一输入队列；`terminalOsc52.ts` 拥有有界、只写的剪贴板协议适配；`terminalClipboardShortcuts.ts` 拥有复制/粘贴快捷键与原生编辑事件分流；`useTerminalInputBindings.ts` 拥有视图绑定生命周期、搜索与词导航接线。macOS/Windows 的原生 paste 在 xterm 处理前接入既有暂存/确认流程；Linux 保持 PRIMARY 选区粘贴语义。`TerminalInput.test.tsx` 保护输入和上传行为，`terminalPanelTestFixture.ts` 提供测试专用 xterm/IPC fixture。
 - `src/terminal/imageExport/`：负责选中完整行的固定宽度快照、系统主题采样、终端外框与图片绘制、S/M/L（1×/2×/3×）尺寸档位与像素上限、预览及导出状态；不修改 live buffer、应用主题或会话。`TerminalContextMenu.tsx` 拥有终端菜单展示和菜单键盘导航，`TerminalPanel.tsx` 只组合导出入口。
 - `src/lib/tauri/terminalImage.ts`、`src-tauri/src/commands/terminal_image.rs`、`src-tauri/src/infrastructure/terminal_image.rs`：分别负责 PNG 原始字节 IPC、原生保存路径选择与错误映射、PNG 有界校验及原子落盘；不接受前端指定的任意保存路径，不接管文件传输或终端会话。
 - `src/files/`：负责内部文件窗口展示、导航、下载反馈与瞬时预览编辑状态；不直接访问本地文件系统或 SSH infrastructure。
@@ -250,6 +250,7 @@
 
 - `crates/qterm-server/src/retained_session.rs`、`retained_socket.rs`：进程所有权、稳定 Block 标识、画面接入、写入控制权和输出流控。
 - `crates/qterm-server/src/screen_worker.rs`：画面组件重试和恢复编排；`screen_worker/process.rs` 拥有有界 stdio、覆盖写入的超时与脱敏诊断，`screen_worker/recovery.rs` 拥有仅内存的检查点、解析操作尾部及查询回复去重；相邻测试覆盖崩溃和错误隔离。`src/server/screen/` 拥有 headless-xterm 解析、快照和恢复，`scripts/build-server-screen.mjs` 打包。
+- `src/server/screen/mouseEncoding.mjs`：补全 headless 快照的鼠标编码状态，隔离固定 xterm 版本的内部状态读取，供浏览器接入与 worker 恢复共用。
 - `workspace_runtime.rs`、`workspace_recovery.rs`：服务端工作区快照、版本化内存草稿、未保存布局中的会话找回。
 - `src/server/sessionTransport.ts`、`ServerRuntimeRestore.tsx`：浏览器接入、断线重连与已有 SSH/SFTP/Git/Network 会话及网络规则运行状态恢复；恢复批次不因普通文档更新中断，逐项使用最新目标映射，锁定/卸载取消，查询失败可重试。
 - `src/files/useRetainedFilePreview.ts`：文件预览/编辑草稿加载与顺序同步。

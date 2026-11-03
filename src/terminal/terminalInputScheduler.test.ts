@@ -6,7 +6,7 @@ describe("terminal input scheduler", () => {
   it("keeps input emitted after an async paste reservation behind the pasted data", async () => {
     let releaseClipboard!: () => void;
     const clipboardReady = new Promise<void>((resolve) => { releaseClipboard = resolve; });
-    const writes: string[] = [];
+    const writes: (string | Uint8Array)[] = [];
     const scheduler = createTerminalInputScheduler(async (data) => { writes.push(data); });
 
     const paste = scheduler.runExclusive(async (capture) => {
