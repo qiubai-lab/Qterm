@@ -22,17 +22,9 @@ const reasons: Record<string, string> = {
   invalidPassword: "访问密码不正确", verificationFailed: "主密码验证未通过", sessionReplaced: "工作台已由其他会话接管",
   sessionExpired: "登录会话已失效", workbenchLocked: "工作台已锁定", claimExpired: "接管请求已失效",
   forbidden: "来源或访问权限校验未通过", rateLimited: "请求过于频繁或验证资源繁忙", serviceError: "服务暂时不可用",
-  requestRejected: "请求未通过校验", presenceReady: "工作台连接已建立", connectionClosed: "浏览器连接已结束",
+  requestRejected: "请求未通过校验", presenceReady: "工作台连接已建立", connectionClosed: "客户端连接已结束",
   timeout: "凭证库自动锁定",
 };
 export const reasonLabel = (reason: string) => reasons[reason] ?? "未提供说明";
 export const eventLabel = (kind: EventKind) => eventLabels[kind] ?? "其他事件";
 export const formatTime = (time: number) => new Date(time).toLocaleString("zh-CN", { hour12: false });
-export function browserLabel(agent: string | null) {
-  if (!agent) return "系统或未知来源";
-  if (/Edg\//.test(agent)) return "Edge";
-  if (/Firefox\//.test(agent)) return "Firefox";
-  if (/Chrome\//.test(agent)) return "Chrome";
-  if (/Safari\//.test(agent)) return "Safari";
-  return "其他客户端";
-}

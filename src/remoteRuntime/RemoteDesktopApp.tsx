@@ -13,7 +13,9 @@ import { Button } from "../components/Button";
 import { AccessLogControl } from "../server/accessLog/AccessLogControl";
 import type { useServerAccess } from "../server/useServerAccess";
 import "./remoteRuntime.css";
+import { useAuthenticationWindowClose } from "./useAuthenticationWindowClose";
 function RemoteChrome({access}: {access: ReturnType<typeof useServerAccess>}) {
+  useAuthenticationWindowClose(["login", "checking", "occupied"].includes(access.phase));
   const controlsRef = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     const element = controlsRef.current;
@@ -30,6 +32,7 @@ function RemoteChrome({access}: {access: ReturnType<typeof useServerAccess>}) {
 }
 export function RemoteDesktopApp() {
   const [ready, setReady] = useState(false); const [error, setError] = useState(""); const [attempt, setAttempt] = useState(0);
+  useAuthenticationWindowClose(!ready);
   useEffect(() => {
     let live = true; pauseData();
     void connectRuntime(selectedRuntime!.endpoint).then(base => { if (live) { configureRuntimeApi(base); setReady(true); } }, reason => { if (live) setError(String(reason)); });

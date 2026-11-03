@@ -30,7 +30,8 @@ async fn fixture() -> (Arc<RemoteRuntime>, tokio::task::JoinHandle<()>) {
         .route("/healthz", get(|| async { "ok" }))
         .route(
             "/api/v1/login",
-            post(|| async {
+            post(|headers: HeaderMap| async move {
+                assert_eq!(headers["user-agent"], client_identity::user_agent());
                 (
                     [("set-cookie", "qterm=private; Path=/; HttpOnly")],
                     "logged-in",
@@ -57,7 +58,13 @@ async fn fixture() -> (Arc<RemoteRuntime>, tokio::task::JoinHandle<()>) {
                 if headers.get("cookie").is_none_or(|v| v != "qterm=private") {
                     return StatusCode::UNAUTHORIZED.into_response();
                 }
+                let agent = headers
+                    .get("user-agent")
+                    .and_then(|v| v.to_str().ok())
+                    .unwrap_or_default()
+                    .to_owned();
                 ws.on_upgrade(|mut socket| async move {
+                    socket.send(Message::Text(agent.into())).await.unwrap();
                     while let Some(Ok(value)) = socket.recv().await {
                         if matches!(value, Message::Close(_)) {
                             break;
@@ -165,6 +172,16 @@ async fn websocket_forwards_text_and_binary_and_disconnect_revokes_it() {
         .headers_mut()
         .insert("origin", "http://localhost:1420".parse().unwrap());
     let (mut ws, _) = tokio_tungstenite::connect_async(request).await.unwrap();
+    let expected_agent = format!(
+        "Qterm Desktop/{} ({}; {})",
+        env!("CARGO_PKG_VERSION"),
+        std::env::consts::OS,
+        std::env::consts::ARCH
+    );
+    assert_eq!(
+        ws.next().await.unwrap().unwrap(),
+        WsMessage::Text(expected_agent.into())
+    );
     for message in [
         WsMessage::Text("input".into()),
         WsMessage::Binary(vec![0, 255, 1].into()),

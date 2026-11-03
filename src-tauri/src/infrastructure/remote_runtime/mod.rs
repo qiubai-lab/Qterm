@@ -1,4 +1,5 @@
 //! A private loopback transport for the bundled desktop UI. Remote HTML is never loaded.
+mod client_identity;
 mod download;
 mod proxy;
 mod socket;
@@ -47,7 +48,7 @@ impl RemoteRuntime {
         let endpoint = endpoint(value)?;
         let cookies = Arc::new(Jar::default());
         let client = Client::builder()
-            .user_agent(concat!("Qterm Desktop/", env!("CARGO_PKG_VERSION")))
+            .user_agent(client_identity::user_agent())
             .cookie_provider(cookies.clone())
             .redirect(reqwest::redirect::Policy::none())
             .connect_timeout(std::time::Duration::from_secs(10))

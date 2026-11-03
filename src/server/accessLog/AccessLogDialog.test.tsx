@@ -159,3 +159,16 @@ it("shows truncated row metadata in a themed tooltip and dismisses it when openi
   expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
   expect(within(screen.getByRole("dialog", {name:"访问记录详情"})).getByText(longIp)).toBeInTheDocument();
 });
+
+it("shows desktop identity in the list and platform/version in details", async () => {
+  transport.api.mockResolvedValue(page([{ ...event, kind: "connected", success: true,
+    source: { ...event.source, browser: "Qterm Desktop/1.2.3 (macos; aarch64)" } }]));
+  const user = userEvent.setup();
+  render(<AccessLogDialog onClose={vi.fn()}/>);
+  const row = await screen.findByRole("button", { name: /连接建立 成功/ });
+  expect(within(row).getByText("Qterm 桌面端")).toBeInTheDocument();
+  await user.click(row);
+  const detail = screen.getByRole("dialog", { name: "访问记录详情" });
+  expect(within(detail).getByText("macOS · arm64 · 版本 1.2.3")).toBeInTheDocument();
+  expect(within(detail).getByText("Qterm Desktop/1.2.3 (macos; aarch64)")).toBeInTheDocument();
+});

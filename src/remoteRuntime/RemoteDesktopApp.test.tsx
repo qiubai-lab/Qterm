@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
-const mocks = vi.hoisted(() => ({connect:vi.fn(),drag:vi.fn(),maximize:vi.fn(),phase:"login"}));
+const mocks = vi.hoisted(() => ({connect:vi.fn(),drag:vi.fn(),maximize:vi.fn(),close:vi.fn(async () => vi.fn()),phase:"login"}));
 vi.mock("./transport",()=>({connectRuntime:mocks.connect,disconnectRuntime:vi.fn()}));
 vi.mock("./selection",()=>({selectedRuntime:{name:"测试服务器",endpoint:"https://server.example"}}));
 vi.mock("../server/http",()=>({configureRuntimeApi:vi.fn()}));
@@ -9,7 +9,7 @@ vi.mock("../server/ServerApp",()=>({ServerApp:({renderChrome}:{renderChrome:(acc
 vi.mock("./EnvironmentControl",()=>({EnvironmentControl:()=> <button>服务器菜单</button>}));
 vi.mock("../workspace/NativeWindowControls",()=>({NativeWindowControls:()=> <button>置顶</button>}));
 vi.mock("../server/accessLog/AccessLogControl",()=>({AccessLogControl:()=>null}));
-vi.mock("../lib/tauri/window",()=>({currentDesktopPlatform:()=>"macos",startDraggingCurrentWindow:mocks.drag,toggleMaximizeCurrentWindow:mocks.maximize}));
+vi.mock("../lib/tauri/window",()=>({registerCurrentWindowCloseFlush:mocks.close,currentDesktopPlatform:()=>"macos",startDraggingCurrentWindow:mocks.drag,toggleMaximizeCurrentWindow:mocks.maximize}));
 import { RemoteDesktopApp } from "./RemoteDesktopApp";
 import { resumeData } from "../server/dataAccess";
 beforeEach(()=>{
@@ -47,4 +47,13 @@ it("cleans pending drag gestures when authentication screens unmount", async()=>
   fireEvent.pointerDown(region(),{button:0,pointerId:1,clientX:200,clientY:20});
   view.unmount();fireEvent.pointerMove(window,{pointerId:1,clientX:220,clientY:20});
   expect(mocks.drag).not.toHaveBeenCalled();
+});
+
+
+it.each(["login", "checking", "occupied"])("handles native close during %s without workspace persistence", async phase => {
+  mocks.phase = phase;
+  render(<RemoteDesktopApp/>);
+  await screen.findByRole("button", {name:"服务器菜单"});
+  // Startup and authentication each own a close handler during their lifetime.
+  expect(mocks.close).toHaveBeenCalledTimes(2);
 });

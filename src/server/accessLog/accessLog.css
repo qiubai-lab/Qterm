@@ -8,7 +8,7 @@
 .access-log-toolbar > button { margin-left:auto; height:28px; }
 .access-log-scroll { flex:1; min-height:0; min-width:0; }
 .access-log-viewport { overflow:auto; overscroll-behavior:contain; }
-.access-log-columns,.access-log-row { display:grid; grid-template-columns:128px 100px 44px minmax(0,1fr) minmax(88px,128px) 56px 12px; gap:10px; align-items:center; min-width:700px; padding:0 16px; }
+.access-log-columns,.access-log-row { display:grid; grid-template-columns:128px 100px 44px minmax(0,1fr) minmax(88px,128px) 104px 12px; gap:10px; align-items:center; min-width:700px; padding:0 16px; }
 .access-log-columns { position:sticky; top:0; z-index:1; height:30px; border:1px solid transparent; border-bottom-color:var(--border); color:var(--muted); font-size:10px; background:var(--surface); }
 .access-log-list { min-width:700px; padding:0; margin:0; list-style:none; }
 .access-log-row { width:100%; height:36px; border:1px solid transparent; border-bottom-color:var(--subtle); border-radius:0; text-align:left; color:var(--text); background:transparent; cursor:pointer; font:inherit; font-size:11px; }
@@ -16,6 +16,10 @@
 .access-log-row time { color:var(--muted); font-size:10px; font-variant-numeric:tabular-nums; }
 .access-log-event { font-weight:500; }
 .access-log-reason,.access-log-source,.access-log-browser { overflow:hidden; text-overflow:ellipsis; color:var(--muted); font-size:10px; }
+.access-log-browser { display:flex; gap:5px; align-items:center; }
+.access-log-browser > svg { flex:none; }
+.access-log-browser > span { min-width:0; overflow:hidden; text-overflow:ellipsis; }
+.access-log-client-detail { margin:4px 0 0; color:var(--muted); font-size:10px; }
 .access-log-source { font-family:"SFMono-Regular",Consolas,monospace; }
 .access-log-result { display:inline-flex; gap:5px; align-items:center; font-size:10px; color:var(--muted); }
 .access-log-result > span { width:4px; height:4px; flex:none; border-radius:50%; background:var(--accent); }

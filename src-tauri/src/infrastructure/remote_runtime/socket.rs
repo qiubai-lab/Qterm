@@ -27,6 +27,12 @@ pub async fn upgrade(
         return StatusCode::BAD_REQUEST.into_response();
     };
     request.headers_mut().insert(
+        header::USER_AGENT,
+        super::client_identity::user_agent()
+            .parse()
+            .expect("static desktop identity is a valid header"),
+    );
+    request.headers_mut().insert(
         header::ORIGIN,
         runtime
             .endpoint

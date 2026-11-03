@@ -1,9 +1,11 @@
+import { clientInfo } from "./clientInfo";
 import { DialogFrame } from "../../components/dialogs/DialogFrame";
 import { Button, StatusBadge } from "../../components/Button";
 import { Icon } from "../../components/Icon";
-import { browserLabel, eventLabel, formatTime, reasonLabel, type AccessEvent } from "./model";
+import { eventLabel, formatTime, reasonLabel, type AccessEvent } from "./model";
 
 export function AccessLogDetail({ event, onClose }: { event: AccessEvent; onClose: () => void }) {
+  const client = clientInfo(event);
   return <DialogFrame title="访问记录详情" className="access-log-detail" onClose={onClose}>
     <div className="access-log-detail-body">
       <div className="access-log-detail-summary">
@@ -14,7 +16,7 @@ export function AccessLogDetail({ event, onClose }: { event: AccessEvent; onClos
       <dl className="access-log-facts">
         <div><dt>发生时间</dt><dd><time dateTime={new Date(event.timestamp).toISOString()}>{formatTime(event.timestamp)}</time><span className="access-log-local-time">本地时间</span></dd></div>
         <div><dt>来源 IP</dt><dd className="access-log-mono">{event.source.ip ?? "系统事件或来源不可用"}</dd></div>
-        <div><dt>客户端</dt><dd>{browserLabel(event.source.browser)}<p className="access-log-user-agent">{event.source.browser ?? "系统事件或未提供浏览器信息"}</p></dd></div>
+        <div><dt>客户端</dt><dd>{client.label}<p className="access-log-client-detail">{client.detail}</p>{event.source.browser && <p className="access-log-user-agent">{event.source.browser}</p>}</dd></div>
       </dl>
       <section className="access-log-reference" aria-labelledby="access-log-reference-title">
         <h4 id="access-log-reference-title">关联信息</h4>

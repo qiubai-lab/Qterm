@@ -6,7 +6,7 @@ import { ServerApp } from "./ServerApp";
 
 const state = vi.hoisted(() => ({
   phase: "workspace", busy: false, error: "", logout: vi.fn(), cancel: vi.fn(),
-  login: vi.fn(), takeover: vi.fn(), acknowledgeReplaced: vi.fn(),
+  clearError: vi.fn(() => { state.error = ""; }), login: vi.fn(), takeover: vi.fn(), acknowledgeReplaced: vi.fn(),
   mount: vi.fn(), unmount: vi.fn(),
 }));
 function PassThrough({ children }: { children: ReactNode }) { return children; }
@@ -25,7 +25,7 @@ vi.mock("../workspace/WorkspaceShell", () => ({ WorkspaceShell: function Workspa
   return <main>当前终端画面</main>;
 } }));
 
-beforeEach(() => { vi.clearAllMocks(); state.phase = "workspace"; });
+beforeEach(() => { vi.clearAllMocks(); state.phase = "workspace"; state.error = ""; });
 afterEach(cleanup);
 
 it.each(["replaced", "disconnected", "reconnecting"])("retains the same inert workbench behind the %s notice until confirmation", async phase => {
@@ -47,4 +47,33 @@ it.each(["replaced", "disconnected", "reconnecting"])("retains the same inert wo
   view.rerender(<ServerApp/>);
   expect(screen.getByLabelText("访问密码")).toBeInTheDocument();
   expect(state.unmount).toHaveBeenCalledOnce();
+});
+
+
+it("anchors login errors to the password and clears them on editing", async () => {
+  state.phase = "login";
+  const view = render(<ServerApp/>);
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  expect(view.container.querySelector(".server-status")).toBeNull();
+  expect(screen.queryByText(/单用户实例/)).not.toBeInTheDocument();
+  state.error = "密码不正确";
+  view.rerender(<ServerApp/>);
+  const input = screen.getByLabelText("访问密码");
+  expect(input).toHaveAttribute("aria-invalid", "true");
+  expect(input).toHaveAccessibleDescription("密码不正确");
+  expect(screen.getByRole("alert")).toHaveTextContent("密码不正确");
+  await userEvent.type(input, "a");
+  expect(state.clearError).toHaveBeenCalled();
+  view.rerender(<ServerApp/>);
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  expect(input).toHaveAttribute("aria-invalid", "false");
+  state.error = "密码不正确";
+  view.rerender(<ServerApp/>);
+  expect(screen.getByRole("alert")).toBeInTheDocument();
+});
+
+it("shows connection restoration in the disabled submit button", () => {
+  state.phase = "checking";
+  render(<ServerApp/>);
+  expect(screen.getByRole("button", {name: "正在恢复连接…"})).toBeDisabled();
 });

@@ -84,7 +84,7 @@ export function useServerAccess() {
   }
   function cancel() {epoch.current++;ticket.current="";rememberAccess("");setPhase("login");setError("");}
   function acknowledgeReplaced() {epoch.current++;leave();rememberAccess("");setPhase("login");setError("");}
-  return {phase,busy,error,logout,cancel,acknowledgeReplaced,
+  return {phase,busy,error,clearError:()=>setError(""),logout,cancel,acknowledgeReplaced,
     login:(password:string)=>submit("/login",{password,clientId:accessProof().clientId}),
     takeover:()=>submit("/access/takeover",{ticket:ticket.current,clientId:accessProof().clientId}),
   };
