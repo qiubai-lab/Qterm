@@ -7,6 +7,7 @@ import { closeLocalSession, connectLocalSession, resizeLocalSession, writeLocalS
 import { acceptHostKey, closeSession, rejectHostKey, resizeSession, writeSession, type SessionEvent, type TerminalSizeInput } from "@qterm/services/sessions";
 import { completeConnectionProgress, connectionProgressFromRouteEvent, failConnectionProgress } from "./connectionProgress";
 import { findLeaf } from "./layout";
+import { resolveRetainedSession } from "./retainedSessionRecovery";
 import { useRemoteTerminalConnection } from "./useRemoteTerminalConnection";
 import { createId, type SplitDirection } from "./model";
 import type { WorkspaceAction } from "./reducer";
@@ -145,6 +146,11 @@ export function useTerminalWorkspaceController(state: WorkspaceRuntimeState, dis
     updateRuntime(blockId, () => ({ ...defaultRuntime, kind: "local", status: "connecting" }));
     let startedSessionId: string | null = null;
     try {
+      if (isServer) {
+        const recovery = await resolveRetainedSession(blockId, "local", null, () => isCurrentEpoch(blockId, epoch));
+        if (recovery.action === "cancel") return;
+        // /local/sessions reattaches the existing process using the stable block key.
+      }
       const connection = await connectLocalSession(
         columns,
         rows,
@@ -200,7 +206,6 @@ export function useTerminalWorkspaceController(state: WorkspaceRuntimeState, dis
   });
 
   const restartLocalBlock = useCallback(async (blockId: string, osc7Enabled: boolean) => {
-    await releaseRetainedBlock(blockId);
     const size = terminalSizeReaders.current.get(blockId)?.() ?? { columns: 80, rows: 24 };
     await startLocalBlock(blockId, size.columns, size.rows, osc7Enabled);
   }, [startLocalBlock, terminalSizeReaders]);

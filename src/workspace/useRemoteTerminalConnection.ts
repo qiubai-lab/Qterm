@@ -1,8 +1,9 @@
 import { useCallback } from "react";
 import { isServer } from "../lib/runtime/environment";
 import type { ConnectionProfile } from "@qterm/services/profiles";
-import { attachRetainedSession, listRetainedSessions, type RetainedSession } from "@qterm/services/runtimeSessions";
+import { attachRetainedSession, type RetainedSession } from "@qterm/services/runtimeSessions";
 import { closeSession, connectSession, type SessionAuth, type SessionEvent } from "@qterm/services/sessions";
+import { resolveRetainedSession } from "./retainedSessionRecovery";
 import { initialConnectionProgress } from "./connectionProgress";
 import type { WorkspaceRuntimeState } from "./useWorkspaceRuntimeState";
 import { connectionIntentAllows, consumeFailureHandler, defaultRuntime, epochKey, terminalFailureKey, workspaceErrorMessage } from "./workspaceRuntime";
@@ -66,19 +67,9 @@ export function useRemoteTerminalConnection(state: ConnectionState, io: Terminal
     updateRuntime(blockId, () => ({ ...defaultRuntime, kind: "ssh", status: "connecting" }));
     try {
       if (isServer) {
-        // A failed lookup must not become permission to replace an unknown live process.
-        const retained = (await listRetainedSessions()).find(session => session.runtimeKey === blockId);
-        if (!isCurrentEpoch(blockId, epoch)) return;
-        if (retained) {
-          if (retained.kind !== "terminal" || retained.profileId !== profile.id) throw new Error("后台终端目标已变化，请重新加载工作区");
-          if (retained.status !== "closed" && retained.status !== "failed") {
-            await attach(retained, blockId, epoch);
-            return;
-          }
-          // Only a confirmed ended session may be replaced by a new SSH connection.
-          await closeSession(retained.sessionId);
-          if (!isCurrentEpoch(blockId, epoch)) return;
-        }
+        const recovery = await resolveRetainedSession(blockId, "terminal", profile.id, () => isCurrentEpoch(blockId, epoch));
+        if (recovery.action === "cancel") return;
+        if (recovery.action === "attach") { await attach(recovery.session, blockId, epoch); return; }
       }
       clearBlockBuffer(blockId, true);
       if (onFailure) connectionFailureHandlers.current.set(failureKey, onFailure);

@@ -1,32 +1,41 @@
 import { useWorkbenchActive } from "../workspace/workbenchActivity";
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import { useWorkspace } from "../workspace/WorkspaceProvider";
 import { findLeaf } from "../workspace/layout";
 import { listRetainedSessions } from "./services/runtimeSessions";
 
-/** Wait for hydration and mounted terminal writers; never create replacement SSH sessions. */
+/** Ordinary document updates must not cancel the remainder of a recovery pass. */
 export function ServerRuntimeRestore() {
   const enabled = useWorkbenchActive();
-  const {hydrated,document,restoreTerminalBlock,restoreFileBlock,restoreGitBlock,restoreNetworkBlock}=useWorkspace();
-  const restored=useRef(false);
-  useEffect(()=>{
-    if (!enabled) { restored.current = false; return; }
-    if(!hydrated || restored.current)return;
-    let active=true;
-    void listRetainedSessions().then(async sessions=>{
-      if(!active)return;
-      restored.current=true;
-      for(const session of sessions){
-        if (!active) return;
-        if(!session.runtimeKey)continue;
-        const leaf=document.workspaces.map(w=>findLeaf(w.layout,session.runtimeKey!)).find(Boolean);
-        if(leaf?.type==="terminal" && leaf.profileId===session.profileId && session.kind==="terminal")await restoreTerminalBlock(session);
-        if(leaf?.type==="git" && leaf.target.type==="remote" && leaf.target.profileId===session.profileId && session.kind==="git")await restoreGitBlock(session);
-        if(leaf?.type==="network" && leaf.profileId===session.profileId && session.kind==="network")await restoreNetworkBlock(session);
-        if(leaf?.type==="files" && leaf.profileId===session.profileId && session.kind==="files")await restoreFileBlock(session);
+  const workspace = useWorkspace();
+  const { hydrated } = workspace;
+  const latest = useRef(workspace);
+  useLayoutEffect(() => { latest.current = workspace; }, [workspace]);
+  useEffect(() => {
+    if (!enabled || !hydrated) return;
+    let active = true;
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    async function restore() {
+      try {
+        const sessions = await listRetainedSessions();
+        for (const session of sessions) {
+          if (!active) return;
+          if (!session.runtimeKey) continue;
+          const current = latest.current;
+          const leaf = current.document.workspaces.map(w => findLeaf(w.layout, session.runtimeKey!)).find(Boolean);
+          try {
+            if (leaf?.type === "terminal" && leaf.profileId === session.profileId && session.kind === "terminal") await current.restoreTerminalBlock(session);
+            if (leaf?.type === "git" && leaf.target.type === "remote" && leaf.target.profileId === session.profileId && session.kind === "git") await current.restoreGitBlock(session);
+            if (leaf?.type === "network" && leaf.profileId === session.profileId && session.kind === "network") await current.restoreNetworkBlock(session);
+            if (leaf?.type === "files" && leaf.profileId === session.profileId && session.kind === "files") await current.restoreFileBlock(session);
+          } catch { /* One failed attachment must not prevent other blocks from recovering. */ }
+        }
+      } catch {
+        if (active) retry = setTimeout(() => void restore(), 3000);
       }
-    }).catch(()=>{ /* API authentication handling owns login expiry. */ });
-    return()=>{active=false;};
-  },[enabled,document,hydrated,restoreFileBlock,restoreGitBlock,restoreNetworkBlock,restoreTerminalBlock]);
+    }
+    void restore();
+    return () => { active = false; clearTimeout(retry); };
+  }, [enabled, hydrated]);
   return null;
 }

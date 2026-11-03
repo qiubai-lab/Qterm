@@ -73,6 +73,8 @@
 - `src/workspace/WorkspaceProvider.tsx`、`useWorkspacePersistence.ts`：兼容的单一 Workspace Context façade，以及 hydration、debounced save、close flush 和 profile refresh owner；Git target retarget 可在同 profile 的已连接 Git session 上只切换路径，Provider 不直接实现会话事件或连接生命周期，运行时状态不持久化。
 - `src/workspace/useWorkspaceRuntimeState.ts`、`useWorkspaceRuntimeController.ts`、`use{Terminal,File,Network,Git}WorkspaceController.ts`：按 `blockId` 隔离的单一 runtime 状态内核、跨用途清理组合器，以及四类独立的事件/connect/disconnect/host-key controller；Git controller 还拥有未持久化 remote target 前的 profile intent 暂存、取消清理与确认复用；共享 epoch、intent、writer、buffer 和 session ownership，不引入第二套 store 或可变全局单例。
 - `src/workspace/useRemoteTerminalConnection.ts`：远程终端新建与保留会话接入编排；Web 自动连接和刷新恢复共用 block epoch 与操作预约，优先接入活动会话，查询或恢复失败不删除后台任务；仅确认结束的会话可在重连时替换。
+- `src/workspace/useRemoteServiceConnection.ts`：Files/Git/Network 共享的新建与接入互斥、epoch/intent 保护、失败状态和迟到结果处理；各 feature controller 保留事件映射与网络规则元数据所有权。
+- `src/workspace/retainedSessionRecovery.ts`：各类远程服务及本地/远程终端共用的后台会话查询、目标校验与已结束会话替换规则；查询失败不新建、不删除活动任务。
 - `src/workspace/workspaceRuntime.ts`：Workspace runtime 类型、默认值、epoch/failure key、connection intent 与 route notice 纯规则；不持有 React state 或可变全局单例。
 - `src/workspace/connectionProgress.ts`、`src/components/ConnectionRouteProgress.tsx`：Terminal/Files/Network/Git SSH Block 共用的 route 事件展示状态映射与悬浮进度组件；`src/components/HostIdentity.tsx` 统一直连/route 完成态的主机概要、视口浮层和地址复制；这些组件不管理 session、认证、凭证或持久化。
 - `src/components/Button.tsx`、`button.css`：共享文本按钮、图标按钮与非交互状态标签的语义、尺寸、主题和可访问契约；不拥有 feature 事件、tabs、菜单项、列表行或选择卡片行为。
@@ -249,7 +251,7 @@
 - `crates/qterm-server/src/retained_session.rs`、`retained_socket.rs`：进程所有权、稳定 Block 标识、画面接入、写入控制权和输出流控。
 - `crates/qterm-server/src/screen_worker.rs`：画面组件重试和恢复编排；`screen_worker/process.rs` 拥有有界 stdio、覆盖写入的超时与脱敏诊断，`screen_worker/recovery.rs` 拥有仅内存的检查点、解析操作尾部及查询回复去重；相邻测试覆盖崩溃和错误隔离。`src/server/screen/` 拥有 headless-xterm 解析、快照和恢复，`scripts/build-server-screen.mjs` 打包。
 - `workspace_runtime.rs`、`workspace_recovery.rs`：服务端工作区快照、版本化内存草稿、未保存布局中的会话找回。
-- `src/server/sessionTransport.ts`、`ServerRuntimeRestore.tsx`：浏览器接入、断线重连与已有 SSH/SFTP/Git/Network 会话及网络规则运行状态恢复。
+- `src/server/sessionTransport.ts`、`ServerRuntimeRestore.tsx`：浏览器接入、断线重连与已有 SSH/SFTP/Git/Network 会话及网络规则运行状态恢复；恢复批次不因普通文档更新中断，逐项使用最新目标映射，锁定/卸载取消，查询失败可重试。
 - `src/files/useRetainedFilePreview.ts`：文件预览/编辑草稿加载与顺序同步。
 - `scripts/test-server-retention.py`、`scripts/test-server-screen-recovery.py`、`scripts/server-screen.node-test.mjs`：真实 PTY 和屏幕状态恢复验收。
 

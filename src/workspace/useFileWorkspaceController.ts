@@ -1,14 +1,16 @@
 import { isServer } from "../lib/runtime/environment";
-import { releaseRetainedBlock, attachRetainedSession, type RetainedSession } from "@qterm/services/runtimeSessions";
+import { releaseRetainedBlock } from "@qterm/services/runtimeSessions";
 import { useCallback, type Dispatch } from "react";
 
 import { connectFileSession } from "@qterm/services/files";
-import type { ConnectionProfile } from "@qterm/services/profiles";
-import { acceptHostKey, closeSession, rejectHostKey, type SessionAuth, type SessionEvent } from "@qterm/services/sessions";
-import { completeConnectionProgress, connectionProgressFromRouteEvent, failConnectionProgress, initialConnectionProgress } from "./connectionProgress";
+import { acceptHostKey, closeSession, rejectHostKey, type SessionEvent } from "@qterm/services/sessions";
+import { completeConnectionProgress, connectionProgressFromRouteEvent, failConnectionProgress } from "./connectionProgress";
+import { useRemoteServiceConnection } from "./useRemoteServiceConnection";
 import type { WorkspaceAction } from "./reducer";
 import type { WorkspaceRuntimeState } from "./useWorkspaceRuntimeState";
-import { connectionIntentAllows, connectionIntentKey, consumeFailureHandler, defaultFileRuntime, epochKey, nodeLabel, routeFailureNotice, workspaceErrorMessage } from "./workspaceRuntime";
+import { connectionIntentAllows, connectionIntentKey, consumeFailureHandler, defaultFileRuntime, epochKey, nodeLabel, routeFailureNotice } from "./workspaceRuntime";
+
+const initialRemoteRuntime = () => ({ ...defaultFileRuntime, kind: "sftp" as const, status: "closed" as const });
 
 export function useFileWorkspaceController(state: WorkspaceRuntimeState, dispatch: Dispatch<WorkspaceAction>) {
   const { fileRuntimes, fileRuntimesRef, connectionTargetIntents, finishedEpochs, connectionFailureHandlers, updateFileRuntime, nextEpoch, isCurrentEpoch } = state;
@@ -42,17 +44,13 @@ export function useFileWorkspaceController(state: WorkspaceRuntimeState, dispatc
 
   const closeCurrentFileSession = useCallback(async (blockId: string) => {
     const runtime = fileRuntimesRef.current[blockId];
-    nextEpoch(blockId);
+    const epoch = nextEpoch(blockId);
     connectionFailureHandlers.current.delete(`files:${blockId}`);
     if (runtime?.sessionId) await closeSession(runtime.sessionId).catch(() => undefined);
     else if (isServer) await releaseRetainedBlock(blockId);
-    updateFileRuntime(blockId, () => defaultFileRuntime);
-  }, [connectionFailureHandlers, fileRuntimesRef, nextEpoch, updateFileRuntime]);
-  const disconnectFileBlock = useCallback(async (blockId: string) => {
-    const remote = fileRuntimesRef.current[blockId]?.kind === "sftp";
-    await closeCurrentFileSession(blockId);
-    if (remote) updateFileRuntime(blockId, () => ({ ...defaultFileRuntime, kind: "sftp", status: "closed" }));
-  }, [closeCurrentFileSession, fileRuntimesRef, updateFileRuntime]);
+    if (isCurrentEpoch(blockId, epoch)) updateFileRuntime(blockId, () => runtime?.kind === "sftp" ? { ...defaultFileRuntime, kind: "sftp", status: "closed" } : defaultFileRuntime);
+  }, [connectionFailureHandlers, fileRuntimesRef, isCurrentEpoch, nextEpoch, updateFileRuntime]);
+  const disconnectFileBlock = useCallback(async (blockId: string) => closeCurrentFileSession(blockId), [closeCurrentFileSession]);
   const selectFileTarget = useCallback(async (workspaceId: string, blockId: string, profileId: string | null) => {
     connectionTargetIntents.current.set(connectionIntentKey("files", blockId), profileId);
     dispatch({ type: "recordRecentProfile", profileId });
@@ -62,32 +60,10 @@ export function useFileWorkspaceController(state: WorkspaceRuntimeState, dispatc
     dispatch({ type: "setFilesProfile", workspaceId, blockId, profileId });
     dispatch({ type: "setFilesPath", workspaceId, blockId, profileId, path: profileId === null ? "~" : "." });
   }, [closeCurrentFileSession, connectionTargetIntents, dispatch, updateFileRuntime]);
-  const connectFileBlock = useCallback(async (blockId: string, profile: ConnectionProfile, auth: SessionAuth, onFailure?: () => void) => {
-    if (!connectionIntentAllows(connectionTargetIntents.current, "files", blockId, profile.id)) return;
-    await closeCurrentFileSession(blockId);
-    if (!connectionIntentAllows(connectionTargetIntents.current, "files", blockId, profile.id)) return;
-    if (onFailure) connectionFailureHandlers.current.set(`files:${blockId}`, onFailure);
-    const epoch = nextEpoch(blockId);
-    const key = epochKey(blockId, epoch);
-    finishedEpochs.current.delete(key);
-    updateFileRuntime(blockId, () => ({ ...defaultFileRuntime, kind: "sftp", status: "connecting", connectionProgress: initialConnectionProgress(profile.jumpProfileIds?.length ?? 0) }));
-    try {
-      const sessionId = await connectFileSession({ profileId: profile.id, auth, ...(isServer ? {runtimeKey:blockId} : {}) }, (event) => onFileSessionEvent(blockId, epoch, event));
-      if (!isCurrentEpoch(blockId, epoch)) await closeSession(sessionId).catch(() => undefined);
-      else if (!finishedEpochs.current.has(key)) updateFileRuntime(blockId, (runtime) => ({ ...runtime, sessionId, kind: "sftp" }));
-    } catch (error) {
-      if (isCurrentEpoch(blockId, epoch)) updateFileRuntime(blockId, () => ({ ...defaultFileRuntime, kind: "sftp", status: "failed", notice: workspaceErrorMessage(error) }));
-      consumeFailureHandler(connectionFailureHandlers.current, `files:${blockId}`);
-    }
-  }, [closeCurrentFileSession, connectionFailureHandlers, connectionTargetIntents, finishedEpochs, isCurrentEpoch, nextEpoch, onFileSessionEvent, updateFileRuntime]);
-  const restoreFileBlock = useCallback(async (session: RetainedSession) => {
-    const blockId=session.runtimeKey;if(!blockId || fileRuntimesRef.current[blockId]?.sessionId)return;
-    const epoch=nextEpoch(blockId);
-    updateFileRuntime(blockId,()=>({...defaultFileRuntime,kind:"sftp",status:"connecting"}));
-    try{const id=await attachRetainedSession(session,event=>onFileSessionEvent(blockId,epoch,event),(_data,consumed)=>consumed?.());
-      if(isCurrentEpoch(blockId,epoch))updateFileRuntime(blockId,r=>({...r,sessionId:id}));
-    }catch(error){updateFileRuntime(blockId,r=>({...r,notice:workspaceErrorMessage(error)}));}
-  },[fileRuntimesRef,isCurrentEpoch,nextEpoch,onFileSessionEvent,updateFileRuntime]);
+  const { connect: connectFileBlock, restore: restoreFileBlock } = useRemoteServiceConnection(state, {
+    kind: "files", runtimes: fileRuntimesRef, update: updateFileRuntime,
+    initial: initialRemoteRuntime, onEvent: onFileSessionEvent, close: closeCurrentFileSession, open: connectFileSession,
+  });
   const acceptFileHostKey = useCallback(async (blockId: string) => {
     const sessionId = fileRuntimes[blockId]?.sessionId;
     if (sessionId) await acceptHostKey(sessionId);
