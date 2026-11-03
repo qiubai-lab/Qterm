@@ -25,7 +25,7 @@ function RemoteChrome({access}: {access: ReturnType<typeof useServerAccess>}) {
   }, []);
   const locked = useSyncExternalStore(subscribeDataAccess, dataPaused);
   const status = access.phase === "workspace" ? locked ? "已锁定" : "已连接" : access.phase === "replaced" ? "已被接管" : access.phase === "reconnecting" ? "重连中" : access.phase === "checking" ? "连接中" : "需要登录";
-  return <div ref={controlsRef} className="runtime-desktop-controls"><EnvironmentControl status={status} onLogout={access.phase === "workspace" ? access.logout : undefined}/>{access.phase === "workspace" && !locked && <div className="window-controls"><AccessLogControl/></div>}<NativeWindowControls/></div>;
+  return <div ref={controlsRef} className="runtime-desktop-controls"><EnvironmentControl status={status} onLogout={access.phase === "workspace" ? access.logout : undefined}/>{access.phase === "workspace" && !locked && <div className="window-controls runtime-access-controls"><AccessLogControl/></div>}<NativeWindowControls/></div>;
 }
 export function RemoteDesktopApp() {
   const [ready, setReady] = useState(false); const [error, setError] = useState(""); const [attempt, setAttempt] = useState(0);

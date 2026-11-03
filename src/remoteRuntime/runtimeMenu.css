@@ -1,25 +1,25 @@
-.runtime-menu { position:fixed; z-index:1300; width:min(264px,calc(100vw - 16px)); max-height:calc(100vh - 65px); overflow:auto; padding:5px; border:1px solid var(--floating-border); border-radius:8px; background:var(--raised); color:var(--menu-text); box-shadow:0 8px 24px var(--shadow-soft); transform-origin:top right; animation:runtime-menu-in 150ms cubic-bezier(.2,.8,.2,1); }
-.runtime-menu-summary { display:flex; align-items:center; gap:8px; padding:7px 6px 9px; }
-.runtime-summary-icon { display:grid; place-items:center; flex:none; width:28px; height:28px; border-radius:6px; background:var(--control-bg); color:var(--icon); }
+.runtime-menu { position:fixed; z-index:1300; width:min(240px,calc(100vw - 16px)); max-height:calc(100vh - 65px); overflow:auto; padding:4px; border:1px solid var(--floating-border); border-radius:8px; background:var(--raised); color:var(--menu-text); box-shadow:0 8px 24px var(--shadow-soft); transform-origin:top right; animation:runtime-menu-in 150ms cubic-bezier(.2,.8,.2,1); }
+.runtime-menu-summary { display:flex; align-items:center; gap:7px; padding:6px 6px 7px; }
+.runtime-summary-icon { display:grid; place-items:center; flex:none; width:24px; height:24px; border-radius:6px; background:var(--control-bg); color:var(--icon); }
 .runtime-menu-summary>div { flex:1; min-width:0; }
 .runtime-menu-summary strong,.runtime-menu-summary code { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.runtime-menu-summary strong { color:var(--text-strong); font-size:11px; font-weight:600; }
-.runtime-menu-summary code { margin-top:4px; color:var(--menu-secondary-text); font-size:9px; }
-.runtime-menu-status { display:flex; align-items:center; gap:4px; flex:none; color:var(--muted); font-size:9px; }
+.runtime-menu-summary strong { color:var(--text-strong); font-size:10px; font-weight:600; }
+.runtime-menu-summary code { margin-top:3px; color:var(--menu-secondary-text); font-size:8px; }
+.runtime-menu-status { display:flex; align-items:center; gap:4px; flex:none; color:var(--muted); font-size:8px; }
 .runtime-menu-status i,.runtime-row-active { display:block; width:4px; height:4px; flex:none; border-radius:50%; background:currentColor; }
 .runtime-menu-status[data-status="已连接"] { color:var(--navigation-accent); }
 .runtime-menu-status[data-status="重连中"],.runtime-menu-status[data-status="连接中"] { color:var(--warning); }
 .runtime-menu-status[data-status="已被接管"] { color:var(--danger); }
 .runtime-menu-section { padding-top:4px; margin-top:4px; border-top:1px solid var(--border); }
-.runtime-menu-caption { display:flex; justify-content:space-between; margin:3px 7px 5px; color:var(--menu-secondary-text); font-size:9px; }
-.runtime-menu button { display:flex; align-items:center; gap:8px; width:100%; min-height:30px; padding:6px 7px; border:0; border-radius:4px; background:transparent; color:var(--menu-text); text-align:left; font-size:11px; cursor:pointer; }
+.runtime-menu-caption { display:flex; justify-content:space-between; margin:3px 7px 5px; color:var(--menu-secondary-text); font-size:8px; }
+.runtime-menu button { display:flex; align-items:center; gap:7px; width:100%; min-height:28px; padding:5px 7px; border:0; border-radius:4px; background:transparent; color:var(--menu-text); text-align:left; font-size:9px; cursor:pointer; }
 .runtime-menu button>svg { flex:none; color:var(--menu-secondary-text); }
 .runtime-menu button>svg:last-child { opacity:.65; }
 .runtime-menu button>span { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .runtime-menu button:hover,.runtime-menu button:focus-visible { background:var(--menu-hover-background); color:var(--menu-hover-text); outline:none; }
 .runtime-menu button:focus-visible { box-shadow:inset 0 0 0 1px var(--focus); }
 .runtime-menu-copy>span,.runtime-menu-copy>small { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.runtime-menu-copy>small { margin-top:3px; font-size:9px; color:var(--menu-secondary-text); }
+.runtime-menu-copy>small { margin-top:2px; font-size:8px; color:var(--menu-secondary-text); }
 @keyframes runtime-menu-in { from { opacity:0; transform:translateY(-3px) scale(.98); } to { opacity:1; transform:translateY(0) scale(1); } }
 @media (prefers-reduced-motion:reduce) { .runtime-menu { animation:none; } }
 .runtime-menu button:is(:hover,:focus-visible)>svg,.runtime-menu button:is(:hover,:focus-visible) small { color:inherit; }

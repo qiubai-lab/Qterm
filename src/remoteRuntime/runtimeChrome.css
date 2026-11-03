@@ -1,5 +1,5 @@
 .runtime-environment-control { display:flex; flex:none; align-items:center; gap:6px; padding:0 4px; min-width:0; }
-.runtime-trigger { display:grid; place-items:center; flex:none; width:28px; height:28px; padding:0; border:0; border-radius:5px; background:transparent; color:var(--icon); cursor:pointer; }
+.runtime-trigger { display:grid; place-items:center; flex:none; width:28px; height:28px; padding:0; border:0; border-radius:5px; background:transparent; color:var(--icon); cursor:pointer; transition:color .1s ease,background-color .1s ease; }
 .runtime-trigger:hover,.runtime-trigger[aria-expanded="true"] { color:var(--icon-hover); background:var(--chrome-action-hover); }
 .runtime-trigger:active { background:var(--chrome-action-pressed); }
 .runtime-trigger:focus-visible,.runtime-status-tag:focus-visible { outline:2px solid var(--focus); outline-offset:2px; }
@@ -15,7 +15,11 @@
 .runtime-status-tag[data-status="已被接管"] { color:var(--danger); }
 .runtime-status-tag[data-status="已锁定"],.runtime-status-tag[data-status="需要登录"] { color:var(--muted); }
 .runtime-status-tag[data-paused]::before,.runtime-status-tag[data-paused] .runtime-status-dot::after { animation-play-state:paused; }
-.runtime-desktop-controls { position:fixed; right:0; top:0; height:40px; z-index:1001; display:flex; align-items:center; background:transparent; }
+.runtime-desktop-controls { position:fixed; right:0; top:0; height:40px; z-index:1001; display:flex; align-items:center; gap:4px; padding:0 4px; background:transparent; }
+/* Container boundaries must not add a second gap between the three chrome actions. */
+.runtime-desktop-controls .runtime-environment-control { padding:0; }
+.runtime-desktop-controls .window-controls { gap:4px; margin-left:0; padding:0; }
+.runtime-desktop-controls :is(.runtime-trigger,.runtime-access-controls>button,.window-pin) { width:28px; height:28px; border:0; border-radius:5px; }
 .runtime-chrome-spacer { width:var(--runtime-chrome-width,250px); flex:none; }
 @keyframes runtime-tag-breathe { 0%,100% { opacity:.07; } 50% { opacity:.15; } }
 @keyframes runtime-dot-breathe { 0%,100% { opacity:.1; transform:scale(.8); } 50% { opacity:.25; transform:scale(1.15); } }

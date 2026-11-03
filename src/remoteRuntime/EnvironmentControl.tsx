@@ -37,7 +37,7 @@ export function EnvironmentControl({status = "本机", onLogout}: {status?: stri
   }
   return <><div className="runtime-environment-control" role="group" aria-label="运行环境">
     {selectedRuntime && <RuntimeStatusTag entry={selectedRuntime} status={status}/>}
-    <ThemedTooltipButton anchorRef={trigger} className="runtime-trigger" tooltip="远程服务器" tooltipDisabled={!!anchor} aria-label={`运行环境：${selectedRuntime?.name ?? "本机"}，${status}`} aria-haspopup="menu" aria-expanded={!!anchor} onClick={() => setAnchor(anchor ? null : trigger.current!.getBoundingClientRect())}><Icon name="server" size={15}/></ThemedTooltipButton>
+    <ThemedTooltipButton anchorRef={trigger} className="runtime-trigger" tooltip="远程服务器" tooltipDisabled={!!anchor} aria-label={`运行环境：${selectedRuntime?.name ?? "本机"}，${status}`} aria-haspopup="menu" aria-expanded={!!anchor} onClick={() => setAnchor(anchor ? null : trigger.current!.getBoundingClientRect())}><Icon name="server" size={14}/></ThemedTooltipButton>
   </div>
     {anchor && <EnvironmentMenu anchor={anchor} current={selectedRuntime} status={status} servers={entries} onChoose={requestSwitch} onClose={closeMenu} onAdd={() => { closeMenu(); setManager("add"); }} onManage={() => { closeMenu(); setManager("manage"); }}/>} 
     {manager && <ServerManager entries={entries} initialNew={manager === "add"} activeId={selectedRuntime?.id} onSave={save} onClose={() => setManager(null)} onConnect={async entry => { setManager(null); requestSwitch(entry); }}/>} 
