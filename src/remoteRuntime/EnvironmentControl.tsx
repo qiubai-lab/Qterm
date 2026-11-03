@@ -39,7 +39,7 @@ export function EnvironmentControl({status = "本机", onLogout}: {status?: stri
     {selectedRuntime && <RuntimeStatusTag entry={selectedRuntime} status={status}/>}
     <ThemedTooltipButton anchorRef={trigger} className="runtime-trigger" tooltip="远程服务器" tooltipDisabled={!!anchor} aria-label={`运行环境：${selectedRuntime?.name ?? "本机"}，${status}`} aria-haspopup="menu" aria-expanded={!!anchor} onClick={() => setAnchor(anchor ? null : trigger.current!.getBoundingClientRect())}><Icon name="server" size={14}/></ThemedTooltipButton>
   </div>
-    {anchor && <EnvironmentMenu anchor={anchor} current={selectedRuntime} status={status} servers={entries} onChoose={requestSwitch} onClose={closeMenu} onAdd={() => { closeMenu(); setManager("add"); }} onManage={() => { closeMenu(); setManager("manage"); }}/>} 
+    {anchor && <EnvironmentMenu anchor={anchor} current={selectedRuntime} status={status} servers={entries} onChoose={requestSwitch} onClose={closeMenu} onManage={() => { closeMenu(); setManager("manage"); }}/>} 
     {manager && <ServerManager entries={entries} initialNew={manager === "add"} activeId={selectedRuntime?.id} onSave={save} onClose={() => setManager(null)} onConnect={async entry => { setManager(null); requestSwitch(entry); }}/>} 
     {pending && <DialogFrame compact title={pending.entry ? `连接 ${pending.entry.name}` : "返回本机"} subtitle="切换工作台运行环境" onClose={() => setPending(null)} dismissible={!busy}>
       <p className="confirm-copy">{selectedRuntime ? "将断开当前服务器的访问。后台终端任务继续运行；正在进行的文件传输会取消。" : "将保存本机布局，并关闭本机工作台的终端、SSH 会话和网络转发。请先保存文件并完成传输；返回本机后会重新建立会话。"}</p>
