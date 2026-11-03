@@ -1,13 +1,13 @@
 import { isServer } from "../lib/runtime/environment";
-import { releaseRetainedBlock, attachRetainedSession, type RetainedSession } from "@qterm/services/runtimeSessions";
+import { releaseRetainedBlock } from "@qterm/services/runtimeSessions";
 import { hasWorkspaceRuntime } from "../lib/runtime/environment";
 import { useCallback, type Dispatch } from "react";
 
 import { closeLocalSession, connectLocalSession, resizeLocalSession, writeLocalSession, type LocalSessionEvent } from "@qterm/services/localSessions";
-import type { ConnectionProfile } from "@qterm/services/profiles";
-import { acceptHostKey, closeSession, connectSession, rejectHostKey, resizeSession, writeSession, type SessionAuth, type SessionEvent, type TerminalSizeInput } from "@qterm/services/sessions";
-import { completeConnectionProgress, connectionProgressFromRouteEvent, failConnectionProgress, initialConnectionProgress } from "./connectionProgress";
+import { acceptHostKey, closeSession, rejectHostKey, resizeSession, writeSession, type SessionEvent, type TerminalSizeInput } from "@qterm/services/sessions";
+import { completeConnectionProgress, connectionProgressFromRouteEvent, failConnectionProgress } from "./connectionProgress";
 import { findLeaf } from "./layout";
+import { useRemoteTerminalConnection } from "./useRemoteTerminalConnection";
 import { createId, type SplitDirection } from "./model";
 import type { WorkspaceAction } from "./reducer";
 import type { WorkspaceRuntimeState } from "./useWorkspaceRuntimeState";
@@ -195,45 +195,9 @@ export function useTerminalWorkspaceController(state: WorkspaceRuntimeState, dis
     }
   }, [activeLocalSessions, clearBlockBuffer, closeCurrentSession, connectionTargetIntents, deliverTerminalOutput, finishedEpochs, isCurrentEpoch, nextEpoch, pendingInitialDirectories, pendingLocalInput, pendingTerminalOutput, runtimesRef, startingLocal, terminalRestoreDirectory, updateRuntime]);
 
-  const connectBlock = useCallback(async (blockId: string, profile: ConnectionProfile, auth: SessionAuth, onFailure?: () => void) => {
-    if (!connectionIntentAllows(connectionTargetIntents.current, "terminal", blockId, profile.id)) return;
-    await closeCurrentSession(blockId);
-    if (!connectionIntentAllows(connectionTargetIntents.current, "terminal", blockId, profile.id)) return;
-    clearBlockBuffer(blockId, true);
-    const epoch = nextEpoch(blockId);
-    const failureKey = terminalFailureKey(blockId, epoch);
-    if (onFailure) connectionFailureHandlers.current.set(failureKey, onFailure);
-    const key = epochKey(blockId, epoch);
-    finishedEpochs.current.delete(key);
-    const terminalSize = terminalSizeReaders.current.get(blockId)?.() ?? { columns: 80, rows: 24 };
-    updateRuntime(blockId, () => ({ ...defaultRuntime, kind: "ssh", status: "connecting", connectionProgress: initialConnectionProgress(profile.jumpProfileIds?.length ?? 0) }));
-    try {
-      const sessionId = await connectSession(
-        { profileId: profile.id, auth, ...(isServer ? {runtimeKey:blockId} : {}), terminalSize, initialDirectory: pendingInitialDirectories.current.get(blockId) ?? terminalRestoreDirectory(blockId, profile.id) },
-        (event) => onSessionEvent(blockId, epoch, event),
-        (data, consumed) => { if (isCurrentEpoch(blockId, epoch)) deliverTerminalOutput(blockId, epoch, data, consumed); },
-      );
-      if (!isCurrentEpoch(blockId, epoch)) await closeSession(sessionId).catch(() => undefined);
-      else if (!finishedEpochs.current.has(key)) updateRuntime(blockId, (runtime) => ({ ...runtime, sessionId, kind: "ssh" }));
-    } catch (error) {
-      if (isCurrentEpoch(blockId, epoch)) {
-        updateRuntime(blockId, () => ({ ...defaultRuntime, kind: "ssh", status: "failed", notice: workspaceErrorMessage(error) }));
-        consumeFailureHandler(connectionFailureHandlers.current, failureKey);
-      }
-    }
-  }, [clearBlockBuffer, closeCurrentSession, connectionFailureHandlers, connectionTargetIntents, deliverTerminalOutput, finishedEpochs, isCurrentEpoch, nextEpoch, onSessionEvent, pendingInitialDirectories, terminalRestoreDirectory, terminalSizeReaders, updateRuntime]);
-
-  const restoreTerminalBlock = useCallback(async (session: RetainedSession) => {
-    const blockId=session.runtimeKey;
-    if (!blockId || runtimesRef.current[blockId]?.sessionId || startingLocal.current.has(blockId)) return;
-    const epoch=nextEpoch(blockId); startingLocal.current.set(blockId,epoch);
-    updateRuntime(blockId,()=>({...defaultRuntime,kind:"ssh",status:"connecting"}));
-    try {
-      const id=await attachRetainedSession(session,event=>onSessionEvent(blockId,epoch,event),(data,consumed)=>{if(isCurrentEpoch(blockId,epoch))deliverTerminalOutput(blockId,epoch,data,consumed);else consumed?.();});
-      if(isCurrentEpoch(blockId,epoch))updateRuntime(blockId,r=>({...r,sessionId:id}));
-    } catch(error) {updateRuntime(blockId,r=>({...r,notice:workspaceErrorMessage(error)}));}
-    finally{startingLocal.current.delete(blockId);}
-  },[deliverTerminalOutput,isCurrentEpoch,nextEpoch,onSessionEvent,runtimesRef,startingLocal,updateRuntime]);
+  const { connectBlock, restoreTerminalBlock } = useRemoteTerminalConnection(state, {
+    closeCurrentSession, clearBlockBuffer, terminalRestoreDirectory, onSessionEvent, deliverTerminalOutput,
+  });
 
   const restartLocalBlock = useCallback(async (blockId: string, osc7Enabled: boolean) => {
     await releaseRetainedBlock(blockId);
