@@ -9,6 +9,14 @@ vi.mock("../../lib/tauri/credentials", () => ({ initializeVault: vi.fn(), unlock
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
 describe("MasterPasswordDialog", () => {
+  it("focuses the password instead of dismissing the unlock dialog on Enter", async () => {
+    const close = vi.fn();
+    render(<MasterPasswordDialog mode="unlock" onSuccess={vi.fn()} onClose={close}/>);
+    expect(screen.getByLabelText("主密码")).toHaveFocus();
+    await userEvent.setup().keyboard("{Enter}");
+    expect(close).not.toHaveBeenCalled();
+    expect(screen.getByRole("dialog", { name: "解锁密码保险库" })).toBeInTheDocument();
+  });
   it("requires a 12 character matching master password before initialization", async () => {
     const user = userEvent.setup();
     render(<MasterPasswordDialog mode="initialize" onSuccess={vi.fn()} onClose={vi.fn()}/>);

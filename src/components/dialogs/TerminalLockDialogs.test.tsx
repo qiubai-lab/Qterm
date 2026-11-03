@@ -21,6 +21,13 @@ describe("TerminalLockChoiceDialog", () => {
 });
 
 describe("TerminalLockScreen", () => {
+  it("focuses the master password and keeps an empty Enter on the lock screen", async () => {
+    render(<TerminalLockScreen onUnlocked={vi.fn()}/>);
+    expect(screen.getByLabelText("主密码")).toHaveFocus();
+    await userEvent.setup().keyboard("{Enter}");
+    expect(mocks.unlockVault).not.toHaveBeenCalled();
+    expect(screen.getByRole("dialog", { name: "终端已锁定" })).toBeInTheDocument();
+  });
   it("clears the submitted master password before completing verification", async () => {
     const user = userEvent.setup();
     render(<TerminalLockScreen onUnlocked={vi.fn()}/>);

@@ -1,7 +1,27 @@
-import { render,screen } from "@testing-library/react";
+import { cleanup,render,screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { expect,it,vi } from "vitest";
+import { afterEach,expect,it,vi } from "vitest";
 import { AccessTakeoverDialog } from "./AccessTakeoverDialog";
+afterEach(cleanup);
+it("focuses takeover so Enter does not dismiss the login flow", async () => {
+  const cancel = vi.fn(), takeover = vi.fn(), user = userEvent.setup();
+  const view = render(<AccessTakeoverDialog busy={false} onCancel={cancel} onTakeover={takeover}/>);
+  expect(screen.getByRole("button", { name: "直接接管" })).toHaveFocus();
+  expect(takeover).not.toHaveBeenCalled();
+  await user.keyboard("{Enter}");
+  expect(takeover).toHaveBeenCalledOnce();
+  expect(cancel).not.toHaveBeenCalled();
+  view.rerender(<AccessTakeoverDialog busy onCancel={cancel} onTakeover={takeover}/>);
+  await user.keyboard("{Enter}");
+  expect(takeover).toHaveBeenCalledOnce();
+});
+it("preserves explicit keyboard cancellation with Escape", async () => {
+  const cancel = vi.fn(), takeover = vi.fn();
+  render(<AccessTakeoverDialog busy={false} onCancel={cancel} onTakeover={takeover}/>);
+  await userEvent.setup().keyboard("{Escape}");
+  expect(cancel).toHaveBeenCalledOnce();
+  expect(takeover).not.toHaveBeenCalled();
+});
 it("offers cancellation or one explicit takeover and keeps pending submission disabled",async()=>{
   const cancel=vi.fn(),takeover=vi.fn(),user=userEvent.setup();
   const view=render(<AccessTakeoverDialog busy={false} onCancel={cancel} onTakeover={takeover}/>);
