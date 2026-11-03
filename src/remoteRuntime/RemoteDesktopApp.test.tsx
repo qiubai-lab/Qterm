@@ -52,8 +52,18 @@ it("cleans pending drag gestures when authentication screens unmount", async()=>
 
 it.each(["login", "checking", "occupied"])("handles native close during %s without workspace persistence", async phase => {
   mocks.phase = phase;
-  render(<RemoteDesktopApp/>);
+  let connect!: (base: string) => void;
+  mocks.connect.mockImplementation(() => new Promise<string>(resolve => { connect = resolve; }));
+  const stopStartup = vi.fn();
+  const stopAuthentication = vi.fn();
+  mocks.close.mockResolvedValueOnce(stopStartup).mockResolvedValueOnce(stopAuthentication);
+  const view = render(<RemoteDesktopApp/>);
+  await waitFor(() => expect(mocks.close).toHaveBeenCalledTimes(1));
+  await act(async () => { connect("/api"); });
   await screen.findByRole("button", {name:"服务器菜单"});
-  // Startup and authentication each own a close handler during their lifetime.
-  expect(mocks.close).toHaveBeenCalledTimes(2);
+  await waitFor(() => expect(mocks.close).toHaveBeenCalledTimes(2));
+  expect(stopStartup).toHaveBeenCalledOnce();
+  expect(stopAuthentication).not.toHaveBeenCalled();
+  view.unmount();
+  expect(stopAuthentication).toHaveBeenCalledOnce();
 });
