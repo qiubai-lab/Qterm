@@ -9,6 +9,9 @@ let detaching = false;
 export function assertRuntimeAttached() { if (detaching) throw new Error("正在切换运行环境，请稍后操作"); }
 export async function detachRuntime(signal?: AbortSignal) {
   detaching = true;
-  try { for (const detach of cleanups) { signal?.throwIfAborted(); await detach(); } signal?.throwIfAborted(); }
+  // Native IPC yields let React re-render and replace effect registrations.
+  // Iterating the live Set would visit those replacements again indefinitely.
+  const pending = [...cleanups];
+  try { for (const detach of pending) { signal?.throwIfAborted(); await detach(); } signal?.throwIfAborted(); }
   catch (error) { detaching = false; throw error; }
 }

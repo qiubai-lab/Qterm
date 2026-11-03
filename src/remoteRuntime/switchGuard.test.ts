@@ -34,3 +34,38 @@ it("stops later cleanup and releases the detach guard after an expired switch se
     expect(() => assertRuntimeAttached()).not.toThrow();
   } finally { removeFirst(); removeLater(); }
 });
+
+it("runs each cleanup once when a React effect re-registers it during an awaited close", async () => {
+  const registrations: (() => void)[] = [];
+  let calls = 0;
+  const cleanup = async () => {
+    calls += 1;
+    // A native IPC await lets React commit the cleared workspace state. Its
+    // effect removes the old callback and registers a new closure.
+    await Promise.resolve();
+    registrations[registrations.length - 1]?.();
+    if (calls < 4) registrations.push(registerRuntimeDetach(() => cleanup()));
+  };
+  registrations.push(registerRuntimeDetach(cleanup));
+  try {
+    await detachRuntime();
+    expect(calls).toBe(1);
+  } finally { registrations.forEach(remove => remove()); }
+});
+
+it("uses replacement callbacks on the next attempt after a cleanup failure", async () => {
+  const replacement = vi.fn().mockResolvedValue(undefined);
+  let removeReplacement = () => {};
+  const removeFirst = registerRuntimeDetach(async () => {
+    removeFirst();
+    removeReplacement = registerRuntimeDetach(replacement);
+    throw new Error("native close failed");
+  });
+  try {
+    await expect(detachRuntime()).rejects.toThrow("native close failed");
+    expect(replacement).not.toHaveBeenCalled();
+    expect(() => assertRuntimeAttached()).not.toThrow();
+    await detachRuntime();
+    expect(replacement).toHaveBeenCalledOnce();
+  } finally { removeFirst(); removeReplacement(); }
+});
