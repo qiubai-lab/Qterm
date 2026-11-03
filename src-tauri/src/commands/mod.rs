@@ -24,6 +24,7 @@ pub mod web;
 pub mod web_library;
 pub mod web_tabs;
 
+pub mod remote_download;
 pub mod remote_runtime;
 
 pub mod remote_clipboard;

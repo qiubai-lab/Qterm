@@ -53,7 +53,13 @@ pub(crate) async fn transfer(
     let (tx, rx) = tokio::sync::oneshot::channel();
     let tx = Mutex::new(Some(tx));
     let progress = operation.progress.clone();
+    let total = operation.total.clone();
     let sink = Arc::new(move |event| {
+        if let TransferEvent::Started { total_bytes }
+        | TransferEvent::Progress { total_bytes, .. } = &event
+        {
+            total.store(*total_bytes, std::sync::atomic::Ordering::Relaxed);
+        }
         if let TransferEvent::Progress {
             transferred_bytes, ..
         } = &event
@@ -253,6 +259,12 @@ pub async fn download(
     let file = tokio::fs::File::open(&download.file)
         .await
         .map_err(|_| ApiError::storage())?;
+    let length = file
+        .metadata()
+        .await
+        .map_err(|_| ApiError::storage())?
+        .len()
+        .to_string();
     let disposition = format!(
         "attachment; filename*=UTF-8''{}",
         url::form_urlencoded::byte_serialize(download.filename.as_bytes())
@@ -266,6 +278,7 @@ pub async fn download(
     Ok((
         [
             (header::CONTENT_TYPE, "application/octet-stream"),
+            (header::CONTENT_LENGTH, length.as_str()),
             (header::CONTENT_DISPOSITION, disposition.as_str()),
         ],
         body,

@@ -25,6 +25,7 @@ struct Entry {
     started: bool,
     cancelled: Arc<AtomicBool>,
     progress: Arc<AtomicU64>,
+    total: Arc<AtomicU64>,
 }
 impl Transfers {
     fn access<T>(
@@ -51,6 +52,7 @@ impl Transfers {
             started: false,
             cancelled: Arc::new(AtomicBool::new(false)),
             progress: Arc::new(AtomicU64::new(0)),
+            total: Arc::new(AtomicU64::new(0)),
         });
         if entry.owner != owner {
             return Err(ApiError::forbidden());
@@ -81,6 +83,14 @@ impl Transfers {
             return Err(ApiError::forbidden());
         }
         Ok(entry.progress.clone())
+    }
+    fn total(&self, owner: &str, id: &str) -> Result<Arc<AtomicU64>> {
+        let entries = self.0.lock().unwrap();
+        let entry = entries.get(id).ok_or_else(ApiError::invalid)?;
+        if entry.owner != owner {
+            return Err(ApiError::forbidden());
+        }
+        Ok(entry.total.clone())
     }
     pub fn finish(&self, id: &str) {
         if let Some(entry) = self.0.lock().unwrap().get_mut(id) {
@@ -117,7 +127,7 @@ pub async fn progress(
 ) -> Result<Json<serde_json::Value>> {
     let progress = state.transfer_tasks.progress(&owner.0, &id)?;
     Ok(Json(
-        serde_json::json!({"transferredBytes": progress.load(Ordering::Relaxed)}),
+        serde_json::json!({"transferredBytes": progress.load(Ordering::Relaxed), "totalBytes": state.transfer_tasks.total(&owner.0, &id)?.load(Ordering::Relaxed)}),
     ))
 }
 
@@ -128,6 +138,7 @@ pub struct Operation {
     owner: String,
     pub cancelled: Arc<AtomicBool>,
     pub progress: Arc<AtomicU64>,
+    pub total: Arc<AtomicU64>,
 }
 impl Operation {
     pub fn start(state: &Arc<ServerState>, owner: &str, id: String) -> Result<Self> {
@@ -135,6 +146,7 @@ impl Operation {
             permit: crate::data_access::Permit::new(state, owner)?,
             cancelled: state.transfer_tasks.start(owner, &id)?,
             progress: state.transfer_tasks.progress(owner, &id)?,
+            total: state.transfer_tasks.total(owner, &id)?,
             state: state.clone(),
             id,
             owner: owner.into(),

@@ -24,6 +24,9 @@ impl Write for BoundedWriter<'_> {
         }
         let written = self.file.write(bytes)?;
         self.bytes += written as u64;
+        self.operation
+            .progress
+            .store(self.bytes, std::sync::atomic::Ordering::Relaxed);
         Ok(written)
     }
     fn flush(&mut self) -> io::Result<()> {
@@ -31,6 +34,12 @@ impl Write for BoundedWriter<'_> {
     }
 }
 pub fn pack(root: &Path, output: &Path, operation: &Operation) -> Result<()> {
+    operation
+        .progress
+        .store(0, std::sync::atomic::Ordering::Relaxed);
+    operation
+        .total
+        .store(0, std::sync::atomic::Ordering::Relaxed);
     let writer = BoundedWriter {
         file: std::fs::File::create(output).map_err(|_| ApiError::storage())?,
         bytes: 0,

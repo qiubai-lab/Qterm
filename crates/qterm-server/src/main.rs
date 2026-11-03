@@ -9,6 +9,8 @@ mod config;
 mod connection;
 mod credential_management;
 mod data_access;
+#[cfg(test)]
+mod download_tests;
 mod error;
 mod files;
 mod git;

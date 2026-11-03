@@ -297,3 +297,10 @@
 - `src-tauri/src/infrastructure/remote_runtime/`: fixed-origin native Cookie jar, private loopback HTTP/WebSocket bridge, exact UI-Origin admission, TLS validation, redirect rejection and cancellation. `commands/remote_runtime.rs` owns native bootstrap/save IPC; `remote_clipboard.rs` and `remote_drop.rs` accept only OS clipboard or approved drag/drop sources.
 - `src/remoteRuntime/switchGuard.ts`: registration boundary for workspace save, dirty file guards, native surface teardown and local runtime shutdown; never substitutes for a workspace state owner.
 - `src-tauri/src/bootstrap_tests.rs`: composition-root path/flavor/window-state regression tests extracted from `lib.rs` to keep registration changes below its source-size limit.
+
+### Runtime download lifecycle
+
+- `src/server/downloadRequest.ts`: server preparation progress/cancellation, browser handoff semantics, and desktop destination selection before network transfer.
+- `src/remoteRuntime/download.ts`: bounded response-reader/native-writer pipeline, backpressure, progress, abort and incomplete-body cleanup. Recovery-key export retains its separate small-response adapter.
+- `src-tauri/src/commands/remote_download.rs`: native save-dialog selection and one-time sink IPC; never accepts arbitrary destination paths from the frontend.
+- `src-tauri/src/infrastructure/remote_runtime/download.rs`: per-runtime temporary sinks beside user-approved destinations, bounded chunk writes, atomic commit and cleanup; disconnect clears pending sinks.

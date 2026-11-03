@@ -507,8 +507,8 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange, persistenc
       const action = direction === "upload" ? "上传" : "下载";
       const base: TransferState = current ?? { transferId: "", status: "starting", transferred: 0, total: 0, message: "", direction };
       if (event.type === "started") return { ...base, direction, status: "running", total: event.totalBytes, message: `正在${action}…` };
-      if (event.type === "progress") return { ...base, direction, status: "running", transferred: event.transferredBytes, total: event.totalBytes, message: `正在${action}…` };
-      if (event.type === "completed") return { ...base, direction, status: "completed", message: `${action}完成` };
+      if (event.type === "progress") return { ...base, direction, status: "running", transferred: event.transferredBytes, total: event.totalBytes, message: event.message ?? `正在${action}…` };
+      if (event.type === "completed" || event.type === "handedOff") return { ...base, direction, status: "completed", message: event.type === "handedOff" ? "已交给浏览器下载，请在浏览器中查看进度或取消" : `${action}完成` };
       if (event.type === "cancelled") return { ...base, direction, status: "cancelled", message: `${action}已取消` };
       return { ...base, status: "failed", message: event.message };
     });
@@ -696,7 +696,7 @@ export function FileBrowserPane({ initialPath, runtime, onPathChange, persistenc
       {transferActive && transfer ? <>
         <span className="file-browser-transfer-label">{transfer.message}{transfer.total > 0 ? ` ${Math.min(100, Math.round(transfer.transferred / transfer.total * 100))}%` : ""}</span>
         {transfer.total > 0 ? <progress className="file-browser-transfer-progress" aria-label={`${transfer.direction === "upload" ? "上传" : "下载"}进度`} value={transfer.transferred} max={transfer.total}/> : <progress className="file-browser-transfer-progress" aria-label={`${transfer.direction === "upload" ? "上传" : "下载"}进度`}/>}
-        <small>{transfer.total > 0 ? `${formatSize(transfer.transferred)} / ${formatSize(transfer.total)}` : "准备中"}</small>
+        <small>{transfer.total > 0 ? `${formatSize(transfer.transferred)} / ${formatSize(transfer.total)}` : transfer.transferred > 0 ? `已处理 ${formatSize(transfer.transferred)}` : "准备中"}</small>
         {transfer.transferId && sessionId && <button onClick={() => void cancelTransfer(sessionId, transfer.transferId)}>取消</button>}
       </> : <>
         <span>{selectedPaths.size > 1 ? `${selectedPaths.size} 项已选择` : showLocalRoots ? loading ? "正在读取本机位置…" : `${localRoots.length} 个文件夹 · 0 个文件` : listing ? `${folderCount} 个文件夹 · ${fileCount} 个文件` : loading ? "正在读取目录…" : "暂无目录统计"}</span>

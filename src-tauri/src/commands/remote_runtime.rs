@@ -32,6 +32,7 @@ pub async fn remote_runtime_connect(
     let info = runtime.info();
     if let Some(previous) = current.replace(runtime) {
         previous.cancel.cancel();
+        previous.downloads.clear().await;
     }
     Ok(info)
 }
@@ -40,6 +41,7 @@ pub async fn remote_runtime_connect(
 pub async fn remote_runtime_disconnect(state: State<'_, RemoteRuntimeState>) -> Result<(), String> {
     if let Some(runtime) = state.0.lock().await.take() {
         runtime.cancel.cancel();
+        runtime.downloads.clear().await;
     }
     Ok(())
 }

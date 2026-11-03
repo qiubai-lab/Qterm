@@ -149,6 +149,9 @@ async fn copy(source: &Path, destination: &Path, operation: &Operation) -> Resul
     if !meta.is_file() || meta.len() > MAX_TRANSFER_BYTES {
         return Err(ApiError::invalid());
     }
+    operation
+        .total
+        .store(meta.len(), std::sync::atomic::Ordering::Relaxed);
     let mut input = tokio::fs::File::open(source)
         .await
         .map_err(|_| ApiError::storage())?;

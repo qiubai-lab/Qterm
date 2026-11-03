@@ -1,9 +1,8 @@
-import { isRemoteDesktop } from "../../lib/runtime/environment";
-import { saveNativeDownload } from "../../remoteRuntime/transport";
+import { downloadRequest, selectDownloadDestination, discardDownloadDestination } from "../downloadRequest";
 import { randomId } from "../../lib/randomId";
 import { dataLease } from "../dataAccess";
 import type * as Desktop from "../../lib/tauri/transfers";
-import { API, api, message, request } from "../http";
+import { api, message } from "../http";
 import { selectUpload, takeUpload, type UploadEntry } from "../uploadSelection";
 import { uploadRequest } from "../uploadRequest";
 const tasks = new Map<string, { controller: AbortController; active: Set<string> }>();
@@ -11,13 +10,13 @@ export type * from "../../lib/tauri/transfers";
 export const selectUploadFiles: typeof Desktop.selectUploadFiles = () => selectUpload(false);
 export const selectUploadFile: typeof Desktop.selectUploadFile = async () => (await selectUpload(false, false))[0] ?? null;
 export const selectUploadFolder: typeof Desktop.selectUploadFolder = async () => (await selectUpload(true))[0] ?? null;
-export const selectDownloadPath: typeof Desktop.selectDownloadPath = async name => name ?? "qterm-download";
-export const selectDownloadDirectory: typeof Desktop.selectDownloadDirectory = async name => `${name}.tar`;
-function start(onEvent: (event: Desktop.TransferEvent) => void, operation: (signal: AbortSignal, active: Set<string>) => Promise<void>, totalBytes = 0): string {
+export const selectDownloadPath: typeof Desktop.selectDownloadPath = async name => selectDownloadDestination(name ?? "qterm-download");
+export const selectDownloadDirectory: typeof Desktop.selectDownloadDirectory = async name => selectDownloadDestination(`${name}.tar`);
+function start(onEvent: (event: Desktop.TransferEvent) => void, operation: (signal: AbortSignal, active: Set<string>) => Promise<void | boolean>, totalBytes = 0): string {
   const lease = dataLease();
   const id = randomId(); const controller = new AbortController(); const active = new Set<string>(); tasks.set(id, { controller, active });
   onEvent({ type: "started", totalBytes });
-  void operation(AbortSignal.any([controller.signal, lease.signal]), active).then(() => onEvent({ type: "completed" }), error => onEvent(controller.signal.aborted ? { type: "cancelled" } : { type: "failed", message: message(error) })).finally(() => tasks.delete(id));
+  void operation(AbortSignal.any([controller.signal, lease.signal]), active).then(completed => { if (completed !== false) onEvent({ type: "completed" }); }, error => onEvent(controller.signal.aborted ? { type: "cancelled" } : { type: "failed", message: message(error) })).finally(() => tasks.delete(id));
   return id;
 }
 async function upload(sessionId: string, entry: UploadEntry, path: string, relative: boolean, signal: AbortSignal, active: Set<string>, progress: (bytes: number) => void) {
@@ -43,14 +42,10 @@ export const uploadSelectedEntries: typeof Desktop.uploadSelectedEntries = async
     }
   }, totalBytes);
 };
-async function download(sessionId: string, path: string, name: string, directory: boolean, onEvent: (event: Desktop.TransferEvent) => void): Promise<string> { return start(onEvent, async (signal, active) => {
-  const taskId = randomId(); active.add(taskId);
-  let id: string;
-  try { ({ id } = await api<{ id: string }>("/transfers/download", "POST", { sessionId, path, taskId, directory }, signal)); } finally { active.delete(taskId); }
-  signal.throwIfAborted();
-  if (isRemoteDesktop) { await saveNativeDownload(await request(`/downloads/${encodeURIComponent(id)}`, {signal}), name, () => signal.throwIfAborted()); return; }
-  const link = document.createElement("a"); link.href = `${API}/downloads/${encodeURIComponent(id)}`; link.download = name; document.body.append(link); link.click(); link.remove();
-}); }
+async function download(sessionId: string, path: string, name: string, directory: boolean, onEvent: (event: Desktop.TransferEvent) => void): Promise<string> {
+  try { return start(onEvent, (signal, active) => downloadRequest(sessionId, path, name, directory, signal, active, onEvent)); }
+  catch (error) { await discardDownloadDestination(name); throw error; }
+}
 export const downloadFile: typeof Desktop.downloadFile = (session, path, name, events) => download(session,path,name,false,events);
 export const cancelTransfer: typeof Desktop.cancelTransfer = async (_session, id) => {
   const task = tasks.get(id); if (!task) return;

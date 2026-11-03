@@ -1,4 +1,5 @@
 //! A private loopback transport for the bundled desktop UI. Remote HTML is never loaded.
+mod download;
 mod proxy;
 mod socket;
 #[cfg(test)]
@@ -11,6 +12,7 @@ use tokio_util::sync::CancellationToken;
 
 pub struct RemoteRuntime {
     pub endpoint: Url,
+    pub downloads: download::Downloads,
     pub client: Client,
     pub cookies: Arc<Jar>,
     pub cancel: CancellationToken,
@@ -70,6 +72,7 @@ impl RemoteRuntime {
         );
         let runtime = Arc::new(Self {
             endpoint,
+            downloads: download::Downloads::default(),
             client,
             cookies,
             cancel: CancellationToken::new(),
