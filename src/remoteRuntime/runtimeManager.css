@@ -5,7 +5,8 @@
 .runtime-manager-sidebar { display:flex; flex-direction:column; min-width:0; min-height:0; padding:10px 7px 8px; gap:6px; border-right:1px solid var(--border); background:var(--panel-bg); }
 .runtime-sidebar-heading { display:flex; justify-content:space-between; padding:0 6px 3px; color:var(--muted); font-size:9px; }
 .runtime-sidebar-heading>span:last-child { color:var(--dim); font-variant-numeric:tabular-nums; }
-.runtime-add-server { justify-content:flex-start; }
+.runtime-manager .runtime-add-server { justify-content:flex-start; }
+.runtime-add-server>svg { color:var(--navigation-accent); }
 .runtime-server-scroll,.runtime-editor-scroll { flex:1; min-width:0; min-height:0; }
 .runtime-server-list { position:relative; }
 .runtime-server-list>button { position:relative; z-index:1; display:flex; width:100%; height:45px; gap:7px; align-items:center; padding:6px; border:0; border-radius:5px; color:var(--muted); background:transparent; text-align:left; cursor:pointer; }
@@ -13,7 +14,7 @@
 .runtime-server-list>button[aria-pressed="true"] { background:transparent; color:var(--text-strong); }
 .runtime-server-list>button:focus-visible { outline:1px solid var(--focus); outline-offset:-1px; }
 .runtime-server-list>button:disabled { opacity:.55; cursor:default; }
-.runtime-row-icon { display:grid; place-items:center; flex:none; width:25px; height:25px; border-radius:5px; background:var(--control-bg); color:var(--icon); }
+.runtime-row-icon { display:grid; place-items:center; flex:none; width:25px; height:25px; border-radius:5px; background:var(--navigation-accent-bg); color:var(--navigation-accent); }
 .runtime-server-list>button>span:not(.runtime-row-icon) { min-width:0; flex:1; }
 .runtime-server-list strong,.runtime-server-list small { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .runtime-server-list strong { font-size:10px; font-weight:500; }

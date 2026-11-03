@@ -15,11 +15,15 @@
 .runtime-status-tag[data-status="已被接管"] { color:var(--danger); }
 .runtime-status-tag[data-status="已锁定"],.runtime-status-tag[data-status="需要登录"] { color:var(--muted); }
 .runtime-status-tag[data-paused]::before,.runtime-status-tag[data-paused] .runtime-status-dot::after { animation-play-state:paused; }
-.runtime-desktop-controls { position:fixed; right:0; top:0; height:40px; z-index:1001; display:flex; align-items:center; gap:4px; padding:0 4px; background:transparent; }
+.runtime-desktop-controls { position:fixed; right:0; top:0; height:40px; z-index:1001; display:flex; align-items:center; gap:4px; padding:0 10px 0 4px; background:transparent; }
 /* Container boundaries must not add a second gap between the three chrome actions. */
 .runtime-desktop-controls .runtime-environment-control { padding:0; }
 .runtime-desktop-controls .window-controls { gap:4px; margin-left:0; padding:0; }
 .runtime-desktop-controls :is(.runtime-trigger,.runtime-access-controls>button,.window-pin) { width:28px; height:28px; border:0; border-radius:5px; }
+/* Local and remote desktop chrome share the same pin target and trailing inset. */
+:is(.app-chrome,.runtime-desktop-controls) .window-controls .window-pin { width:28px; height:28px; border:0; border-radius:5px; }
+.app-chrome>.runtime-environment-control { height:40px; align-self:stretch; padding:0 0 0 4px; }
+.app-chrome>.runtime-environment-control+.window-controls { gap:4px; margin-left:4px; padding:0 10px 0 0; }
 .runtime-chrome-spacer { width:var(--runtime-chrome-width,250px); flex:none; }
 @keyframes runtime-tag-breathe { 0%,100% { opacity:.07; } 50% { opacity:.15; } }
 @keyframes runtime-dot-breathe { 0%,100% { opacity:.1; transform:scale(.8); } 50% { opacity:.25; transform:scale(1.15); } }

@@ -31,7 +31,7 @@ export function ServerManager({entries, initialNew, activeId, onSave, onConnect,
     <div className="runtime-manager-grid">
       <aside className="runtime-manager-sidebar">
         <div className="runtime-sidebar-heading"><span>服务器</span><span>{entries.length.toString().padStart(2, "0")}</span></div>
-        <Button size="compact" variant="quiet" className="runtime-add-server" onClick={() => choose(null)} disabled={busy}><Icon name="plus" size={13}/>添加服务器</Button>
+        <Button size="compact" variant="secondary" className="runtime-add-server" onClick={() => choose(null)} disabled={busy}><Icon name="plus" size={13}/>添加服务器</Button>
         <OverlayScrollArea ref={listRef} className="runtime-server-scroll" viewportClassName="runtime-server-list" viewportProps={{"aria-label":"已保存的服务器"}} density="compact">
           {indicator && <span className="runtime-selection" aria-hidden="true" style={{height:indicator.height,transform:`translateY(${indicator.top}px)`}}/>}
           {entries.length ? entries.map(entry => <ServerEntryRow key={entry.id} entry={entry} selected={target === entry.id} active={entry.id === activeId} busy={busy} onChoose={() => choose(entry)}/>) : <div className="runtime-list-empty"><Icon name="server" size={20}/><strong>尚未添加服务器</strong><span>保存常用地址，快速切换</span></div>}
