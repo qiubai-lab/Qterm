@@ -5,6 +5,11 @@ pub trait KnownHostRepository: Send + Sync {
         &self,
         endpoint: &HostEndpoint,
     ) -> Result<Option<PresentedHostKey>, KnownHostRepositoryError>;
+    fn forget(
+        &self,
+        endpoint: &HostEndpoint,
+        fingerprint: &str,
+    ) -> Result<bool, KnownHostRepositoryError>;
     fn trust(
         &self,
         endpoint: &HostEndpoint,

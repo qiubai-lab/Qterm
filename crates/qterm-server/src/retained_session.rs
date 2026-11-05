@@ -169,7 +169,16 @@ impl RetainedSession {
                     Some("hostKeyConfirmationRequired" | "routeProgress") => {
                         inner.event = Some(event.clone())
                     }
-                    Some("failed" | "hostKeyChanged") => inner.failure = Some(event.clone()),
+                    Some("hostKeyChanged") => inner.failure = Some(event.clone()),
+                    Some("failed")
+                        if inner
+                            .failure
+                            .as_ref()
+                            .and_then(|value| value["type"].as_str())
+                            != Some("hostKeyChanged") =>
+                    {
+                        inner.failure = Some(event.clone());
+                    }
                     _ => {}
                 }
                 let _ = session.output.send(Message::Text(

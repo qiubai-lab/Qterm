@@ -1,0 +1,6 @@
+.block-notice .host-key-recovery-action { display:inline; margin-left:8px; padding:3px 0; border:0; background:transparent; color:inherit; font:inherit; text-decoration:underline; text-underline-offset:3px; cursor:pointer; }
+.host-key-recovery-action:focus-visible { outline:2px solid var(--focus); outline-offset:3px; }
+.host-key-recovery-fingerprints { margin:12px 0; font-size:11px; }
+.host-key-recovery-fingerprints dt { color:var(--muted); margin-top:8px; }
+.host-key-recovery-fingerprints dd { margin:4px 0 0; font-family:monospace; overflow-wrap:anywhere; }
+.host-key-recovery-error { height:32px; margin:0; color:var(--danger); font-size:11px; overflow:auto; }

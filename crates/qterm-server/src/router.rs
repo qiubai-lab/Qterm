@@ -57,6 +57,7 @@ pub fn router(state: Arc<ServerState>) -> Router {
         .route("/auth",get(||async{Json(serde_json::json!({"authenticated":true,"runtime":"web-server","protocolVersion":1,"version":env!("CARGO_PKG_VERSION")}))}))
         .route("/logout",post(auth::logout))
         .route("/access",get(crate::access_socket::upgrade))
+        .route("/host-keys/forget",post(catalog::forget_host_key))
         .route("/profiles",get(catalog::profiles).post(catalog::create_profile))
         .route("/profiles/{id}",axum::routing::put(catalog::update_profile).delete(catalog::delete_profile))
         .route("/profiles/{id}/requirements",get(catalog::requirements))

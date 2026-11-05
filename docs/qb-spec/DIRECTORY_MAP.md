@@ -312,3 +312,9 @@
 - `src/remoteRuntime/download.ts`: bounded response-reader/native-writer pipeline, backpressure, progress, abort and incomplete-body cleanup. Recovery-key export retains its separate small-response adapter.
 - `src-tauri/src/commands/remote_download.rs`: native save-dialog selection and one-time sink IPC; never accepts arbitrary destination paths from the frontend.
 - `src-tauri/src/infrastructure/remote_runtime/download.rs`: per-runtime temporary sinks beside user-approved destinations, bounded chunk writes, atomic commit and cleanup; disconnect clears pending sinks.
+
+### 主机密钥变更恢复
+
+- `src/workspace/BlockNotice.tsx`：终端、Files、Git、Network 共用的错误提示与旧主机密钥清理确认，显示实际失败节点的新旧指纹；清理成功后走原认证建连流程。
+- `application/host_key_service.rs`、`ports/known_host_repository.rs`、`infrastructure/persistence/json_known_host_repository.rs`：按 endpoint 与预期旧指纹原子删除信任记录，拒绝过期确认；下一次建连仍需确认新密钥。
+- `qterm-protocol/src/sessions.rs` 的 `ForgetHostKeyDto`、桌面 `session_forget_host_key` 和 Web `/host-keys/forget`：复用同一清理契约与现有认证/终端锁边界。

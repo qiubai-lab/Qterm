@@ -56,7 +56,7 @@ export function useGitWorkspaceController(state: WorkspaceRuntimeState, dispatch
     } else if (event.type === "hostKeyConfirmationRequired") {
       updateGitRuntime(blockId, (runtime) => ({ ...runtime, hostKeyPrompt: event }));
     } else if (event.type === "hostKeyChanged") {
-      updateGitRuntime(blockId, (runtime) => ({ ...runtime, stale: true, connectionProgress: failConnectionProgress(runtime.connectionProgress, event.node, "主机密钥已变化"), notice: `${nodeLabel(event.node)}主机密钥已变化：${event.presentedFingerprint}` }));
+      updateGitRuntime(blockId, (runtime) => ({ ...runtime, hostKeyChange: event, stale: true, connectionProgress: failConnectionProgress(runtime.connectionProgress, event.node, "主机密钥已变化"), notice: `${nodeLabel(event.node)}主机密钥已变化：${event.presentedFingerprint}` }));
     } else {
       updateGitRuntime(blockId, (runtime) => ({ ...runtime, stale: true, connectionProgress: failConnectionProgress(runtime.connectionProgress, event.node, event.message), notice: routeFailureNotice(event) }));
       if (event.node?.role === "target" && event.stage === "authenticate") consumeFailureHandler(connectionFailureHandlers.current, `git:${blockId}`);

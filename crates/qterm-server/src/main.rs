@@ -122,3 +122,6 @@ fn hash_password() -> Result<(), String> {
     println!("{hash}");
     Ok(())
 }
+
+#[cfg(test)]
+mod host_key_tests;

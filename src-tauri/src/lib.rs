@@ -353,6 +353,7 @@ pub fn run() {
             settings_update_terminal,
             session_connect,
             session_accept_host_key,
+            commands::session::session_forget_host_key,
             session_reject_host_key,
             session_close,
             session_write,

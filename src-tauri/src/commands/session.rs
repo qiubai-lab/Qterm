@@ -240,3 +240,21 @@ pub(crate) fn control_error(error: SessionControlError) -> IpcError {
     };
     IpcError::from(application_error)
 }
+
+#[tauri::command]
+pub async fn session_forget_host_key(
+    input: qterm_protocol::sessions::ForgetHostKeyDto,
+    state: State<'_, SessionState>,
+) -> Result<(), IpcError> {
+    let manager = Arc::clone(state.manager());
+    tauri::async_runtime::spawn_blocking(move || input.apply(&manager))
+        .await
+        .map_err(|_| {
+            IpcError::from(ApplicationError::new(
+                ApplicationErrorCode::KnownHostsUnavailable,
+                "无法清理旧主机密钥",
+                true,
+            ))
+        })?
+        .map_err(IpcError::from)
+}

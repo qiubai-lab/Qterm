@@ -388,3 +388,40 @@ mod tests {
         );
     }
 }
+
+/// Compare-and-delete protects a newer trust decision from a stale confirmation.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct ForgetHostKeyDto {
+    pub host: String,
+    pub port: u32,
+    pub trusted_fingerprint: String,
+}
+impl ForgetHostKeyDto {
+    pub fn apply(
+        self,
+        manager: &qterm_core::infrastructure::ssh::client::SshSessionManager,
+    ) -> Result<(), ApplicationError> {
+        let endpoint = qterm_core::domain::session::HostEndpoint::new(&self.host, self.port)
+            .map_err(|_| {
+                ApplicationError::new(
+                    ApplicationErrorCode::KnownHostsUnavailable,
+                    "主机地址无效",
+                    false,
+                )
+            })?;
+        match manager.forget_host_key(&endpoint, &self.trusted_fingerprint) {
+            Ok(true) => Ok(()),
+            Ok(false) => Err(ApplicationError::new(
+                ApplicationErrorCode::KnownHostsUnavailable,
+                "主机密钥记录已更新，请重新连接后核对",
+                true,
+            )),
+            Err(_) => Err(ApplicationError::new(
+                ApplicationErrorCode::KnownHostsUnavailable,
+                "无法清理旧主机密钥，请重试",
+                true,
+            )),
+        }
+    }
+}

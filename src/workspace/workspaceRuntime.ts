@@ -15,6 +15,7 @@ export interface TerminalRuntime {
   kind: "local" | "ssh" | null;
   status: SessionState;
   hostKeyPrompt: HostKeyPrompt | null;
+  hostKeyChange?: Extract<SessionEvent, { type: "hostKeyChanged" }> | null;
   notice: string;
   connectionProgress: ConnectionRouteProgressState | null;
   initialCwd: string | null;
@@ -27,6 +28,7 @@ export interface FileRuntime {
   kind: "local" | "sftp";
   status: SessionState;
   hostKeyPrompt: HostKeyPrompt | null;
+  hostKeyChange?: Extract<SessionEvent, { type: "hostKeyChanged" }> | null;
   notice: string;
   connectionProgress: ConnectionRouteProgressState | null;
 }
@@ -35,6 +37,7 @@ export interface NetworkRuntime {
   sessionId: string | null;
   status: SessionState;
   hostKeyPrompt: HostKeyPrompt | null;
+  hostKeyChange?: Extract<SessionEvent, { type: "hostKeyChanged" }> | null;
   notice: string;
   connectionProgress: ConnectionRouteProgressState | null;
   ruleStates: Record<string, NetworkRuleRuntimeState>;
@@ -44,6 +47,7 @@ export interface GitRuntime {
   sessionId: string | null;
   status: SessionState;
   hostKeyPrompt: HostKeyPrompt | null;
+  hostKeyChange?: Extract<SessionEvent, { type: "hostKeyChanged" }> | null;
   notice: string;
   connectionProgress: ConnectionRouteProgressState | null;
   stale: boolean;

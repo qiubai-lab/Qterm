@@ -1,4 +1,5 @@
 import type * as Desktop from "../../lib/tauri/sessions";
+import { api } from "../http";
 import { openSession, control, closeSession as close } from "../sessionTransport";
 export type * from "../../lib/tauri/sessions";
 export const connectSession: typeof Desktop.connectSession = (input, onEvent, onData) => openSession("terminal", input, onEvent, onData);
@@ -8,3 +9,5 @@ export const acceptHostKey: typeof Desktop.acceptHostKey = async id => control(i
 export const rejectHostKey: typeof Desktop.rejectHostKey = async id => control(id, { type: "rejectHostKey" });
 export const closeSession: typeof Desktop.closeSession = async id => close(id);
 export { startClipboard as startTerminalClipboardStaging, cancelClipboard as cancelTerminalClipboardStaging } from "../terminalClipboard";
+
+export const forgetHostKey: typeof Desktop.forgetHostKey = input => api("/host-keys/forget", "POST", input);

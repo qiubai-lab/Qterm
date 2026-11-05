@@ -36,7 +36,7 @@ export function useNetworkWorkspaceController(state: WorkspaceRuntimeState, disp
     } else if (event.type === "hostKeyConfirmationRequired") {
       updateNetworkRuntime(blockId, (runtime) => ({ ...runtime, hostKeyPrompt: event }));
     } else if (event.type === "hostKeyChanged") {
-      updateNetworkRuntime(blockId, (runtime) => ({ ...runtime, connectionProgress: failConnectionProgress(runtime.connectionProgress, event.node, "主机密钥已变化"), notice: `${nodeLabel(event.node)}主机密钥已变化：${event.presentedFingerprint}` }));
+      updateNetworkRuntime(blockId, (runtime) => ({ ...runtime, hostKeyChange: event, connectionProgress: failConnectionProgress(runtime.connectionProgress, event.node, "主机密钥已变化"), notice: `${nodeLabel(event.node)}主机密钥已变化：${event.presentedFingerprint}` }));
     } else {
       updateNetworkRuntime(blockId, (runtime) => ({ ...runtime, connectionProgress: failConnectionProgress(runtime.connectionProgress, event.node, event.message), notice: routeFailureNotice(event), ruleStates: {} }));
       if (event.node?.role === "target" && event.stage === "authenticate") consumeFailureHandler(connectionFailureHandlers.current, `network:${blockId}`);

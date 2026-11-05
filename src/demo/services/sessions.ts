@@ -15,3 +15,5 @@ export const startTerminalClipboardStaging: typeof Desktop.startTerminalClipboar
   return text ? { kind: "text", text } : { kind: "empty" };
 };
 export const cancelTerminalClipboardStaging: typeof Desktop.cancelTerminalClipboardStaging = async () => undefined;
+
+export const forgetHostKey: typeof import("../../lib/tauri/sessions").forgetHostKey = async () => { throw new Error("演示环境不保存主机密钥"); };

@@ -69,6 +69,16 @@ impl SshSessionManager {
         id
     }
 
+    pub fn forget_host_key(
+        &self,
+        endpoint: &HostEndpoint,
+        fingerprint: &str,
+    ) -> Result<bool, SessionControlError> {
+        self.host_keys
+            .forget(endpoint, fingerprint)
+            .map_err(|_| SessionControlError::KnownHostsUnavailable)
+    }
+
     pub fn accept_host_key(&self, id: &str) -> Result<(), SessionControlError> {
         let entry = self.entry(id)?;
         let pending = entry

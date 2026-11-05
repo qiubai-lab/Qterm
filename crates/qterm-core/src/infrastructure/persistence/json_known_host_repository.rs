@@ -87,6 +87,28 @@ impl KnownHostRepository for JsonKnownHostRepository {
             .map(HostRecord::into_domain))
     }
 
+    fn forget(
+        &self,
+        endpoint: &HostEndpoint,
+        fingerprint: &str,
+    ) -> Result<bool, KnownHostRepositoryError> {
+        let _guard = self.lock.lock().map_err(|_| KnownHostRepositoryError::Io)?;
+        let mut document = self.load()?;
+        let Some(index) = document
+            .hosts
+            .iter()
+            .position(|record| record.host == endpoint.host() && record.port == endpoint.port())
+        else {
+            return Ok(true);
+        };
+        if document.hosts[index].fingerprint != fingerprint {
+            return Ok(false);
+        }
+        document.hosts.remove(index);
+        self.save(&document)?;
+        Ok(true)
+    }
+
     fn trust(
         &self,
         endpoint: &HostEndpoint,
@@ -204,6 +226,29 @@ mod tests {
 
         let reopened = JsonKnownHostRepository::new(path);
         assert_eq!(reopened.find(&endpoint).expect("find key"), Some(key));
+    }
+
+    #[test]
+    fn forget_only_removes_matching_endpoint_and_fingerprint() {
+        let directory = tempdir().unwrap();
+        let path = directory.path().join("known-hosts.json");
+        let repository = JsonKnownHostRepository::new(path.clone());
+        let endpoint = HostEndpoint::new("example.com", 22).unwrap();
+        let other_port = HostEndpoint::new("example.com", 2222).unwrap();
+        let key = host_key();
+        repository.trust(&endpoint, &key).unwrap();
+        repository.trust(&other_port, &key).unwrap();
+        assert!(!repository.forget(&endpoint, "SHA256:stale").unwrap());
+        assert_eq!(repository.find(&endpoint).unwrap(), Some(key.clone()));
+        assert!(repository.forget(&endpoint, key.fingerprint()).unwrap());
+        let reopened = JsonKnownHostRepository::new(path);
+        assert_eq!(reopened.find(&endpoint).unwrap(), None);
+        assert_eq!(reopened.find(&other_port).unwrap(), Some(key));
+        assert!(
+            reopened
+                .forget(&endpoint, "SHA256:already-removed")
+                .unwrap()
+        );
     }
 
     #[test]

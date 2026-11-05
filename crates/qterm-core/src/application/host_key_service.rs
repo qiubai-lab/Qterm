@@ -21,6 +21,14 @@ impl<R: KnownHostRepository> HostKeyService<R> {
         Ok(classify_host_key(trusted.as_ref(), presented))
     }
 
+    pub fn forget(
+        &self,
+        endpoint: &HostEndpoint,
+        fingerprint: &str,
+    ) -> Result<bool, KnownHostRepositoryError> {
+        self.repository.forget(endpoint, fingerprint)
+    }
+
     pub fn accept(
         &self,
         endpoint: &HostEndpoint,

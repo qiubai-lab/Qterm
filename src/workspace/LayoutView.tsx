@@ -27,7 +27,7 @@ import type { GitRepositoryHistoryEntry, GitTarget, LayoutLeaf, Workspace } from
 import { TerminalTargetPicker } from "./TerminalTargetPicker";
 import { useWorkspace, type FileRuntime } from "./WorkspaceProvider";
 export type ConnectionOwner = "terminal" | "files" | "network" | "git";
-function BlockNotice({ message }: { message: string }) { return <div className="block-notice" role="alert" aria-live="assertive" aria-atomic="true">{message}</div>; }
+import { BlockNotice } from "./BlockNotice";
 export function WorkspaceCanvas({ workspace, visible, localTerminalAttention = false, remoteShellIntegrationEnabled = false, terminalSettingsReady = true, onRequestClose, onRequestDisconnect, onRequestAuthConnection, onOpenConnectionManager }: { workspace: Workspace; visible: boolean; localTerminalAttention?: boolean; remoteShellIntegrationEnabled?: boolean; terminalSettingsReady?: boolean; onRequestClose: (blockId: string) => void; onRequestDisconnect?: (owner: ConnectionOwner, blockId: string, name: string, local: boolean) => void; onRequestAuthConnection: (owner: ConnectionOwner, blockId: string, profile: ConnectionProfile) => void; onOpenConnectionManager?: () => void }) {
   const { dispatch } = useWorkspace();
   const { drag, geometry, layoutSurfaceRef, beginDrag, startResize } = useLayoutInteractions(workspace, visible, dispatch);
@@ -259,7 +259,7 @@ function TerminalBlock(props: BlockRenderProps & { blockId: string; profileId: s
       />
     </header>
     <TerminalPanel key={props.profileId ?? "local"} blockId={props.blockId} sessionKey={`${props.blockId}:${props.profileId ?? "local"}`} local={props.profileId === null} visible={props.visible} osc7Enabled={props.remoteShellIntegrationEnabled} terminalSettingsReady={props.terminalSettingsReady}/>
-    {runtime?.notice && <BlockNotice message={runtime.notice}/>}
+    {runtime?.notice && <BlockNotice message={runtime.notice} hostKeyChange={runtime.hostKeyChange} onReconnect={profile ? () => props.onRequestAuthConnection("terminal", props.blockId, profile) : undefined}/>}
   </section>;
 }
 
@@ -312,7 +312,7 @@ function FilesBlock(props: BlockRenderProps & { blockId: string; profileId: stri
       <BlockHeaderClose label="关闭文件窗口" onClose={() => props.onRequestClose(props.blockId)}/>
     </header>
     <FileBrowserPane persistenceKey={`${props.blockId}:${props.profileId ?? "local"}`} key={`files:${props.profileId ?? "local"}`} initialPath={props.profileId !== null && props.path === "~" ? "." : props.path} runtime={runtime} onPathChange={updatePath}/>
-    {runtime.notice && <BlockNotice message={runtime.notice}/>}
+    {runtime.notice && <BlockNotice message={runtime.notice} hostKeyChange={runtime.hostKeyChange} onReconnect={profile ? () => props.onRequestAuthConnection("files", props.blockId, profile) : undefined}/>}
   </section>;
 }
 
@@ -378,7 +378,7 @@ function NetworkBlock(props: BlockRenderProps & { blockId: string; profileId: st
       <BlockHeaderClose label="关闭网络窗口" onClose={() => props.onRequestClose(props.blockId)}/>
     </header>
     <NetworkPane profileId={props.profileId} profileHost={profile?.host} runtimeStates={runtime?.ruleStates} lockedRuleIds={lockedRuleIds} onStart={(rule) => void startRule(rule.id)} onStop={(rule) => void stopNetworkBlockRule(props.blockId, rule.id)}/>
-    {runtime?.notice && <BlockNotice message={runtime.notice}/>}
+    {runtime?.notice && <BlockNotice message={runtime.notice} hostKeyChange={runtime.hostKeyChange} onReconnect={profile ? () => props.onRequestAuthConnection("network", props.blockId, profile) : undefined}/>}
   </section>;
 }
 
@@ -539,6 +539,6 @@ function GitBlock(props: BlockRenderProps & { blockId: string; target: GitTarget
         if (nextPath !== target.path) void retargetGit({ ...target, path: nextPath });
       }}
     />}
-    {runtime?.notice && <BlockNotice message={runtime.notice}/>}
+    {runtime?.notice && <BlockNotice message={runtime.notice} hostKeyChange={runtime.hostKeyChange} onReconnect={profile ? () => props.onRequestAuthConnection("git", props.blockId, profile) : undefined}/>}
   </section>;
 }

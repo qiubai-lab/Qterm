@@ -212,3 +212,13 @@ pub async fn save_workspace(
     *revision += 1;
     Ok(Json(json!({"revision":*revision})))
 }
+
+pub async fn forget_host_key(
+    State(state): State<Arc<ServerState>>,
+    Json(input): Json<qterm_protocol::sessions::ForgetHostKeyDto>,
+) -> Result<Json<Value>> {
+    tokio::task::spawn_blocking(move || input.apply(&state.sessions))
+        .await
+        .map_err(|_| ApiError::invalid())??;
+    Ok(Json(json!({})))
+}

@@ -80,7 +80,7 @@ export function useTerminalWorkspaceController(state: WorkspaceRuntimeState, dis
     } else if (event.type === "hostKeyConfirmationRequired") {
       updateRuntime(blockId, (runtime) => ({ ...runtime, hostKeyPrompt: event }));
     } else if (event.type === "hostKeyChanged") {
-      updateRuntime(blockId, (runtime) => ({ ...runtime, connectionProgress: failConnectionProgress(runtime.connectionProgress, event.node, "主机密钥已变化"), notice: `${nodeLabel(event.node)}主机密钥已变化：${event.presentedFingerprint}` }));
+      updateRuntime(blockId, (runtime) => ({ ...runtime, hostKeyChange: event, connectionProgress: failConnectionProgress(runtime.connectionProgress, event.node, "主机密钥已变化"), notice: `${nodeLabel(event.node)}主机密钥已变化：${event.presentedFingerprint}` }));
     } else {
       updateRuntime(blockId, (runtime) => ({ ...runtime, connectionProgress: failConnectionProgress(runtime.connectionProgress, event.node, event.message), notice: routeFailureNotice(event) }));
       if (event.node?.role === "target" && event.stage === "authenticate") consumeFailureHandler(connectionFailureHandlers.current, terminalFailureKey(blockId, epoch));

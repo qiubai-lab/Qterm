@@ -12,3 +12,5 @@ export const rejectHostKey: typeof local.rejectHostKey = (...args) => (selectedR
 export const closeSession: typeof local.closeSession = (...args) => (selectedRuntime ? remote.closeSession : local.closeSession)(...args);
 export const startTerminalClipboardStaging: typeof local.startTerminalClipboardStaging = (...args) => (selectedRuntime ? remote.startTerminalClipboardStaging : local.startTerminalClipboardStaging)(...args);
 export const cancelTerminalClipboardStaging: typeof local.cancelTerminalClipboardStaging = (...args) => (selectedRuntime ? remote.cancelTerminalClipboardStaging : local.cancelTerminalClipboardStaging)(...args);
+
+export const forgetHostKey: typeof local.forgetHostKey = (...args) => (selectedRuntime ? remote.forgetHostKey : local.forgetHostKey)(...args);

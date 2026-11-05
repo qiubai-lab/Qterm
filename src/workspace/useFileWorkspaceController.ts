@@ -35,7 +35,7 @@ export function useFileWorkspaceController(state: WorkspaceRuntimeState, dispatc
     } else if (event.type === "hostKeyConfirmationRequired") {
       updateFileRuntime(blockId, (runtime) => ({ ...runtime, hostKeyPrompt: event }));
     } else if (event.type === "hostKeyChanged") {
-      updateFileRuntime(blockId, (runtime) => ({ ...runtime, connectionProgress: failConnectionProgress(runtime.connectionProgress, event.node, "主机密钥已变化"), notice: `${nodeLabel(event.node)}主机密钥已变化：${event.presentedFingerprint}` }));
+      updateFileRuntime(blockId, (runtime) => ({ ...runtime, hostKeyChange: event, connectionProgress: failConnectionProgress(runtime.connectionProgress, event.node, "主机密钥已变化"), notice: `${nodeLabel(event.node)}主机密钥已变化：${event.presentedFingerprint}` }));
     } else {
       updateFileRuntime(blockId, (runtime) => ({ ...runtime, connectionProgress: failConnectionProgress(runtime.connectionProgress, event.node, event.message), notice: routeFailureNotice(event) }));
       if (event.node?.role === "target" && event.stage === "authenticate") consumeFailureHandler(connectionFailureHandlers.current, `files:${blockId}`);

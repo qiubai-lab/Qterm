@@ -57,3 +57,8 @@ export function startTerminalClipboardStaging(
 export function cancelTerminalClipboardStaging(sessionId: string, taskId: string): Promise<void> {
   return invoke("session_cancel_clipboard_staging", { sessionId, taskId });
 }
+
+export interface ForgetHostKeyInput { host: string; port: number; trustedFingerprint: string }
+export function forgetHostKey(input: ForgetHostKeyInput): Promise<void> {
+  return invoke("session_forget_host_key", { input });
+}

@@ -155,3 +155,16 @@ it("explicit disconnect still stops the restored backend session", async () => {
   await act(() => view.result.current.terminal.disconnectBlock(view.blockId));
   expect(transport.close).toHaveBeenCalledExactlyOnceWith("original-ssh");
 });
+
+it("retains changed-key details through failure for explicit recovery", async () => {
+  const view = setup();
+  const change: SessionEvent = { type: "hostKeyChanged", node: { profileId: "jump", name: "Jump", host: "jump.example", port: 2222, index: 0, total: 2, role: "jump" }, trustedFingerprint: "SHA256:old", presentedFingerprint: "SHA256:new" };
+  transport.attach.mockImplementation(async (_session, event: (event: SessionEvent) => void) => {
+    event(change);
+    event({ type: "failed", code: "hostKeyChanged", message: "主机密钥已变化，连接已阻断", node: change.node, stage: "verifyHostKey" });
+    event({ type: "stateChanged", state: "failed" });
+    return "original-ssh";
+  });
+  await act(view.restore);
+  expect(view.result.current.state.runtimes[view.blockId]).toMatchObject({ status: "failed", sessionId: null, hostKeyChange: change });
+});

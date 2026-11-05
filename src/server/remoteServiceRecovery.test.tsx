@@ -205,3 +205,16 @@ it("does not copy rule state from a different retained session", async () => {
   await act(() => view.result.current.restore({ ...view.session, sessionId: "other-session", ruleStates: {} }));
   expect(view.result.current.runtime).toMatchObject({ sessionId: "original-ssh", ruleStates: { tunnel: "running" } });
 });
+
+it.each(["files", "git", "network"] as const)("%s retains changed-key details through failure for explicit recovery", async kind => {
+  const view = setup(kind);
+  const change: SessionEvent = { type: "hostKeyChanged", node: { profileId: "jump", name: "Jump", host: "jump.example", port: 2222, index: 0, total: 2, role: "jump" }, trustedFingerprint: "SHA256:old", presentedFingerprint: "SHA256:new" };
+  transport.attach.mockImplementation(async (_session, event: (event: SessionEvent) => void) => {
+    event(change);
+    event({ type: "failed", code: "hostKeyChanged", message: "主机密钥已变化，连接已阻断", node: change.node, stage: "verifyHostKey" });
+    event({ type: "stateChanged", state: "failed" });
+    return "original-ssh";
+  });
+  await act(view.restore);
+  expect(view.result.current.runtime).toMatchObject({ status: "failed", sessionId: null, hostKeyChange: change });
+});
