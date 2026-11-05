@@ -63,3 +63,14 @@ it("reports a cache read failure without writing an empty replacement", async ()
   await act(async () => { await mocks.close!(); });
   expect(mocks.save).toHaveBeenCalled(); expect(mocks.tabsSave).not.toHaveBeenCalled();
 });
+
+it("clears a transient save error only after a later save succeeds", async () => {
+  const view = renderHook(useHarness);
+  await waitFor(() => expect(view.result.current.hydrated).toBe(true));
+  mocks.save.mockRejectedValue(new Error("连接已暂停"));
+  await act(async () => { await mocks.close!(); });
+  expect(view.result.current.storageNotice).toContain("无法保存工作区");
+  mocks.save.mockResolvedValue(undefined);
+  await act(async () => { await mocks.close!(); });
+  expect(view.result.current.storageNotice).toBe("");
+});

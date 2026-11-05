@@ -16,7 +16,7 @@ export function useWorkspaceTabDrag(workspaceTabRefs: RefObject<Map<string, HTML
   const workspaceDragClickTimerRef = useRef<number | null>(null);
   const workspaceDropSettleFrameRef = useRef<number | null>(null);
   function beginWorkspaceDrag(event: ReactPointerEvent<HTMLDivElement>, workspaceId: string) {
-    if (event.button !== 0 || (event.target as HTMLElement).closest("input,.workspace-tab-close")) return;
+    if (event.pointerType === "touch" || event.button !== 0 || (event.target as HTMLElement).closest("input,.workspace-tab-close")) return;
     workspaceDragCleanupRef.current?.();
     const slots = document.workspaces.flatMap((workspace) => {
       const element = workspaceTabRefs.current.get(workspace.id);

@@ -1,0 +1,23 @@
+import { afterEach, expect, it, vi } from "vitest";
+import { bindBrowserViewport } from "./browserViewport";
+afterEach(() => vi.unstubAllGlobals());
+it("follows keyboard resize and panning, ignores pinch zoom, and cleans up", () => {
+  const viewport = Object.assign(new EventTarget(), {height:900,offsetTop:0,scale:1});
+  vi.stubGlobal("visualViewport", viewport);
+  let callback: FrameRequestCallback = () => {};
+  vi.stubGlobal("requestAnimationFrame", (fn: FrameRequestCallback) => { callback=fn; return 1; });
+  const style=document.documentElement.style;
+  const stop=bindBrowserViewport();
+  expect(style.getPropertyValue("--browser-height")).toBe("900px");
+  viewport.height=400;viewport.offsetTop=20;viewport.dispatchEvent(new Event("resize"));callback(0);
+  expect(style.getPropertyValue("--browser-height")).toBe("400px");
+  expect(style.getPropertyValue("--browser-top")).toBe("20px");
+  viewport.scale=2;viewport.height=200;viewport.dispatchEvent(new Event("resize"));callback(0);
+  expect(style.getPropertyValue("--browser-height")).toBe("400px");
+  viewport.scale=1;viewport.height=900;viewport.offsetTop=0;viewport.dispatchEvent(new Event("resize"));callback(0);
+  expect(style.getPropertyValue("--browser-height")).toBe("900px");
+  stop();
+  expect(style.getPropertyValue("--browser-height")).toBe("");
+  viewport.dispatchEvent(new Event("resize"));
+  expect(style.getPropertyValue("--browser-height")).toBe("");
+});

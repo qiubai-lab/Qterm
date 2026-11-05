@@ -1,3 +1,5 @@
+import { TerminalTouchControls } from "./TerminalTouchControls";
+import { isGuardedPaste, pasteLineCount } from "./terminalPastePolicy";
 import { supportsLocalSessions, isServer } from "../lib/runtime/environment";
 import { acquireTerminalView, scheduleTerminalViewDisposal, type TerminalView } from "./terminalView";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from "react";
@@ -35,7 +37,6 @@ type SearchResults = { resultIndex: number; resultCount: number };
 type ActiveStagingTask = { sessionId: string; taskId: string };
 type StagingCompletion = { kind: "completed"; remotePaths: string[] } | { kind: "cancelled" } | { kind: "failed" };
 const CLEAR_SCREEN_INPUT = "\x1bcls\r";
-const LONG_PASTE_THRESHOLD = 1000;
 const SEARCH_EXIT_DURATION_MS = 110;
 const STAGING_RESULT_DURATION_MS = 2_200;
 const STAGING_ERROR_DURATION_MS = 5_000;
@@ -465,6 +466,7 @@ export function TerminalPanel({ blockId, sessionKey, visible, local, osc7Enabled
 
   return <>
     <div className="terminal-surface" ref={containerRef} aria-label={`终端 ${blockId}`} onContextMenu={openContextMenu} onKeyDown={openKeyboardContextMenu}/>
+    <TerminalTouchControls viewRef={viewRef} enabled={inputEnabled} paste={requestPaste}/>
     {stagingStatus.phase !== "idle" && stagingSessionId === connectedSessionId && <TerminalStagingStatus state={stagingStatus} closing={stagingClosing} canStop={activeStagingTask !== null} onStop={stopStaging}/>}
     {searchMounted && <div
       className="terminal-search"
@@ -517,14 +519,6 @@ function terminalStagingErrorMessage(reason: unknown): string {
   }
   if (reason instanceof Error && reason.message.trim()) return reason.message;
   return "文件上传失败，请重试";
-}
-
-function isGuardedPaste(text: string): boolean {
-  return text.length > LONG_PASTE_THRESHOLD || /[\r\n]/.test(text);
-}
-
-function pasteLineCount(text: string): number {
-  return text.split(/\r\n|\r|\n/).length;
 }
 
 function fitContextMenu(anchorX: number, anchorY: number, menuWidth: number, menuHeight: number, viewportWidth: number, viewportHeight: number) {

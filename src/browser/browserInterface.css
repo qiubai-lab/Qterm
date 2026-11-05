@@ -1,0 +1,53 @@
+html[data-browser-interface] body { min-width:0; min-height:0; overscroll-behavior:none; }
+html[data-browser-interface] #root { position:absolute; top:var(--browser-top,0px); height:var(--browser-height,100dvh); padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+html[data-browser-interface] .app-shell { border-radius:0; }
+html[data-browser-interface] .server-login { min-height:0; height:100%; overflow:auto; }
+html[data-browser-interface] .utility-rail { overflow-y:auto; overscroll-behavior:contain; }
+html[data-browser-interface] .rail-button { flex-shrink:0; }
+html[data-browser-interface] .dialog-scrim { top:var(--browser-top,0px); bottom:auto; height:var(--browser-height,100dvh); padding:12px; }
+html[data-browser-interface] .dialog-frame { max-width:calc(100vw - 24px); max-height:calc(var(--browser-height,100dvh) - 24px); }
+.browser-display-settings { display:grid; gap:16px; padding:18px; overflow:auto; }
+.browser-display-settings label { display:grid; gap:8px; color:var(--text); font-size:12px; }
+.browser-display-settings select { min-height:36px; width:100%; border:1px solid var(--border); border-radius:6px; background:var(--surface); color:var(--text); padding:6px; }
+.browser-display-settings p { margin:0; color:var(--muted); font-size:12px; line-height:1.5; }
+.browser-fullscreen-error { position:absolute; top:100%; right:8px; max-width:calc(100vw - 16px); padding:10px; background:var(--raised); border:1px solid var(--danger); color:var(--danger); font-size:12px; }
+html[data-browser-interface="touch"] .app-shell { grid-template-rows:48px minmax(0,1fr); }
+html[data-browser-interface="touch"] .app-chrome,html[data-browser-interface="touch"] .window-controls { height:48px; }
+html[data-browser-interface="touch"] .window-controls button { width:44px; height:44px; }
+html[data-browser-interface="touch"] .workspace-tab { height:44px; }
+html[data-browser-interface="touch"] .workspace-tab-selection { top:2px; height:44px; }
+html[data-browser-interface="touch"] .workspace-tab-close { top:5px; }
+html[data-browser-interface="touch"] .workspace-tab-strip { touch-action:pan-x; }
+html[data-browser-interface="touch"] .terminal-block-header { height:44px; }
+html[data-browser-interface="touch"] .ui-icon-button { min-width:36px; min-height:36px; }
+html[data-browser-interface="touch"] .terminal-target-trigger { min-height:36px; }
+html[data-browser-interface="touch"] .ui-button,html[data-browser-interface="touch"] .dialog-frame input:not([type="checkbox"]),html[data-browser-interface="touch"] .dialog-frame select { min-height:40px; }
+html[data-browser-interface="touch"] .dialog-frame input:not([type="checkbox"]),html[data-browser-interface="touch"] .dialog-frame textarea,html[data-browser-interface="touch"] .dialog-frame select,html[data-browser-interface="touch"] .server-login-card input { font-size:16px; }
+html[data-browser-interface="touch"] .connection-item { min-height:44px; touch-action:pan-y; }
+html[data-browser-interface="touch"] .connection-item-name { font-size:12px; }
+html[data-browser-interface="touch"] .connection-item-endpoint { font-size:10px; }
+html[data-browser-interface="touch"] .rail-button-label { font-size:10px; }
+@media (max-width:760px) {
+  html[data-browser-interface] .app-brand { padding:0 6px; }
+  html[data-browser-interface] .app-brand span { display:none; }
+  html[data-browser-interface] .window-controls { margin-left:2px; gap:0; padding:0 2px; }
+  html[data-browser-interface] .workspace-stage-content { grid-template-columns:minmax(0,1fr) 54px; }
+  html[data-browser-interface] .rail-button { width:46px; }
+}
+html[data-browser-interface="touch"] .workspace-tab-strip[data-stacked] .workspace-tab { top:2px; }
+.browser-access-chrome { position:fixed; top:calc(var(--browser-top,0px) + env(safe-area-inset-top)); right:env(safe-area-inset-right); z-index:1100; margin:0; border-radius:0 0 0 6px; background:var(--chrome); }
+html[data-browser-interface] .browser-access-chrome .dialog-scrim { z-index:1101; }
+html[data-browser-interface] .connection-dialog-grid { min-height:0; height:min(500px,calc(var(--browser-height,100dvh) - 130px)); }
+@media (max-width:760px) {
+  html[data-browser-interface] .connection-dialog-grid { grid-template-columns:165px minmax(0,1fr); }
+}
+html[data-browser-interface="touch"] .block-actions button { width:40px; height:40px; }
+html[data-browser-interface="touch"] .terminal-header-secondary-actions { display:none; }
+html[data-browser-interface="touch"] .block-actions .terminal-header-more { display:grid; }
+html[data-browser-interface="touch"] .terminal-header-menu button { height:44px; font-size:12px; }
+html[data-browser-interface="touch"] .credential-item,html[data-browser-interface="touch"] .file-row { min-height:44px; }
+html[data-browser-interface="touch"] .file-name { font-size:12px; }
+html[data-browser-interface] .terminal-header-menu { max-height:calc(var(--browser-height,100dvh) - 112px); overflow-y:auto; overscroll-behavior:contain; }
+@media (max-width:760px) {
+  html[data-browser-interface] .credential-dialog-grid { grid-template-columns:165px minmax(0,1fr); }
+}

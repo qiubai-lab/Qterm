@@ -620,6 +620,10 @@ describe("ConnectionDialog", () => {
     const item = screen.getByRole("button", { name: /K8S服务器/ });
     const productionTarget = productionToggle.closest("header")!;
     elementFromPoint.mockReturnValue(productionTarget);
+    fireEvent.pointerDown(item, { pointerId: 3, pointerType: "touch", button: 0, clientX: 10, clientY: 10 });
+    fireEvent.pointerMove(item, { pointerId: 3, pointerType: "touch", clientX: 10, clientY: 80 });
+    expect(document.querySelector(".connection-drag-preview")).not.toBeInTheDocument();
+    fireEvent.pointerUp(item, { pointerId: 3, pointerType: "touch", clientX: 10, clientY: 80 });
     fireEvent.pointerDown(item, { pointerId: 1, button: 0, clientX: 10, clientY: 10 });
     fireEvent.pointerMove(item, { pointerId: 1, clientX: 22, clientY: 22 });
     fireEvent.pointerUp(item, { pointerId: 1, clientX: 22, clientY: 22 });

@@ -1,3 +1,6 @@
+import { BrowserAccessChrome } from "./BrowserAccessChrome";
+import { BrowserInterface } from "../browser/BrowserInterface";
+import { isRemoteDesktop } from "../lib/runtime/environment";
 import { ServerWorkbench } from "./ServerWorkbench";
 import { useState } from "react";
 import { AppThemeProvider } from "../app/theme/AppThemeProvider";
@@ -26,8 +29,9 @@ export function ServerApp({renderChrome}: {renderChrome?: (access: ReturnType<ty
   }
   // Desktop controls own operations that span logout. Keep them outside the
   // keyed authentication/theme subtree so a phase change cannot cancel a switch.
-  return <ThemedTitleTooltipProvider>
+  return <BrowserInterface enabled={!isRemoteDesktop}><ThemedTitleTooltipProvider>
     {renderChrome?.(access)}
+    <BrowserAccessChrome workspace={authenticated && !interrupted}/>
     <AppThemeProvider key={authenticated ? "workspace" : "login"}>
     {authenticated ? <div className="server-workspace" inert={interrupted}><ServerWorkbench onLogout={access.logout}/></div> :
       <main className="server-login"><form className="server-login-card" onSubmit={event => void login(event)}>
@@ -39,5 +43,5 @@ export function ServerApp({renderChrome}: {renderChrome?: (access: ReturnType<ty
     {access.phase === "occupied" && <AccessTakeoverDialog busy={busy} onCancel={access.cancel} onTakeover={()=>void access.takeover()}/>}
     {interrupted && <AccessReplacedDialog reason={replaced ? "replaced" : "disconnected"} reconnecting={access.phase === "reconnecting"} onConfirm={access.acknowledgeReplaced}/>}
     </AppThemeProvider>
-  </ThemedTitleTooltipProvider>;
+  </ThemedTitleTooltipProvider></BrowserInterface>;
 }

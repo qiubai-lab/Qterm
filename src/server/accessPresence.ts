@@ -1,3 +1,4 @@
+import { watchBrowserResume } from "./browserResume";
 import { vaultStatus } from "./vaultStatus";
 import { pauseData } from "./dataAccess";
 import { accessProof } from "./accessIdentity";
@@ -9,6 +10,23 @@ export function openAccessPresence(onReady: () => void, onDisconnected: () => vo
   let socket: WebSocket | undefined;
   let retry: number | undefined;
   let timeout: number | undefined;
+  let generation = 0;
+  const unwatch = watchBrowserResume(restart);
+  function restart() {
+    if (stopped) return;
+    const currentGeneration = ++generation;
+    window.clearTimeout(retry); window.clearTimeout(timeout);
+    const previous = socket; socket = undefined;
+    previous?.close();
+    onDisconnected();
+    retry = window.setTimeout(() => {
+      void api("/auth").then(() => {
+        if (!stopped && generation === currentGeneration) connect();
+      }).catch(() => {
+        if (!stopped && generation === currentGeneration) retry = window.setTimeout(connect, 3000);
+      });
+    }, 250);
+  }
   function connect() {
     if (stopped) return;
     const url = new URL(`${API}/access`,location.href);
@@ -16,7 +34,7 @@ export function openAccessPresence(onReady: () => void, onDisconnected: () => vo
     const current = new WebSocket(url);
     socket = current;
     timeout = window.setTimeout(() => current.close(),10000);
-    current.onopen = () => current.send(JSON.stringify(accessProof()));
+    current.onopen = () => { if (!stopped && socket === current) current.send(JSON.stringify(accessProof())); };
     current.onmessage = event => {
       if (stopped || socket !== current) return;
       try {
@@ -31,19 +49,14 @@ export function openAccessPresence(onReady: () => void, onDisconnected: () => vo
       } catch { current.close(); }
     };
     current.onclose = () => {
-      window.clearTimeout(timeout);
       if (stopped || socket !== current) return;
-      onDisconnected();
-      retry = window.setTimeout(() => {
-        void api("/auth").then(connect).catch(() => {
-          if (!stopped) retry = window.setTimeout(connect,3000);
-        });
-      },1000);
+      restart();
     };
     current.onerror = () => { /* onclose owns bounded retries; revoked access never retries. */ };
   }
   function stop() {
     stopped = true;
+    unwatch();
     window.clearTimeout(retry);window.clearTimeout(timeout);
     socket?.close();
   }

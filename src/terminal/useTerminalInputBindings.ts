@@ -1,3 +1,5 @@
+import { useBrowserInterface } from "../browser/browserInterfaceContext";
+import { bindTerminalTouchScroll } from "./terminalTouchScroll";
 import { isServer, isRemoteDesktop } from "../lib/runtime/environment";
 import type { TerminalClipboardInput } from "../lib/contracts/sessions";
 import { useEffect, type RefObject } from "react";
@@ -7,6 +9,11 @@ import { bindTerminalClipboardEvents, handleClipboardShortcut, type ClipboardPla
 import type { TerminalView } from "./terminalView";
 
 export function useTerminalInputBindings(viewRef: RefObject<TerminalView | null>, sessionKey: string, clipboardPlatform: ClipboardPlatform, desktopPlatform: DesktopPlatform, inputEnabled: boolean, copy: () => Promise<void>, paste: (input?: TerminalClipboardInput) => Promise<void>, openSearch: () => void) {
+  const { touch } = useBrowserInterface();
+  useEffect(() => {
+    const view = viewRef.current;
+    if (touch && view) return bindTerminalTouchScroll(view.element, view.terminal);
+  }, [viewRef, sessionKey, touch]);
   useEffect(() => {
     const view = viewRef.current;
     if (!view) return;

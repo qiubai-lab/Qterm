@@ -96,3 +96,13 @@ it("reserves overflow navigation only when collapsed tabs no longer fit", async 
   fireEvent(window, new Event("resize"));
   expect(within(nav).queryByLabelText("显示左侧工作区")).toBeNull();
 });
+
+it("leaves a finger swipe available for scrolling instead of reordering workspaces", async () => {
+  const { nav, select, tab } = await setup();
+  const before = Array.from(nav.querySelectorAll(".workspace-tab-select")).map(node => node.textContent);
+  fireEvent.pointerDown(select(2), { pointerId: 1, pointerType: "touch", button: 0, clientX: 80, clientY: 16 });
+  fireEvent.pointerMove(window, { pointerId: 1, pointerType: "touch", clientX: 240, clientY: 16 });
+  expect(tab(2)).not.toHaveClass("dragging");
+  fireEvent.pointerUp(window, { pointerId: 1, pointerType: "touch", clientX: 240, clientY: 16 });
+  expect(Array.from(nav.querySelectorAll(".workspace-tab-select")).map(node => node.textContent)).toEqual(before);
+});

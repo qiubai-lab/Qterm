@@ -43,3 +43,34 @@ it("reports transport interruption without claiming another session took over", 
     expect(listener).not.toHaveBeenCalled();
   } finally { stop(); window.removeEventListener(AUTH_EXPIRED, listener); }
 });
+
+it("rechecks admission on foreground/network recovery and ignores late old-socket messages", async () => {
+  mocks.api.mockResolvedValue({authenticated:true});
+  vi.spyOn(document,"visibilityState","get").mockReturnValue("visible");
+  const ready=vi.fn(), disconnected=vi.fn();
+  const stop=openAccessPresence(ready,disconnected);
+  const previous=Socket.current;
+  document.dispatchEvent(new Event("visibilitychange"));
+  expect(disconnected).toHaveBeenCalledOnce();
+  expect(previous.close).toHaveBeenCalledOnce();
+  previous.receive({type:"ready"});expect(ready).not.toHaveBeenCalled();
+  await vi.advanceTimersByTimeAsync(250);
+  expect(mocks.api).toHaveBeenCalledWith("/auth");
+  expect(Socket.current).not.toBe(previous);
+  Socket.current.receive({type:"ready"});expect(ready).toHaveBeenCalledOnce();
+  stop();window.dispatchEvent(new Event("online"));
+  await vi.advanceTimersByTimeAsync(5000);
+  expect(mocks.api).toHaveBeenCalledTimes(1);
+  vi.restoreAllMocks();
+});
+
+it("does not reconnect after stop when a resume admission request resolves late", async () => {
+  let resolve!:()=>void;
+  mocks.api.mockReturnValue(new Promise<void>(done=>{resolve=done;}));
+  const stop=openAccessPresence(vi.fn(),vi.fn());
+  const previous=Socket.current;
+  window.dispatchEvent(new Event("online"));
+  await vi.advanceTimersByTimeAsync(250);
+  stop();resolve();await vi.advanceTimersByTimeAsync(3000);
+  expect(Socket.current).toBe(previous);
+});

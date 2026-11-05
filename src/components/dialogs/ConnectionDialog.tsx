@@ -383,7 +383,7 @@ export function ConnectionDialog({ onClose }: { onClose: () => void }) {
   }
 
   function beginPointerDrag(event: ReactPointerEvent<HTMLElement>, profile: ConnectionProfile) {
-    if (event.button !== 0) return;
+    if (event.pointerType === "touch" || event.button !== 0) return;
     const additive = event.metaKey || event.ctrlKey;
     const draggedProfiles = selectedIds.has(profile.id)
       ? profiles.filter((item) => selectedIds.has(item.id))

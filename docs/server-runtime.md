@@ -222,3 +222,15 @@ python3 scripts/test-server-takeover.py --container
 验收：构建 Web 资源和 qterm-server 后运行 `python3 scripts/test-server-observation.py`，使用隔离临时仓库与测试凭证验证事件、变更、退订、锁定和重连。安装 OpenSSH 的环境可再运行 `python3 scripts/test-server-observation-ssh.py`，验证远端授权、共享采样和应用内操作通知。
 
 画面故障验收：`python3 scripts/test-server-screen-recovery.py` 在 Linux 隔离服务中主动终止画面子进程，验证多终端恢复、原 PTY/PID/环境保留及新建终端；`cargo test --manifest-path crates/Cargo.toml -p qterm-server screen_worker` 覆盖检查点、半截 ANSI/UTF-8、查询去重、超时与错误隔离。
+
+## 平板浏览器
+
+Web 客户端按实际窗口尺寸和主要指针能力适配，不由服务端猜测设备型号。顶部「浏览器显示设置」可选择自动、触控或桌面操作，以及独立的终端快捷键栏显示策略；偏好只保存在当前浏览器。触控模式使用较大的按钮、可滚动工具栏及终端操作菜单，手指滑动连接列表/工作区标签不会触发桌面拖动排序。
+
+支持 Fullscreen API 的浏览器在顶部提供进入/退出全屏按钮，登录、锁定、重连时也保留入口。全屏只由点击触发，不拦截 Esc，不自动重新进入，不提供专注模式；不支持时隐藏全屏按钮并在显示设置中解释。请求失败会显示可读错误。全屏能力取决于浏览器与页面权限，参考 [MDN Fullscreen API](https://developer.mozilla.org/en-US/docs/Web/API/Fullscreen_API)。
+
+终端底部快捷键栏包含 Esc、Tab、Ctrl+C/D/Z/L、方向键、键盘、文字选择、复制和粘贴。快捷键走现有输入队列，方向键遵守应用光标模式，断线期间禁用写入；粘贴继续走文件暂存与多行确认流程。触摸滑动用于滚动终端历史；「选择」打开只读文本快照，支持原生触摸选区和复制，最多约 1 MiB，不随实时输出改变。复制和粘贴仍受浏览器剪贴板权限限制。
+
+Visual Viewport 的高度和偏移变化会调整工作区与弹窗，终端通过既有 ResizeObserver/resize 队列更新服务端行列数；双指缩放不会触发 PTY 重排。恢复前台或网络时重新检查访问权限、锁状态并附着原会话，不重放键盘输入；后台进程的存活仍由服务端负责。没有增加后台常驻或自动解锁能力。
+
+验证入口：`pnpm check`、`pnpm test:web`、`pnpm build:web`。相邻测试覆盖能力变化/偏好持久化、全屏事件及拒绝、可视区域缩小/恢复/缩放、触摸滚动、快捷键和复制、恢复过程中过期响应隔离。浏览器验证可用 1024×768 横屏、768×1024 竖屏和约 400px 可视高度检查；浏览器模拟不能替代 Android/iPadOS 真机软键盘、IME 与后台生命周期验收。

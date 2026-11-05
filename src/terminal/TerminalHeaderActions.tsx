@@ -23,9 +23,11 @@ function fitHeaderMenu(anchor: DOMRect, width: number, height: number): HeaderMe
   const gutter = 8;
   const offset = 4;
   const left = Math.max(gutter, Math.min(anchor.right - width, window.innerWidth - width - gutter));
+  const viewportTop = window.visualViewport?.offsetTop ?? 0;
+  const viewportBottom = viewportTop + (window.visualViewport?.height ?? window.innerHeight);
   const below = anchor.bottom + offset;
-  if (below + height <= window.innerHeight - gutter) return { left, top: below, placement: "below" };
-  return { left, top: Math.max(gutter, anchor.top - height - offset), placement: "above" };
+  if (below + height <= viewportBottom - gutter) return { left, top: below, placement: "below" };
+  return { left, top: Math.max(viewportTop + gutter, anchor.top - height - offset), placement: "above" };
 }
 
 export function TerminalHeaderActions({ actions: requestedActions, closeDisabled, onClose }: { actions: TerminalHeaderAction[]; closeDisabled: boolean; onClose: () => void }) {

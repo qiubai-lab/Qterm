@@ -69,7 +69,9 @@ export function useWorkspacePersistence(document: WorkspaceDocument, dispatch: D
   const flush = useCallback(async () => {
     if (!active) return;
     webTabSessions.reconcile(documentRef.current);
-    await save(documentRef.current, webTabSessions.snapshot()).catch((error: unknown) => {
+    await save(documentRef.current, webTabSessions.snapshot()).then(() => {
+      setStorageNotice(current => current.startsWith("无法保存工作区或浏览器标签：") ? "" : current);
+    }).catch((error: unknown) => {
       setStorageNotice(`无法保存工作区或浏览器标签：${workspaceErrorMessage(error)}`);
     });
   }, [active, save, webTabSessions]);

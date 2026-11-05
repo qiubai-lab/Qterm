@@ -318,3 +318,10 @@
 - `src/workspace/BlockNotice.tsx`：终端、Files、Git、Network 共用的错误提示与旧主机密钥清理确认，显示实际失败节点的新旧指纹；清理成功后走原认证建连流程。
 - `application/host_key_service.rs`、`ports/known_host_repository.rs`、`infrastructure/persistence/json_known_host_repository.rs`：按 endpoint 与预期旧指纹原子删除信任记录，拒绝过期确认；下一次建连仍需确认新密钥。
 - `qterm-protocol/src/sessions.rs` 的 `ForgetHostKeyDto`、桌面 `session_forget_host_key` 和 Web `/host-keys/forget`：复用同一清理契约与现有认证/终端锁边界。
+
+### 平板浏览器客户端
+
+- `src/browser/`：浏览器专用显示偏好、指针能力适配、Visual Viewport 生命周期与 Fullscreen API 控件。偏好仅存当前浏览器，不参与服务端设备识别、Workspace 持久化或 runtime 选择；桌面原生入口不启用。
+- `src/server/BrowserAccessChrome.tsx`：登录、锁定与恢复连接期间保留浏览器全屏退出入口；正常工作台由 `ServerWorkbench` 注入同一控件。
+- `src/terminal/TerminalTouchControls.tsx`、`TerminalTouchSelection.tsx`、`terminalSelectionText.ts`、`terminalTouchScroll.ts`：快捷键仍走既有有序输入/受保护粘贴，触摸只滚动历史；只读文字快照提供系统触摸选择与复制，不拥有会话或缓存持久化。`terminalPastePolicy.ts` 拥有原有长文本/多行粘贴确认规则。
+- `src/server/browserResume.ts`：前台/网络恢复事件订阅；`accessPresence` 撤销旧 transport 回调并重新验证访问，沿用终端锁和原 session attach，不重放输入、不创建替代进程。

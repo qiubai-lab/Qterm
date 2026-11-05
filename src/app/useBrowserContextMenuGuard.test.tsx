@@ -41,3 +41,9 @@ describe("useBrowserContextMenuGuard", () => {
     expect(source).not.toMatch(/addEventListener\("(?:pointer|mouse|key|copy|cut|paste|select)/);
   });
 });
+
+it("allows native touch selection menus only on explicit selection surfaces", () => {
+  function Selection() { useBrowserContextMenuGuard(); return <textarea data-native-text-selection aria-label="文字快照"/>; }
+  render(<Selection/>);
+  expect(fireEvent.contextMenu(screen.getByRole("textbox", {name:"文字快照"}))).toBe(true);
+});

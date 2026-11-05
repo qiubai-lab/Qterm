@@ -1,0 +1,7 @@
+.terminal-touch-controls { position:relative; flex:none; min-width:0; border-top:1px solid var(--border); background:var(--chrome); }
+.terminal-touch-keybar { display:flex; gap:4px; padding:3px 5px; overflow-x:auto; overscroll-behavior:contain; touch-action:pan-x; scrollbar-width:thin; }
+.terminal-touch-keybar button { flex:none; min-width:44px; height:40px; padding:0 9px; border:1px solid var(--border); border-radius:5px; background:var(--surface); color:var(--text); font-size:12px; }
+.terminal-touch-keybar button:active:not(:disabled) { background:var(--accent-bg); color:var(--accent); }
+.terminal-touch-keybar button:focus-visible { outline:2px solid var(--focus); outline-offset:-2px; }
+.terminal-touch-error { position:absolute; bottom:100%; left:0; right:0; padding:7px; background:var(--raised); color:var(--danger); font-size:12px; }
+.terminal-touch-selection { display:block; width:100%; height:min(360px,calc(var(--browser-height,100dvh) - 210px)); min-height:64px; resize:none; padding:10px; border:1px solid var(--border); border-radius:6px; background:var(--surface); color:var(--text); font:14px/1.5 monospace; user-select:text; -webkit-user-select:text; }
