@@ -38,7 +38,14 @@ export function useServerAccess() {
       })().then(state => state.locked ? undefined : bootstrapAppTheme()).then(() => {
         if (generation===epoch.current) {setPhase("workspace");setError("");}
       }).catch(reason => {if(generation===epoch.current){setError(message(reason));setPhase("login");leave();}});
-    },() => {if(generation===epoch.current){resetServerTerminalLock();closeAllSessions();setPhase(current => current === "workspace" || current === "reconnecting" ? "reconnecting" : "checking");setError("连接中断，正在重新连接…");}});
+    },() => {
+      if (generation !== epoch.current) return;
+      // Keep session owners subscribed so unlock can reattach their original processes.
+      // Only leaving the page or losing authentication permanently detaches them.
+      resetServerTerminalLock();
+      setPhase(current => current === "workspace" || current === "reconnecting" ? "reconnecting" : "checking");
+      setError("连接中断，正在重新连接…");
+    });
   },[leave]);
   useEffect(() => {
     const generation=++epoch.current;
