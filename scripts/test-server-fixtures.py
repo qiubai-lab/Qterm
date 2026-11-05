@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""Regression tests for the real-runtime acceptance client's output contract."""
+"""Regression tests for the real-runtime acceptance client."""
 import asyncio
+import errno
 import importlib.util
 import json
 from pathlib import Path
@@ -31,6 +32,37 @@ class Socket:
             message = json.loads(value)
             if message.get("type") == "ack":
                 self.acks.append(message)
+
+
+class ProcessCleanupTests(unittest.IsolatedAsyncioTestCase):
+    async def test_process_disappearing_during_read_counts_as_exited(self):
+        for code in (errno.ENOENT, errno.ESRCH):
+            with self.subTest(errno=code):
+                with patch.object(Path, "read_text", side_effect=["123 (sleep) S 1", OSError(code, "process disappeared")]), \
+                     patch.object(local.asyncio, "sleep", new_callable=AsyncMock) as sleep:
+                    await local.wait_for_child_exit("123")
+                sleep.assert_awaited_once_with(0.05)
+
+    async def test_zombie_counts_as_exited_even_with_spaces_and_parentheses_in_name(self):
+        with patch.object(Path, "read_text", return_value="123 (worker (test)) Z 1"), \
+             patch.object(local.asyncio, "sleep", new_callable=AsyncMock) as sleep:
+            await local.wait_for_child_exit("123")
+        sleep.assert_not_awaited()
+
+    async def test_live_process_still_fails_after_timeout(self):
+        with patch.object(Path, "read_text", return_value="123 (sleep) S 1"), \
+             patch.object(local.asyncio, "sleep", new_callable=AsyncMock) as sleep:
+            with self.assertRaisesRegex(AssertionError, "foreground process 123 alive"):
+                await local.wait_for_child_exit("123")
+        self.assertEqual(sleep.await_count, 100)
+
+    async def test_unrelated_read_errors_are_not_hidden(self):
+        for code in (errno.EACCES, errno.EIO):
+            with self.subTest(errno=code):
+                with patch.object(Path, "read_text", side_effect=OSError(code, "read failed")):
+                    with self.assertRaises(OSError) as error:
+                        await local.wait_for_child_exit("123")
+                self.assertEqual(error.exception.errno, code)
 
 
 class OutputTests(unittest.IsolatedAsyncioTestCase):

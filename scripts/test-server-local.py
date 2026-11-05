@@ -142,6 +142,22 @@ async def output_until(ws, pattern, timeout=20):
     return output
 
 
+async def wait_for_child_exit(child):
+    status_file = Path(f"/proc/{child}/stat")
+    for _ in range(100):
+        try:
+            status = status_file.read_text()
+        except (FileNotFoundError, ProcessLookupError):
+            # procfs can lose the process during open/read, even after a
+            # successful existence check. Both ENOENT and ESRCH mean it exited.
+            return
+        # The parenthesized comm field can contain spaces and parentheses.
+        if status.rsplit(")", 1)[1].split()[0] == "Z":
+            return
+        await asyncio.sleep(0.05)
+    raise AssertionError(f"explicit stop left the foreground process {child} alive")
+
+
 async def verify(f):
     f.api("/local/capabilities", status=401)
     f.login()
@@ -199,13 +215,7 @@ async def verify(f):
         else:
             raise AssertionError("explicit stop left the local shell alive")
     for child in children:
-        status_file = Path(f"/proc/{child}/stat")
-        for _ in range(100):
-            if not status_file.exists() or status_file.read_text().split()[2] == "Z":
-                break
-            await asyncio.sleep(0.05)
-        else:
-            raise AssertionError("explicit stop left the foreground process alive")
+        await wait_for_child_exit(child)
     f.api("/logout", "POST", status=204)
     f.api("/local/files/read", "POST", {"path":filepath}, status=401)
     f.login()
