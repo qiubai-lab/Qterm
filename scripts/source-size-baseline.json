@@ -9,7 +9,7 @@
     "src/components/dialogs/aboutUpdate.css": 520,
     "src/components/dialogs/ConnectionDialog.tsx": 682,
     "src/components/dialogs/CredentialDialog.tsx": 476,
-    "src/files/FileBrowserPane.test.tsx": 1104,
+    "src/files/FileBrowserPane.test.tsx": 1102,
     "src/files/FileBrowserPane.tsx": 721,
     "src/git/GitPane.tsx": 1119,
     "src/git/styles/gitBranchOverlays.css": 643,

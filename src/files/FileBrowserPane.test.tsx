@@ -950,7 +950,7 @@ describe("FileBrowserPane", () => {
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "删除文件夹？" })).not.toBeInTheDocument());
   });
 
-  it("shows a native drop overlay only over the remote file area and uploads to the current path", async () => {
+  it.each(["dialog", "inactive workspace"])("uploads to the current path and ignores drops blocked by %s", async (blocker) => {
     const runtime = { ...localRuntime, kind: "sftp" as const, sessionId: "session-1" };
     listRemoteDirectory.mockResolvedValue({ path: "/srv", entries: [] });
     uploadDroppedEntries.mockResolvedValue("transfer-drop");
@@ -968,12 +968,10 @@ describe("FileBrowserPane", () => {
     expect(view.container.querySelector(".file-upload-drop-overlay")).not.toBeInTheDocument();
 
     uploadDroppedEntries.mockClear();
-    const modalScrim = document.createElement("div");
-    modalScrim.className = "dialog-scrim";
-    document.body.append(modalScrim);
+    view.container.classList.toggle("dialog-scrim", blocker === "dialog");
+    view.container.setAttribute("aria-hidden", String(blocker === "inactive workspace"));
     act(() => dragDrop.handler?.({ payload: { type: "drop", paths: ["C:/drop/key"], position: { x: 100, y: 100 } } }));
     expect(uploadDroppedEntries).not.toHaveBeenCalled();
-    modalScrim.remove();
   });
 
   it("shows an upload action only for remote files and exposes both native picker choices", async () => {

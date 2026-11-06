@@ -82,7 +82,15 @@ impl TransferState {
             == Some(paths)
     }
 
-    pub(crate) fn approve_drop_paths(&self, paths: &[PathBuf]) {
+    pub(crate) fn record_webview_drop(&self, label: &str, event: &tauri::WebviewEvent) {
+        if crate::domain::web::trusted_ui_label(label)
+            && let tauri::WebviewEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) = event
+        {
+            self.approve_drop_paths(paths);
+        }
+    }
+
+    fn approve_drop_paths(&self, paths: &[PathBuf]) {
         let mut approved = self
             .dropped_paths
             .lock()
@@ -568,7 +576,21 @@ mod tests {
             Path::new("/tmp/a").to_path_buf(),
             Path::new("/tmp/b").to_path_buf(),
         ];
-        state.approve_drop_paths(&paths);
+        let position = tauri::PhysicalPosition::new(1., 2.);
+        let drop = tauri::WebviewEvent::DragDrop(tauri::DragDropEvent::Drop {
+            paths: paths.clone(),
+            position,
+        });
+        state.record_webview_drop("guest", &drop);
+        state.record_webview_drop(
+            "main",
+            &tauri::WebviewEvent::DragDrop(tauri::DragDropEvent::Enter {
+                paths: paths.clone(),
+                position,
+            }),
+        );
+        assert!(!state.take_drop_paths(&paths));
+        state.record_webview_drop("main", &drop);
         assert!(!state.take_drop_paths(&[paths[0].clone()]));
         assert!(state.take_drop_paths(&paths));
         assert!(!state.take_drop_paths(&paths));

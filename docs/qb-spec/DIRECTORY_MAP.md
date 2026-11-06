@@ -279,6 +279,7 @@
 - `crates/qterm-server/src/network.rs`：网络规则 CRUD、运行时启动/停止与活动规则保护；配置复用核心 NetworkService，服务状态负责保留会话和运行标记。
 - `crates/qterm-server/src/transfer_storage.rs`、`transfer_archive.rs`：本地/SFTP 上传目的路径、目录暂存与有界 tar 归档；`transfers.rs` 保留 HTTP 准入/票据，`transfer_lifecycle.rs` 保留取消与重放控制。
 - `src/server/uploadSelection.ts`、`services/fileDrop.ts`、`services/transfers.ts`：浏览器文件选择与目录拖放句柄、批次上传、下载和取消；复用 Files 面板。
+- `src/remoteRuntime/droppedUpload.ts`：桌面连接远程服务时，由接收拖放的 Files 面板触发本机读取，消费主 WebView 本次拖入路径的一次性授权，再通过远程上传接口发送相对路径和文件内容。
 - `scripts/test-server-blocks.py`、`test-server-blocks-ssh.py`：原生/容器本地目录传输与 Git，真实 SSH 的 SFTP 目录、Git、三类 TCP 转发及重新登录后的原会话恢复验收。
 
 ### Web 上传进度与终端剪贴板

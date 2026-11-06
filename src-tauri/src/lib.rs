@@ -199,6 +199,7 @@ impl DataPaths {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default()
+        .manage(TransferState::new())
         .manage(commands::remote_runtime::RemoteRuntimeState::default())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_clipboard_manager::init())
@@ -216,10 +217,8 @@ pub fn run() {
     );
 
     builder
-        .on_window_event(|window, event| {
-            if let tauri::WindowEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) = event {
-                window.state::<TransferState>().approve_drop_paths(paths);
-            }
+        .on_webview_event(|webview, event| {
+            webview.state::<TransferState>().record_webview_drop(webview.label(), event);
         })
         .setup(|app| {
             #[cfg(windows)]
@@ -272,7 +271,6 @@ pub fn run() {
             app.manage(CredentialState::new(credential_vault));
             app.manage(NetworkState::new(JsonNetworkRepository::new(paths.network)));
             app.manage(BrowserProxyState::new(paths.browser_profiles));
-            app.manage(TransferState::new());
             app.manage(WorkspaceState::new(JsonWorkspaceRepository::new(
                 paths.workspaces,
             )));
