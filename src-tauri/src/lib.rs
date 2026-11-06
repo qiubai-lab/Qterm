@@ -222,6 +222,8 @@ pub fn run() {
             }
         })
         .setup(|app| {
+            #[cfg(windows)]
+            infrastructure::windows_focus::install(app)?;
             #[cfg(not(target_os = "macos"))]
             if let Some(window) = app.get_webview_window("main")
                 && let Some(product_name) = app.config().product_name.as_deref()

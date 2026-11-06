@@ -93,6 +93,8 @@ mod windows_snapshot;
 mod windows_surface;
 
 #[cfg(all(test, target_os = "windows"))]
+mod native_focus_tests;
+#[cfg(all(test, target_os = "windows"))]
 mod native_metrics_tests;
 #[cfg(all(test, target_os = "windows"))]
 mod native_modal_tests;

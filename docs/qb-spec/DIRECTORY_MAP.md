@@ -117,6 +117,7 @@
 - `scripts/tauri.mjs`、`tauri-dev-runner.mjs`：package `tauri` script 的跨平台 ESM 入口，以及只在 macOS `dev` 使用的 app-bundle runner；前者注入开发 config/runner 并原样转发其他命令，后者用参数数组执行 Cargo build、原子更新 `target/tauri-dev/.../Qterm Dev.app` 并运行，不承载业务或发布行为。
 - `scripts/check-source-size.mjs`、`source-size-baseline.json`：源码尺寸的确定性类型上限和历史热点不增长 ratchet，由 `pnpm check` 在本地与 CI 共用；baseline 只记录待拆热点，不豁免新增文件或生成新的架构规则。
 - `src-tauri/tauri.dev.conf.json`、`Info.dev.plist`：声明 `Qterm Dev` / `com.qiubai.qterm.dev` 开发身份和 macOS dev bundle 元数据，不声明窗口数组或业务配置；plist 使用非保留文件名，正式身份继续以 `tauri.conf.json` 为事实源。
+- `src-tauri/src/infrastructure/windows_focus.rs`：Windows 主窗口重新激活时，将停留在外层 HWND 的键盘焦点交还主 WebView2；原生切窗与首字符输入由 `native_focus_tests.rs` 验证。
 - `src-tauri/src/lib.rs`：Tauri 组合根，注册 commands、装配 adapters，在 Windows/Linux 把主窗口标题同步为最终 productName、在 macOS 保留 Overlay 窗口创建时的静态隐藏标题，按 Rust debug/release 模式选择互不 fallback 的 home locator/default-root，再派生并初始化 root/data/device/cache 后构造全部 repositories；不写程序目录、不读取另一模式或旧 AppData 位置，也不在 repository 内重复计算全局路径。
 - `crates/qterm-core/src/domain/profile.rs`：连接配置、最多 4 个显式有序跃点、候选资格与引用完整性规则；不包含 IPC、凭证明文或 JSON 序列化模型。
 - `crates/qterm-core/src/domain/auth.rs`：短期凭据包装、可执行认证请求与稳定认证失败；不表达 profile 的 `manual` 策略，也不依赖 `russh` 或 Tauri。

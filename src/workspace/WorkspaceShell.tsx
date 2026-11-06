@@ -2,6 +2,7 @@ import { isRemoteDesktop } from "../lib/runtime/environment";
 import { useWorkbenchActive } from "./workbenchActivity";
 import { useTerminalLock, type TerminalLockBackend } from "./useTerminalLock";
 import { useTerminalAutoLock } from "./useTerminalAutoLock";
+import { useTerminalWindowFocus } from "./useTerminalWindowFocus";
 import { WorkspaceToolRail } from "./WorkspaceToolRail";
 import { WorkspaceTabs } from "./WorkspaceTabs";
 import { createBlockCloseRequest, type CloseRequest } from "./workspaceClose";
@@ -237,6 +238,7 @@ export function WorkspaceShell({ onLogout, webActions, terminalLockBackend, term
 
   const lockIdleTerminal = useCallback(() => applyLockScope("terminalAndVault"), [applyLockScope]);
   useTerminalAutoLock(securitySettings?.terminalAutoLockAfterSeconds, terminalLocked, vaultStatus, lockIdleTerminal);
+  useTerminalWindowFocus(activeWorkspace, workbenchActive && !terminalLocked);
 
   useWorkspaceShortcuts({
     platform: desktopPlatform, activeWorkspace, workspaces: document.workspaces, terminalLocked,
