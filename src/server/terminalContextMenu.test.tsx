@@ -1,0 +1,20 @@
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, expect, it, vi } from "vitest";
+import { TerminalContextMenu } from "../terminal/TerminalContextMenu";
+vi.mock("../lib/runtime/environment", () => ({ isServer: true, isRemoteDesktop: false }));
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+it.each(["windows", "macos"] as const)("disables HTTP menu paste on %s and explains the restriction on hover", platform => {
+  vi.stubGlobal("navigator", { clipboard: undefined });
+  vi.stubGlobal("isSecureContext", false);
+  const paste = vi.fn(), close = vi.fn();
+  render(<TerminalContextMenu state={{ x: 0, y: 0, placement: "below", hasSelection: true }} menuRef={{ current: null }} platform={platform} canPaste actions={{ copy: vi.fn(), paste, exportImage: vi.fn(), search: vi.fn(), selectAll: vi.fn(), clear: vi.fn() }} close={close}/>);
+  const action = screen.getByRole("menuitem", { name: /^粘贴/ });
+  expect(action).toBeDisabled();
+  expect(action).toHaveTextContent(platform === "macos" ? "⌘V" : "Ctrl+V");
+  fireEvent.click(action);
+  expect(close).not.toHaveBeenCalled(); expect(paste).not.toHaveBeenCalled();
+  fireEvent.mouseEnter(action.parentElement!);
+  expect(screen.getByRole("tooltip")).toHaveTextContent("当前处于非可信上下文，无法通过菜单粘贴");
+  fireEvent.mouseLeave(action.parentElement!);
+  expect(screen.queryByRole("tooltip")).toBeNull();
+});

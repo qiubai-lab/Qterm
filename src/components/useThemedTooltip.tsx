@@ -5,8 +5,9 @@ export function isElementOverflowing(element: HTMLElement) {
   return element.scrollWidth > element.clientWidth;
 }
 
-export function useThemedTooltip<T extends HTMLElement>({ tooltip, anchorRef, shouldShow, placement = "auto", disabled = false }: {
+export function useThemedTooltip<T extends HTMLElement>({ tooltip, anchorRef, shouldShow, placement = "auto", disabled = false, className }: {
   tooltip: string;
+  className?: string;
   anchorRef?: RefObject<T | null>;
   shouldShow?: (anchor: T) => boolean;
   placement?: "auto" | "above";
@@ -52,6 +53,6 @@ export function useThemedTooltip<T extends HTMLElement>({ tooltip, anchorRef, sh
   }, [open]);
 
   return [anchor, !disabled && open ? id : undefined, hide, show, !disabled && open && position && createPortal(<div ref={surface} id={id} role="tooltip" data-app-overlay="floating" data-overlay-motion="hover"
-      className="themed-tooltip themed-action-tooltip" style={position}>{tooltip}</div>, document.body),
+      className={`themed-tooltip themed-action-tooltip${className ? ` ${className}` : ""}`} style={position}>{tooltip}</div>, document.body),
   ] as const;
 }

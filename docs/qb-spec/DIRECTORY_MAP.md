@@ -285,6 +285,7 @@
 ### Web 上传进度与终端剪贴板
 
 - `src/server/uploadRequest.ts`：带页面凭证的 XHR 发送进度、目标写入进度轮询、取消与最终确认；由 Files 与终端粘贴共同使用。
+- `src/server/browserClipboard.ts`：浏览器文本剪贴板能力与权限失败处理；复制依次使用异步 API、用户手势内的选区复制，恢复焦点和选区，不向服务端发送内容。`src/terminal/useTerminalCopy.tsx` 拥有复制失败后的手动复制界面和过期请求保护；HTTP 菜单粘贴指引由 `TerminalContextMenu.tsx` 展示。
 - `src/server/terminalClipboard.ts`：读取粘贴快照/浏览器剪贴板、上传文件、完成/取消事件适配；共享终端保持输入排序、旧会话保护和路径粘贴所有权。
 - `crates/qterm-server/src/terminal_clipboard.rs`：验证终端身份，受限 multipart 临时文件落地，本地私有运行缓存与核心 RemoteTerminalStagingStore 对接；客户端文件名不作为服务端路径。
 - `transfer_lifecycle.rs` 的任务记录持有所有者绑定的目标字节进度；进度查询不隐式注册任务。

@@ -222,3 +222,11 @@ python3 scripts/test-server-takeover.py --container
 验收：构建 Web 资源和 qterm-server 后运行 `python3 scripts/test-server-observation.py`，使用隔离临时仓库与测试凭证验证事件、变更、退订、锁定和重连。安装 OpenSSH 的环境可再运行 `python3 scripts/test-server-observation-ssh.py`，验证远端授权、共享采样和应用内操作通知。
 
 画面故障验收：`python3 scripts/test-server-screen-recovery.py` 在 Linux 隔离服务中主动终止画面子进程，验证多终端恢复、原 PTY/PID/环境保留及新建终端；`cargo test --manifest-path crates/Cargo.toml -p qterm-server screen_worker` 覆盖检查点、半截 ANSI/UTF-8、查询去重、超时与错误隔离。
+
+### HTTP 环境中的复制粘贴
+
+通过内网 HTTP 访问时，浏览器可能不提供异步剪贴板 API。文本复制优先使用浏览器 API，不可用或被拒绝时尝试用户操作触发的选区复制；仍失败时，终端显示可选中的文本供手动复制。临时文本不会持久化或发送到服务端。
+
+终端快捷键粘贴通过浏览器原生 `paste` 事件读取内容，继续保留多行/长文本确认和文件上传流程。无法直接读取剪贴板时，终端菜单的“粘贴”禁用，悬浮气泡解释限制并提示使用 Ctrl+V（Mac 为 ⌘V）。浏览器未在粘贴事件中提供文件时，请使用文件选择或拖拽上传；图片复制不可用时可保存图片。
+
+`QTERM_ALLOW_INSECURE_HTTP` 不会改变浏览器安全上下文；HTTPS 可以启用异步接口，但仍需满足浏览器权限和用户交互要求。旧式选区复制属于兼容兜底，不保证所有浏览器均支持。

@@ -1,5 +1,7 @@
+import { isServer, isRemoteDesktop } from "../lib/runtime/environment";
 import { type KeyboardEvent, type RefObject } from "react";
 import { createPortal } from "react-dom";
+import { useThemedTooltip } from "../components/useThemedTooltip";
 import { shortcutLabel } from "../app/shortcuts";
 import type { DesktopPlatform } from "../lib/tauri/window";
 
@@ -33,11 +35,19 @@ export function TerminalContextMenu({ state, menuRef, platform, canPaste, action
       items[event.key === "Home" ? 0 : items.length - 1]?.focus();
     } else if (event.key === "Tab") close();
   }
+  const nativePasteOnly = isServer && !isRemoteDesktop && !navigator.clipboard?.read && !navigator.clipboard?.readText;
+  const pasteHint = window.isSecureContext === false
+    ? "当前处于非可信上下文，无法通过菜单粘贴。请使用 Ctrl+V（Mac 为 ⌘V）。"
+    : "当前浏览器未开放剪贴板读取，无法通过菜单粘贴。请使用 Ctrl+V（Mac 为 ⌘V）。";
+  const [pasteRef, descriptionId, hidePasteHint, showPasteHint, pasteTooltip] = useThemedTooltip<HTMLSpanElement>({ tooltip: pasteHint, disabled: !nativePasteOnly, className: "terminal-menu-paste-tooltip" });
   const modifier = platform === "macos" ? "⌘" : platform === "windows" ? "Ctrl+" : "Ctrl+Shift+";
   return createPortal(<div ref={menuRef} className="terminal-context-menu" data-placement={state.placement} role="menu" data-app-overlay="floating" aria-label="终端菜单" style={{ left: state.x, top: state.y }} onContextMenu={event => event.preventDefault()} onKeyDown={handleKeyDown}>
     <button role="menuitem" disabled={!state.hasSelection} onClick={() => void actions.copy()}><span>复制</span><kbd>{modifier}C</kbd></button>
     <button role="menuitem" disabled={!state.hasSelection} onClick={actions.exportImage}><span>导出选中行为图片…</span></button>
-    <button role="menuitem" disabled={!canPaste} onClick={() => void actions.paste()}><span>粘贴</span><kbd>{modifier}V</kbd></button>
+    <span ref={pasteRef} className="terminal-menu-paste" onMouseEnter={showPasteHint} onMouseLeave={hidePasteHint}>
+      <button role="menuitem" disabled={!canPaste || nativePasteOnly} aria-description={nativePasteOnly ? pasteHint : undefined} aria-describedby={descriptionId} onClick={() => void actions.paste()}><span>粘贴</span><kbd>{modifier}V</kbd></button>
+    </span>
+    {pasteTooltip}
     <div className="terminal-context-menu-separator" role="separator"/>
     <button role="menuitem" onClick={actions.search}><span>搜索</span><kbd>{shortcutLabel("searchTerminal", platform)}</kbd></button>
     <div className="terminal-context-menu-separator" role="separator"/>

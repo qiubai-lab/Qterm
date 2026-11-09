@@ -1,0 +1,15 @@
+.terminal-copy-text {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  height: min(180px, 30vh);
+  resize: none;
+  overflow: auto;
+  padding: 9px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  background: var(--surface);
+  font: 11px/1.5 "SFMono-Regular", Consolas, monospace;
+}
+.terminal-copy-text:focus-visible { outline: 2px solid var(--focus); outline-offset: -1px; }

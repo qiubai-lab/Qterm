@@ -3,7 +3,7 @@ import { acquireTerminalView, scheduleTerminalViewDisposal, type TerminalView } 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from "react";
 import { createPortal } from "react-dom";
 import type { ISearchOptions } from "@xterm/addon-search";
-import { writeText as writeClipboardText } from "@qterm/services/textClipboard";
+import { useTerminalCopy } from "./useTerminalCopy";
 import "@xterm/xterm/css/xterm.css";
 import { DialogFrame } from "../components/dialogs/DialogFrame";
 import { ExactTextInput } from "../components/ExactTextInput";
@@ -109,13 +109,7 @@ export function TerminalPanel({ blockId, sessionKey, visible, local, osc7Enabled
     if (restoreFocus) restoreTerminalFocus();
   }, [restoreTerminalFocus]);
 
-  const copySelection = useCallback(async () => {
-    const terminal = viewRef.current?.terminal;
-    if (!terminal?.hasSelection()) return;
-    try { await writeClipboardText(terminal.getSelection()); }
-    catch { /* Keep clipboard failures from reaching the terminal input path. */ }
-    closeContextMenu();
-  }, [closeContextMenu]);
+  const { copy: copySelection, dialog: copyDialog } = useTerminalCopy(viewRef, sessionKey, closeContextMenu, restoreTerminalFocus);
 
   const requestPaste = useCallback(async (clipboard?: TerminalClipboardInput) => {
     if (!inputEnabled) return;
@@ -502,6 +496,7 @@ export function TerminalPanel({ blockId, sessionKey, visible, local, osc7Enabled
     </div>}
     {contextMenu && <TerminalContextMenu state={contextMenu} menuRef={menuRef} platform={desktopPlatform} canPaste={inputEnabled} close={closeContextMenu}
       actions={{ copy: copySelection, paste: requestPaste, search: openSearch, selectAll, clear: clearBuffer, exportImage: () => { closeContextMenu(false); imageExport.open(); } }}/>}
+    {copyDialog}
     {imageExport.request && <TerminalImageExportDialog request={imageExport.request} onClose={imageExport.close}/>}
     {pendingPaste && createPortal(<DialogFrame compact title="确认粘贴？" subtitle="多行或较长内容可能立即执行命令" onClose={() => { setPendingPaste(null); restoreTerminalFocus(); }}>
       <p className="confirm-copy">剪贴板包含 {pendingPaste.lines} 行、{pendingPaste.characters} 个字符。确认只会把内容发送到当前终端，不会在此处显示剪贴板正文。</p>

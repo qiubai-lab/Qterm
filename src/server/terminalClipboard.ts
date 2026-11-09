@@ -1,3 +1,4 @@
+import { pasteShortcutHint, readText } from "./browserClipboard";
 import { isRemoteDesktop } from "../lib/runtime/environment";
 import { readNativeClipboard } from "../remoteRuntime/clipboard";
 import { randomId } from "../lib/randomId";
@@ -9,10 +10,9 @@ const tasks = new Map<string, {session:string;controller:AbortController}>();
 export async function readClipboard(): Promise<TerminalClipboardInput> {
   if (isRemoteDesktop) return readNativeClipboard();
   if (!navigator.clipboard?.read) {
-    if (!navigator.clipboard?.readText) throw new Error("浏览器无法读取剪贴板，请使用 Ctrl+V 粘贴");
-    return {files:[],text:await navigator.clipboard.readText()};
+    return {files:[],text:await readText()};
   }
-  const items = await navigator.clipboard.read();
+  const items = await navigator.clipboard.read().catch(() => { throw new Error(pasteShortcutHint()); });
   const files: File[] = [];
   let text = "";
   for (const item of items) {
