@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>下载 Qterm：macOS、Windows 与 Linux 安装指南 — Qterm</title>
+    <meta name="description" content="免费开源的远程 AI 开发 SSH 工作台。选择你的系统开始安装；Qterm 不内置 AI 模型或 Agent。" />
+    <!-- site:seo -->
+    <link rel="icon" type="image/png" href="/qterm-icon.png" />
+    <link rel="stylesheet" href="/src/site/site.css" />
+  </head>
+  <body>
+    <a class="site-skip" href="#site-main">跳到正文</a>
+    <header class="site-nav"><a class="site-brand" href="%BASE_URL%">Qterm</a><nav aria-label="主导航"><a href="%BASE_URL%#guides">教程</a><a href="%BASE_URL%download/">下载</a><a href="%BASE_URL%en/download/">English</a><a href="%BASE_URL%demo/">Demo</a></nav></header>
+    <main id="site-main" class="site-article">
+      <header class="article-heading"><p class="site-eyebrow">QTERM / 使用指南</p><h1>下载 Qterm：macOS、Windows 与 Linux 安装指南</h1><p class="article-lead">免费开源的远程 AI 开发 SSH 工作台。选择你的系统开始安装；Qterm 不内置 AI 模型或 Agent。</p></header>
+      <nav class="article-toc" aria-label="本页目录"><p>本页目录</p><ol><li><a href="#macos">macOS · Apple Silicon / Intel</a></li><li><a href="#windows">Windows · x64</a></li><li><a href="#linux">Linux · x64</a></li><li><a href="#update">通过 Homebrew 更新</a></li><li><a href="#start">安装后做什么</a></li></ol></nav>
+      <section id="macos"><h2>macOS · Apple Silicon / Intel</h2>
+<p>可使用项目维护的 Homebrew tap。当前应用尚未经过 Apple 公证，cask 会在安装时移除隔离属性；信任 tap 前可先查看其内容。</p><pre><code>brew tap qiubai-lab/tap
+brew trust qiubai-lab/tap
+brew install --cask qterm</code></pre><p><code>brew trust</code> 用于 Homebrew 6.0+ 的一次性确认，旧版可跳过。<a href="https://github.com/qiubai-lab/homebrew-tap">Homebrew tap</a> · <a href="https://brew.sh/">Homebrew</a></p><p>手动下载 DMG 时，Apple Silicon 选择 aarch64，Intel 选择 x86_64，再将 Qterm 拖入“应用程序”。若提示应用“已损坏”，查看项目的 <a href="https://github.com/qiubai-lab/Qterm#macos">安装说明</a>。</p><p><a class="text-link" href="https://github.com/qiubai-lab/Qterm/releases/latest">打开最新发布页，选择安装包 →</a></p>
+</section>
+<section id="windows"><h2>Windows · x64</h2>
+<p>从发布页的 Assets 下载 x64 <code>.msi</code> 或 NSIS <code>.exe</code>，运行安装程序并按提示操作。升级时下载新版安装程序运行。</p><p><a class="text-link" href="https://github.com/qiubai-lab/Qterm/releases/latest">打开最新发布页，选择安装包 →</a></p>
+</section>
+<section id="linux"><h2>Linux · x64</h2>
+<p>Debian / Ubuntu 选择 <code>.deb</code>，使用 RPM 的发行版选择 <code>.rpm</code>，也可选择 x64 <code>.AppImage</code> 并授予可执行权限后运行。升级时安装新版包或替换 AppImage。</p><p><a class="text-link" href="https://github.com/qiubai-lab/Qterm/releases/latest">打开最新发布页，选择安装包 →</a></p>
+</section>
+<section id="update"><h2>通过 Homebrew 更新</h2>
+<pre><code>brew update
+brew upgrade --cask qterm</code></pre><p>先更新第三方 tap，再升级 Qterm。升级前备份重要配置。</p>
+</section>
+<section id="start"><h2>安装后做什么</h2>
+<p>保存连接，在 Terminal Block 中选择目标并核对服务器指纹，然后跟随远程 Agent 教程开始工作。Qterm 使用 GPL-3.0-only，完整条款以仓库许可证为准。</p><p><a href="https://github.com/qiubai-lab/Qterm/blob/main/LICENSE">GPL-3.0-only</a></p>
+</section>
+      <aside class="article-related"><h2>继续阅读</h2><ul><li><a href="%BASE_URL%guides/remote-ai/">开始远程 AI 开发</a></li><li><a href="%BASE_URL%guides/remote-agent-files/">发送截图与文件</a></li></ul></aside>
+      <div class="article-cta"><a class="site-primary" href="%BASE_URL%download/">下载 Qterm</a><a class="site-secondary" href="%BASE_URL%demo/">体验模拟 Demo</a></div>
+      <p class="article-note">浏览器 Demo 使用虚构数据，不连接真实服务器、不运行真实 Agent，也不上传你的文件。真实操作请使用安装后的 Qterm。</p>
+    </main>
+    <footer class="site-footer"><span>Qterm · GPL-3.0-only</span><a href="https://github.com/qiubai-lab/Qterm">GitHub</a><a href="https://github.com/qiubai-lab/Qterm/issues">反馈与建议</a></footer>
+  </body>
+</html>

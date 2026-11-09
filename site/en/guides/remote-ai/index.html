@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Run Claude Code or Codex over SSH — Qterm</title>
+    <meta name="description" content="Connect Qterm to a development server, run your CLI agent in a remote repository, then inspect files and review Git changes in the same workspace." />
+    <!-- site:seo -->
+    <link rel="icon" type="image/png" href="/qterm-icon.png" />
+    <link rel="stylesheet" href="/src/site/site.css" />
+  </head>
+  <body>
+    <a class="site-skip" href="#site-main">Skip to content</a>
+    <header class="site-nav"><a class="site-brand" href="%BASE_URL%en/">Qterm</a><nav aria-label="Main navigation"><a href="%BASE_URL%en/#guides">Guides</a><a href="%BASE_URL%en/download/">Download</a><a href="%BASE_URL%guides/remote-ai/">中文</a><a href="%BASE_URL%demo/">Demo</a></nav></header>
+    <main id="site-main" class="site-article">
+      <header class="article-heading"><p class="site-eyebrow">QTERM / GUIDE</p><h1>Run Claude Code or Codex over SSH</h1><p class="article-lead">Keep your agent and repository on a development server. Use Qterm to bring its terminal, files and Git review into one workspace.</p></header>
+      <nav class="article-toc" aria-label="On this page"><p>On this page</p><ol><li><a href="#prepare">1. Prepare the remote environment</a></li><li><a href="#connect">2. Connect a terminal to the server</a></li><li><a href="#run">3. Start the agent inside the project</a></li><li><a href="#context">4. Send local context to the remote agent</a></li><li><a href="#review">5. Inspect files and review the diff</a></li><li><a href="#limits">Troubleshooting and session limits</a></li></ol></nav>
+      <section id="prepare"><h2>1. Prepare the remote environment</h2>
+<p>You need an SSH-accessible development server, login credentials and a project repository. Install and authenticate your chosen CLI on that server using its official instructions. Its account, model access and network requirements are separate from Qterm. Qterm does not include a model, credits or an agent installer.</p><p>Verify that ordinary SSH access, repository permissions and the CLI work before diagnosing the workspace.</p>
+</section>
+<section id="connect"><h2>2. Connect a terminal to the server</h2>
+<p>Install Qterm and save the host, port, username and authentication method in connection management. Return to a Terminal Block and select the connection from its top-left target selector. On first connection, compare the host-key fingerprint with a trusted value from your server administrator before accepting it.</p><p>Saving a profile alone does not connect. Unlock the credential vault when requested. Investigate changed host keys before trusting a replacement.</p>
+</section>
+<section id="run"><h2>3. Start the agent inside the project</h2>
+<p>Change to your actual remote repository before starting the installed CLI. This example uses Codex; use <code>claude</code> on the last line for Claude Code. All commands run on the remote server.</p><pre><code>cd /path/to/your/project
+git status
+codex</code></pre><p>Replace the example path. Give the agent a concrete task and constraints. Approval and execution permissions remain controlled by the agent itself; pasting a prompt into Qterm does not automatically execute it.</p>
+</section>
+<section id="context"><h2>4. Send local context to the remote agent</h2>
+<p>Copy an image, file or folder on your computer, then paste into the connected remote terminal. Qterm stages it on the server through the SSH session and inserts its remote path when the upload completes. Review the input before sending it.</p><p><a href="%BASE_URL%en/guides/remote-agent-files/">Read the image and file paste guide</a> for permissions, clipboard precedence and image-support limitations.</p><figure><a href="%BASE_URL%screenshots/paste-image-to-cli.png"><img src="/screenshots/paste-image-to-cli.png" alt="An image pasted into a remote CLI through Qterm" width="1165" height="709" loading="lazy" /></a><figcaption>Desktop capture; the current interface is in Chinese.</figcaption></figure>
+</section>
+<section id="review"><h2>5. Inspect files and review the diff</h2>
+<p>Open Files or Git from the terminal. When OSC 7 is enabled and the shell reports its directory, Qterm opens at that path. Otherwise, use the directory picker to choose the repository.</p><p>Inspect generated files, review each diff, stage only the intended changes and write a commit message. Run project tests in the terminal. Commit, Pull and Push are separate actions; inspect the branch before synchronizing.</p><figure><a href="%BASE_URL%screenshots/git-diff.png"><img src="/screenshots/git-diff.png" alt="Side-by-side Git diff in Qterm" width="1165" height="709" loading="lazy" /></a><figcaption>Desktop capture: inspect the changes before committing.</figcaption></figure>
+</section>
+<section id="limits"><h2>Troubleshooting and session limits</h2>
+<ul><li><strong>Command not found:</strong> check the CLI installation and PATH on the server.</li><li><strong>Wrong directory:</strong> check the OSC 7 setting and shell support, or choose the directory manually. The temporary shell hook may appear in command history.</li><li><strong>Long tasks:</strong> switching workspaces preserves active sessions, but this does not promise process recovery after a lost connection, application exit or restart. Configure server-side session management if needed.</li><li><strong>Notifications:</strong> the tool must actively emit a supported OSC message for Qterm to display it.</li></ul>
+</section>
+      <aside class="article-related"><h2>Continue exploring</h2><ul><li><a href="%BASE_URL%en/guides/remote-agent-files/">Paste images and files to a remote agent</a></li><li><a href="%BASE_URL%en/download/">Install Qterm</a></li><li><a href="%BASE_URL%en/">Explore the SSH workspace</a></li></ul></aside>
+      <div class="article-cta"><a class="site-primary" href="%BASE_URL%en/download/">Download Qterm</a><a class="site-secondary" href="%BASE_URL%demo/">Try the simulated demo</a></div>
+      <p class="article-note">The browser demo uses fictional data. It does not connect to servers, run real agents or upload your files. The demo interface is currently in Chinese.</p>
+    </main>
+    <footer class="site-footer"><span>Qterm · GPL-3.0-only</span><a href="https://github.com/qiubai-lab/Qterm">GitHub</a><a href="https://github.com/qiubai-lab/Qterm/issues">Feedback</a></footer>
+  </body>
+</html>

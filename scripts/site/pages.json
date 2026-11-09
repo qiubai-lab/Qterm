@@ -1,0 +1,14 @@
+[
+  { "path": "", "lang": "zh-CN", "translation": "en/", "application": true },
+  { "path": "en/", "lang": "en", "translation": "", "application": true },
+  { "path": "guides/remote-ai/", "lang": "zh-CN", "translation": "en/guides/remote-ai/" },
+  { "path": "en/guides/remote-ai/", "lang": "en", "translation": "guides/remote-ai/" },
+  { "path": "guides/remote-agent-files/", "lang": "zh-CN", "translation": "en/guides/remote-agent-files/" },
+  { "path": "en/guides/remote-agent-files/", "lang": "en", "translation": "guides/remote-agent-files/" },
+  { "path": "download/", "lang": "zh-CN", "translation": "en/download/" },
+  { "path": "en/download/", "lang": "en", "translation": "download/" },
+  { "path": "guides/remote-git/", "lang": "zh-CN" },
+  { "path": "guides/ssh-sftp/", "lang": "zh-CN" },
+  { "path": "guides/self-hosting/", "lang": "zh-CN" },
+  { "path": "demo/", "lang": "zh-CN", "index": false }
+]

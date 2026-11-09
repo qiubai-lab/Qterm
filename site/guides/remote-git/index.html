@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>通过 SSH 审阅远程 Git 差异并提交 — Qterm</title>
+    <meta name="description" content="在 Qterm 的远程 Git 面板中查看工作区与暂存区差异、逐文件暂存和提交，衔接 CLI Agent 的远程开发流程。" />
+    <!-- site:seo -->
+    <link rel="icon" type="image/png" href="/qterm-icon.png" />
+    <link rel="stylesheet" href="/src/site/site.css" />
+  </head>
+  <body>
+    <a class="site-skip" href="#site-main">跳到正文</a>
+    <header class="site-nav"><a class="site-brand" href="%BASE_URL%">Qterm</a><nav aria-label="主导航"><a href="%BASE_URL%#guides">教程</a><a href="%BASE_URL%download/">下载</a><a href="%BASE_URL%demo/">Demo</a></nav></header>
+    <main id="site-main" class="site-article">
+      <header class="article-heading"><p class="site-eyebrow">QTERM / 使用指南</p><h1>通过 SSH 审阅远程 Git 差异并提交</h1><p class="article-lead">Agent 在服务器上修改代码后，直接打开同一远程仓库，检查它改了什么，再决定提交哪些内容。</p></header>
+      <nav class="article-toc" aria-label="本页目录"><p>本页目录</p><ol><li><a href="#open">1. 打开正确的远程仓库</a></li><li><a href="#diff">2. 区分工作区与暂存区</a></li><li><a href="#commit">3. 测试、选择性暂存与提交</a></li><li><a href="#sync">4. 单独处理同步与冲突</a></li><li><a href="#limits">演示与真实仓库的区别</a></li></ol></nav>
+      <section id="open"><h2>1. 打开正确的远程仓库</h2>
+<p>连接 SSH 终端，切换到项目目录。通过终端打开 Git Block；OSC 7 正常上报目录时会使用当前路径，也可通过目录选择器定位本机或已连接服务器的仓库。</p><p>先检查面板的连接目标、仓库目录和分支。项目需要已经是 Git 仓库，服务器上需要可用的 Git；工作区中的不同面板可以拥有独立目标。</p>
+</section>
+<section id="diff"><h2>2. 区分工作区与暂存区</h2>
+<p>工作区包含未暂存修改，暂存区是下一次提交的候选内容。选择文件查看对应差异，并排比较增删内容。先检查 Agent 是否改了无关文件或生成了不应提交的产物。</p><figure><a href="%BASE_URL%screenshots/git-diff.png"><img src="/screenshots/git-diff.png" alt="Git 差异预览比较暂存区和工作区内容" width="1165" height="709" loading="lazy" /></a><figcaption>桌面端实拍：左右对照代码修改。</figcaption></figure>
+</section>
+<section id="commit"><h2>3. 测试、选择性暂存与提交</h2>
+<p>在远程终端执行项目要求的测试。回到 Git 面板逐文件或多选暂存需要提交的改动；错误加入的文件可以取消暂存。填写能说明改动目的的提交信息，检查已暂存列表，再提交。</p><p>提交前需在远程环境配置好 Git 作者身份。不要将“丢弃更改”当作取消暂存：丢弃会影响文件内容，应仔细阅读确认提示。</p>
+</section>
+<section id="sync"><h2>4. 单独处理同步与冲突</h2>
+<p>本地提交不会自动推送。检查目标分支、上游关系与远端访问凭据，再执行 Pull、Push 或发布分支。Qterm 的主操作建议根据当前状态变化，不会把提交和推送自动串联起来。</p><p>遇到合并冲突时，在冲突工作台比较 Current 与 Incoming，编辑结果、保存并继续合并；决定放弃本次合并时使用中止操作。运行测试后再同步。</p>
+</section>
+<section id="limits"><h2>演示与真实仓库的区别</h2>
+<p>在线 Demo 可以体验虚构仓库的差异、暂存与提交，不执行真实 Git 操作；分支、同步、历史和冲突等能力并未完整模拟。请使用桌面端操作实际仓库。</p>
+</section>
+      <aside class="article-related"><h2>继续阅读</h2><ul><li><a href="%BASE_URL%guides/remote-ai/">远程 AI 开发完整流程</a></li><li><a href="%BASE_URL%guides/ssh-sftp/">浏览与编辑远程文件</a></li></ul></aside>
+      <div class="article-cta"><a class="site-primary" href="%BASE_URL%download/">下载 Qterm</a><a class="site-secondary" href="%BASE_URL%demo/">体验模拟 Demo</a></div>
+      <p class="article-note">浏览器 Demo 使用虚构数据，不连接真实服务器、不运行真实 Agent，也不上传你的文件。真实操作请使用安装后的 Qterm。</p>
+    </main>
+    <footer class="site-footer"><span>Qterm · GPL-3.0-only</span><a href="https://github.com/qiubai-lab/Qterm">GitHub</a><a href="https://github.com/qiubai-lab/Qterm/issues">反馈与建议</a></footer>
+  </body>
+</html>

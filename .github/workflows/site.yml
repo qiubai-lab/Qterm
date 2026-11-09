@@ -19,7 +19,10 @@ jobs:
     name: Verify product site
     runs-on: ubuntu-latest
     env:
-      QTERM_SITE_BASE: ${{ vars.QTERM_SITE_BASE || '/Qterm/' }}
+      QTERM_SITE_URL: ${{ vars.QTERM_SITE_URL || 'https://qiubai-lab.github.io/Qterm/' }}
+      QTERM_SITE_BASE: ${{ vars.QTERM_SITE_BASE }}
+      QTERM_GOOGLE_SITE_VERIFICATION: ${{ vars.QTERM_GOOGLE_SITE_VERIFICATION }}
+      QTERM_BING_SITE_VERIFICATION: ${{ vars.QTERM_BING_SITE_VERIFICATION }}
     steps:
       - uses: actions/checkout@v7
         with:

@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Paste images and files to a remote CLI agent — Qterm</title>
+    <meta name="description" content="Use Qterm to upload local screenshots, files and folders over SSH and insert remote paths for Claude Code or Codex, with practical troubleshooting steps." />
+    <!-- site:seo -->
+    <link rel="icon" type="image/png" href="/qterm-icon.png" />
+    <link rel="stylesheet" href="/src/site/site.css" />
+  </head>
+  <body>
+    <a class="site-skip" href="#site-main">Skip to content</a>
+    <header class="site-nav"><a class="site-brand" href="%BASE_URL%en/">Qterm</a><nav aria-label="Main navigation"><a href="%BASE_URL%en/#guides">Guides</a><a href="%BASE_URL%en/download/">Download</a><a href="%BASE_URL%guides/remote-agent-files/">中文</a><a href="%BASE_URL%demo/">Demo</a></nav></header>
+    <main id="site-main" class="site-article">
+      <header class="article-heading"><p class="site-eyebrow">QTERM / GUIDE</p><h1>Paste images and files to a remote CLI agent</h1><p class="article-lead">Paste local context into a remote terminal, wait for the upload, then give the server path to your CLI agent.</p></header>
+      <nav class="article-toc" aria-label="On this page"><p>On this page</p><ol><li><a href="#prepare">1. Use a connected SSH terminal</a></li><li><a href="#image">2. Copy and paste a screenshot</a></li><li><a href="#files">3. Copy files or folders</a></li><li><a href="#verify">4. Verify before sending</a></li><li><a href="#troubleshoot">Troubleshooting</a></li></ol></nav>
+      <section id="prepare"><h2>1. Use a connected SSH terminal</h2>
+<p>This guide covers the Qterm desktop SSH terminal. Connect to the server and confirm normal command input first. The server must permit SFTP and writes to the staging directory. Your agent needs permission to read the resulting path.</p><p>Pasting a file into a local terminal produces a local path. A path on your computer is not a file on another server.</p>
+</section>
+<section id="image"><h2>2. Copy and paste a screenshot</h2>
+<p>Copy an image with your operating system’s screenshot tool. Focus the remote Terminal Block and paste. Wait for the upload to finish, inspect the inserted server path or the agent’s image representation, then add your request and send it.</p><figure><a href="%BASE_URL%screenshots/paste-image-to-cli.png"><img src="/screenshots/paste-image-to-cli.png" alt="Image input in a remote Codex terminal" width="1165" height="709" loading="lazy" /></a><figcaption>Desktop capture; image presentation depends on the agent.</figcaption></figure>
+</section>
+<section id="files"><h2>3. Copy files or folders</h2>
+<p>Copy a file or folder object in Finder, Explorer or your Linux file manager, then paste into the remote terminal. Copy the file itself, not its filename as text. Once uploaded, Qterm inserts its absolute remote path without executing a command.</p><figure><a href="%BASE_URL%screenshots/paste-file-to-cli.png"><img src="/screenshots/paste-file-to-cli.png" alt="A completed file upload inserts a remote path" width="1165" height="709" loading="lazy" /></a><figcaption>Desktop capture: the path belongs to the server.</figcaption></figure><p>To put files in a specific project directory, open that directory in a Files Block and use upload or drag and drop. Terminal staging and uploading to a chosen directory serve different purposes.</p>
+</section>
+<section id="verify"><h2>4. Verify before sending</h2>
+<p>Check that the upload finished and the path is correct, then tell the agent what to do with it. A path only identifies a file: image recognition, supported formats and reading permissions depend on the CLI and model.</p><p>You can cancel an active upload. Diagnose a failed transfer before using its result. Manage uploaded material according to your server’s data-retention practices.</p>
+</section>
+<section id="troubleshoot"><h2>Troubleshooting</h2>
+<ul><li><strong>Only text is pasted:</strong> text takes precedence when present in the clipboard. Copy the image or file object again.</li><li><strong>Upload rejected:</strong> check SFTP access, free space, staging-directory permissions and the SSH connection.</li><li><strong>Agent cannot find the file:</strong> confirm that the agent and terminal can access the same filesystem. An agent inside a container may not see a host path.</li><li><strong>Image is uploaded but unreadable:</strong> verify image input support in the CLI and model.</li><li><strong>Need a permanent destination:</strong> upload through the Files panel after choosing the target directory.</li></ul>
+</section>
+      <aside class="article-related"><h2>Continue exploring</h2><ul><li><a href="%BASE_URL%en/guides/remote-ai/">Run a CLI agent over SSH</a></li><li><a href="%BASE_URL%en/download/">Download and install Qterm</a></li><li><a href="%BASE_URL%en/">Explore Qterm</a></li></ul></aside>
+      <div class="article-cta"><a class="site-primary" href="%BASE_URL%en/download/">Download Qterm</a><a class="site-secondary" href="%BASE_URL%demo/">Try the simulated demo</a></div>
+      <p class="article-note">The browser demo uses fictional data. It does not connect to servers, run real agents or upload your files. The demo interface is currently in Chinese.</p>
+    </main>
+    <footer class="site-footer"><span>Qterm · GPL-3.0-only</span><a href="https://github.com/qiubai-lab/Qterm">GitHub</a><a href="https://github.com/qiubai-lab/Qterm/issues">Feedback</a></footer>
+  </body>
+</html>

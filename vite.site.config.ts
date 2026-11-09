@@ -2,13 +2,16 @@ import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
 
+import { pages, siteConfig, siteSeo } from "./scripts/site/seo.mjs";
+
+const site = siteConfig();
 const source = (path: string) => fileURLToPath(new URL(path, import.meta.url));
 
 export default defineConfig({
   root: source("./site"),
   publicDir: source("./site/public"),
-  base: process.env.QTERM_SITE_BASE || "/Qterm/",
-  plugins: [react()],
+  base: site.base,
+  plugins: [react(), siteSeo(site)],
   define: { __QTERM_DEMO__: true },
   resolve: {
     alias: [
@@ -20,7 +23,7 @@ export default defineConfig({
     outDir: source("./dist-site"),
     emptyOutDir: true,
     rollupOptions: {
-      input: { index: source("./site/index.html"), demo: source("./site/demo/index.html") },
+      input: Object.fromEntries(pages.map(page => [page.path || "index", source(`./site/${page.path}index.html`)])),
       output: { manualChunks: { terminal: ["@xterm/xterm", "@xterm/addon-fit"] } },
     },
   },

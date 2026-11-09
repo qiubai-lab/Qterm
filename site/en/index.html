@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Qterm — Open-source SSH workspace for remote AI development</title>
+    <meta name="description" content="Run remote CLI agents with terminals, SFTP files and Git review in one Qterm workspace. Paste local images and files to your server. Free and open source for macOS, Windows and Linux." />
+    <!-- site:seo -->
+    <link rel="icon" type="image/png" href="/qterm-icon.png" />
+    <link rel="stylesheet" href="/src/site/site.css" />
+  </head>
+  <body>
+    <a class="site-skip" href="#site-main">Skip to content</a>
+    <header class="site-nav"><a class="site-brand" href="%BASE_URL%en/">Qterm</a><nav aria-label="Main navigation"><a href="#features">Features</a><a href="#guides">Guides</a><a href="%BASE_URL%" lang="zh-CN">中文</a><a class="site-link-button" href="%BASE_URL%en/download/">Download</a></nav></header>
+    <main id="site-main">
+      <section class="site-hero">
+        <p class="site-eyebrow">OPEN SOURCE · CROSS PLATFORM · REMOTE DEVELOPMENT</p>
+        <h1>Your remote AI workflow.<br />One SSH workspace.</h1>
+        <p class="site-summary">Run Claude Code, Codex or another CLI agent on your server.<br />Send screenshots, inspect files and review Git changes alongside the terminal.</p>
+        <div class="site-actions"><a class="site-primary" href="%BASE_URL%en/download/">Download Qterm</a><a class="site-secondary" href="%BASE_URL%demo/">Try the demo →</a></div>
+        <p class="site-platforms">Free and open source · macOS · Windows · Linux<span>No bundled AI model or agent. Configure your chosen CLI separately.</span></p>
+      </section>
+      <figure class="site-preview"><div class="preview-heading"><span>TERMINAL / FILES / GIT</span><span>ONE WORKSPACE</span></div><a href="%BASE_URL%screenshots/workspace.png"><img src="/screenshots/workspace.png" alt="Qterm workspace with terminal, files, Git and network panels" width="1206" height="737" fetchpriority="high" /></a><figcaption>Simulated demo workspace. The current application and demo interface are in Chinese.</figcaption></figure>
+      <section class="site-section" id="features" aria-labelledby="features-title">
+        <div class="site-section-heading"><p class="site-eyebrow">CONTEXT, WITHOUT THE ROUND TRIP</p><h2 id="features-title">Local context for your remote CLI agent.</h2><p>Keep the repository on the server and bring the tools together around it.</p></div>
+        <div class="site-feature-grid">
+          <article><span class="site-feature-number">01 / CONTEXT</span><h3>Paste images and files</h3><p>Copy a screenshot, file or folder on your computer and paste it into the remote terminal. Qterm uploads it through the SSH session and inserts the server path without executing a command.</p><a class="text-link" href="%BASE_URL%en/guides/remote-agent-files/">Follow the paste guide →</a></article>
+          <article><span class="site-feature-number">02 / FILES</span><h3>Edit through SFTP</h3><p>Browse, upload, download and edit remote files in a Files Block. With OSC 7 directory reporting, open it from the terminal’s current path, or select a directory yourself.</p><a class="text-link" href="%BASE_URL%en/guides/remote-ai/#review">Inspect generated files →</a></article>
+          <article><span class="site-feature-number">03 / REVIEW</span><h3>Review before committing</h3><p>Open the remote repository, inspect diffs and stage only the changes you intend to commit. Git actions use the selected local or SSH repository.</p><a class="text-link" href="%BASE_URL%en/guides/remote-ai/">Walk through the workflow →</a></article>
+        </div>
+      </section>
+      <section class="site-section" aria-labelledby="workspace-title">
+        <div class="site-section-heading"><p class="site-eyebrow">BUILT AROUND THE TERMINAL</p><h2 id="workspace-title">Arrange your tools around the task.</h2><p>Split local and remote terminals, files, Git and network panels horizontally or vertically. Switch between workspaces while active sessions stay in place.</p></div>
+        <div class="site-feature-grid">
+          <article><h3>SSH connections and credentials</h3><p>Use passwords, private keys or SSH Agent. Verify new host keys and keep saved secrets in an encrypted vault. Changed trusted host keys are blocked by default.</p></article>
+          <article><h3>Port forwarding</h3><p>Manage local forwarding, remote forwarding and SOCKS5 rules in a Network Block. Start rules when you need them and inspect their status.</p></article>
+          <article><h3>Agent notifications</h3><p>When a tool emits supported OSC 9 or OSC 777 messages, Qterm can surface a notification and take you back to the source terminal. The tool must emit the message itself.</p></article>
+        </div>
+      </section>
+      <section class="site-section" id="guides" aria-labelledby="guides-title">
+        <div class="site-section-heading"><p class="site-eyebrow">GET STARTED</p><h2 id="guides-title">From connection to reviewed changes.</h2><p>Practical guides with prerequisites, steps and troubleshooting.</p></div>
+        <div class="guide-grid">
+          <a class="guide-card" href="%BASE_URL%en/guides/remote-ai/"><span>01 / WORKFLOW</span><h3>Run Claude Code or Codex over SSH</h3><p>Connect to a server, start your agent and review its changes.</p><span>Read the guide →</span></a>
+          <a class="guide-card" href="%BASE_URL%en/guides/remote-agent-files/"><span>02 / CONTEXT</span><h3>Paste images and files to a remote agent</h3><p>Upload local context and use the resulting server paths.</p><span>Read the guide →</span></a>
+          <a class="guide-card" href="%BASE_URL%en/download/"><span>03 / INSTALL</span><h3>Download and install Qterm</h3><p>Choose a macOS, Windows or Linux package and keep it updated.</p><span>Choose your platform →</span></a>
+        </div>
+      </section>
+      <section class="site-section" aria-labelledby="faq-title"><div class="site-section-heading"><h2 id="faq-title">Before you start</h2></div><div class="site-faq">
+        <details><summary>Does Qterm include an AI agent?</summary><p>No. Install and authenticate your chosen CLI on the server. Qterm provides the terminal and surrounding tools; model access and usage costs belong to the selected provider.</p></details>
+        <details><summary>Does the online demo connect to my server?</summary><p>No. It uses fictional sessions and data, runs no real shell commands and establishes no network tunnels. Download the app for real work. The demo currently uses a Chinese interface.</p></details>
+        <details><summary>Can I self-host Qterm in a browser?</summary><p>Yes. A separate, single-user Web runtime is available for deployment in your own environment. Read the <a href="https://github.com/qiubai-lab/Qterm/blob/main/docs/container-deployment.md">container deployment guide (Chinese)</a> for platform, authentication and network requirements.</p></details>
+        <details><summary>What is the license?</summary><p>Qterm is free and open source under <a href="https://github.com/qiubai-lab/Qterm/blob/main/LICENSE">GPL-3.0-only</a>. See the license for redistribution and modification terms.</p></details>
+      </div></section>
+      <section class="site-experience"><div><p class="site-eyebrow">TRY THE WORKSPACE</p><h2>See how the tools fit together.</h2><p>The browser demo uses fictional data. No server credentials required.</p></div><div class="site-experience-links"><a class="site-primary" href="%BASE_URL%demo/">Open simulated demo →</a><a class="site-secondary" href="%BASE_URL%en/download/">Download Qterm</a></div></section>
+    </main>
+    <footer class="site-footer"><span>Qterm · GPL-3.0-only · Built with Tauri and Rust</span><a href="https://github.com/qiubai-lab/Qterm">GitHub</a><a href="https://github.com/qiubai-lab/Qterm/issues">Feedback</a></footer>
+  </body>
+</html>

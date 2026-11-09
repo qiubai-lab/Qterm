@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>在同一工作区使用 SSH 与 SFTP — Qterm</title>
+    <meta name="description" content="使用 Qterm 的 SSH 终端与 SFTP Files 面板浏览远程目录、上传下载和编辑文本，并通过 OSC 7 从终端当前目录打开文件。" />
+    <!-- site:seo -->
+    <link rel="icon" type="image/png" href="/qterm-icon.png" />
+    <link rel="stylesheet" href="/src/site/site.css" />
+  </head>
+  <body>
+    <a class="site-skip" href="#site-main">跳到正文</a>
+    <header class="site-nav"><a class="site-brand" href="%BASE_URL%">Qterm</a><nav aria-label="主导航"><a href="%BASE_URL%#guides">教程</a><a href="%BASE_URL%download/">下载</a><a href="%BASE_URL%demo/">Demo</a></nav></header>
+    <main id="site-main" class="site-article">
+      <header class="article-heading"><p class="site-eyebrow">QTERM / 使用指南</p><h1>在同一工作区使用 SSH 与 SFTP</h1><p class="article-lead">终端运行命令，文件面板检查结果。两个面板并排放置，让远程路径、文件与操作目标保持可见。</p></header>
+      <nav class="article-toc" aria-label="本页目录"><p>本页目录</p><ol><li><a href="#connect">1. 连接并选择文件目标</a></li><li><a href="#directory">2. 从终端目录打开 Files</a></li><li><a href="#transfer">3. 上传与下载</a></li><li><a href="#edit">4. 预览与编辑文本</a></li></ol></nav>
+      <section id="connect"><h2>1. 连接并选择文件目标</h2>
+<p>在 Terminal Block 左上角选择保存的 SSH 连接并完成认证。通过终端的文件入口打开 Files Block，或从右侧工具轨打开后选择目标。Files 可以选择本机或远程服务器，并建立自己的连接。</p><p>检查文件面板的服务器名称与路径；它并不始终与另一个面板使用同一目标。</p>
+</section>
+<section id="directory"><h2>2. 从终端目录打开 Files</h2>
+<p>启用 OSC 7 且 Shell 上报当前目录时，从终端打开的文件面板可从该目录开始。进入另一个目录后，可以再次从终端打开相应视图。已打开的 Files 面板有独立的浏览状态，不会被每次 cd 强制改写。</p><p>没有目录信息时用路径导航或目录选择器手动定位。OSC 7 的临时 Shell Hook 不修改远端 Shell 配置，但可能被记录到历史中；可以在高级设置中关闭。</p><figure><a href="%BASE_URL%screenshots/files.png"><img src="/screenshots/files.png" alt="终端、SFTP 文件目录和文本预览并排" width="1206" height="737" loading="lazy" /></a><figcaption>Demo 截图：使用虚构项目说明文件面板布局。</figcaption></figure>
+</section>
+<section id="transfer"><h2>3. 上传与下载</h2>
+<p>先进入目标目录，再将本机文件或文件夹拖入远程文件面板，或使用上传入口。查看传输进度和失败反馈；下载时选择本机保存位置。确认目录读写权限和剩余磁盘空间。</p><p>只想把资料交给 CLI Agent 时，<a href="%BASE_URL%guides/remote-agent-files/">在终端粘贴文件</a> 可以上传至暂存位置并插入路径，无需先定位项目目录。</p><figure><a href="%BASE_URL%screenshots/drag-file-upload.png"><img src="/screenshots/drag-file-upload.png" alt="将本机文件拖入远程文件面板" width="1165" height="709" loading="lazy" /></a><figcaption>桌面端实拍：上传目标是当前远程目录。</figcaption></figure>
+</section>
+<section id="edit"><h2>4. 预览与编辑文本</h2>
+<p>选择文件进行预览，需要修改时进入编辑并保存。处理未保存内容提示后再切换文件。保存影响远程文件本身，后续可从当前目录打开 Git Block 检查差异。</p><p>二进制、超大文件或不支持的格式不适合作为普通文本编辑。发生权限错误时先检查服务端权限；不会因为面板打开成功就自动获得写权限。</p>
+</section>
+      <aside class="article-related"><h2>继续阅读</h2><ul><li><a href="%BASE_URL%guides/remote-agent-files/">粘贴截图与文件给远程 Agent</a></li><li><a href="%BASE_URL%guides/remote-git/">检查远程 Git 变更</a></li><li><a href="%BASE_URL%download/">下载桌面应用</a></li></ul></aside>
+      <div class="article-cta"><a class="site-primary" href="%BASE_URL%download/">下载 Qterm</a><a class="site-secondary" href="%BASE_URL%demo/">体验模拟 Demo</a></div>
+      <p class="article-note">浏览器 Demo 使用虚构数据，不连接真实服务器、不运行真实 Agent，也不上传你的文件。真实操作请使用安装后的 Qterm。</p>
+    </main>
+    <footer class="site-footer"><span>Qterm · GPL-3.0-only</span><a href="https://github.com/qiubai-lab/Qterm">GitHub</a><a href="https://github.com/qiubai-lab/Qterm/issues">反馈与建议</a></footer>
+  </body>
+</html>

@@ -3,13 +3,9 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Qterm — 为远程开发而生的 SSH 工作台</title>
-    <meta name="description" content="Qterm 将终端、SSH、SFTP、Git 与网络转发组织在自由分屏的工作区。支持 macOS、Windows 和 Linux，立即在浏览器中体验。" />
-    <meta property="og:title" content="Qterm — 为远程开发而生的 SSH 工作台" />
-    <meta property="og:description" content="终端、文件与 Git，在同一个工作区。免费开源，支持 macOS、Windows 和 Linux。" />
-    <meta property="og:type" content="website" />
-    <meta property="og:image" content="https://qiubai-lab.github.io/Qterm/qterm-social.png" />
-    <meta name="twitter:card" content="summary_large_image" />
+    <title>Qterm — 开源 SSH 客户端与远程 AI 开发工作台</title>
+    <meta name="description" content="Qterm 是面向远程 AI 开发的开源 SSH 工作台。在同一工作区运行 Claude Code、Codex 等 CLI Agent，粘贴截图、管理 SFTP 文件并审阅 Git 变更。支持 macOS、Windows 和 Linux。" />
+    <!-- site:seo -->
     <link rel="icon" type="image/png" href="/qterm-icon.png" />
     <link rel="stylesheet" href="/src/site/site.css" />
     <script defer src="/site-interactions.js"></script>
@@ -17,18 +13,19 @@
     <script defer src="/image-viewer.js"></script>
   </head>
   <body>
-    <header class="site-nav"><a class="site-brand" href="%BASE_URL%"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><path d="m7 8 4 4-4 4m6 0h4"/></svg>Qterm</a><nav aria-label="主导航"><a href="#features">功能</a><a href="https://github.com/qiubai-lab/Qterm" target="_blank" rel="noreferrer" class="site-github-link"><svg class="site-action-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .75a11.25 11.25 0 0 0-3.558 21.923c.563.105.768-.244.768-.542 0-.267-.01-.975-.015-1.913-3.13.68-3.79-1.508-3.79-1.508-.512-1.3-1.25-1.646-1.25-1.646-1.023-.7.078-.686.078-.686 1.13.08 1.725 1.16 1.725 1.16 1.006 1.724 2.64 1.226 3.283.937.102-.73.394-1.226.716-1.508-2.498-.284-5.124-1.249-5.124-5.562 0-1.23.44-2.235 1.16-3.023-.116-.285-.502-1.43.11-2.98 0 0 .945-.303 3.094 1.155A10.8 10.8 0 0 1 12 6.177c.955.004 1.917.13 2.815.38 2.148-1.458 3.092-1.155 3.092-1.155.613 1.55.227 2.695.112 2.98.72.788 1.158 1.793 1.158 3.023 0 4.324-2.63 5.275-5.136 5.553.404.35.765 1.043.765 2.1 0 1.517-.014 2.74-.014 3.112 0 .3.203.652.774.542A11.25 11.25 0 0 0 12 .75Z"/></svg>GitHub</a><a class="site-link-button" href="%BASE_URL%demo/"><svg class="site-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3M13 15h4"/></svg>在线体验</a></nav></header>
+    <a class="site-skip" href="#site-main">跳到正文</a>
+    <header class="site-nav"><a class="site-brand" href="%BASE_URL%"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><path d="m7 8 4 4-4 4m6 0h4"/></svg>Qterm</a><nav aria-label="主导航"><a href="#features">功能</a><a href="#guides">教程</a><a href="%BASE_URL%en/" lang="en">English</a><a href="https://github.com/qiubai-lab/Qterm" target="_blank" rel="noreferrer" class="site-github-link"><svg class="site-action-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .75a11.25 11.25 0 0 0-3.558 21.923c.563.105.768-.244.768-.542 0-.267-.01-.975-.015-1.913-3.13.68-3.79-1.508-3.79-1.508-.512-1.3-1.25-1.646-1.25-1.646-1.023-.7.078-.686.078-.686 1.13.08 1.725 1.16 1.725 1.16 1.006 1.724 2.64 1.226 3.283.937.102-.73.394-1.226.716-1.508-2.498-.284-5.124-1.249-5.124-5.562 0-1.23.44-2.235 1.16-3.023-.116-.285-.502-1.43.11-2.98 0 0 .945-.303 3.094 1.155A10.8 10.8 0 0 1 12 6.177c.955.004 1.917.13 2.815.38 2.148-1.458 3.092-1.155 3.092-1.155.613 1.55.227 2.695.112 2.98.72.788 1.158 1.793 1.158 3.023 0 4.324-2.63 5.275-5.136 5.553.404.35.765 1.043.765 2.1 0 1.517-.014 2.74-.014 3.112 0 .3.203.652.774.542A11.25 11.25 0 0 0 12 .75Z"/></svg>GitHub</a><a class="site-link-button" href="%BASE_URL%demo/"><svg class="site-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3M13 15h4"/></svg>在线体验</a></nav></header>
     <main id="site-main">
       <section class="site-hero">
         <p class="site-eyebrow">开源 · 跨平台 · 远程开发</p>
-        <h1>Vibe Coding，<br />一个终端就够了。</h1>
-        <p class="site-summary">终端、文件与 Git 并排工作，支持 OSC 协议。<br />粘贴截图给远程 Agent，接收任务通知，再审阅它的修改。</p>
-        <div class="site-actions"><a class="site-primary site-demo-action" href="%BASE_URL%demo/"><svg class="site-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3M13 15h4"/></svg>打开交互演示</a><a class="site-secondary" href="#install">安装 Qterm</a></div>
-        <p class="site-platforms">macOS · Windows · Linux <span>基于 Tauri 2 与 Rust</span></p>
+        <h1>Qterm，让远程 AI 开发<br />有一个完整的 SSH 工作台。</h1>
+        <p class="site-summary">在同一工作区运行 Claude Code、Codex 等 CLI Agent。<br />粘贴截图和文件到远程服务器，编辑代码，再审阅 Git 变更。</p>
+        <div class="site-actions"><a class="site-primary site-demo-action" href="%BASE_URL%demo/"><svg class="site-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3M13 15h4"/></svg>打开交互演示</a><a class="site-secondary" href="%BASE_URL%download/">安装 Qterm</a></div>
+        <p class="site-platforms">免费开源 · 不内置 AI 模型或 Agent<br />macOS · Windows · Linux <span>基于 Tauri 2 与 Rust</span></p>
       </section>
       <figure class="site-preview" data-reveal><div class="preview-heading"><span><i></i> 一个工作区，完整的开发上下文</span><span>TERMINAL / FILES / GIT</span></div><a href="%BASE_URL%screenshots/workspace.png" data-image-viewer aria-label="查看工作区截图原图"><img src="/screenshots/workspace.png" width="1206" height="737" alt="Demo 实际截图：构建终端、Git 更改、文件目录与网络面板并排工作" fetchpriority="high" /></a><figcaption>来自交互 Demo 的实际截图 · 虚构开发环境</figcaption></figure>
       <section class="site-section" id="features" aria-labelledby="features-title" data-reveal>
-        <div class="site-section-heading"><p class="site-eyebrow">为 Vibe Coding 准备</p><h2 id="features-title">把上下文交给 Agent，把注意力留给思路。</h2><p>从粘贴截图到接收通知，让远程 CLI Agent 更顺手。</p></div>
+        <div class="site-section-heading"><p class="site-eyebrow">为 Vibe Coding 准备</p><h2 id="features-title">给远程 CLI Agent 发送截图与文件。</h2><p>从粘贴截图到接收通知，让远程 CLI Agent 更顺手。</p></div>
         <div class="workflow-tabs" aria-label="为 Vibe Coding 准备功能展示" data-tabs>
           <button id="tab-paste-image" aria-controls="panel-paste-image" type="button">01 <span>粘贴图片</span></button>
           <button id="tab-notification" aria-controls="panel-notification" type="button">02 <span>Agent 通知</span></button>
@@ -48,7 +45,7 @@
         </article>
       </section>
       <section class="site-section" id="workflow" aria-labelledby="workflow-title" data-reveal>
-        <div class="site-section-heading"><p class="site-eyebrow">从文件，到交付</p><h2 id="workflow-title">工具并排，思路不断。</h2><p>文件传输、代码修改和 Git 审阅，都在终端身边。</p></div>
+        <div class="site-section-heading"><p class="site-eyebrow">从文件，到交付</p><h2 id="workflow-title">SSH、SFTP 与 Git，在同一个工作区。</h2><p>文件传输、代码修改和 Git 审阅，都在终端身边。</p></div>
         <div class="workflow-tabs" aria-label="从文件，到交付功能展示" data-tabs>
           <button id="tab-files" aria-controls="panel-files" type="button">01 <span>文件管理</span></button>
           <button id="tab-upload" aria-controls="panel-upload" type="button">02 <span>拖拽上传</span></button>
@@ -135,7 +132,15 @@ brew upgrade --cask qterm</code></pre>
           </article>
         </div>
       </section>
-      <section class="site-experience"><div><p class="site-eyebrow">无需安装，先试一试</p><h2>给下一次远程开发，<br />换一个工作台。</h2><p>在虚构环境中输入命令、编辑文件、审阅 Git 差异并提交。<br />浏览器演示不会连接真实服务器或建立隧道。</p></div><div class="site-experience-links"><a class="site-primary" href="%BASE_URL%demo/?scene=remote">体验远程终端 →</a><a class="site-secondary" href="#install">安装 Qterm</a></div></section>
+      <section class="site-section" id="guides" aria-labelledby="guides-title"><div class="site-section-heading"><p class="site-eyebrow">从连接到交付</p><h2 id="guides-title">跟着实际场景，开始远程开发。</h2><p>安装准备、操作步骤与常见问题，都有独立指南。</p></div><div class="guide-grid">
+<a class="guide-card" href="%BASE_URL%guides/remote-ai/"><span>远程 AI 开发</span><h3>通过 SSH 使用 Claude Code / Codex</h3><p>连接服务器、启动 Agent，并在同一工作区检查结果。</p><span>阅读指南 →</span></a>
+<a class="guide-card" href="%BASE_URL%guides/remote-agent-files/"><span>截图与文件</span><h3>给远程 Agent 粘贴本机资料</h3><p>上传截图、文件与文件夹，检查远端路径和常见问题。</p><span>阅读指南 →</span></a>
+<a class="guide-card" href="%BASE_URL%guides/remote-git/"><span>代码审阅</span><h3>远程 Git 差异与提交</h3><p>检查工作区和暂存区，选择性提交已确认的修改。</p><span>阅读指南 →</span></a>
+<a class="guide-card" href="%BASE_URL%guides/ssh-sftp/"><span>文件工作区</span><h3>SSH 与 SFTP 并排工作</h3><p>从终端目录打开 Files，上传下载并编辑远程文本。</p><span>阅读指南 →</span></a>
+<a class="guide-card" href="%BASE_URL%guides/self-hosting/"><span>自托管</span><h3>用 Docker 部署 Web 工作台</h3><p>了解真实 Web 服务的部署、访问与升级方式。</p><span>阅读指南 →</span></a>
+<a class="guide-card" href="%BASE_URL%download/"><span>开始使用</span><h3>下载与安装 Qterm</h3><p>选择 macOS、Windows 或 Linux 安装方式。</p><span>阅读指南 →</span></a>
+</div></section>
+      <section class="site-experience"><div><p class="site-eyebrow">无需安装，先试一试</p><h2>给下一次远程开发，<br />换一个工作台。</h2><p>在虚构环境中输入命令、编辑文件、审阅 Git 差异并提交。<br />浏览器演示不会连接真实服务器或建立隧道。</p></div><div class="site-experience-links"><a class="site-primary" href="%BASE_URL%demo/?scene=remote">体验远程终端 →</a><a class="site-secondary" href="%BASE_URL%download/">安装 Qterm</a></div></section>
     </main>
     <footer class="site-footer"><span>Qterm · GPL-3.0 开源项目</span><a href="https://github.com/qiubai-lab/Qterm/issues" target="_blank" rel="noreferrer">反馈与建议 ↗</a></footer>
   </body>

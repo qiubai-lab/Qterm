@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>通过 SSH 使用 Claude Code 与 Codex — Qterm</title>
+    <meta name="description" content="使用 Qterm 连接开发服务器，在远程项目中运行 Claude Code 或 Codex，并通过同一工作区的 SFTP 与 Git 面板检查修改。" />
+    <!-- site:seo -->
+    <link rel="icon" type="image/png" href="/qterm-icon.png" />
+    <link rel="stylesheet" href="/src/site/site.css" />
+  </head>
+  <body>
+    <a class="site-skip" href="#site-main">跳到正文</a>
+    <header class="site-nav"><a class="site-brand" href="%BASE_URL%">Qterm</a><nav aria-label="主导航"><a href="%BASE_URL%#guides">教程</a><a href="%BASE_URL%download/">下载</a><a href="%BASE_URL%en/guides/remote-ai/">English</a><a href="%BASE_URL%demo/">Demo</a></nav></header>
+    <main id="site-main" class="site-article">
+      <header class="article-heading"><p class="site-eyebrow">QTERM / 使用指南</p><h1>通过 SSH 使用 Claude Code 与 Codex</h1><p class="article-lead">让 Agent 在服务器上的项目里工作，用 Qterm 在同一工作区完成终端交互、文件检查和 Git 审阅。</p></header>
+      <nav class="article-toc" aria-label="本页目录"><p>本页目录</p><ol><li><a href="#prepare">1. 准备远程开发环境</a></li><li><a href="#connect">2. 在终端中连接服务器</a></li><li><a href="#run">3. 进入项目，再启动 CLI Agent</a></li><li><a href="#context">4. 把截图和文件交给远程 Agent</a></li><li><a href="#review">5. 并排检查文件与 Git 变更</a></li><li><a href="#limits">常见问题与会话边界</a></li></ol></nav>
+      <section id="prepare"><h2>1. 准备远程开发环境</h2>
+<p>准备一台可通过 SSH 登录的开发服务器、登录凭证和已存在的 Git 项目。在服务器上按所选 Agent 的官方说明安装 CLI 并完成登录；相关账户、模型权限和网络访问由你单独配置。Qterm 不提供模型、不附赠额度，也不会替你安装 Agent。</p><p>先确认普通 SSH 登录、项目读写权限和 CLI 本身可用，再排查工作台层面的问题。</p>
+</section>
+<section id="connect"><h2>2. 在终端中连接服务器</h2>
+<p>安装 Qterm 后，在连接管理中保存主机、端口、用户名和认证方式。回到 Terminal Block，使用左上角目标选择器选择该连接。首次连接时，将显示的主机密钥指纹与服务器管理员提供的信息核对，再确认信任。</p><p>保存连接配置不会立即发起连接；凭证库若已锁定，需要先解锁。主机密钥变化时，应先查明服务器变更原因。</p>
+</section>
+<section id="run"><h2>3. 进入项目，再启动 CLI Agent</h2>
+<p>在远程终端中切换到真实项目目录，然后启动你已经安装的 CLI。下面以 Codex 为例；使用 Claude Code 时将最后一行替换为 <code>claude</code>。这些命令在远程服务器上执行。</p><pre><code>cd /path/to/your/project
+git status
+codex</code></pre><p>将示例路径换成实际目录。告诉 Agent 具体目标和约束；Agent 自身的审批与执行权限仍由该工具管理。Qterm 不会因粘贴提示词而自动执行它。</p>
+</section>
+<section id="context"><h2>4. 把截图和文件交给远程 Agent</h2>
+<p>在本机复制截图、文件或文件夹，然后在已连接的远程终端粘贴。Qterm 将内容通过当前 SSH 会话暂存到服务器，完成后插入远端路径。检查上传结果和输入区，再决定是否发送给 Agent。</p><p><a href="%BASE_URL%guides/remote-agent-files/">查看截图与文件粘贴教程</a>，了解文本优先、权限不足和图片读取能力的边界。</p><figure><a href="%BASE_URL%screenshots/paste-image-to-cli.png"><img src="/screenshots/paste-image-to-cli.png" alt="Qterm 远程终端中的图片粘贴结果" width="1165" height="709" loading="lazy" /></a><figcaption>桌面端实拍：图片上传后交给远程 CLI。</figcaption></figure>
+</section>
+<section id="review"><h2>5. 并排检查文件与 Git 变更</h2>
+<p>从终端打开 Files 或 Git Block。启用 OSC 7 且 Shell 正常报告目录时，Qterm 可从当前路径打开；未报告路径时，使用目录选择器定位仓库。</p><p>先在 Files 中检查生成结果，再在 Git 中逐文件查看差异、选择性暂存并填写提交说明。测试仍需要在终端中运行。提交、Pull 和 Push 是独立操作，先检查目标分支再执行。</p><figure><a href="%BASE_URL%screenshots/git-diff.png"><img src="/screenshots/git-diff.png" alt="Qterm Git 面板左右对照代码修改" width="1165" height="709" loading="lazy" /></a><figcaption>桌面端实拍：在提交之前检查差异。</figcaption></figure>
+</section>
+<section id="limits"><h2>常见问题与会话边界</h2>
+<ul><li><strong>找不到命令：</strong>检查 CLI 是否安装在远程服务器，以及远程 Shell 的 PATH。</li><li><strong>文件面板没有跟随目录：</strong>检查高级设置中的 OSC 7 和 Shell 支持；也可手动选择目录。临时 Shell Hook 可能进入命令历史，详见 README。</li><li><strong>长任务：</strong>工作区切换保留当前运行中的会话，但不承诺断网、关闭应用或重启后恢复进程；需要断线续跑时自行配置服务端会话管理。</li><li><strong>通知：</strong>只有工具主动发出支持的 OSC 消息时，Qterm 才能呈现相应提醒。</li></ul>
+</section>
+      <aside class="article-related"><h2>继续阅读</h2><ul><li><a href="%BASE_URL%guides/remote-agent-files/">给远程 Agent 粘贴截图与文件</a></li><li><a href="%BASE_URL%guides/remote-git/">远程 Git 差异审阅与提交</a></li><li><a href="%BASE_URL%guides/ssh-sftp/">SSH 与 SFTP 文件工作区</a></li></ul></aside>
+      <div class="article-cta"><a class="site-primary" href="%BASE_URL%download/">下载 Qterm</a><a class="site-secondary" href="%BASE_URL%demo/">体验模拟 Demo</a></div>
+      <p class="article-note">浏览器 Demo 使用虚构数据，不连接真实服务器、不运行真实 Agent，也不上传你的文件。真实操作请使用安装后的 Qterm。</p>
+    </main>
+    <footer class="site-footer"><span>Qterm · GPL-3.0-only</span><a href="https://github.com/qiubai-lab/Qterm">GitHub</a><a href="https://github.com/qiubai-lab/Qterm/issues">反馈与建议</a></footer>
+  </body>
+</html>

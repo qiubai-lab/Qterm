@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Download Qterm for macOS, Windows and Linux — Qterm</title>
+    <meta name="description" content="A free, open-source SSH workspace for remote AI development. Choose your platform; Qterm does not include an AI model or agent." />
+    <!-- site:seo -->
+    <link rel="icon" type="image/png" href="/qterm-icon.png" />
+    <link rel="stylesheet" href="/src/site/site.css" />
+  </head>
+  <body>
+    <a class="site-skip" href="#site-main">Skip to content</a>
+    <header class="site-nav"><a class="site-brand" href="%BASE_URL%en/">Qterm</a><nav aria-label="Main navigation"><a href="%BASE_URL%en/#guides">Guides</a><a href="%BASE_URL%en/download/">Download</a><a href="%BASE_URL%download/">中文</a><a href="%BASE_URL%demo/">Demo</a></nav></header>
+    <main id="site-main" class="site-article">
+      <header class="article-heading"><p class="site-eyebrow">QTERM / GUIDE</p><h1>Download Qterm for macOS, Windows and Linux</h1><p class="article-lead">A free, open-source SSH workspace for remote AI development. Choose your platform; Qterm does not include an AI model or agent.</p></header>
+      <nav class="article-toc" aria-label="On this page"><p>On this page</p><ol><li><a href="#macos">macOS · Apple Silicon / Intel</a></li><li><a href="#windows">Windows · x64</a></li><li><a href="#linux">Linux · x64</a></li><li><a href="#update">Update with Homebrew</a></li><li><a href="#start">After installation</a></li></ol></nav>
+      <section id="macos"><h2>macOS · Apple Silicon / Intel</h2>
+<p>Use the project-maintained Homebrew tap. The app is not currently notarized by Apple; the cask removes its quarantine attribute during installation. Review the tap before trusting it.</p><pre><code>brew tap qiubai-lab/tap
+brew trust qiubai-lab/tap
+brew install --cask qterm</code></pre><p><code>brew trust</code> is the one-time step for Homebrew 6.0+; skip it on older versions. <a href="https://github.com/qiubai-lab/homebrew-tap">Homebrew tap</a> · <a href="https://brew.sh/">Homebrew</a></p><p>For a manual DMG install, choose aarch64 for Apple Silicon or x86_64 for Intel, then drag Qterm into Applications. If macOS reports the downloaded app as damaged, see the project’s <a href="https://github.com/qiubai-lab/Qterm#macos">installation notes</a>.</p><p><a class="text-link" href="https://github.com/qiubai-lab/Qterm/releases/latest">Open the latest release and download assets →</a></p>
+</section>
+<section id="windows"><h2>Windows · x64</h2>
+<p>Download an x64 <code>.msi</code> or NSIS <code>.exe</code> installer from the release Assets, run it and follow the installer. To update, run the installer for the newer version.</p><p><a class="text-link" href="https://github.com/qiubai-lab/Qterm/releases/latest">Open the latest release and download assets →</a></p>
+</section>
+<section id="linux"><h2>Linux · x64</h2>
+<p>Choose <code>.deb</code> for Debian/Ubuntu, <code>.rpm</code> for RPM-based distributions, or the x64 <code>.AppImage</code>. Make the AppImage executable before running it. Update by installing the new package or replacing the AppImage.</p><p><a class="text-link" href="https://github.com/qiubai-lab/Qterm/releases/latest">Open the latest release and download assets →</a></p>
+</section>
+<section id="update"><h2>Update with Homebrew</h2>
+<pre><code>brew update
+brew upgrade --cask qterm</code></pre><p>Updates to the third-party tap are fetched by brew update. Back up important configuration before upgrading.</p>
+</section>
+<section id="start"><h2>After installation</h2>
+<p>Save a connection, select it in a Terminal Block and verify the server fingerprint. Then follow the remote agent guide. Qterm is licensed under GPL-3.0-only; the full terms are in the repository.</p><p><a href="https://github.com/qiubai-lab/Qterm/blob/main/LICENSE">GPL-3.0-only</a></p>
+</section>
+      <aside class="article-related"><h2>Continue exploring</h2><ul><li><a href="%BASE_URL%en/guides/remote-ai/">Start a remote AI workflow</a></li><li><a href="%BASE_URL%en/guides/remote-agent-files/">Send images and files</a></li></ul></aside>
+      <div class="article-cta"><a class="site-primary" href="%BASE_URL%en/download/">Download Qterm</a><a class="site-secondary" href="%BASE_URL%demo/">Try the simulated demo</a></div>
+      <p class="article-note">The browser demo uses fictional data. It does not connect to servers, run real agents or upload your files. The demo interface is currently in Chinese.</p>
+    </main>
+    <footer class="site-footer"><span>Qterm · GPL-3.0-only</span><a href="https://github.com/qiubai-lab/Qterm">GitHub</a><a href="https://github.com/qiubai-lab/Qterm/issues">Feedback</a></footer>
+  </body>
+</html>

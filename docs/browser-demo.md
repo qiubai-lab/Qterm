@@ -20,7 +20,7 @@ pnpm check:site
 pnpm preview:site
 ```
 
-预览地址默认 `http://localhost:4173/Qterm/`。`check:site` 检查两个真实 HTML 入口、子路径资源和桌面产物隔离，因此需要先完成桌面前端和站点构建。
+预览地址默认 `http://localhost:4173/Qterm/`。`check:site` 检查全部已登记 HTML 页面的静态正文、SEO 元信息、语言关联、链接与锚点、sitemap、子路径资源和桌面产物隔离，因此需要先完成桌面前端和站点构建。
 
 ## 当前体验范围
 
@@ -60,9 +60,11 @@ Files 的创建、复制、重命名、删除、图片读取、上传下载，�
 2. 确认 `github-pages` environment 只允许 main 发布。
 3. 在 main 上手动运行 Product site，或通过后续 main 推送发布，无需额外配置发布开关变量。
 
-默认地址为 `https://qiubai-lab.github.io/Qterm/`。构建 base 默认为 `/Qterm/`。改仓库名或使用自定义域名时，配置 Actions variable `QTERM_SITE_BASE`（例如 `/`）；同时更新 `site/index.html` 中绝对分享图片 URL，并配置 Pages 域名。默认构建没有设置 canonical，避免本地/fork 指向错误域名。
+默认地址为 `https://qiubai-lab.github.io/Qterm/`。`QTERM_SITE_URL` 是包含尾斜杠的正式 HTTPS 站点地址，构建 base 默认从其路径派生。canonical、hreflang、分享图片、结构化数据及 sitemap 都从这个地址生成。`QTERM_SITE_BASE` 可保留用于兼容，但若设置必须与 URL 路径一致，避免资源路径与 canonical 不一致。
 
-本地可用 `QTERM_SITE_BASE=/ pnpm build:site` 验证根路径；预览与 `check:site` 使用相同环境变量。不要把 Pages 的 base 或 outDir 写入桌面配置。
+Fork 或独立域名部署前，请设置自己的 `QTERM_SITE_URL` Actions variable（例如 `https://example.com/`），并配置 Pages 域名；不要发布仍指向上游站点的 canonical。只有根路径部署才生成有效的 `robots.txt`；项目路径站点直接向搜索平台提交 sitemap。Search Console / Bing 验证变量、内容维护和指标见 [站点 SEO 运维](site-seo.md)。
+
+本地可用 `QTERM_SITE_URL=https://example.com/ pnpm build:site` 验证根路径；预览与 `check:site` 使用相同环境变量。不要把 Pages 的 base 或 outDir 写入桌面构建配置。
 
 站点首页加载静态 HTML/CSS、图片与轻量经典脚本 `site/public/site-interactions.js`；脚本仅增强功能页签和一次性滚动显现，不加载 React 或终端运行时。无 JavaScript 时全部介绍仍可阅读，支持减少动效设置和键盘页签导航。交互终端在 demo 页面加载，没有 Service Worker 或后端服务。
 

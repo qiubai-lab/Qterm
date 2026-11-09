@@ -1,0 +1,43 @@
+/* Public guides and language navigation; no application runtime styles. */
+.site-skip { position:absolute; top:8px; left:16px; z-index:100; padding:12px; border-radius:6px; background:var(--surface); transform:translateY(-160%); }
+.site-skip:focus { transform:translateY(0); }
+.site-nav nav { flex-wrap:wrap; justify-content:flex-end; }
+.guide-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:18px; }
+.guide-card { display:flex; flex-direction:column; gap:12px; min-width:0; padding:24px; border:1px solid var(--border); border-radius:12px; background:var(--surface); }
+.guide-card:hover { border-color:var(--accent); color:var(--text); }
+.guide-card h3 { margin:0; font-size:20px; line-height:1.5; }
+.guide-card p { margin:0 0 12px; color:var(--muted); line-height:1.8; font-size:14px; }
+.guide-card>span { color:var(--accent); font-size:12px; }
+.guide-card>span:last-child { margin-top:auto; }
+.site-article { width:min(820px,calc(100% - 48px)); margin:64px auto 80px; line-height:1.9; overflow-wrap:anywhere; }
+.article-heading h1 { margin:16px 0 24px; font-size:clamp(30px,4.8vw,52px); line-height:1.25; letter-spacing:-.035em; text-wrap:balance; }
+.article-lead { color:var(--muted); font-size:18px; }
+.article-toc { margin:36px 0 48px; padding:20px 28px; border:1px solid var(--border); border-radius:12px; background:var(--surface); }
+.article-toc p { margin:0; color:var(--muted); font-size:13px; }
+.article-toc ol { margin-bottom:0; padding-left:0; list-style:none; }
+.site-article section { margin:48px 0; }
+.site-article h2 { margin:0 0 18px; font-size:26px; line-height:1.45; letter-spacing:-.02em; }
+.site-article p,.site-article li { color:var(--muted); }
+.site-article li { margin:8px 0; }
+.site-article strong { color:var(--text); }
+.site-article p a,.site-article li a,.site-faq a { color:var(--accent); text-decoration:underline; text-underline-offset:4px; }
+.site-article pre { overflow-x:auto; padding:20px; border:1px solid var(--border); border-radius:8px; background:var(--surface); font-size:13px; line-height:1.8; }
+.site-article code { font-family:ui-monospace,monospace; }
+.site-article figure { margin:28px 0; }
+.site-article img { display:block; width:100%; height:auto; border:1px solid var(--border); border-radius:8px; }
+.site-article figcaption,.article-note { color:var(--dim); font-size:12px; }
+.article-related { padding-top:28px; border-top:1px solid var(--border); }
+.article-cta { display:flex; flex-wrap:wrap; gap:12px; margin-top:36px; }
+.site-faq details { padding:20px 0; border-bottom:1px solid var(--border); }
+.site-faq summary { cursor:pointer; font-size:17px; line-height:1.6; }
+.site-faq summary:focus-visible { outline:2px solid var(--focus); outline-offset:5px; }
+.site-faq p { max-width:800px; color:var(--muted); line-height:1.85; }
+@media (max-width:760px) {
+  .guide-grid { grid-template-columns:1fr; }
+  .site-nav { flex-wrap:wrap; gap:12px; padding-block:16px; }
+  .site-nav nav { gap:14px; }
+  body .site-nav nav>a:first-child { display:inline; }
+  .site-article { margin-top:36px; }
+  .site-article h2 { font-size:23px; }
+  .article-toc { padding:18px; }
+}

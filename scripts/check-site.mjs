@@ -1,23 +1,13 @@
-import { access, readFile, readdir } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
+import { siteConfig } from "./site/seo.mjs";
+import { verifySite } from "./site/verify.mjs";
 
 const site = path.resolve("dist-site");
 const desktop = path.resolve("dist");
-const base = process.env.QTERM_SITE_BASE || "/Qterm/";
-if (!base.startsWith("/") || !base.endsWith("/")) throw new Error("QTERM_SITE_BASE must start and end with /.");
-
-for (const name of ["index.html", "demo/index.html"]) {
-  const html = await readFile(path.join(site, name), "utf8");
-  for (const [, reference] of html.matchAll(/(?:src|href)="([^"]+)"/g)) {
-    if (/^(?:https?:|#|mailto:)/.test(reference)) continue;
-    const pathname = new URL(reference, `https://demo.test${base}${name}`).pathname;
-    if (!pathname.startsWith(base)) throw new Error(`${name} escapes site base: ${reference}`);
-    let local = decodeURIComponent(pathname.slice(base.length));
-    if (!local || local.endsWith("/")) local += "index.html";
-    await access(path.join(site, local)).catch(() => { throw new Error(`${name} has missing resource: ${reference}`); });
-  }
-  if (name === "index.html" && /<script[^>]+type="module"/.test(html)) throw new Error("The introduction must not load the terminal runtime.");
-}
+const config = siteConfig();
+const base = config.base;
+await verifySite(site, config);
 
 async function files(directory) {
   return (await Promise.all((await readdir(directory, { withFileTypes: true })).map(async entry => {

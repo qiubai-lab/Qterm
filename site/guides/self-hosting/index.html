@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>用 Docker 自托管 Qterm Web 工作台 — Qterm</title>
+    <meta name="description" content="在 AMD64 Linux 服务器部署 Qterm Web 运行时，了解 Docker 前提、一键安装、访问密码、内网与 HTTPS 边界及升级备份。" />
+    <!-- site:seo -->
+    <link rel="icon" type="image/png" href="/qterm-icon.png" />
+    <link rel="stylesheet" href="/src/site/site.css" />
+  </head>
+  <body>
+    <a class="site-skip" href="#site-main">跳到正文</a>
+    <header class="site-nav"><a class="site-brand" href="%BASE_URL%">Qterm</a><nav aria-label="主导航"><a href="%BASE_URL%#guides">教程</a><a href="%BASE_URL%download/">下载</a><a href="%BASE_URL%demo/">Demo</a></nav></header>
+    <main id="site-main" class="site-article">
+      <header class="article-heading"><p class="site-eyebrow">QTERM / 使用指南</p><h1>用 Docker 自托管 Qterm Web 工作台</h1><p class="article-lead">需要从浏览器进入自己的开发环境时，可以部署 Qterm Web 运行时。它是真实的单用户服务，与官网的模拟 Demo 不同。</p></header>
+      <nav class="article-toc" aria-label="本页目录"><p>本页目录</p><ol><li><a href="#prepare">1. 确认部署前提</a></li><li><a href="#install">2. 安装到新目录</a></li><li><a href="#access">3. 使用正确的访问地址</a></li><li><a href="#maintain">4. 升级、日志与备份</a></li><li><a href="#limits">桌面版、Web 服务与 Demo</a></li></ol></nav>
+      <section id="prepare"><h2>1. 确认部署前提</h2>
+<p>准备 AMD64 Linux 主机、本机 Docker Engine，以及支持 <code>up --wait-timeout</code> 的 Docker Compose v2。当前发布镜像为 linux/amd64；ARM 主机需要模拟执行支持，并非原生 ARM 镜像。</p><p>默认容器以 root 运行并使用 host 网络，登录用户可访问该容器开发环境。HTTP 仅适用于受信任内网或 VPN；公网应配置 HTTPS 反向代理。</p>
+</section>
+<section id="install"><h2>2. 安装到新目录</h2>
+<p>在计划保存部署数据的父目录执行。脚本会新建 <code>qterm/</code>，生成访问密码并启动服务，不覆盖已有目录。</p><pre><code>curl -fsSL https://raw.githubusercontent.com/qiubai-lab/Qterm/main/scripts/install-server.sh | sh</code></pre><p>脚本默认使用端口 2654，检测主机 IPv4 地址，健康检查成功后输出访问地址和登录密码。部署文件、数据和密码文件分别保存在生成目录中；妥善保管密码，不要提交到版本库。</p>
+</section>
+<section id="access"><h2>3. 使用正确的访问地址</h2>
+<p>使用安装输出的地址登录。浏览器地址的协议、主机和端口必须与 <code>QTERM_PUBLIC_ORIGIN</code> 完全一致。公网、NAT 或多网卡环境应显式指定地址；把环境变量传给管道右侧的 sh：</p><pre><code>curl -fsSL https://raw.githubusercontent.com/qiubai-lab/Qterm/main/scripts/install-server.sh | \
+  QTERM_PUBLIC_ORIGIN=http://192.168.1.10:2654 sh</code></pre><p>将示例 IP 替换成真实内网地址。设置 HTTPS origin 不会自动配置代理或证书。Web 登录密码与凭证库主密码互相独立；首次进入后按界面设置凭证库。</p><p><a href="https://github.com/qiubai-lab/Qterm/blob/main/docs/container-deployment.md">完整部署文档</a>提供内网直连、Nginx HTTPS、端口配置和手动部署步骤。</p>
+</section>
+<section id="maintain"><h2>4. 升级、日志与备份</h2>
+<p>在生成的部署目录中执行：</p><pre><code>cd qterm
+docker compose logs --tail 100 qterm
+docker compose pull
+docker compose up -d --wait --wait-timeout 90</code></pre><p>升级前按照完整部署文档备份数据与配置，必要时保留原镜像标签或 digest 供回滚。服务启动失败时在现有目录排查日志，不要重新运行安装脚本覆盖部署。容器可写层中的自行安装工具可能在重建后丢失，应将环境构建与持久化纳入自己的部署方案。</p>
+</section>
+<section id="limits"><h2>桌面版、Web 服务与 Demo</h2>
+<p>桌面版连接本机及远程环境；自托管 Web 服务在你的容器中执行实际操作；官网 Demo 只有虚构会话。HTTP 环境下浏览器主动剪贴板 API 可能受限，可使用键盘复制粘贴、文件选择或拖放。</p>
+</section>
+      <aside class="article-related"><h2>继续阅读</h2><ul><li><a href="%BASE_URL%guides/remote-ai/">远程 Agent 开发流程</a></li><li><a href="%BASE_URL%guides/ssh-sftp/">SSH 与文件管理</a></li><li><a href="%BASE_URL%download/">选择桌面安装包</a></li></ul></aside>
+      <div class="article-cta"><a class="site-primary" href="%BASE_URL%download/">下载 Qterm</a><a class="site-secondary" href="%BASE_URL%demo/">体验模拟 Demo</a></div>
+      <p class="article-note">浏览器 Demo 使用虚构数据，不连接真实服务器、不运行真实 Agent，也不上传你的文件。真实操作请使用安装后的 Qterm。</p>
+    </main>
+    <footer class="site-footer"><span>Qterm · GPL-3.0-only</span><a href="https://github.com/qiubai-lab/Qterm">GitHub</a><a href="https://github.com/qiubai-lab/Qterm/issues">反馈与建议</a></footer>
+  </body>
+</html>

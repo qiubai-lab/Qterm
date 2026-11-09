@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>给远程 Claude Code / Codex 粘贴截图与文件 — Qterm</title>
+    <meta name="description" content="通过 Qterm 将本机截图、文件和文件夹上传到 SSH 服务器并插入远端路径，了解实际操作、文本优先规则和常见问题。" />
+    <!-- site:seo -->
+    <link rel="icon" type="image/png" href="/qterm-icon.png" />
+    <link rel="stylesheet" href="/src/site/site.css" />
+  </head>
+  <body>
+    <a class="site-skip" href="#site-main">跳到正文</a>
+    <header class="site-nav"><a class="site-brand" href="%BASE_URL%">Qterm</a><nav aria-label="主导航"><a href="%BASE_URL%#guides">教程</a><a href="%BASE_URL%download/">下载</a><a href="%BASE_URL%en/guides/remote-agent-files/">English</a><a href="%BASE_URL%demo/">Demo</a></nav></header>
+    <main id="site-main" class="site-article">
+      <header class="article-heading"><p class="site-eyebrow">QTERM / 使用指南</p><h1>给远程 Claude Code / Codex 粘贴截图与文件</h1><p class="article-lead">无需先另开传输工具：在远程终端粘贴本机资料，等上传完成后，把服务器路径交给 CLI Agent。</p></header>
+      <nav class="article-toc" aria-label="本页目录"><p>本页目录</p><ol><li><a href="#prepare">1. 确认是已连接的远程终端</a></li><li><a href="#image">2. 复制截图并粘贴</a></li><li><a href="#files">3. 复制文件或文件夹</a></li><li><a href="#verify">4. 检查结果再发送</a></li><li><a href="#troubleshoot">常见问题</a></li></ol></nav>
+      <section id="prepare"><h2>1. 确认是已连接的远程终端</h2>
+<p>以下流程面向桌面版 Qterm 的 SSH 终端。先选择服务器并完成认证，确认可以正常输入命令。服务器需要允许 SFTP 及暂存目录写入；Agent 需要能读取上传后显示的路径。</p><p>在本地终端粘贴文件得到的是本地路径；本机路径不能直接作为另一台服务器上的文件使用。</p>
+</section>
+<section id="image"><h2>2. 复制截图并粘贴</h2>
+<p>用系统截图工具将图片复制到剪贴板，聚焦 Qterm 的远程 Terminal Block，再使用系统粘贴操作。等待上传进度结束，检查终端输入区的远端路径或 Agent 对图片的显示，再补充你的需求并发送。</p><figure><a href="%BASE_URL%screenshots/paste-image-to-cli.png"><img src="/screenshots/paste-image-to-cli.png" alt="远程 Codex 收到粘贴图片后的输入区" width="1165" height="709" loading="lazy" /></a><figcaption>桌面端实拍；Agent 如何显示图片取决于其自身能力。</figcaption></figure>
+</section>
+<section id="files"><h2>3. 复制文件或文件夹</h2>
+<p>在 Finder、Explorer 或 Linux 文件管理器中复制目标文件或文件夹，在远程终端粘贴。这里需要复制文件对象，而不是复制文件名文本。上传成功后，Qterm 插入远端绝对路径，不会自动执行命令。</p><figure><a href="%BASE_URL%screenshots/paste-file-to-cli.png"><img src="/screenshots/paste-file-to-cli.png" alt="文件暂存上传完成后在远程终端插入路径" width="1165" height="709" loading="lazy" /></a><figcaption>桌面端实拍：输入区使用服务器上的路径。</figcaption></figure><p>如果需要把文件固定放在项目目录中，可以改用 Files 面板：先打开目标目录，再拖入文件或使用上传入口。终端粘贴暂存与向指定目录上传是不同的操作。</p>
+</section>
+<section id="verify"><h2>4. 检查结果再发送</h2>
+<p>确认上传完成、路径正确，并告知 Agent 如何使用该资料，例如“参考这个截图调整页面布局”。路径只是文件位置；能否识别图片、读取特定文件格式，由 CLI、模型及其权限决定。</p><p>可取消正在进行的上传。上传失败时先排查原因，不要把不完整的路径当作成功结果；上传后的资料仍需按你的服务器数据管理方式处理。</p>
+</section>
+<section id="troubleshoot"><h2>常见问题</h2>
+<ul><li><strong>只粘贴了文字：</strong>剪贴板同时包含文本时采用文本优先；重新复制图片或文件对象后再试。</li><li><strong>上传被拒绝：</strong>检查 SSH/SFTP 权限、服务器剩余空间、暂存目录写权限和连接状态。</li><li><strong>Agent 找不到文件：</strong>核对 Agent 与终端是否运行在同一台机器及可访问同一文件系统；容器中的 Agent 可能看不到宿主机路径。</li><li><strong>上传成功但读不了图片：</strong>先确认所用 CLI 和模型支持图片输入。</li><li><strong>要指定落盘目录：</strong>使用 <a href="%BASE_URL%guides/ssh-sftp/">SFTP Files 面板</a> 上传至已选目录。</li></ul>
+</section>
+      <aside class="article-related"><h2>继续阅读</h2><ul><li><a href="%BASE_URL%guides/remote-ai/">通过 SSH 使用 Claude Code 与 Codex</a></li><li><a href="%BASE_URL%guides/ssh-sftp/">管理远程目录与文件</a></li><li><a href="%BASE_URL%guides/remote-git/">审阅 Agent 的代码修改</a></li></ul></aside>
+      <div class="article-cta"><a class="site-primary" href="%BASE_URL%download/">下载 Qterm</a><a class="site-secondary" href="%BASE_URL%demo/">体验模拟 Demo</a></div>
+      <p class="article-note">浏览器 Demo 使用虚构数据，不连接真实服务器、不运行真实 Agent，也不上传你的文件。真实操作请使用安装后的 Qterm。</p>
+    </main>
+    <footer class="site-footer"><span>Qterm · GPL-3.0-only</span><a href="https://github.com/qiubai-lab/Qterm">GitHub</a><a href="https://github.com/qiubai-lab/Qterm/issues">反馈与建议</a></footer>
+  </body>
+</html>

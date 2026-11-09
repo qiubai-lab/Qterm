@@ -5,7 +5,7 @@
 - `.agents/skills/`：负责 Qterm 项目级、可自动发现的 agent 工作流与稳定规范入口；不保存单次任务计划、运行时代码或重复的可执行配置。
 - `src/`：负责 React 展示、用户交互和 Tauri IPC 客户端；不读取私钥、不实现 SSH 规则，也不持久化敏感凭据。
 - `src-tauri/`：负责桌面运行时、应用用例、领域规则和基础设施适配器；不承载 React 页面状态。
-- `scripts/`：负责仓库级可测试命令入口；当前只为 Tauri `dev` 注入开发 flavor 并把其他 CLI 参数原样转发，不承载应用业务、发布凭据或 shell 拼接。
+- `scripts/`：负责仓库级可测试命令入口、开发工具与站点构建验证，不承载应用业务、发布凭据或 shell 拼接。
 - `docs/qb-spec/`：负责长期产品上下文、需求规格和实施计划；不作为运行时代码或配置来源。
 - `.github/`：负责持续集成、依赖更新、桌面产物与静态产品站点构建发布自动化；不包含产品业务逻辑或发布凭据。
 
@@ -38,12 +38,14 @@
 - `crates/qterm-core/src/application/configuration_merge/`、`domain/configuration_merge.rs`、`ports/configuration_merge.rs`：连接/分组、网络规则、凭证的合并模型、去重命名、引用映射与用例边界；设备和 Workspace 数据不参与。
 - `crates/qterm-core/src/infrastructure/persistence/configuration_merge/`、`configuration_gate.rs`：受限文件快照、加密暂存、备份日志、提交回滚与启动恢复；三个核心 repository 共用进程内可重入事务锁，存在待恢复日志时禁止正常读写。`json_credential_vault/crypto.rs` 拥有既有凭证库的加密封装辅助函数，schema 不变。
 
-- `vite.site.config.ts`、`.github/workflows/site.yml`、`scripts/check-site.mjs`、`docs/browser-demo.md`：站点多页构建、Pages 发布、子路径资源与 desktop/demo 产物隔离检查及操作说明；不改原 Tauri 打包入口。Pages 发布由仓库变量显式启用。
+- `vite.site.config.ts`、`.github/workflows/site.yml`、`scripts/check-site.mjs`、`docs/browser-demo.md`：站点多页构建、Pages 发布、子路径资源与 desktop/demo 产物隔离检查及操作说明；不改原 Tauri 打包入口。main 验证成功后发布，其他分支只验证。
 - `src/lib/runtime/environment.ts`、`@qterm/services/*`：显式 build-selected workspace/terminal service 边界，默认选择现有 Tauri adapters，仅 site 选择模拟服务；不伪造原生环境、不自动降级。
 - `src/demo/`：DemoApp/DemoWorkbench 只拥有站点外壳、主题分段控件、刷新清理和虚构连接路由；通过相同 LayoutView 与 Files/Git/Network 产品面板消费 build-selected services。demoProject 拥有按目标隔离的文件/Git 模拟后端，demoGitAdapter 映射产品 Git 快照，terminalSession/sessionRegistry 拥有终端模拟任务，featureSessions 拥有按用途与目标隔离的非终端模拟连接；networkFixtures 提供开发服务器的三类网络种子，services 适配原 typed service 契约，未支持操作明确拒绝。WorkspaceProvider 仍唯一拥有 UI runtime，不另建 Demo 功能页面。
 - `src/onboarding/`：两端共享首次展示记录、引导步骤、高亮定位和重看入口；工作区就绪后运行，遇到其他弹窗暂停。不发起连接、执行命令或修改项目数据，版本更新不触发。
 - `src/demo/services/credentials.ts`：Demo 凭证边界，报告未初始化保险库并拒绝修改，不调用原生凭证 API。
 
+- `scripts/site/pages.json`：官网可发布页面、语言配对与索引策略的清单，供 Vite 多页入口与验证共用；`scripts/site/seo.mjs` 拥有正式 URL/base 校验、构建时元信息与 sitemap/root robots 生成；`scripts/site/verify.mjs` 检查真实产物的链接、锚点、语言关联、schema、可索引正文与首页可达性。相邻 Node tests 保护域名切换和索引规则。
+- `site/en/`、`site/guides/`、`site/download/`：英文入口、双语远程 Agent 教程与安装指南、中文 SFTP/Git/容器指南；正文为独立静态 HTML。`src/site/siteContent.css` 负责文章、教程卡片与语言导航；`docs/site-seo.md` 记录发布、验证与指标操作，不引入追踪服务或桌面运行时依赖。
 - `site/index.html`、`src/site/site.css`：静态介绍页的文案与独立布局，复用产品主题 token，不导入应用运行时。`site/public/site-interactions.js` 仅增强功能页签、键盘导航和一次性显现；`site/public/site-scrollbar.js` 与 `src/site/siteScrollbar.css` 负责不占布局空间的页面悬浮滚动条、拖动/键盘操作与延时隐藏；`site/public/image-viewer.js` 与 `src/site/imageViewer.css` 负责独立的原图弹窗、尺寸切换与焦点返回，`src/site/imageViewer.test.ts` 保护其交互；`site/public/screenshots/` 保存 Demo 和桌面端展示截图及来源说明，`src/site/siteInteractions.test.ts` 保护渐进增强行为。
 
 - `native/conpty/`：G0 隔离原型的上游版本锁、MIT 许可与原生输出边界补丁；`scripts/build-conpty-prototype.ps1` 构建未发布的测试 host，`scripts/conpty-ordered-probe-consumer.mjs` 只供真实 PTY 探针消费 QTR0 帧。尚未作为生产 runtime 或应用 IPC 协议接线。

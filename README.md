@@ -1,7 +1,8 @@
 <div align="center">
   <img src="src-tauri/icons/icon.png" width="128" height="128" alt="Qterm 软件图标">
   <h1>Qterm</h1>
-  <p>面向远程 AI 开发的轻量、安全、跨平台 SSH 工作台</p>
+  <p>面向远程 AI 开发的开源 SSH 工作台</p>
+  <p>简体中文 · <a href="README.en.md">English</a></p>
   <p>
     <a href="https://github.com/qiubai-lab/Qterm/releases/latest"><img src="https://img.shields.io/github/v/release/qiubai-lab/Qterm?logo=github" alt="最新版本"></a>
     <a href="LICENSE"><img src="https://img.shields.io/github/license/qiubai-lab/Qterm" alt="许可证"></a>
@@ -10,11 +11,13 @@
   <p>
     <a href="https://qiubai-lab.github.io/Qterm/">官网</a> ·
     <a href="https://qiubai-lab.github.io/Qterm/demo/">在线体验</a> ·
-    <a href="https://qiubai-lab.github.io/Qterm/#install">安装</a>
+    <a href="https://qiubai-lab.github.io/Qterm/download/">安装</a>
   </p>
 </div>
 
 Qterm 基于 Tauri 2、React、TypeScript 与 Rust 构建，将本地终端、SSH 会话、SFTP 文件管理、Git 操作和网络转发组织在可持久化、可自由拆分的 Workspace 中。
+
+快速上手：[通过 SSH 使用 Claude Code / Codex](https://qiubai-lab.github.io/Qterm/guides/remote-ai/) · [粘贴截图与文件给远程 Agent](https://qiubai-lab.github.io/Qterm/guides/remote-agent-files/) · [远程 Git 审阅](https://qiubai-lab.github.io/Qterm/guides/remote-git/)
 
 ## 🌠 界面预览
 
