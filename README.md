@@ -85,7 +85,7 @@ Web 运行时提供精简 Ubuntu 24.04 镜像，默认 root、host 网络，允�
 curl -fsSL https://raw.githubusercontent.com/qiubai-lab/Qterm/main/scripts/install-server.sh | sh
 ```
 
-脚本使用 `ghcr.io/qiubai-lab/qterm:latest`，在当前目录下创建 `qterm/`，自动检测主机 IPv4 地址并使用 `8080` 端口。它会创建 `data/`、`.server-secrets/password`、`.env` 和 `compose.yaml`，从系统随机源生成 **16 位字母数字登录密码**，写入权限为 `600` 的密码文件；容器健康检查通过后输出访问地址、登录密码、目录用途和管理命令。已有目录不会被覆盖，重复执行不会重置原密码。
+脚本使用 `ghcr.io/qiubai-lab/qterm:latest`，在当前目录下创建 `qterm/`，自动检测主机 IPv4 地址并使用 `2654` 端口。它会创建 `data/`、`.server-secrets/password`、`.env` 和 `compose.yaml`，从系统随机源生成 **16 位字母数字登录密码**，写入权限为 `600` 的密码文件；容器健康检查通过后输出访问地址、登录密码、目录用途和管理命令。已有目录不会被覆盖，重复执行不会重置原密码。
 
 公网/NAT、多网卡或域名访问时，请显式指定浏览器实际使用的地址。环境变量要传给管道右侧的 `sh`：
 

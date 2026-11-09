@@ -26,7 +26,7 @@ else if (args.includes('pull') || args.includes('up')) {
 `, { mode: 0o755 });
   const install = path.join(root, "deployment with spaces");
   const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith("QTERM_") && !key.startsWith("COMPOSE_")));
-  Object.assign(env, { PATH: `${bin}:${env.PATH}`, MOCK_LOG: path.join(root, "calls"), QTERM_INSTALL_DIR: install, QTERM_PUBLIC_ORIGIN: "http://192.168.1.10:8080" }, overrides);
+  Object.assign(env, { PATH: `${bin}:${env.PATH}`, MOCK_LOG: path.join(root, "calls"), QTERM_INSTALL_DIR: install, QTERM_PUBLIC_ORIGIN: "http://192.168.1.10:2654" }, overrides);
   return { root, install, env, run: (input = source) => spawnSync("sh", [], { input, env, cwd: root, encoding: "utf8", timeout: 15000 }) };
 }
 
@@ -42,6 +42,7 @@ test("piped installation creates canonical config, private random credentials an
   assert.equal(await readFile(path.join(f.install, "compose.yaml"), "utf8"), canonicalCompose);
   const env = await readFile(path.join(f.install, ".env"), "utf8");
   assert.ok(!env.includes(password));
+  assert.match(env, /^QTERM_PORT=2654$/m);
   assert.match(env, /QTERM_IMAGE=ghcr.io\/qiubai-lab\/qterm:latest/);
   assert.match(result.stdout, /容器健康检查通过/);
   assert.ok(result.stdout.includes(`登录密码：${password}`));
@@ -98,10 +99,12 @@ test("truncated download does not create a deployment", async t => {
   await assert.rejects(stat(f.install), { code: "ENOENT" });
 });
 
-test("default origin uses the detected interface and requested port", async t => {
-  const f = await fixture(t, { QTERM_PUBLIC_ORIGIN: "", QTERM_PORT: "1425" });
+for (const port of [undefined, "1425"]) {
+test(`default origin uses the detected interface and ${port ?? "default"} port`, async t => {
+  const f = await fixture(t, { QTERM_PUBLIC_ORIGIN: "", ...(port ? { QTERM_PORT: port } : {}) });
   await writeFile(path.join(f.root, "bin/ip"), "#!/bin/sh\nprintf '1.1.1.1 via 10.0.0.1 dev eth0 src 10.0.0.20 uid 1000\\n'\n", { mode: 0o755 });
   const result = f.run();
   assert.equal(result.status, 0, result.stderr);
-  assert.match(await readFile(path.join(f.install, ".env"), "utf8"), /QTERM_PUBLIC_ORIGIN=http:\/\/10\.0\.0\.20:1425/);
+  assert.ok((await readFile(path.join(f.install, ".env"), "utf8")).includes(`QTERM_PUBLIC_ORIGIN=http://10.0.0.20:${port ?? "2654"}`));
 });
+}

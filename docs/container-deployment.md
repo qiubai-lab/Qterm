@@ -12,7 +12,7 @@ AMD64 Linux 主机已安装本机 Docker Engine 和支持 `up --wait-timeout` �
 curl -fsSL https://raw.githubusercontent.com/qiubai-lab/Qterm/main/scripts/install-server.sh | sh
 ```
 
-可选参数、目录用途和自定义地址示例见 [README 一键部署](../README.md#容器部署)。脚本无需下载完整仓库，内嵌与仓库一致的 Compose 定义；使用 host 网络和 GHCR 镜像，随机生成 16 位登录密码，健康检查通过后显示结果。仅安装到新目录，不覆盖已有配置或数据。若拉取或启动失败，在生成目录中执行本页的拉取与启动命令重试。
+可选参数、目录用途和自定义地址示例见 [README 一键部署](../README.md#容器部署)。一键脚本默认使用 `2654` 端口（下文手动部署模板仍默认 `8080`）。脚本无需下载完整仓库，内嵌与仓库一致的 Compose 定义；使用 host 网络和 GHCR 镜像，随机生成 16 位登录密码，健康检查通过后显示结果。仅安装到新目录，不覆盖已有配置或数据。若拉取或启动失败，在生成目录中执行本页的拉取与启动命令重试。
 
 ## 1. 准备部署文件
 

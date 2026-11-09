@@ -28,7 +28,7 @@ main() {
     docker_platform=$(docker info --format '{{.OSType}}/{{.Architecture}}' 2>/dev/null) || fail '无法连接 Docker，请启动服务并确认当前用户有访问权限。'
     case "$docker_platform" in linux/x86_64|linux/amd64) ;; *) fail '当前镜像仅支持 linux/amd64；请在 AMD64 Linux Docker 主机部署。' ;; esac
 
-    port=${QTERM_PORT:-8080}
+    port=${QTERM_PORT:-2654}
     case "$port" in ''|*[!0-9]*) fail 'QTERM_PORT 必须为 1–65535 的整数。' ;; esac
     [ "${#port}" -le 5 ] && [ "$port" -ge 1 ] && [ "$port" -le 65535 ] || fail 'QTERM_PORT 必须为 1–65535 的整数。'
     bind_host=${QTERM_BIND_HOST:-0.0.0.0}
@@ -44,7 +44,7 @@ main() {
         if [ -z "$detected_ip" ] && command -v hostname >/dev/null 2>&1; then
             detected_ip=$(hostname -I 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i ~ /^[0-9]+\./) {print $i;exit}}')
         fi
-        [ -n "$detected_ip" ] || fail '无法检测主机 IPv4 地址，请设置 QTERM_PUBLIC_ORIGIN，例如 http://192.168.1.10:8080。'
+        [ -n "$detected_ip" ] || fail '无法检测主机 IPv4 地址，请设置 QTERM_PUBLIC_ORIGIN，例如 http://192.168.1.10:2654。'
         origin="http://$detected_ip:$port"
     fi
     # No paths, userinfo, quotes, interpolation or newlines can enter the .env.
