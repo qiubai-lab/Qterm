@@ -132,6 +132,7 @@ jobs:
       - name: Verify container behavior and Compose deployment
         run: |
           test "$(docker image inspect qterm-server:local --format '{{.Os}}/{{.Architecture}}')" = 'linux/amd64'
+          python scripts/test-server-container-entrypoint.py
           python scripts/test-server-local.py --container
           python scripts/test-server-retention.py --container
           python scripts/test-server-takeover.py --container

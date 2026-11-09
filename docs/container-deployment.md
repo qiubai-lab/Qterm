@@ -186,6 +186,8 @@ curl --fail https://qterm.example.com/healthz
 
 镜像只预装 Qterm 运行所需的 Bash、CA 证书、curl、tini、Git、OpenSSH 客户端和运行库。不预装 mise、编译器、Python/venv 或开发用 Node/npm/pnpm，用户可按需通过 apt 或自行安装 mise 配置开发环境。
 
+容器启动时会为当前 HOME 和内置 `qterm` 用户补齐缺失的 `.profile`、`.bashrc`（使用 Ubuntu 的 `/etc/skel` 模板），已有数据卷同样适用；不会覆盖已有文件或符号链接。默认 `.profile` 会加载 `.bashrc`，工具的交互式初始化（如 mise 的 Bash activation）应写入 `~/.bashrc`，之后新建终端即可加载。已经打开的终端仍需执行一次 `source ~/.bashrc`。如果自行创建了 `.bash_profile` 或 `.bash_login`，请确保它加载 `.bashrc` 或 `.profile`，因为 Bash 会优先读取这些登录配置；已有自定义配置不会被自动改写。
+
 Qterm 屏幕组件内部依赖的 Node 保留在 `/opt/qterm/bin/node`，该目录不加入用户 PATH；开发者自行安装或切换 Node 版本不会影响屏幕组件。
 
 `/data` 绑定到部署目录的 `./data`，不再由 Docker 命名卷管理。root HOME `/data/home` 对应宿主机 `./data/home`，内置 `qterm` 用户（UID/GID 10001）的 HOME `/data/users/qterm` 对应 `./data/users/qterm`。其他路径默认属于容器层。手动安装的系统软件在重建后消失；长期依赖应写入派生 Dockerfile，自行安装的工具若需持久化，应明确把其数据目录放入 `/data` 或另挂数据卷。
