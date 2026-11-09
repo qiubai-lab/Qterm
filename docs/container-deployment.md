@@ -4,6 +4,16 @@ Qterm Web 运行时是单用户服务，镜像基于 Ubuntu 24.04 LTS，默认�
 
 本文以 AMD64 Linux 宿主机上的 Docker Engine 和带 `up --wait` 的 Docker Compose v2 或更新版本为部署目标。默认 `network_mode: host`，容器与宿主机共享网络，不使用 `ports` 映射。Docker Desktop 需要 4.34 或更新版本，并在设置中显式开启 host networking；详见 [Docker host 网络说明](https://docs.docker.com/engine/network/drivers/host/)。
 
+## 一键部署
+
+AMD64 Linux 主机已安装本机 Docker Engine 和支持 `up --wait-timeout` 的 Docker Compose 后，可直接运行：
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/qiubai-lab/Qterm/main/scripts/install-server.sh | sh
+```
+
+可选参数、目录用途和自定义地址示例见 [README 一键部署](../README.md#容器部署)。脚本无需下载完整仓库，内嵌与仓库一致的 Compose 定义；使用 host 网络和 GHCR 镜像，随机生成 16 位登录密码，健康检查通过后显示结果。仅安装到新目录，不覆盖已有配置或数据。若拉取或启动失败，在生成目录中执行本页的拉取与启动命令重试。
+
 ## 1. 准备部署文件
 
 可以从当前分支复制 `compose.yaml` 和 `.env.example` 到一个固定目录，也可以直接在仓库根目录部署。拉取镜像不需要完整源码。数据使用 `./data:/data` 绑定挂载，直接保存在 `compose.yaml` 所在部署目录的 `data/` 下。相对路径以 Compose 项目目录为基准（默认是第一份 Compose 文件所在目录），并非任意执行命令的当前工作目录；不要误切换到另一个空目录。

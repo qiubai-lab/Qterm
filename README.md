@@ -77,7 +77,30 @@ xattr -cr /Applications/Qterm.app
 
 ### 容器部署
 
-Web 运行时提供精简 Ubuntu 24.04 镜像，默认 root、host 网络，允许内网 HTTP 访问；开发工具可自行安装。部署步骤与配置索引：
+Web 运行时提供精简 Ubuntu 24.04 镜像，默认 root、host 网络，允许内网 HTTP 访问；开发工具可自行安装。
+
+**一键部署（AMD64 Linux，已安装并可访问本机 Docker Engine 与支持 `up --wait` 的 Docker Compose v2 或更新版本）：**
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/qiubai-lab/Qterm/main/scripts/install-server.sh | sh
+```
+
+脚本使用 `ghcr.io/qiubai-lab/qterm:latest`，在当前目录下创建 `qterm/`，自动检测主机 IPv4 地址并使用 `8080` 端口。它会创建 `data/`、`.server-secrets/password`、`.env` 和 `compose.yaml`，从系统随机源生成 **16 位字母数字登录密码**，写入权限为 `600` 的密码文件；容器健康检查通过后输出访问地址、登录密码、目录用途和管理命令。已有目录不会被覆盖，重复执行不会重置原密码。
+
+公网/NAT、多网卡或域名访问时，请显式指定浏览器实际使用的地址。环境变量要传给管道右侧的 `sh`：
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/qiubai-lab/Qterm/main/scripts/install-server.sh | \
+  QTERM_INSTALL_DIR=/opt/qterm \
+  QTERM_PUBLIC_ORIGIN=http://192.168.1.10:1425 \
+  QTERM_PORT=1425 sh
+```
+
+将示例 IP 替换为实际服务器地址，并确保当前用户可创建目标目录。还可设置 `QTERM_BIND_HOST`（默认 `0.0.0.0`）及 `QTERM_IMAGE`（仓库的其他标签或 digest）。访问地址必须与配置完全一致；HTTP 适用于受信任内网/VPN，公网请配置 HTTPS 反向代理。指定 HTTPS origin 不会自动安装证书或配置代理。Web 登录密码与首次登录后设置的凭证库主密码相互独立。
+
+部署文件与数据保存在指定目录中，后续在该目录执行 `docker compose logs -f qterm` 查看日志，执行 `docker compose pull && docker compose up -d --wait` 升级。启动失败时保留文件供排查和重试；不要重新运行安装脚本覆盖已有部署。
+
+手动部署步骤与配置索引：
 
 - [部署准备与配置参数](docs/container-deployment.md#1-准备部署文件)
 - [案例一：内网 IP 直连 HTTP](docs/container-deployment.md#案例一内网-ip-直连-http)
