@@ -11,33 +11,41 @@
   </head>
   <body>
     <a class="site-skip" href="#site-main">跳到正文</a>
-    <header class="site-nav"><a class="site-brand" href="%BASE_URL%">Qterm</a><nav aria-label="主导航"><a href="%BASE_URL%#guides">教程</a><a href="%BASE_URL%download/">下载</a><a href="%BASE_URL%demo/">Demo</a></nav></header>
+    <header class="site-nav"><a class="site-brand" href="%BASE_URL%"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><path d="m7 8 4 4-4 4m6 0h4"/></svg>Qterm</a><nav aria-label="主导航"><a href="%BASE_URL%#features">功能</a><a href="%BASE_URL%#guides">教程</a><a href="%BASE_URL%en/">English</a><a href="%BASE_URL%download/">安装</a><a href="https://github.com/qiubai-lab/Qterm" target="_blank" rel="noreferrer" class="site-github-link"><svg class="site-action-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .75a11.25 11.25 0 0 0-3.558 21.923c.563.105.768-.244.768-.542 0-.267-.01-.975-.015-1.913-3.13.68-3.79-1.508-3.79-1.508-.512-1.3-1.25-1.646-1.25-1.646-1.023-.7.078-.686.078-.686 1.13.08 1.725 1.16 1.725 1.16 1.006 1.724 2.64 1.226 3.283.937.102-.73.394-1.226.716-1.508-2.498-.284-5.124-1.249-5.124-5.562 0-1.23.44-2.235 1.16-3.023-.116-.285-.502-1.43.11-2.98 0 0 .945-.303 3.094 1.155A10.8 10.8 0 0 1 12 6.177c.955.004 1.917.13 2.815.38 2.148-1.458 3.092-1.155 3.092-1.155.613 1.55.227 2.695.112 2.98.72.788 1.158 1.793 1.158 3.023 0 4.324-2.63 5.275-5.136 5.553.404.35.765 1.043.765 2.1 0 1.517-.014 2.74-.014 3.112 0 .3.203.652.774.542A11.25 11.25 0 0 0 12 .75Z"/></svg>GitHub</a><a class="site-link-button" href="%BASE_URL%demo/"><svg class="site-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3M13 15h4"/></svg>在线体验</a></nav></header>
     <main id="site-main" class="site-article">
-      <header class="article-heading"><p class="site-eyebrow">QTERM / 使用指南</p><h1>用 Docker 自托管 Qterm Web 工作台</h1><p class="article-lead">需要从浏览器进入自己的开发环境时，可以部署 Qterm Web 运行时。它是真实的单用户服务，与官网的模拟 Demo 不同。</p></header>
-      <nav class="article-toc" aria-label="本页目录"><p>本页目录</p><ol><li><a href="#prepare">1. 确认部署前提</a></li><li><a href="#install">2. 安装到新目录</a></li><li><a href="#access">3. 使用正确的访问地址</a></li><li><a href="#maintain">4. 升级、日志与备份</a></li><li><a href="#limits">桌面版、Web 服务与 Demo</a></li></ol></nav>
-      <section id="prepare"><h2>1. 确认部署前提</h2>
+      <header class="article-heading"><a class="article-breadcrumb" href="%BASE_URL%#guides">← 使用指南</a><p class="site-eyebrow">QTERM / 使用指南</p><h1>用 Docker 自托管 Qterm Web 工作台</h1><p class="article-lead">需要从浏览器进入自己的开发环境时，可以部署 Qterm Web 运行时。它是真实的单用户服务，与官网的模拟 Demo 不同。</p></header>
+      <nav class="article-toc" aria-label="本页目录"><details open><summary>本页目录</summary><ol><li><a href="#prepare">1. 确认部署前提</a></li><li><a href="#install">2. 安装到新目录</a></li><li><a href="#access">3. 使用正确的访问地址</a></li><li><a href="#maintain">4. 升级、日志与备份</a></li><li><a href="#limits">桌面版、Web 服务与 Demo</a></li></ol></details></nav>
+      <div class="article-body"><section id="prepare"><h2>1. 确认部署前提</h2>
 <p>准备 AMD64 Linux 主机、本机 Docker Engine，以及支持 <code>up --wait-timeout</code> 的 Docker Compose v2。当前发布镜像为 linux/amd64；ARM 主机需要模拟执行支持，并非原生 ARM 镜像。</p><p>默认容器以 root 运行并使用 host 网络，登录用户可访问该容器开发环境。HTTP 仅适用于受信任内网或 VPN；公网应配置 HTTPS 反向代理。</p>
 </section>
 <section id="install"><h2>2. 安装到新目录</h2>
-<p>在计划保存部署数据的父目录执行。脚本会新建 <code>qterm/</code>，生成访问密码并启动服务，不覆盖已有目录。</p><pre><code>curl -fsSL https://raw.githubusercontent.com/qiubai-lab/Qterm/main/scripts/install-server.sh | sh</code></pre><p>脚本默认使用端口 2654，检测主机 IPv4 地址，健康检查成功后输出访问地址和登录密码。部署文件、数据和密码文件分别保存在生成目录中；妥善保管密码，不要提交到版本库。</p>
+<p>在计划保存部署数据的父目录执行。脚本会新建 <code>qterm/</code>，生成访问密码并启动服务，不覆盖已有目录。</p><pre><code><span class="code-comment"># 在当前目录下新建 qterm/ 并部署 Web 服务</span>
+curl -fsSL https://raw.githubusercontent.com/qiubai-lab/Qterm/main/scripts/install-server.sh | sh</code></pre><p>脚本默认使用端口 2654，检测主机 IPv4 地址，健康检查成功后输出访问地址和登录密码。部署文件、数据和密码文件分别保存在生成目录中；妥善保管密码，不要提交到版本库。</p>
 </section>
 <section id="access"><h2>3. 使用正确的访问地址</h2>
-<p>使用安装输出的地址登录。浏览器地址的协议、主机和端口必须与 <code>QTERM_PUBLIC_ORIGIN</code> 完全一致。公网、NAT 或多网卡环境应显式指定地址；把环境变量传给管道右侧的 sh：</p><pre><code>curl -fsSL https://raw.githubusercontent.com/qiubai-lab/Qterm/main/scripts/install-server.sh | \
+<p>使用安装输出的地址登录。浏览器地址的协议、主机和端口必须与 <code>QTERM_PUBLIC_ORIGIN</code> 完全一致。公网、NAT 或多网卡环境应显式指定地址；把环境变量传给管道右侧的 sh：</p><pre><code><span class="code-comment"># 指定浏览器访问地址，请将下方 IP 替换为实际内网地址</span>
+curl -fsSL https://raw.githubusercontent.com/qiubai-lab/Qterm/main/scripts/install-server.sh | \
   QTERM_PUBLIC_ORIGIN=http://192.168.1.10:2654 sh</code></pre><p>将示例 IP 替换成真实内网地址。设置 HTTPS origin 不会自动配置代理或证书。Web 登录密码与凭证库主密码互相独立；首次进入后按界面设置凭证库。</p><p><a href="https://github.com/qiubai-lab/Qterm/blob/main/docs/container-deployment.md">完整部署文档</a>提供内网直连、Nginx HTTPS、端口配置和手动部署步骤。</p>
 </section>
 <section id="maintain"><h2>4. 升级、日志与备份</h2>
-<p>在生成的部署目录中执行：</p><pre><code>cd qterm
+<p>在生成的部署目录中执行：</p><pre><code><span class="code-comment"># 进入安装脚本生成的部署目录</span>
+cd qterm
+<span class="code-comment"># 查看最近 100 行服务日志</span>
 docker compose logs --tail 100 qterm
+<span class="code-comment"># 拉取新版容器镜像</span>
 docker compose pull
+<span class="code-comment"># 后台启动服务，最多等待 90 秒通过健康检查</span>
 docker compose up -d --wait --wait-timeout 90</code></pre><p>升级前按照完整部署文档备份数据与配置，必要时保留原镜像标签或 digest 供回滚。服务启动失败时在现有目录排查日志，不要重新运行安装脚本覆盖部署。容器可写层中的自行安装工具可能在重建后丢失，应将环境构建与持久化纳入自己的部署方案。</p>
 </section>
 <section id="limits"><h2>桌面版、Web 服务与 Demo</h2>
 <p>桌面版连接本机及远程环境；自托管 Web 服务在你的容器中执行实际操作；官网 Demo 只有虚构会话。HTTP 环境下浏览器主动剪贴板 API 可能受限，可使用键盘复制粘贴、文件选择或拖放。</p>
 </section>
       <aside class="article-related"><h2>继续阅读</h2><ul><li><a href="%BASE_URL%guides/remote-ai/">远程 Agent 开发流程</a></li><li><a href="%BASE_URL%guides/ssh-sftp/">SSH 与文件管理</a></li><li><a href="%BASE_URL%download/">选择桌面安装包</a></li></ul></aside>
-      <div class="article-cta"><a class="site-primary" href="%BASE_URL%download/">下载 Qterm</a><a class="site-secondary" href="%BASE_URL%demo/">体验模拟 Demo</a></div>
+      <div class="article-cta"><a class="site-primary" href="%BASE_URL%download/">安装 Qterm</a><a class="site-secondary" href="%BASE_URL%demo/">体验模拟 Demo</a></div>
       <p class="article-note">浏览器 Demo 使用虚构数据，不连接真实服务器、不运行真实 Agent，也不上传你的文件。真实操作请使用安装后的 Qterm。</p>
+</div>
     </main>
     <footer class="site-footer"><span>Qterm · GPL-3.0-only</span><a href="https://github.com/qiubai-lab/Qterm">GitHub</a><a href="https://github.com/qiubai-lab/Qterm/issues">反馈与建议</a></footer>
+    <script src="/guide-interactions.js" defer></script>
   </body>
 </html>

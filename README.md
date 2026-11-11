@@ -15,17 +15,21 @@
   </p>
 </div>
 
-Qterm 基于 Tauri 2、React、TypeScript 与 Rust 构建，将本地终端、SSH 会话、SFTP 文件管理、Git 操作和网络转发组织在可持久化、可自由拆分的 Workspace 中。
-
-快速上手：[通过 SSH 使用 Claude Code / Codex](https://qiubai-lab.github.io/Qterm/guides/remote-ai/) · [粘贴截图与文件给远程 Agent](https://qiubai-lab.github.io/Qterm/guides/remote-agent-files/) · [远程 Git 审阅](https://qiubai-lab.github.io/Qterm/guides/remote-git/)
-
 ## 🌠 界面预览
 
 ![Qterm 工作台：远程终端、本地终端、文件编辑、网络转发与文件浏览](site/public/screenshots/workspace.png)
 
-## 🌐 浏览器交互演示
+将本地终端、SSH 会话、文件、Git 与网络转发组织在同一个可持久化、可自由拆分的工作区中。
 
-打开 [在线演示](https://qiubai-lab.github.io/Qterm/demo/)，无需安装即可在浏览器中体验模拟终端、工作区、分屏、文件编辑、Git 审阅提交、虚构网络规则与主题；也可运行 `pnpm dev:demo` 在本地体验。演示使用虚构数据，不连接真实服务器或建立隧道。站点构建、GitHub Pages 发布与体验范围见 [浏览器演示说明](docs/browser-demo.md)。
+## 🧭 快速上手
+
+无需安装，先通过[在线体验](https://qiubai-lab.github.io/Qterm/demo/)探索工作区与分屏操作；准备连接自己的服务器时，查看[安装指南](https://qiubai-lab.github.io/Qterm/download/)。
+
+- **连接与运行**：[通过 SSH 使用 Claude Code / Codex](https://qiubai-lab.github.io/Qterm/guides/remote-ai/)
+- **提供上下文**：[粘贴截图与文件给远程 Agent](https://qiubai-lab.github.io/Qterm/guides/remote-agent-files/)
+- **检查结果**：[审阅远程 Git 变更](https://qiubai-lab.github.io/Qterm/guides/remote-git/)
+
+演示使用虚构数据，不连接真实服务器或建立隧道。可运行 `pnpm dev:demo` 在本地体验；支持范围与 GitHub Pages 发布方式见[浏览器演示说明](docs/browser-demo.md)。
 
 ## 🤖 为远程 AI 开发优化
 

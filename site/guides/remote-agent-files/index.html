@@ -11,11 +11,11 @@
   </head>
   <body>
     <a class="site-skip" href="#site-main">跳到正文</a>
-    <header class="site-nav"><a class="site-brand" href="%BASE_URL%">Qterm</a><nav aria-label="主导航"><a href="%BASE_URL%#guides">教程</a><a href="%BASE_URL%download/">下载</a><a href="%BASE_URL%en/guides/remote-agent-files/">English</a><a href="%BASE_URL%demo/">Demo</a></nav></header>
+    <header class="site-nav"><a class="site-brand" href="%BASE_URL%"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><path d="m7 8 4 4-4 4m6 0h4"/></svg>Qterm</a><nav aria-label="主导航"><a href="%BASE_URL%#features">功能</a><a href="%BASE_URL%#guides">教程</a><a href="%BASE_URL%en/guides/remote-agent-files/">English</a><a href="%BASE_URL%download/">安装</a><a href="https://github.com/qiubai-lab/Qterm" target="_blank" rel="noreferrer" class="site-github-link"><svg class="site-action-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .75a11.25 11.25 0 0 0-3.558 21.923c.563.105.768-.244.768-.542 0-.267-.01-.975-.015-1.913-3.13.68-3.79-1.508-3.79-1.508-.512-1.3-1.25-1.646-1.25-1.646-1.023-.7.078-.686.078-.686 1.13.08 1.725 1.16 1.725 1.16 1.006 1.724 2.64 1.226 3.283.937.102-.73.394-1.226.716-1.508-2.498-.284-5.124-1.249-5.124-5.562 0-1.23.44-2.235 1.16-3.023-.116-.285-.502-1.43.11-2.98 0 0 .945-.303 3.094 1.155A10.8 10.8 0 0 1 12 6.177c.955.004 1.917.13 2.815.38 2.148-1.458 3.092-1.155 3.092-1.155.613 1.55.227 2.695.112 2.98.72.788 1.158 1.793 1.158 3.023 0 4.324-2.63 5.275-5.136 5.553.404.35.765 1.043.765 2.1 0 1.517-.014 2.74-.014 3.112 0 .3.203.652.774.542A11.25 11.25 0 0 0 12 .75Z"/></svg>GitHub</a><a class="site-link-button" href="%BASE_URL%demo/"><svg class="site-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3M13 15h4"/></svg>在线体验</a></nav></header>
     <main id="site-main" class="site-article">
-      <header class="article-heading"><p class="site-eyebrow">QTERM / 使用指南</p><h1>给远程 Claude Code / Codex 粘贴截图与文件</h1><p class="article-lead">无需先另开传输工具：在远程终端粘贴本机资料，等上传完成后，把服务器路径交给 CLI Agent。</p></header>
-      <nav class="article-toc" aria-label="本页目录"><p>本页目录</p><ol><li><a href="#prepare">1. 确认是已连接的远程终端</a></li><li><a href="#image">2. 复制截图并粘贴</a></li><li><a href="#files">3. 复制文件或文件夹</a></li><li><a href="#verify">4. 检查结果再发送</a></li><li><a href="#troubleshoot">常见问题</a></li></ol></nav>
-      <section id="prepare"><h2>1. 确认是已连接的远程终端</h2>
+      <header class="article-heading"><a class="article-breadcrumb" href="%BASE_URL%#guides">← 使用指南</a><p class="site-eyebrow">QTERM / 使用指南</p><h1>给远程 Claude Code / Codex 粘贴截图与文件</h1><p class="article-lead">无需先另开传输工具：在远程终端粘贴本机资料，等上传完成后，把服务器路径交给 CLI Agent。</p></header>
+      <nav class="article-toc" aria-label="本页目录"><details open><summary>本页目录</summary><ol><li><a href="#prepare">1. 确认是已连接的远程终端</a></li><li><a href="#image">2. 复制截图并粘贴</a></li><li><a href="#files">3. 复制文件或文件夹</a></li><li><a href="#verify">4. 检查结果再发送</a></li><li><a href="#troubleshoot">常见问题</a></li></ol></details></nav>
+      <div class="article-body"><section id="prepare"><h2>1. 确认是已连接的远程终端</h2>
 <p>以下流程面向桌面版 Qterm 的 SSH 终端。先选择服务器并完成认证，确认可以正常输入命令。服务器需要允许 SFTP 及暂存目录写入；Agent 需要能读取上传后显示的路径。</p><p>在本地终端粘贴文件得到的是本地路径；本机路径不能直接作为另一台服务器上的文件使用。</p>
 </section>
 <section id="image"><h2>2. 复制截图并粘贴</h2>
@@ -31,9 +31,11 @@
 <ul><li><strong>只粘贴了文字：</strong>剪贴板同时包含文本时采用文本优先；重新复制图片或文件对象后再试。</li><li><strong>上传被拒绝：</strong>检查 SSH/SFTP 权限、服务器剩余空间、暂存目录写权限和连接状态。</li><li><strong>Agent 找不到文件：</strong>核对 Agent 与终端是否运行在同一台机器及可访问同一文件系统；容器中的 Agent 可能看不到宿主机路径。</li><li><strong>上传成功但读不了图片：</strong>先确认所用 CLI 和模型支持图片输入。</li><li><strong>要指定落盘目录：</strong>使用 <a href="%BASE_URL%guides/ssh-sftp/">SFTP Files 面板</a> 上传至已选目录。</li></ul>
 </section>
       <aside class="article-related"><h2>继续阅读</h2><ul><li><a href="%BASE_URL%guides/remote-ai/">通过 SSH 使用 Claude Code 与 Codex</a></li><li><a href="%BASE_URL%guides/ssh-sftp/">管理远程目录与文件</a></li><li><a href="%BASE_URL%guides/remote-git/">审阅 Agent 的代码修改</a></li></ul></aside>
-      <div class="article-cta"><a class="site-primary" href="%BASE_URL%download/">下载 Qterm</a><a class="site-secondary" href="%BASE_URL%demo/">体验模拟 Demo</a></div>
+      <div class="article-cta"><a class="site-primary" href="%BASE_URL%download/">安装 Qterm</a><a class="site-secondary" href="%BASE_URL%demo/">体验模拟 Demo</a></div>
       <p class="article-note">浏览器 Demo 使用虚构数据，不连接真实服务器、不运行真实 Agent，也不上传你的文件。真实操作请使用安装后的 Qterm。</p>
+</div>
     </main>
     <footer class="site-footer"><span>Qterm · GPL-3.0-only</span><a href="https://github.com/qiubai-lab/Qterm">GitHub</a><a href="https://github.com/qiubai-lab/Qterm/issues">反馈与建议</a></footer>
+    <script src="/guide-interactions.js" defer></script>
   </body>
 </html>

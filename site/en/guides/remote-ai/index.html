@@ -11,19 +11,21 @@
   </head>
   <body>
     <a class="site-skip" href="#site-main">Skip to content</a>
-    <header class="site-nav"><a class="site-brand" href="%BASE_URL%en/">Qterm</a><nav aria-label="Main navigation"><a href="%BASE_URL%en/#guides">Guides</a><a href="%BASE_URL%en/download/">Download</a><a href="%BASE_URL%guides/remote-ai/">中文</a><a href="%BASE_URL%demo/">Demo</a></nav></header>
+    <header class="site-nav"><a class="site-brand" href="%BASE_URL%en/"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><path d="m7 8 4 4-4 4m6 0h4"/></svg>Qterm</a><nav aria-label="Main navigation"><a href="%BASE_URL%en/#features">Features</a><a href="%BASE_URL%en/#guides">Guides</a><a href="%BASE_URL%guides/remote-ai/">中文</a><a href="%BASE_URL%en/download/">Install</a><a href="https://github.com/qiubai-lab/Qterm" target="_blank" rel="noreferrer" class="site-github-link"><svg class="site-action-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .75a11.25 11.25 0 0 0-3.558 21.923c.563.105.768-.244.768-.542 0-.267-.01-.975-.015-1.913-3.13.68-3.79-1.508-3.79-1.508-.512-1.3-1.25-1.646-1.25-1.646-1.023-.7.078-.686.078-.686 1.13.08 1.725 1.16 1.725 1.16 1.006 1.724 2.64 1.226 3.283.937.102-.73.394-1.226.716-1.508-2.498-.284-5.124-1.249-5.124-5.562 0-1.23.44-2.235 1.16-3.023-.116-.285-.502-1.43.11-2.98 0 0 .945-.303 3.094 1.155A10.8 10.8 0 0 1 12 6.177c.955.004 1.917.13 2.815.38 2.148-1.458 3.092-1.155 3.092-1.155.613 1.55.227 2.695.112 2.98.72.788 1.158 1.793 1.158 3.023 0 4.324-2.63 5.275-5.136 5.553.404.35.765 1.043.765 2.1 0 1.517-.014 2.74-.014 3.112 0 .3.203.652.774.542A11.25 11.25 0 0 0 12 .75Z"/></svg>GitHub</a><a class="site-link-button" href="%BASE_URL%demo/"><svg class="site-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3M13 15h4"/></svg>Live demo</a></nav></header>
     <main id="site-main" class="site-article">
-      <header class="article-heading"><p class="site-eyebrow">QTERM / GUIDE</p><h1>Run Claude Code or Codex over SSH</h1><p class="article-lead">Keep your agent and repository on a development server. Use Qterm to bring its terminal, files and Git review into one workspace.</p></header>
-      <nav class="article-toc" aria-label="On this page"><p>On this page</p><ol><li><a href="#prepare">1. Prepare the remote environment</a></li><li><a href="#connect">2. Connect a terminal to the server</a></li><li><a href="#run">3. Start the agent inside the project</a></li><li><a href="#context">4. Send local context to the remote agent</a></li><li><a href="#review">5. Inspect files and review the diff</a></li><li><a href="#limits">Troubleshooting and session limits</a></li></ol></nav>
-      <section id="prepare"><h2>1. Prepare the remote environment</h2>
+      <header class="article-heading"><a class="article-breadcrumb" href="%BASE_URL%en/#guides">← Guides</a><p class="site-eyebrow">QTERM / GUIDE</p><h1>Run Claude Code or Codex over SSH</h1><p class="article-lead">Keep your agent and repository on a development server. Use Qterm to bring its terminal, files and Git review into one workspace.</p></header>
+      <nav class="article-toc" aria-label="On this page"><details open><summary>On this page</summary><ol><li><a href="#prepare">1. Prepare the remote environment</a></li><li><a href="#connect">2. Connect a terminal to the server</a></li><li><a href="#run">3. Start the agent inside the project</a></li><li><a href="#context">4. Send local context to the remote agent</a></li><li><a href="#review">5. Inspect files and review the diff</a></li><li><a href="#limits">Troubleshooting and session limits</a></li></ol></details></nav>
+      <div class="article-body"><section id="prepare"><h2>1. Prepare the remote environment</h2>
 <p>You need an SSH-accessible development server, login credentials and a project repository. Install and authenticate your chosen CLI on that server using its official instructions. Its account, model access and network requirements are separate from Qterm. Qterm does not include a model, credits or an agent installer.</p><p>Verify that ordinary SSH access, repository permissions and the CLI work before diagnosing the workspace.</p>
 </section>
 <section id="connect"><h2>2. Connect a terminal to the server</h2>
 <p>Install Qterm and save the host, port, username and authentication method in connection management. Return to a Terminal Block and select the connection from its top-left target selector. On first connection, compare the host-key fingerprint with a trusted value from your server administrator before accepting it.</p><p>Saving a profile alone does not connect. Unlock the credential vault when requested. Investigate changed host keys before trusting a replacement.</p>
 </section>
 <section id="run"><h2>3. Start the agent inside the project</h2>
-<p>Change to your actual remote repository before starting the installed CLI. This example uses Codex; use <code>claude</code> on the last line for Claude Code. All commands run on the remote server.</p><pre><code>cd /path/to/your/project
+<p>Change to your actual remote repository before starting the installed CLI. This example uses Codex; use <code>claude</code> on the last line for Claude Code. All commands run on the remote server.</p><pre><code><span class="code-comment"># Enter your remote project directory; replace this example path</span>
+cd /path/to/your/project
 git status
+<span class="code-comment"># Start your installed and authenticated Codex CLI</span>
 codex</code></pre><p>Replace the example path. Give the agent a concrete task and constraints. Approval and execution permissions remain controlled by the agent itself; pasting a prompt into Qterm does not automatically execute it.</p>
 </section>
 <section id="context"><h2>4. Send local context to the remote agent</h2>
@@ -36,9 +38,11 @@ codex</code></pre><p>Replace the example path. Give the agent a concrete task an
 <ul><li><strong>Command not found:</strong> check the CLI installation and PATH on the server.</li><li><strong>Wrong directory:</strong> check the OSC 7 setting and shell support, or choose the directory manually. The temporary shell hook may appear in command history.</li><li><strong>Long tasks:</strong> switching workspaces preserves active sessions, but this does not promise process recovery after a lost connection, application exit or restart. Configure server-side session management if needed.</li><li><strong>Notifications:</strong> the tool must actively emit a supported OSC message for Qterm to display it.</li></ul>
 </section>
       <aside class="article-related"><h2>Continue exploring</h2><ul><li><a href="%BASE_URL%en/guides/remote-agent-files/">Paste images and files to a remote agent</a></li><li><a href="%BASE_URL%en/download/">Install Qterm</a></li><li><a href="%BASE_URL%en/">Explore the SSH workspace</a></li></ul></aside>
-      <div class="article-cta"><a class="site-primary" href="%BASE_URL%en/download/">Download Qterm</a><a class="site-secondary" href="%BASE_URL%demo/">Try the simulated demo</a></div>
+      <div class="article-cta"><a class="site-primary" href="%BASE_URL%en/download/">Install Qterm</a><a class="site-secondary" href="%BASE_URL%demo/">Try the simulated demo</a></div>
       <p class="article-note">The browser demo uses fictional data. It does not connect to servers, run real agents or upload your files. The demo interface is currently in Chinese.</p>
+</div>
     </main>
     <footer class="site-footer"><span>Qterm · GPL-3.0-only</span><a href="https://github.com/qiubai-lab/Qterm">GitHub</a><a href="https://github.com/qiubai-lab/Qterm/issues">Feedback</a></footer>
+    <script src="/guide-interactions.js" defer></script>
   </body>
 </html>

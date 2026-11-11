@@ -8,12 +8,24 @@
     <a href="LICENSE"><img src="https://img.shields.io/github/license/qiubai-lab/Qterm" alt="License"></a>
     <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey" alt="macOS, Windows and Linux">
   </p>
-  <p><a href="https://qiubai-lab.github.io/Qterm/en/">Website</a> · <a href="https://qiubai-lab.github.io/Qterm/demo/">Live demo</a> · <a href="https://qiubai-lab.github.io/Qterm/en/download/">Download</a></p>
+  <p><a href="https://qiubai-lab.github.io/Qterm/en/">Website</a> · <a href="https://qiubai-lab.github.io/Qterm/demo/">Live demo</a> · <a href="https://qiubai-lab.github.io/Qterm/en/download/">Install</a></p>
 </div>
 
-Qterm brings local terminals, SSH sessions, SFTP files, Git review and port forwarding into split workspaces. It is built with Tauri 2, React, TypeScript and Rust.
+## Workspace preview
 
 ![Qterm workspace with terminal, file, Git and network panels](site/public/screenshots/workspace.png)
+
+Bring local terminals, SSH sessions, files, Git and port forwarding together in persistent workspaces you can freely split.
+
+## Quick start
+
+Explore workspaces and split panes in the [live demo](https://qiubai-lab.github.io/Qterm/demo/), with no installation required. When you are ready to connect your own server, follow the [installation guide](https://qiubai-lab.github.io/Qterm/en/download/).
+
+- **Connect and run:** [Use Claude Code / Codex over SSH](https://qiubai-lab.github.io/Qterm/en/guides/remote-ai/)
+- **Provide context:** [Send images and files to a remote agent](https://qiubai-lab.github.io/Qterm/en/guides/remote-agent-files/)
+- **Review results:** [Review remote Git changes (Chinese)](https://qiubai-lab.github.io/Qterm/guides/remote-git/)
+
+The demo uses fictional data; it does not connect to servers, run real shell commands or establish tunnels. Run `pnpm dev:demo` to try it locally. See [demo scope and publishing](docs/browser-demo.md) (Chinese).
 
 The current application and browser demo interface are in Chinese. The English website and guides explain how to use the workspace.
 
@@ -26,12 +38,6 @@ Run Claude Code, Codex or another CLI agent on your SSH server. Qterm does **not
 - **Follow the terminal directory:** when OSC 7 directory reporting is enabled, open Files or Git at the reported location. You can also choose the path manually.
 - **Review remote changes:** inspect diffs, selectively stage files, commit and manage branches, synchronization and conflicts in the selected local or remote repository.
 - **Organize projects:** split Terminal, Files, Git and Network Blocks and switch workspaces while active sessions stay in place. This does not promise recovery after disconnection or application exit.
-
-Start with [the remote AI workflow](https://qiubai-lab.github.io/Qterm/en/guides/remote-ai/) and [the image/file paste guide](https://qiubai-lab.github.io/Qterm/en/guides/remote-agent-files/).
-
-## Try before installing
-
-The [browser demo](https://qiubai-lab.github.io/Qterm/demo/) uses fictional sessions, files and repositories. It does not connect to servers, run real shell commands or establish tunnels. It demonstrates layout, simulated terminal input, file editing, Git staging/commits and themes; it does not simulate every desktop feature. See [demo scope](docs/browser-demo.md) (Chinese).
 
 ## Install
 
@@ -72,6 +78,8 @@ Qterm supports one-time passwords, saved encrypted credentials, private keys and
 OSC 7 integration installs temporary session hooks without editing shell startup files, but those commands can appear in shell history. Disable directory tracking in advanced settings if you do not want the hooks. See the [security model](docs/security-model.md) and [troubleshooting](docs/troubleshooting.md) for limitations (Chinese).
 
 ## Development and contributions
+
+Qterm is built with Tauri 2, React, TypeScript and Rust.
 
 Use the pinned toolchain and platform prerequisites in the [development guide](docs/DEVELOPMENT.md):
 
