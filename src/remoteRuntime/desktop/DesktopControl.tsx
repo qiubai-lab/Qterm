@@ -32,9 +32,9 @@ export function DesktopControl({host}: {host: DesktopEnvironments}) {
     catch (reason) { setFailure({ key: target.key, message: `${target.name}：${reason instanceof Error ? reason.message : String(reason)}` }); }
   }
   return <div className="runtime-environment-control" role="group" aria-label="运行环境">
+    {environments.length > 1 && <button aria-label="访问记录" disabled={!env.entry || env.status !== "已连接"} className="runtime-trigger runtime-log-trigger" onClick={() => host.showLog(active)}><Icon name="history" size={14}/></button>}
     <button aria-label={`运行环境：${env.name}，${env.status}`} aria-haspopup="menu" aria-expanded={!!anchor} className="runtime-trigger"
       onClick={event => setAnchor(anchor ? null : { trigger: event.currentTarget, bounds: event.currentTarget.getBoundingClientRect() })}><Icon name="server" size={14}/></button>
-    {environments.length > 1 && <button aria-label="访问记录" disabled={!env.entry || env.status !== "已连接"} className="runtime-trigger runtime-log-trigger" onClick={() => host.showLog(active)}><Icon name="history" size={14}/></button>}
     {anchor && <EnvironmentMenu trigger={anchor.trigger} anchor={anchor.bounds} current={env.entry ?? null} status={env.status} servers={entries} onChoose={choose}
       connected={environments.filter(item => item.entry).map(item => ({entry: item.entry!, status: item.closing ? "断开中" : item.status}))}
       onDisconnect={id => ask(serverKey(id))} onManage={() => { setAnchor(null); setManager(true); }} onClose={() => setAnchor(null)}/>}

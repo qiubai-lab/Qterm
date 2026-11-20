@@ -3,6 +3,7 @@ import { acquireTerminalView, scheduleTerminalViewDisposal, type TerminalView } 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from "react";
 import { createPortal } from "react-dom";
 import type { ISearchOptions } from "@xterm/addon-search";
+import { useTerminalViewport } from "./useTerminalViewport";
 import { useTerminalCopy } from "./useTerminalCopy";
 import "@xterm/xterm/css/xterm.css";
 import { DialogFrame } from "../components/dialogs/DialogFrame";
@@ -330,13 +331,7 @@ export function TerminalPanel({ blockId, sessionKey, visible, local, osc7Enabled
         return { columns: view.terminal.cols, rows: view.terminal.rows };
       },
     );
-    const observer = new ResizeObserver(() => {
-      if (!container.offsetParent) return;
-      view.layout.restore();
-    });
-    observer.observe(container);
     return () => {
-      observer.disconnect();
       unregisterWriter();
       view.write = async () => undefined;
       view.resize.send = async () => undefined;
@@ -368,21 +363,7 @@ export function TerminalPanel({ blockId, sessionKey, visible, local, osc7Enabled
     if (view) void startLocalRef.current(blockId, view.terminal.cols, view.terminal.rows, osc7EnabledRef.current);
   }, [blockId, hydrated, local, terminalSettingsReady]);
 
-  const synchronizedSession = useRef<string | null>(null);
-  useEffect(() => {
-    if (!inputEnabled) synchronizedSession.current = null;
-    if (!visible) return;
-    let frame = 0;
-    let attempts = 0;
-    const restore = () => {
-      const session = inputEnabled ? connectedSessionId : null;
-      const force = session !== null && synchronizedSession.current !== session;
-      if (viewRef.current?.layout.restore(force)) synchronizedSession.current = session;
-      else if (++attempts < 12) frame = requestAnimationFrame(restore);
-    };
-    frame = requestAnimationFrame(restore);
-    return () => cancelAnimationFrame(frame);
-  }, [sessionKey, connectedSessionId, inputEnabled, visible]);
+  useTerminalViewport(viewRef, containerRef, sessionKey, visible, inputEnabled ? connectedSessionId : null);
 
   useEffect(() => {
     if (!contextMenu) return;

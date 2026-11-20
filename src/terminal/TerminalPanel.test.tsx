@@ -265,6 +265,44 @@ describe("TerminalPanel view lifetime", () => {
     view.unmount();
   });
 
+  it("coalesces resize observations with the first visible frame and cancels hidden work", () => {
+    let resize!: () => void;
+    vi.stubGlobal("ResizeObserver", class extends ResizeObserverMock {
+      constructor(callback: () => void) { super(); resize = callback; }
+    });
+    const panel = (visible: boolean) => <TerminalPanel blockId="coalesce" sessionKey="coalesce" local={false} visible={visible}/>;
+    const view = render(panel(true));
+    // The observer and the initial reveal both request a measurement before this frame.
+    resize(); resize();
+    act(() => vi.runAllTimers());
+    expect(mocks.fits[0].proposeDimensions).toHaveBeenCalledOnce();
+    resize();
+    view.rerender(panel(false));
+    act(() => vi.runAllTimers());
+    expect(mocks.fits[0].proposeDimensions).toHaveBeenCalledOnce();
+  });
+
+  it("reuses the fitted grid on a warm reveal and resynchronizes after reconnect", async () => {
+    const id = "block-warm";
+    mocks.runtimes = { [id]: { status: "connected", sessionId: "ssh-1" } };
+    const panel = (visible: boolean) => <TerminalPanel blockId={id} sessionKey={id} local={false} visible={visible}/>;
+    const view = render(panel(true));
+    await act(async () => vi.runAllTimersAsync());
+    const terminal = mocks.terminals[mocks.terminals.length - 1];
+    terminal.refresh.mockClear();
+    mocks.resizeBlock.mockClear();
+    view.rerender(panel(false)); view.rerender(panel(true));
+    await act(async () => vi.runAllTimersAsync());
+    expect(terminal.refresh).not.toHaveBeenCalled();
+    expect(mocks.resizeBlock).not.toHaveBeenCalled();
+    mocks.runtimes[id] = { status: "connecting", sessionId: "ssh-1" };
+    view.rerender(panel(false));
+    mocks.runtimes[id] = { status: "connected", sessionId: "ssh-1" };
+    view.rerender(panel(true));
+    await act(async () => vi.runAllTimersAsync());
+    expect(mocks.resizeBlock).toHaveBeenCalledExactlyOnceWith(id, 80, 24);
+  });
+
   it.each([false, true])("force-synchronizes dimensions when a session becomes available (local=%s)", async local => {
     mocks.runtimes = { "block-ssh-size": { status: "connecting", sessionId: null } };
     const view = render(<TerminalPanel blockId="block-ssh-size" sessionKey="block-ssh-size:ssh" local={local} visible/>);

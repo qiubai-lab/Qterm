@@ -26,9 +26,14 @@ export function ServerRuntimeRestore({ workspaceId, visible = true }: { workspac
       try {
         const owner = latest.current.document.workspaces.find(w => w.id === workspaceId);
         if (!owner) return;
-        const sessions = await listRetainedSessions({ blockIds: blockIds(owner.layout) });
-        const priority = (session: typeof sessions[number]) => session.runtimeKey === owner.activeBlockId ? 0 : session.kind === "terminal" ? 1 : 2;
-        const ordered = sessions.filter(session => session.runtimeKey && findLeaf(owner.layout, session.runtimeKey))
+        const ids = blockIds(owner.layout);
+        const sessions = await listRetainedSessions({ blockIds: ids });
+        const priority = (session: typeof sessions[number]) => {
+          if (session.kind === "terminal") return session.runtimeKey === owner.activeBlockId ? 0 : 1;
+          return session.runtimeKey === owner.activeBlockId ? 2 : 3;
+        };
+        const ordered = sessions.filter(session => session.runtimeKey && ids.includes(session.runtimeKey)
+          && session.status !== "closed" && session.status !== "failed")
           .sort((left, right) => priority(left) - priority(right));
         for (const session of ordered) {
           if (!active) return;

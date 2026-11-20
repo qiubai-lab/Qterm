@@ -19,7 +19,7 @@ export function useBlockAutoConnect(owner: Owner, profile: ConnectionProfile | u
     let retry: number | undefined;
     const recover = () => {
       void listRetainedSessions({ blockId }).then(sessions => {
-        if (!sessions.some(s => s.runtimeKey === blockId && s.kind === owner && s.profileId === profile.id)) start();
+        if (!sessions.some(s => s.runtimeKey === blockId && s.kind === owner && s.profileId === profile.id && s.status !== "failed" && s.status !== "closed")) start();
       }).catch(() => { if (active) retry = window.setTimeout(recover, 3000); });
     };
     if (isServer) recover(); else start();

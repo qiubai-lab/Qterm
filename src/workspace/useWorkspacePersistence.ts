@@ -29,8 +29,10 @@ export function useWorkspacePersistence(document: WorkspaceDocument, dispatch: D
   const previousScheduled = useRef<WorkspaceDocument | null>(null);
   useLayoutEffect(() => {
     documentRef.current = document;
-    if (hydrated) webTabSessions.reconcile(document);
-  }, [document, hydrated, webTabSessions]);
+  }, [document]);
+  useLayoutEffect(() => {
+    if (hydrated) webTabSessions.reconcile(documentRef.current);
+  }, [document.workspaces, hydrated, webTabSessions]);
 
   const refreshProfiles = useCallback(async () => {
     if (!active || !hasWorkspaceRuntime()) return;

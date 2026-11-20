@@ -24,7 +24,13 @@ export function createSessionStartQueue() {
         key,
         start() {
           signal.removeEventListener("abort", task.cancel);
-          open().then(resolve, reject).finally(() => { running--; drain(); });
+          const release = () => { running--; drain(); };
+          try {
+            open().then(resolve, reject).finally(release);
+          } catch (error) {
+            reject(error);
+            release();
+          }
         },
         cancel() {
           waiting.delete(task);

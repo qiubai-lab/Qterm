@@ -1,6 +1,8 @@
 import { act, cleanup, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { createWorkspace } from "./model";
+import { DesktopContext } from "../remoteRuntime/desktop/context";
+import { DesktopEnvironments } from "../remoteRuntime/desktop/environments";
 import { WorkspaceStages } from "./WorkspaceStages";
 
 const draw = vi.hoisted(() => vi.fn());
@@ -33,4 +35,18 @@ it("mounts the selected view first, warms one at a time, and updates only the tw
   expect(draw.mock.calls).toEqual([[b, false], [c, true]]);
   expect(screen.getByTestId(c)).toBe(draft);
   expect(draft.value).toBe("unfinished");
+});
+
+it("hides foreground-only work when switching servers and keeps the local terminal mounted", async () => {
+  const host = new DesktopEnvironments({ connect: async () => "/api", disconnect: async () => {} });
+  const workspace = createWorkspace();
+  render(<DesktopContext value={host}><WorkspaceStages workspaces={[workspace]} activeId={workspace.id}
+    hydrated covered={false} attentionId={null} transition={{ workspaceId: workspace.id, direction: null }}
+    onRequestClose={vi.fn()} onRequestAuthConnection={vi.fn()}/></DesktopContext>);
+  const local = screen.getByTestId(workspace.id);
+  await act(() => host.connect({ id: "remote", name: "远程", endpoint: "https://test.invalid" }));
+  expect(draw).toHaveBeenLastCalledWith(workspace.id, false);
+  act(() => host.focus("local"));
+  expect(draw).toHaveBeenLastCalledWith(workspace.id, true);
+  expect(screen.getByTestId(workspace.id)).toBe(local);
 });

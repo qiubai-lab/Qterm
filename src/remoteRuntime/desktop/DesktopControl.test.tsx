@@ -4,6 +4,26 @@ import { DesktopControl } from "./DesktopControl";
 import { DesktopEnvironments, serverKey } from "./environments";
 afterEach(cleanup);
 
+it("keeps the environment switcher at the window-controls end when access history is unavailable", async () => {
+  const host = new DesktopEnvironments({ connect: async url => url, disconnect: vi.fn() });
+  render(<DesktopControl host={host}/>);
+  const controls = screen.getByRole("group", { name: "运行环境" });
+  const switcher = within(controls).getByRole("button", { name: /运行环境/ });
+  expect(controls.lastElementChild).toBe(switcher);
+  await act(() => host.connect({ id: "a", name: "开发服", endpoint: "https://a.test" }));
+  const key = serverKey("a");
+  const showLog = vi.fn();
+  const port = host.frame(host.find(key)!, vi.fn());
+  act(() => port.status("已连接", vi.fn(), vi.fn(), () => 0, showLog));
+  const history = within(controls).getByRole("button", { name: "访问记录" });
+  expect(history.nextElementSibling).toBe(switcher);
+  fireEvent.click(history);
+  expect(showLog).toHaveBeenCalledOnce();
+  act(() => host.focus("local"));
+  expect(history).toBeDisabled();
+  expect(controls.lastElementChild).toBe(switcher);
+});
+
 it("releases the desktop while a background server flushes, and lets the user retry a failed save", async () => {
   const disconnect = vi.fn(async () => {});
   const host = new DesktopEnvironments({ connect: async url => url, disconnect });

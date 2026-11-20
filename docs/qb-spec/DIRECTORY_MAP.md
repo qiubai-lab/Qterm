@@ -72,6 +72,8 @@
 - `src/workspace/workspaceClose.ts`：Block 关闭资格和按类型确认文案的纯规则，供 reducer 与关闭编排共用；不操作会话或存储。`src/web/surface/nativeSurfaceCoordinator.ts` 同时从现有 surface 登记解析可见 guest 的 Block 归属；`web/windows_shortcuts.rs` 与 `web/macos/native/BlockCloseShortcut.swift` 转发可信原生关闭按键，不向客体页面开放 IPC。
 - `src-tauri/src/infrastructure/macos_menu.rs`、`src/lib/tauri/blockClose.ts`：macOS 原生菜单与主窗口定向 block/tab-close 事件的 transport/订阅生命周期；不直接断开会话或修改布局，关闭规则委托工作区快捷键 controller。`macos_menu/select_all.rs` 将主 WebView 中的终端全选交给可取消 DOM 事件，其余焦点回落 AppKit 响应链。
 - `src/workspace/useWorkspaceShortcuts.ts`：应用快捷键的捕获、弹窗/锁屏门禁和所有活动 Block 的关闭路由；复用 Shell 关闭确认与现有会话清理，不持有会话或持久化状态。
+- `src/workspace/WorkspaceStages.tsx`、`workspaceBlockContext.ts`：前台画布立即挂载、已访问画布保活及后台分批预热。面板订阅运行时和历史记录，标签选择由外层 Shell 管理。
+- `src/server/ServerRuntimeRestore.tsx`、`sessionInventory.ts`、`sessionStartQueue.ts`：按已挂载工作区恢复原有会话，同轮读取共享清单，锁定撤销旧读取，后台握手为当前工作区保留容量。
 - `src/workspace/WorkspaceShell.tsx`：组合顶部 Workspace 导航、工具轨、Terminal/Files/Network/Git 认证路由、route 凭证库解锁、关闭编排、快捷键与一次性启动更新提示入口；不请求任意更新地址、解析跳板图、布局树或 SSH 协议。
 - `src/workspace/model.ts`、`layout.ts`、`reducer.ts`、`gitRepositoryHistory.ts`：schema v10 可持久化工作区契约、Git `Unbound | Local | Remote` target、按本机或 profile 隔离的有界 Git 仓库 MRU、使用调用方提供稳定 ID 的纯布局树变换与低频结构状态；不持有 session、xterm、Git 快照、远程命令、一次性启动目录或凭据。
 - `src/workspace/WorkspaceProvider.tsx`、`useWorkspacePersistence.ts`：兼容的单一 Workspace Context façade，以及 hydration、debounced save、close flush 和 profile refresh owner；Git target retarget 可在同 profile 的已连接 Git session 上只切换路径，Provider 不直接实现会话事件或连接生命周期，运行时状态不持久化。

@@ -117,7 +117,11 @@ export class DesktopEnvironments {
       if (entry && tabs.enabled) rememberTabs(entry, tabs);
       this.owners.set(key, commands);
       const previous = this.find(key)?.tabs;
-      if (previous?.activeId !== tabs.activeId || previous.enabled !== tabs.enabled || previous.items !== tabs.items) {
+      const sameItems = previous?.items === tabs.items || (previous?.items.length === tabs.items.length && tabs.items.every((item, index) => {
+        const prior = previous.items[index];
+        return prior.id === item.id && prior.name === item.name && prior.unread === item.unread;
+      }));
+      if (previous?.activeId !== tabs.activeId || previous.enabled !== tabs.enabled || !sameItems) {
         this.patch(key, { tabs });
       }
       return () => { if (this.owners.get(key) === commands) this.owners.delete(key); };

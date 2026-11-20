@@ -343,7 +343,7 @@ export function WorkspaceShell({ onLogout, webActions, terminalLockBackend, term
     <section className="workspace-stage">
       <div className="workspace-stage-content" data-lock-covered={Boolean(terminalLockBackend && terminalLocked) || undefined} inert={terminalLocked ? true : undefined} aria-hidden={terminalLocked || undefined}>
         <WorkspaceStages workspaces={document.workspaces} activeId={activeWorkspace.id} hydrated={hydrated}
-          transition={workspaceTransition} covered={Boolean(terminalLockState && terminalLocked)}
+          transition={workspaceTransition} covered={terminalLocked || !workbenchActive}
           attentionId={localTerminalAttentionWorkspaceId} remoteShellIntegrationEnabled={remoteShellIntegrationEnabled}
           terminalSettingsReady={terminalSettingsReady && workbenchActive} renderRuntime={renderWorkspaceRuntime}
           onRequestClose={closeBlock} onRequestDisconnect={(owner, blockId, name, local) => setDisconnectRequest({ owner, blockId, name, local })}
