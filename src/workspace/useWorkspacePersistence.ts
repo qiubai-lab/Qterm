@@ -26,6 +26,7 @@ export function useWorkspacePersistence(document: WorkspaceDocument, dispatch: D
   const [webTabSessions] = useState(createWebTabSessionStore);
   const [save] = useState(() => createWorkspaceSaveQueue(saveWorkspaces, saveWebTabCache));
   const documentRef = useRef(document);
+  const previousScheduled = useRef<WorkspaceDocument | null>(null);
   useLayoutEffect(() => {
     documentRef.current = document;
     if (hydrated) webTabSessions.reconcile(document);
@@ -88,7 +89,9 @@ export function useWorkspacePersistence(document: WorkspaceDocument, dispatch: D
   useEffect(() => {
     if (!hydrated || !hasWorkspaceRuntime()) return;
     let timer: number;
-    const schedule = () => { window.clearTimeout(timer); timer = window.setTimeout(() => { void flush(); }, isServer ? 0 : 180); };
+    const selectionOnly = previousScheduled.current?.workspaces === document.workspaces;
+    previousScheduled.current = document;
+    const schedule = () => { window.clearTimeout(timer); timer = window.setTimeout(() => { void flush(); }, isServer && !selectionOnly ? 0 : 180); };
     schedule();
     const stop = webTabSessions.subscribe(schedule);
     return () => { window.clearTimeout(timer); stop(); };

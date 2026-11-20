@@ -9,11 +9,12 @@ export function restoreWindowSession(host: DesktopEnvironments) {
   try {
     const saved = JSON.parse(sessionStorage.getItem(storageKey) ?? "null");
     if (Array.isArray(saved?.members)) {
+      const members = [];
       for (const item of saved.members) {
         const entry = entries.find(entry => entry.id === item?.id && entry.endpoint === item.endpoint);
-        if (entry && typeof item.runtimeId === "string") void host.connect(entry, item.runtimeId);
+        if (entry && typeof item.runtimeId === "string") members.push({ entry, runtimeId: item.runtimeId });
       }
-      if (typeof saved.active === "string") host.focus(saved.active);
+      void host.restore(members, typeof saved.active === "string" ? saved.active : "local");
       return;
     }
   } catch { /* A fresh window still has its local workspace and server list. */ }

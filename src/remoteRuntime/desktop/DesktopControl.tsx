@@ -13,7 +13,7 @@ import "../remoteRuntime.css";
 export function DesktopControl({host}: {host: DesktopEnvironments}) {
   const { environments, active } = useEnvironments(host);
   const [entries, setEntries] = useState(listServers);
-  const [anchor, setAnchor] = useState<DOMRect | null>(null);
+  const [anchor, setAnchor] = useState<{ trigger: HTMLButtonElement; bounds: DOMRect } | null>(null);
   const [manager, setManager] = useState(false);
   const [pending, setPending] = useState<string | null>(null);
   const [failure, setFailure] = useState<{ key: string; message: string } | null>(null);
@@ -33,9 +33,9 @@ export function DesktopControl({host}: {host: DesktopEnvironments}) {
   }
   return <div className="runtime-environment-control" role="group" aria-label="运行环境">
     <button aria-label={`运行环境：${env.name}，${env.status}`} aria-haspopup="menu" aria-expanded={!!anchor} className="runtime-trigger"
-      onClick={event => setAnchor(anchor ? null : event.currentTarget.getBoundingClientRect())}><Icon name="server" size={14}/></button>
-    {env.entry && env.status === "已连接" && <button aria-label="访问记录" className="runtime-trigger" onClick={() => host.showLog(active)}><Icon name="history" size={14}/></button>}
-    {anchor && <EnvironmentMenu anchor={anchor} current={env.entry ?? null} status={env.status} servers={entries} onChoose={choose}
+      onClick={event => setAnchor(anchor ? null : { trigger: event.currentTarget, bounds: event.currentTarget.getBoundingClientRect() })}><Icon name="server" size={14}/></button>
+    {environments.length > 1 && <button aria-label="访问记录" disabled={!env.entry || env.status !== "已连接"} className="runtime-trigger runtime-log-trigger" onClick={() => host.showLog(active)}><Icon name="history" size={14}/></button>}
+    {anchor && <EnvironmentMenu trigger={anchor.trigger} anchor={anchor.bounds} current={env.entry ?? null} status={env.status} servers={entries} onChoose={choose}
       connected={environments.filter(item => item.entry).map(item => ({entry: item.entry!, status: item.closing ? "断开中" : item.status}))}
       onDisconnect={id => ask(serverKey(id))} onManage={() => { setAnchor(null); setManager(true); }} onClose={() => setAnchor(null)}/>}
     {manager && <ServerManager initialNew={!entries.length} entries={entries} activeId={env.entry?.id} connectedIds={environments.flatMap(item => item.entry ? [item.entry.id] : [])}

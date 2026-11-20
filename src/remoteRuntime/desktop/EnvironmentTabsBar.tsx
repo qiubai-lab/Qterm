@@ -13,7 +13,7 @@ export function EnvironmentTabsBar({ host, localLabel }: { host: DesktopEnvironm
     const items = env.tabs?.items.length ? env.tabs.items : [{ id: "", name: "工作区" }];
     const editable = host.canEdit(env);
     const needsAccess = ["已锁定", "需要登录", "等待接管", "已被接管"].includes(env.status);
-    const icon: WorkspaceTabItem["icon"] = env.entry ? needsAccess ? "lock" : "server" : "workspace";
+    const icon: WorkspaceTabItem["icon"] = env.entry ? needsAccess ? "lockSolid" : "serverSolid" : "workspace";
     return items.map(item => ({
       id: tabKey(env.key, item.id), workspaceId: item.id, env, name: item.name, icon,
       editable, closable: editable && items.length > 1, color: env.entry?.tabColor,

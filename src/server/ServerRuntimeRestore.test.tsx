@@ -3,7 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ServerRuntimeRestore } from "./ServerRuntimeRestore";
 const state = vi.hoisted(() => ({
   hydrated: true,
-  document: {workspaces: [{layout: {type:"split",id:"split",direction:"horizontal",ratio:0.5,first:{type:"git",blockId:"git-block",target:{type:"remote",profileId:"profile"}},second:{type:"network",blockId:"network-block",profileId:"profile"}}}]},
+  document: {workspaces: [{id:"ws",activeBlockId:"git-block",layout: {type:"split",id:"split",direction:"horizontal",ratio:0.5,first:{type:"git",blockId:"git-block",target:{type:"remote",profileId:"profile"}},second:{type:"network",blockId:"network-block",profileId:"profile"}}}]},
   restoreTerminalBlock:vi.fn(),restoreFileBlock:vi.fn(),restoreGitBlock:vi.fn(),restoreNetworkBlock:vi.fn(),
 }));
 const activity = vi.hoisted(() => ({ enabled: true }));
@@ -18,7 +18,7 @@ it("reattaches the original Git and network sessions, including running rules", 
   const git={sessionId:"old-git",runtimeKey:"git-block",kind:"git",profileId:"profile"};
   const network={sessionId:"old-network",runtimeKey:"network-block",kind:"network",profileId:"profile",ruleStates:{rule:"running"}};
   list.mockResolvedValue([git,network]);
-  render(<ServerRuntimeRestore/>);
+  render(<ServerRuntimeRestore workspaceId="ws"/>);
   await waitFor(()=>expect(state.restoreNetworkBlock).toHaveBeenCalledWith(network));
   expect(state.restoreGitBlock).toHaveBeenCalledWith(git);
   expect(state.restoreTerminalBlock).not.toHaveBeenCalled();
@@ -29,9 +29,9 @@ it("waits for workspace hydration and skips stale profile or block mappings", as
     {sessionId:"old",runtimeKey:"git-block",kind:"git",profileId:"other"},
     {sessionId:"gone",runtimeKey:"removed-block",kind:"network",profileId:"profile"},
   ]);
-  const view=render(<ServerRuntimeRestore/>);
+  const view=render(<ServerRuntimeRestore workspaceId="ws"/>);
   expect(list).not.toHaveBeenCalled();
-  state.hydrated=true;view.rerender(<ServerRuntimeRestore/>);
+  state.hydrated=true;view.rerender(<ServerRuntimeRestore workspaceId="ws"/>);
   await waitFor(()=>expect(list).toHaveBeenCalledOnce());
   expect(state.restoreGitBlock).not.toHaveBeenCalled();
   expect(state.restoreNetworkBlock).not.toHaveBeenCalled();
@@ -47,10 +47,10 @@ function pendingGit() {
 }
 it("continues remaining restores after a workspace document update", async () => {
   const complete = pendingGit();
-  const view = render(<ServerRuntimeRestore/>);
+  const view = render(<ServerRuntimeRestore workspaceId="ws"/>);
   await waitFor(() => expect(state.restoreGitBlock).toHaveBeenCalled());
   state.document = { ...state.document };
-  view.rerender(<ServerRuntimeRestore/>);
+  view.rerender(<ServerRuntimeRestore workspaceId="ws"/>);
   await act(async () => { complete(); });
   expect(state.restoreNetworkBlock).toHaveBeenCalledExactlyOnceWith(network);
   expect(state.restoreGitBlock).toHaveBeenCalledOnce();
@@ -58,42 +58,42 @@ it("continues remaining restores after a workspace document update", async () =>
 });
 it("checks the latest target before restoring the next block", async () => {
   const complete = pendingGit();
-  const view = render(<ServerRuntimeRestore/>);
+  const view = render(<ServerRuntimeRestore workspaceId="ws"/>);
   await waitFor(() => expect(state.restoreGitBlock).toHaveBeenCalled());
   const workspace = state.document.workspaces[0];
   state.document = { workspaces: [{ ...workspace, layout: { ...workspace.layout, second: { ...workspace.layout.second, profileId: "other" } } }] };
-  view.rerender(<ServerRuntimeRestore/>);
+  view.rerender(<ServerRuntimeRestore workspaceId="ws"/>);
   await act(async () => { complete(); });
   expect(state.restoreNetworkBlock).not.toHaveBeenCalled();
 });
 it("continues other blocks after an individual attachment rejects", async () => {
   list.mockResolvedValue([git, network]);
   state.restoreGitBlock.mockRejectedValue(new Error("attach failed"));
-  render(<ServerRuntimeRestore/>);
+  render(<ServerRuntimeRestore workspaceId="ws"/>);
   await waitFor(() => expect(state.restoreNetworkBlock).toHaveBeenCalledWith(network));
 });
 it("cancels the old pass when locked and runs a new pass after unlock", async () => {
   const complete = pendingGit();
-  const view = render(<ServerRuntimeRestore/>);
+  const view = render(<ServerRuntimeRestore workspaceId="ws"/>);
   await waitFor(() => expect(state.restoreGitBlock).toHaveBeenCalled());
   activity.enabled = false;
-  view.rerender(<ServerRuntimeRestore/>);
+  view.rerender(<ServerRuntimeRestore workspaceId="ws"/>);
   await act(async () => { complete(); });
   expect(state.restoreNetworkBlock).not.toHaveBeenCalled();
   activity.enabled = true;
-  view.rerender(<ServerRuntimeRestore/>);
+  view.rerender(<ServerRuntimeRestore workspaceId="ws"/>);
   await waitFor(() => expect(state.restoreNetworkBlock).toHaveBeenCalledWith(network));
   expect(list).toHaveBeenCalledTimes(2);
 });
 it("retries failed registry queries and cancels retry timers on unmount", async () => {
   vi.useFakeTimers();
   list.mockRejectedValueOnce(new Error("offline")).mockResolvedValue([network]);
-  const view = render(<ServerRuntimeRestore/>);
+  const view = render(<ServerRuntimeRestore workspaceId="ws"/>);
   await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
   expect(state.restoreNetworkBlock).toHaveBeenCalledWith(network);
   view.unmount();
   list.mockRejectedValue(new Error("offline"));
-  const next = render(<ServerRuntimeRestore/>);
+  const next = render(<ServerRuntimeRestore workspaceId="ws"/>);
   await act(async () => { await Promise.resolve(); });
   const calls = list.mock.calls.length;
   next.unmount();

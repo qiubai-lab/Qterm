@@ -27,7 +27,7 @@ interface Props {
 
 export function WebBlock({ workspaceId, node, visible, active, onClose, onConnect, onManageConnections, onHeaderPointerDown }: Props) {
   const [tabHeader, setTabHeader] = useState<HTMLDivElement | null>(null);
-  const { document, profiles, profileGroups = [], networkRuntimes, dispatch, disconnectNetworkBlock, selectNetworkTarget, registerWebOpener, webTabSessions, hydrated } = useWorkspace();
+  const { document, profiles, profileGroups = [], networkRuntimes, dispatch, disconnectNetworkBlock, selectNetworkTarget, registerWebOpener, webTabSessions, hydrated } = useWorkspace("blocks");
   const profile = profiles.find(item => item.id === node.profileId);
   const local = node.profileId === null;
   const available = local || Boolean(profile);

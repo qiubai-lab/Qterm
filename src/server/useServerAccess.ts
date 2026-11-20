@@ -3,7 +3,6 @@ import { vaultStatus } from "./vaultStatus";
 import { pauseData } from "./dataAccess";
 import { resetServerTerminalLock, serverTerminalLock } from "./terminalLock";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { bootstrapAppTheme } from "../app/theme/AppThemeProvider";
 import { accessProof, rememberAccess } from "./accessIdentity";
 import { openAccessPresence } from "./accessPresence";
 import { api, AUTH_EXPIRED, message } from "./http";
@@ -35,7 +34,7 @@ export function useServerAccess() {
           if (info.runtime !== "web-server" || info.protocolVersion !== 1) throw new Error("服务器协议不兼容，请更新客户端或服务器");
         }
         return serverTerminalLock.read().catch(() => ({locked:true}));
-      })().then(state => state.locked ? undefined : bootstrapAppTheme()).then(() => {
+      })().then(() => {
         if (generation===epoch.current) {setPhase("workspace");setError("");}
       }).catch(reason => {if(generation===epoch.current){setError(message(reason));setPhase("login");leave();}});
     },() => {

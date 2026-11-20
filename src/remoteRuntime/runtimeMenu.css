@@ -33,4 +33,8 @@
 .runtime-menu .connected-server-row:is(:hover,:focus-within) { background:var(--menu-hover-background); color:var(--menu-hover-text); }
 .runtime-menu .connected-server-row:is(:hover,:focus-within) button { background:transparent; color:inherit; }
 .runtime-menu .connected-server-row:is(:hover,:focus-within) :is(svg,small) { color:inherit; opacity:1; }
-.runtime-menu .connected-server-row .runtime-disconnect:is(:hover,:focus-visible) { background:var(--raised); color:var(--danger); box-shadow:inset 0 0 0 1px var(--danger); }
+.runtime-menu :is(.runtime-menu-summary[data-connected] strong,.runtime-menu-summary[data-connected] .runtime-summary-icon) { color:var(--navigation-accent); }
+.runtime-menu button[data-connected]:not(:hover,:focus-visible) :is(svg,.runtime-menu-copy>span) { color:var(--navigation-accent); }
+.runtime-menu .connected-server-row:is(:hover,:focus-within) button[data-connected] :is(svg,.runtime-menu-copy>span) { color:var(--menu-hover-text); }
+.runtime-menu .connected-server-row .runtime-disconnect:is(:hover,:focus-visible) { background:transparent; box-shadow:none; }
+.runtime-menu .connected-server-row .runtime-disconnect:is(:hover,:focus-visible) > svg { color:var(--danger); opacity:1; stroke-width:2.3; }

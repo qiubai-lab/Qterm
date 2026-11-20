@@ -2,7 +2,7 @@ import { framePort } from "../../remoteRuntime/desktop/frame";
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 /* eslint-disable react-refresh/only-export-components -- feature provider and its typed hook share a boundary. */
-import { createContext, useContext, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { getNotificationSettings, sendTerminalNotification, updateNotificationSettings, getNotificationBodySettings, updateNotificationBodySettings } from "@qterm/services/notifications";
 import { useWorkspace } from "../../workspace/WorkspaceProvider";
 import { findLeaf } from "../../workspace/layout";
@@ -109,7 +109,7 @@ export function TerminalNotificationProvider({ children }: { children: ReactNode
     notices.prune(item => valid(item.blockId, item.epoch) && item.workspaceId !== workspaceDocument.activeWorkspaceId);
   }, [workspaceDocument, runtimes, getTerminalEpoch, receiver, limiter, inbox, notices]);
 
-  const update = async (value: boolean) => {
+  const update = useCallback(async (value: boolean) => {
     if (busyRef.current || !ready) return;
     busyRef.current = true; setBusy(true); setError("");
     try {
@@ -118,13 +118,17 @@ export function TerminalNotificationProvider({ children }: { children: ReactNode
       receiver.current?.clear(); limiter.clear(); inbox.clear(); notices.dismiss();
     } catch (reason) { setError(errorText(reason)); throw reason; }
     finally { busyRef.current = false; setBusy(false); }
-  };
-  const updateBody = async (value: boolean) => {
+  }, [inbox, limiter, notices, ready]);
+  const updateBody = useCallback(async (value: boolean) => {
     if (busyRef.current || !ready) return;
     busyRef.current = true; setBusy(true); setError("");
     try { await updateNotificationBodySettings(value); showBodyRef.current = value; setShowBody(value); }
     catch (reason) { setError(errorText(reason)); throw reason; }
     finally { busyRef.current = false; setBusy(false); }
-  };
-  return <Context.Provider value={{ notice, dismissNotice: notices.dismiss, showBody, updateBody, enabled, ready, busy, error, update, unread: blockId => enabled && unreadEpochs[blockId] !== undefined && unreadEpochs[blockId] === getTerminalEpoch(blockId), acknowledge }}>{children}</Context.Provider>;
+  }, [ready]);
+  const value = useMemo<NotificationContext>(() => ({
+    notice, dismissNotice: notices.dismiss, showBody, updateBody, enabled, ready, busy, error, update, acknowledge,
+    unread: blockId => enabled && unreadEpochs[blockId] !== undefined && unreadEpochs[blockId] === getTerminalEpoch(blockId),
+  }), [acknowledge, busy, enabled, error, getTerminalEpoch, notice, notices, ready, showBody, unreadEpochs, update, updateBody]);
+  return <Context.Provider value={value}>{children}</Context.Provider>;
 }

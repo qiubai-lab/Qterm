@@ -7,7 +7,7 @@ type Recovery = { action: "cancel" } | { action: "create" } | { action: "attach"
 export async function resolveRetainedSession(
   blockId: string, kind: string, profileId: string | null, current: () => boolean,
 ): Promise<Recovery> {
-  const session = (await listRetainedSessions()).find(value => value.runtimeKey === blockId);
+  const session = (await listRetainedSessions({ blockId })).find(value => value.runtimeKey === blockId);
   if (!current()) return { action: "cancel" };
   if (!session) return { action: "create" };
   if (session.kind !== kind || session.profileId !== profileId) throw new Error("后台会话目标已变化，请重新加载工作区");

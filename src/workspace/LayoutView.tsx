@@ -1,4 +1,4 @@
-import { useFileAutoConnect } from "./useFileAutoConnect";
+import { useBlockAutoConnect } from "./useBlockAutoConnect";
 import { boundsStyle, workbenchHostName } from "./layoutPresentation";
 import { WebBlock } from "../web/WebBlock";
 import { supportsWebBlocks } from "../web/webModel";
@@ -29,7 +29,7 @@ import { useWorkspace, type FileRuntime } from "./WorkspaceProvider";
 export type ConnectionOwner = "terminal" | "files" | "network" | "git";
 import { BlockNotice } from "./BlockNotice";
 export function WorkspaceCanvas({ workspace, visible, localTerminalAttention = false, remoteShellIntegrationEnabled = false, terminalSettingsReady = true, onRequestClose, onRequestDisconnect, onRequestAuthConnection, onOpenConnectionManager }: { workspace: Workspace; visible: boolean; localTerminalAttention?: boolean; remoteShellIntegrationEnabled?: boolean; terminalSettingsReady?: boolean; onRequestClose: (blockId: string) => void; onRequestDisconnect?: (owner: ConnectionOwner, blockId: string, name: string, local: boolean) => void; onRequestAuthConnection: (owner: ConnectionOwner, blockId: string, profile: ConnectionProfile) => void; onOpenConnectionManager?: () => void }) {
-  const { dispatch } = useWorkspace();
+  const { dispatch } = useWorkspace("blocks");
   const { drag, geometry, layoutSurfaceRef, beginDrag, startResize } = useLayoutInteractions(workspace, visible, dispatch);
   const activeBounds = geometry.leaves.find(({ node }) => node.blockId === workspace.activeBlockId)?.bounds ?? null;
 
@@ -88,7 +88,7 @@ function BlockView(props: BlockRenderProps & { node: LayoutLeaf }) {
 }
 
 function TerminalBlock(props: BlockRenderProps & { blockId: string; profileId: string | null }) {
-  const { document, dispatch, runtimes, profiles, profileGroups = [], splitTerminalBlock, selectBlockTarget, clearBlockBuffer, disconnectBlock, restartLocalBlock } = useWorkspace();
+  const { document, dispatch, runtimes, profiles, profileGroups = [], splitTerminalBlock, selectBlockTarget, clearBlockBuffer, disconnectBlock, restartLocalBlock } = useWorkspace("blocks");
   const requestConnection = props.onRequestAuthConnection;
   const runtime = runtimes[props.blockId];
   const active = props.workspace.activeBlockId === props.blockId;
@@ -225,11 +225,7 @@ function TerminalBlock(props: BlockRenderProps & { blockId: string; profileId: s
     if (osc7AttentionTimerRef.current !== null) window.clearTimeout(osc7AttentionTimerRef.current);
   }, []);
 
-  useEffect(() => {
-    if (!profile || status !== "closed" || requestedProfileRef.current === profile.id) return;
-    requestedProfileRef.current = profile.id;
-    requestConnection("terminal", props.blockId, profile);
-  }, [profile, props.blockId, requestConnection, status]);
+  useBlockAutoConnect("terminal", profile, status, props.blockId, requestedProfileRef, requestConnection);
 
   return <section
     className={`terminal-block${active ? " active" : ""}`}
@@ -264,7 +260,7 @@ function TerminalBlock(props: BlockRenderProps & { blockId: string; profileId: s
 }
 
 function FilesBlock(props: BlockRenderProps & { blockId: string; profileId: string | null; path: string }) {
-  const { document, dispatch, fileRuntimes, profiles, profileGroups = [], selectFileTarget, disconnectFileBlock } = useWorkspace();
+  const { document, dispatch, fileRuntimes, profiles, profileGroups = [], selectFileTarget, disconnectFileBlock } = useWorkspace("blocks");
   const requestConnection = props.onRequestAuthConnection;
   const runtime: FileRuntime = fileRuntimes[props.blockId] ?? (props.profileId === null
     ? { sessionId: null, kind: "local", status: "connected", hostKeyPrompt: null, notice: "", connectionProgress: null }
@@ -297,7 +293,7 @@ function FilesBlock(props: BlockRenderProps & { blockId: string; profileId: stri
     requestedProfileRef.current = target?.id ?? null;
     if (target) requestConnection("files", props.blockId, target);
   }
-  useFileAutoConnect(profile, runtime.status, props.blockId, requestedProfileRef, requestConnection);
+  useBlockAutoConnect("files", profile, runtime.status, props.blockId, requestedProfileRef, requestConnection);
   return <section
     className={`terminal-block file-browser-block${active ? " active" : ""}`}
     data-layout-block={props.blockId}
@@ -317,7 +313,7 @@ function FilesBlock(props: BlockRenderProps & { blockId: string; profileId: stri
 }
 
 function NetworkBlock(props: BlockRenderProps & { blockId: string; profileId: string | null }) {
-  const { document, dispatch, profiles, profileGroups = [], networkRuntimes, selectNetworkTarget, disconnectNetworkBlock, startNetworkBlockRule, stopNetworkBlockRule } = useWorkspace();
+  const { document, dispatch, profiles, profileGroups = [], networkRuntimes, selectNetworkTarget, disconnectNetworkBlock, startNetworkBlockRule, stopNetworkBlockRule } = useWorkspace("blocks");
   const profile = profiles.find((item) => item.id === props.profileId);
   const runtime = networkRuntimes[props.blockId];
   const active = props.workspace.activeBlockId === props.blockId;
@@ -383,7 +379,7 @@ function NetworkBlock(props: BlockRenderProps & { blockId: string; profileId: st
 }
 
 function GitBlock(props: BlockRenderProps & { blockId: string; target: GitTarget }) {
-  const { document, dispatch, profiles, profileGroups = [], gitRuntimes, selectGitTarget, stageGitRemoteTarget, cancelStagedGitTarget, disconnectGitBlock } = useWorkspace();
+  const { document, dispatch, profiles, profileGroups = [], gitRuntimes, selectGitTarget, stageGitRemoteTarget, cancelStagedGitTarget, disconnectGitBlock } = useWorkspace("blocks");
   const { blockId, onRequestAuthConnection, target, workspace } = props;
   const workspaceId = workspace.id;
   const active = props.workspace.activeBlockId === props.blockId;
@@ -463,11 +459,7 @@ function GitBlock(props: BlockRenderProps & { blockId: string; target: GitTarget
     if (status !== "connected" || !runtime?.sessionId) onRequestAuthConnection("git", blockId, profile);
   }, [blockId, onRequestAuthConnection, pendingRemote, profile, runtime?.sessionId, status, target.type]);
 
-  useEffect(() => {
-    if (target.type !== "remote" || !profile || status !== "closed" || requestedProfileRef.current === profile.id) return;
-    requestedProfileRef.current = profile.id;
-    onRequestAuthConnection("git", blockId, profile);
-  }, [blockId, onRequestAuthConnection, profile, status, target.type]);
+  useBlockAutoConnect("git", target.type === "remote" ? profile : undefined, status, blockId, requestedProfileRef, onRequestAuthConnection);
 
   const repositoryPickerOpen = target.type === "remote"
     && typeof repositoryPickerRequest === "object"

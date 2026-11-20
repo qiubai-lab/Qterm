@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { dropPosition } from "./layoutPresentation";
 import { calculateLayoutGeometry, resolveLayoutBounds, type LayoutDividerGeometry, type LayoutGeometry } from "./layoutGeometry";
 import type { DropPosition } from "./layout";
@@ -27,7 +27,7 @@ export function useLayoutInteractions(workspace: Workspace, visible: boolean, di
   const [liveRatios, setLiveRatios] = useState<Record<string, number>>({});
   const layoutSurfaceRef = useRef<HTMLDivElement>(null);
   const cancelGesture = useRef<(() => void) | null>(null);
-  const geometry = calculateLayoutGeometry(workspace.layout, liveRatios);
+  const geometry = useMemo(() => calculateLayoutGeometry(workspace.layout, liveRatios), [workspace.layout, liveRatios]);
   const latestGeometry = useRef(geometry);
   useLayoutEffect(() => { latestGeometry.current = geometry; }, [geometry]);
   useEffect(() => {

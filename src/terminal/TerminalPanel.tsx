@@ -57,7 +57,7 @@ export function TerminalPanel({ blockId, sessionKey, visible, local, osc7Enabled
   const [stagingSessionId, setStagingSessionId] = useState<string | null>(null);
   const [stagingClosing, setStagingClosing] = useState(false);
   const [activeStagingTask, setActiveStagingTask] = useState<ActiveStagingTask | null>(null);
-  const { hydrated = true, localTerminalCapabilities, registerWriter, setBlockCwd, startLocalBlock, writeBlock, resizeBlock, clearBlockBuffer, runtimes } = useWorkspace();
+  const { hydrated = true, localTerminalCapabilities, registerWriter, setBlockCwd, startLocalBlock, writeBlock, resizeBlock, clearBlockBuffer, runtimes } = useWorkspace("blocks");
   const windowsPty = local ? localTerminalCapabilities?.windowsPty ?? undefined : undefined;
   const inputEnabled = runtimes[blockId]?.status === "connected";
   const connectedSessionId = runtimes[blockId]?.sessionId ?? null;
@@ -368,41 +368,21 @@ export function TerminalPanel({ blockId, sessionKey, visible, local, osc7Enabled
     if (view) void startLocalRef.current(blockId, view.terminal.cols, view.terminal.rows, osc7EnabledRef.current);
   }, [blockId, hydrated, local, terminalSettingsReady]);
 
+  const synchronizedSession = useRef<string | null>(null);
   useEffect(() => {
+    if (!inputEnabled) synchronizedSession.current = null;
     if (!visible) return;
     let frame = 0;
-    let cancelled = false;
     let attempts = 0;
     const restore = () => {
-      if (cancelled) return;
-      const view = viewRef.current;
-      if (!view || !view.layout.restore()) {
-        attempts += 1;
-        if (attempts < 12) frame = requestAnimationFrame(restore);
-        return;
-      }
+      const session = inputEnabled ? connectedSessionId : null;
+      const force = session !== null && synchronizedSession.current !== session;
+      if (viewRef.current?.layout.restore(force)) synchronizedSession.current = session;
+      else if (++attempts < 12) frame = requestAnimationFrame(restore);
     };
     frame = requestAnimationFrame(restore);
-    return () => { cancelled = true; cancelAnimationFrame(frame); };
-  }, [blockId, local, visible]);
-
-  useEffect(() => {
-    if (!visible || !inputEnabled || !connectedSessionId) return;
-    let frame = 0;
-    let cancelled = false;
-    let attempts = 0;
-    const synchronize = () => {
-      if (cancelled) return;
-      const view = viewRef.current;
-      if (!view || !view.layout.restore(true)) {
-        attempts += 1;
-        if (attempts < 12) frame = requestAnimationFrame(synchronize);
-        return;
-      }
-    };
-    frame = requestAnimationFrame(synchronize);
-    return () => { cancelled = true; cancelAnimationFrame(frame); };
-  }, [blockId, connectedSessionId, inputEnabled, local, visible]);
+    return () => cancelAnimationFrame(frame);
+  }, [sessionKey, connectedSessionId, inputEnabled, visible]);
 
   useEffect(() => {
     if (!contextMenu) return;

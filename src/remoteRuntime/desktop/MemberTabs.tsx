@@ -15,7 +15,7 @@ import { EnvironmentTabsBar } from "./EnvironmentTabsBar";
 type Props = { disabled: boolean; requestClose(request: CloseRequest): void; onReorderSelection(order: string[]): void };
 function PublishTabs({ port, disabled, requestClose, onReorderSelection }: Props & { port: WorkspacePort }) {
   const { document, hydrated, dispatch } = useWorkspace();
-  const notifications = useTerminalNotifications();
+  const { unread } = useTerminalNotifications();
   const batch = useWorkspaceBatchActions();
   const latest = useRef({ document, disabled, requestClose, onReorderSelection, batch });
   useLayoutEffect(() => { latest.current = { document, disabled, requestClose, onReorderSelection, batch }; });
@@ -43,10 +43,10 @@ function PublishTabs({ port, disabled, requestClose, onReorderSelection }: Props
         current.requestClose(createWorkspaceCloseRequest(workspace, () => dispatch({ type: "closeWorkspace", workspaceId: id })));
     },
   }), [dispatch]);
-  const signature = JSON.stringify(document.workspaces.map(({ id, name, layout }) => ({ id, name, unread: terminalBlockIds(layout).some(notifications.unread) })));
+  const items = useMemo(() => document.workspaces.map(({ id, name, layout }) => ({ id, name, unread: terminalBlockIds(layout).some(unread) })), [document.workspaces, unread]);
   useLayoutEffect(() => {
-    if (hydrated) return port.publish({ activeId: document.activeWorkspaceId, items: JSON.parse(signature), enabled: !disabled }, commands);
-  }, [commands, disabled, document.activeWorkspaceId, hydrated, port, signature]);
+    if (hydrated) return port.publish({ activeId: document.activeWorkspaceId, items, enabled: !disabled }, commands);
+  }, [commands, disabled, document.activeWorkspaceId, hydrated, items, port]);
   return null;
 }
 function LocalTabs({ host, ...props }: Props & { host: DesktopEnvironments }) {

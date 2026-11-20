@@ -23,6 +23,7 @@ export interface FramePort extends WorkspacePort {
   status(label: string, leave: () => Promise<void>, flush: () => Promise<void>, transfers: () => number, showLog?: () => void): void;
   shortcut(event: KeyboardEvent): void;
   foreground(): boolean;
+  subscribe(listener: () => void): () => void;
 }
 export type RuntimeFrame = HTMLIFrameElement & { qtermWorkbench?: FramePort };
 

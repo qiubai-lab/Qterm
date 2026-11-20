@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-export type IconName = "bookmark" | "history" | "workspace" | "plus" | "terminal" | "git" | "submodule" | "mergeConflict" | "browser" | "externalLink" | "computer" | "server" | "network" | "files" | "file" | "filePlus" | "folderPlus" | "edit" | "save" | "check" | "checkCircle" | "alertCircle" | "copy" | "upload" | "download" | "key" | "lock" | "logout" | "trash" | "clear" | "back" | "forward" | "chevronDown" | "refresh" | "sync" | "search" | "connect" | "disconnect" | "settings" | "help" | "splitHorizontal" | "splitVertical" | "menu" | "pin" | "windowMinimize" | "windowMaximize" | "close" | "more" | "eye" | "eyeOff";
+export type IconName = "bookmark" | "history" | "workspace" | "plus" | "terminal" | "git" | "submodule" | "mergeConflict" | "browser" | "externalLink" | "computer" | "server" | "serverSolid" | "lockSolid" | "network" | "files" | "file" | "filePlus" | "folderPlus" | "edit" | "save" | "check" | "checkCircle" | "alertCircle" | "copy" | "upload" | "download" | "key" | "lock" | "logout" | "trash" | "clear" | "back" | "forward" | "chevronDown" | "refresh" | "sync" | "search" | "connect" | "disconnect" | "settings" | "help" | "splitHorizontal" | "splitVertical" | "menu" | "pin" | "windowMinimize" | "windowMaximize" | "close" | "more" | "eye" | "eyeOff";
 
 export function Icon({ name, size = 16 }: { name: IconName; size?: number }) {
   const paths: Record<IconName, ReactNode> = {
@@ -16,6 +16,8 @@ export function Icon({ name, size = 16 }: { name: IconName; size?: number }) {
     history: <><path d="M3 4v5h5M3.6 9a8.5 8.5 0 1 1-.1 6"/><path d="M12 7v5l3 2"/></>,
     computer: <><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></>,
     server: <><rect x="4" y="3" width="16" height="7" rx="2"/><rect x="4" y="14" width="16" height="7" rx="2"/><path d="M8 6.5h.01M8 17.5h.01M12 6.5h5M12 17.5h5"/></>,
+    serverSolid: <path fill="currentColor" stroke="none" fillRule="evenodd" d="M4 2.5h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2Zm1.5 3v2.5H8V5.5H5.5Zm7 1v1.5h6V6.5h-6ZM4 13h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2Zm1.5 3v2.5H8V16H5.5Zm7 1v1.5h6V17h-6Z"/>,
+    lockSolid: <><path d="M7 10V7a5 5 0 0 1 10 0v3" strokeWidth="2.6"/><path fill="currentColor" stroke="none" fillRule="evenodd" d="M5 9h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2Zm5.75 4v5h2.5v-5h-2.5Z"/></>,
     network: <><rect x="9" y="2" width="6" height="6" rx="1.2"/><rect x="3" y="16" width="6" height="6" rx="1.2"/><rect x="15" y="16" width="6" height="6" rx="1.2"/><path d="M12 8v4M6 16v-4h12v4"/></>,
     files: <><path d="M4 5a2 2 0 0 1 2-2h4l2 3h6a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z"/></>,
     file: <><path d="M6 3h8l4 4v14H6Z"/><path d="M14 3v5h5"/></>,

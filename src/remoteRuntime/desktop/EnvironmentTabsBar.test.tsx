@@ -36,7 +36,7 @@ it.each(["重连中", "需要登录", "已被接管", "已锁定"])("retains %s 
   act(() => port.status(status, vi.fn(), vi.fn(), () => 0));
   const remoteTab = screen.getAllByRole("button", {name: "API"})[1];
   expect(remoteTab).toHaveAccessibleDescription(status);
-  expect(remoteTab.querySelector("svg")).toHaveAttribute("data-icon", status === "重连中" ? "server" : "lock");
+  expect(remoteTab.querySelector("svg")).toHaveAttribute("data-icon", status === "重连中" ? "serverSolid" : "lockSolid");
   fireEvent.click(screen.getByRole("button", {name: "新建工作区"}));
   expect(within(screen.getByRole("dialog")).getByRole("button", {name: new RegExp("开发服.*" + status)})).toBeDisabled();
   fireEvent.keyDown(window, {key: "Escape"});
@@ -49,7 +49,7 @@ it("uses the original rename interaction and updates only the server glyph when 
   const {host, remote, local} = await fixture();
   const [localTab, remoteTab] = screen.getAllByRole("button", {name: "API"});
   expect(localTab.querySelector("svg")).toHaveAttribute("data-icon", "workspace");
-  expect(remoteTab.querySelector("svg")).toHaveAttribute("data-icon", "server");
+  expect(remoteTab.querySelector("svg")).toHaveAttribute("data-icon", "serverSolid");
   expect(localTab.closest(".workspace-tab")).not.toHaveAttribute("data-source-color");
   const card = remoteTab.closest<HTMLElement>(".workspace-tab")!;
   expect(card.style.getPropertyValue("--workspace-source-color")).toBe("#81a9cd");

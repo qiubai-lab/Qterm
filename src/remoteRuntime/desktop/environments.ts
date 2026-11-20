@@ -31,6 +31,7 @@ export class DesktopEnvironments {
   private listeners = new Set<() => void>();
   private owners = new Map<string, WorkspaceCommands>();
   private access = new Map<string, Access>();
+  private waiting = new Map<string, DesktopEnvironment>();
   private history = ["local"];
   private state = { active: "local", environments: [{ key: "local", name: "本机", status: "本机" }] as DesktopEnvironment[] };
   constructor(private transport: Transport) {}
@@ -47,9 +48,17 @@ export class DesktopEnvironments {
   focus(key: string, id?: string) {
     const env = this.find(key);
     if (!env) return;
+    void this.startWaiting(key);
     this.history = [key, ...this.history.filter(previous => previous !== key)];
-    this.update(this.state.environments, key);
-    if (env.tabs && this.canEdit(env)) this.owners.get(key)?.select(id || env.tabs.activeId);
+    const commands = this.commands(key);
+    const tabId = id && env.tabs?.items.some(tab => tab.id === id) ? id : env.tabs?.activeId;
+    if (commands && env.tabs && tabId && env.tabs.activeId !== tabId) {
+      const tabs = { ...env.tabs, activeId: tabId };
+      this.update(this.state.environments.map(item => item === env ? { ...env, tabs } : item), key);
+    } else if (this.state.active !== key) {
+      this.update(this.state.environments, key);
+    }
+    if (commands && tabId) commands.select(tabId);
   }
   async connect(entry: ServerEntry, runtimeId = randomId()) {
     const key = serverKey(entry.id);
@@ -57,10 +66,43 @@ export class DesktopEnvironments {
     if (existing && existing.key !== key) { this.focus(existing.key); return; }
     const previous = this.find(key);
     if (previous && (previous.closing || !previous.error)) { this.focus(key); return; }
+    const pending = this.reserve(entry, runtimeId);
+    this.focus(key);
+    await this.open(pending);
+  }
+
+  private reserve(entry: ServerEntry, runtimeId: string) {
+    const key = serverKey(entry.id);
+    const previous = this.find(key);
     const pending = { key, entry, name: entry.name, runtimeId, status: "连接中", tabs: previous?.tabs ?? readRememberedTabs(entry) };
     if (previous) this.patch(key, { ...pending, error: undefined });
     else this.update([...this.state.environments, pending]);
-    this.focus(key);
+    return pending;
+  }
+
+  async restore(members: { entry: ServerEntry; runtimeId: string }[], active: string) {
+    for (const { entry, runtimeId } of members) {
+      if (this.state.environments.some(env => env.entry?.endpoint === entry.endpoint || env.key === serverKey(entry.id))) continue;
+      const env = this.reserve(entry, runtimeId);
+      this.waiting.set(env.key, env);
+    }
+    this.focus(this.find(active) ? active : "local");
+    for (const key of this.waiting.keys()) {
+      await new Promise(resolve => setTimeout(resolve, 180));
+      await this.startWaiting(key);
+    }
+  }
+
+  private startWaiting(key: string) {
+    const env = this.waiting.get(key);
+    if (!env || this.find(key)?.closing) return;
+    this.waiting.delete(key);
+    return this.open(env);
+  }
+
+  private async open(env: DesktopEnvironment) {
+    const { key, runtimeId, entry } = env;
+    if (!entry || !runtimeId) return;
     try {
       const apiBase = await this.transport.connect(entry.endpoint, runtimeId);
       if (this.find(key)?.runtimeId === runtimeId) this.patch(key, { apiBase, status: "需要登录" });
@@ -74,7 +116,10 @@ export class DesktopEnvironments {
       const entry = this.find(key)?.entry;
       if (entry && tabs.enabled) rememberTabs(entry, tabs);
       this.owners.set(key, commands);
-      this.patch(key, { tabs });
+      const previous = this.find(key)?.tabs;
+      if (previous?.activeId !== tabs.activeId || previous.enabled !== tabs.enabled || previous.items !== tabs.items) {
+        this.patch(key, { tabs });
+      }
       return () => { if (this.owners.get(key) === commands) this.owners.delete(key); };
     } };
   }
@@ -83,6 +128,7 @@ export class DesktopEnvironments {
     const entry = () => this.find(env.key)?.entry ?? env.entry!;
     return { get entry() { return entry(); }, runtimeId: env.runtimeId!, apiBase: env.apiBase!,
       shortcut: event => { if (current() && this.state.active === env.key && !this.find(env.key)?.closing) shortcut(event); },
+      subscribe: this.subscribe,
       foreground: () => current() && this.state.active === env.key && !this.find(env.key)?.closing,
       publish: (tabs, commands) => current() ? this.workspacePort(env.key).publish(tabs, commands) : () => {},
       status: (status, leave, flush, transfers, showLog) => {
@@ -119,6 +165,7 @@ export class DesktopEnvironments {
       await this.access.get(key)?.flush();
       await this.access.get(key)?.leave();
       await this.transport.disconnect(env.runtimeId);
+      this.waiting.delete(key);
       this.access.delete(key);
       this.owners.delete(key);
       this.history = this.history.filter(id => id !== key);

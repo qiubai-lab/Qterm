@@ -103,3 +103,33 @@ it("restores only tab titles for the same saved endpoint while authentication is
   await changed.connect({ ...entry, endpoint: b.endpoint });
   expect(changed.find(serverKey(entry.id))?.tabs).toBeUndefined();
 });
+
+it("selects the requested remote tab in the first host notification", async () => {
+  const { host } = setup();
+  const { port, workspace } = await open(host, a);
+  port.publish({ activeId: "first", enabled: true, items: [{ id: "first", name: "构建" }, { id: "second", name: "测试" }] }, workspace);
+  host.focus("local");
+  const observed: (string | undefined)[] = [];
+  const stop = host.subscribe(() => observed.push(host.find(host.snapshot().active)?.tabs?.activeId));
+  host.focus(serverKey(a.id), "second");
+  expect(observed).toEqual(["second"]);
+  expect(workspace.select).toHaveBeenLastCalledWith("second");
+  stop();
+});
+
+it("restores the foreground first, preserves tab order, and lets a click promote a queued server", async () => {
+  vi.useFakeTimers();
+  try {
+    const { transport, host } = setup();
+    const c = { id: "c", name: "CI", endpoint: "https://c.test" };
+    const restoring = host.restore([a, b, c].map(entry => ({ entry, runtimeId: entry.id })), serverKey("b"));
+    expect(transport.connect.mock.calls).toEqual([[b.endpoint, "b"]]);
+    expect(host.snapshot().environments.map(env => env.key)).toEqual(["local", "server:a", "server:b", "server:c"]);
+    host.focus("server:c");
+    expect(transport.connect.mock.calls).toHaveLength(2);
+    host.focus("local");
+    await vi.runAllTimersAsync(); await restoring;
+    expect(transport.connect.mock.calls).toEqual([[b.endpoint, "b"], [c.endpoint, "c"], [a.endpoint, "a"]]);
+    expect(host.snapshot().active).toBe("local");
+  } finally { vi.useRealTimers(); }
+});

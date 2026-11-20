@@ -25,7 +25,9 @@ export function createTerminalLayout(
   let generation = 0;
   let disposed = false;
   let forced = false;
+  let measured = false;
   const apply = () => {
+    measured = true;
     fit.fit();
     terminal.refresh(0, Math.max(0, terminal.rows - 1));
     scheduler.request(terminal.cols, terminal.rows, forced);
@@ -36,6 +38,13 @@ export function createTerminalLayout(
       if (disposed) return false;
       const dimensions = fit.proposeDimensions();
       if (!dimensions || !Number.isFinite(dimensions.cols) || !Number.isFinite(dimensions.rows) || dimensions.cols < 2 || dimensions.rows < 1) return false;
+      if (measured && dimensions.cols === terminal.cols && dimensions.rows === terminal.rows) {
+        clearTimeout(timer);
+        generation++;
+        scheduler.request(terminal.cols, terminal.rows, force || forced);
+        forced = false;
+        return true;
+      }
       forced ||= force;
       if (terminal.options.windowsPty?.backend !== "conpty") {
         apply();

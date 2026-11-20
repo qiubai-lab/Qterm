@@ -1,6 +1,7 @@
 /* eslint-disable react-refresh/only-export-components -- provider and its typed hook are one public boundary. */
 import type { TerminalOutputObserver } from "../terminal/notifications/notificationRuntime";
-import { createContext, useContext, useMemo, useReducer, type Dispatch, type ReactNode } from "react";
+import { WorkspaceBlockContext, useWorkspaceBlockValue } from "./workspaceBlockContext";
+import { createContext, use, useMemo, useReducer, type Dispatch, type ReactNode } from "react";
 
 import type { LocalTerminalCapabilities } from "../lib/tauri/localSessions";
 import type { ConnectionProfile, ProfileGroup } from "@qterm/services/profiles";
@@ -18,7 +19,7 @@ export type { FileRuntime, GitRuntime, HostKeyPrompt, NetworkRuntime, TerminalRu
 
 import type { RetainedSession } from "@qterm/services/runtimeSessions";
 
-interface WorkspaceContextValue extends ReturnType<typeof useWebOpenController> {
+export interface WorkspaceContextValue extends ReturnType<typeof useWebOpenController> {
   webTabSessions?: WebTabSessionStore;
   restoreTerminalBlock: (session: RetainedSession) => Promise<void>;
   restoreGitBlock: (session: RetainedSession) => Promise<void>;
@@ -102,11 +103,14 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     dismissStorageNotice: persistence.dismissStorageNotice,
   }), [document, persistence.dismissStorageNotice, persistence.hydrated, persistence.profileGroups, persistence.profiles, persistence.refreshProfiles, persistence.storageNotice, persistence.webTabSessions, runtime, web]);
 
-  return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;
+  const blocks = useWorkspaceBlockValue(value);
+  return <WorkspaceContext value={value}><WorkspaceBlockContext value={blocks}>{children}</WorkspaceBlockContext></WorkspaceContext>;
 }
 
-export function useWorkspace(): WorkspaceContextValue {
-  const context = useContext(WorkspaceContext);
+export function useWorkspace(scope: "blocks"): ReturnType<typeof useWorkspaceBlockValue>;
+export function useWorkspace(): WorkspaceContextValue;
+export function useWorkspace(scope?: "blocks") {
+  const context = scope === "blocks" ? use(WorkspaceBlockContext) : use(WorkspaceContext);
   if (!context) throw new Error("WorkspaceProvider is missing");
   return context;
 }

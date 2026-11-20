@@ -42,7 +42,7 @@ export function workspaceReducer(state: WorkspaceDocument, action: WorkspaceActi
       const recentGitRepositories = recordRecentGitRepository(state.recentGitRepositories, action.repository);
       return recentGitRepositories === state.recentGitRepositories ? state : { ...state, recentGitRepositories };
     }
-    case "selectWorkspace": return state.workspaces.some((workspace) => workspace.id === action.workspaceId) ? { ...state, activeWorkspaceId: action.workspaceId } : state;
+    case "selectWorkspace": return state.activeWorkspaceId !== action.workspaceId && state.workspaces.some((workspace) => workspace.id === action.workspaceId) ? { ...state, activeWorkspaceId: action.workspaceId } : state;
     case "addWorkspace": {
       if (state.workspaces.length >= MAX_WORKSPACES) return state;
       const occupiedNames = new Set(state.workspaces.map(workspace => workspace.name));

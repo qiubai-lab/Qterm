@@ -20,6 +20,7 @@ html[data-runtime-member] .app-chrome { display:none; }
 /* The source color belongs exclusively to the glyph, including during a rename. */
 .workspace-tab[data-source-color]:not(:has([data-unread])) :is(.workspace-tab-select,.workspace-tab-rename) > svg {
   color:var(--workspace-source-color);
+  color:oklch(from var(--workspace-source-color) calc(l * .96) calc(c * 1.35) h);
 }
 .workspace-source-scrim { padding-top:64px; }
 .workspace-source-dialog.dialog-compact { width:min(386px,calc(100vw - 40px)); }

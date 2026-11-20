@@ -85,8 +85,9 @@ it("preserves a forced Windows reconnect sync through later measurements", async
   h.layout.restore(); await vi.advanceTimersByTimeAsync(120);
   h.drain.shift()!(); await vi.runAllTimersAsync();
   h.layout.restore(true); h.layout.restore();
-  await vi.advanceTimersByTimeAsync(120);
-  h.drain.shift()!(); await vi.runAllTimersAsync();
+  await vi.runAllTimersAsync();
+  expect(h.drain).toHaveLength(0);
+  expect(h.fit.fit).toHaveBeenCalledOnce();
   expect(h.send).toHaveBeenCalledTimes(2);
   h.layout.dispose();
 });
