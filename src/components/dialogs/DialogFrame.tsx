@@ -1,3 +1,5 @@
+import { useDesktopHost } from "../../remoteRuntime/desktop/context";
+import { framePort } from "../../remoteRuntime/desktop/frame";
 import { useWorkbenchActive } from "../../workspace/workbenchActivity";
 import { useEffect, useId, useRef, type ReactNode } from "react";
 
@@ -6,8 +8,10 @@ import { Icon } from "../Icon";
 
 const dialogStack: symbol[] = [];
 
-export function DialogFrame({ title, titleIcon, subtitle, onClose, children, headerActions, wide = false, compact = false, dismissible = true, blocking = !dismissible, modal = true, closing = false, className, scrimClassName }: { title: string; titleIcon?: ReactNode; subtitle?: string; onClose: () => void; children: ReactNode; headerActions?: ReactNode; wide?: boolean; compact?: boolean; dismissible?: boolean; blocking?: boolean; modal?: boolean; closing?: boolean; className?: string; scrimClassName?: string }) {
+export function DialogFrame({ environment, title, titleIcon, subtitle, onClose, children, headerActions, wide = false, compact = false, dismissible = true, blocking = !dismissible, modal = true, closing = false, className, scrimClassName }: { environment?: string | null; title: string; titleIcon?: ReactNode; subtitle?: string; onClose: () => void; children: ReactNode; headerActions?: ReactNode; wide?: boolean; compact?: boolean; dismissible?: boolean; blocking?: boolean; modal?: boolean; closing?: boolean; className?: string; scrimClassName?: string }) {
   const active = useWorkbenchActive();
+  const host = useDesktopHost();
+  const owner = environment === undefined ? framePort?.entry.name ?? (host && host.snapshot().environments.length > 1 ? "本机" : null) : environment;
   const frameRef = useRef<HTMLElement>(null);
   const stackIdRef = useRef(Symbol("dialog"));
   const onCloseRef = useRef(onClose);
@@ -46,7 +50,7 @@ export function DialogFrame({ title, titleIcon, subtitle, onClose, children, hea
   if (!active) return null;
   return <div data-app-overlay={modal ? "modal" : undefined} className={`dialog-scrim${blocking ? " dialog-scrim-blocking" : ""}${scrimClassName ? ` ${scrimClassName}` : ""}`} data-state={closing ? "closing" : "open"} onPointerDown={(event) => { if (dismissible && !closing && event.target === event.currentTarget) onClose(); }}>
     <section ref={frameRef} tabIndex={-1} className={`dialog-frame${wide ? " dialog-wide" : ""}${compact ? " dialog-compact" : ""}${className ? ` ${className}` : ""}`} data-state={closing ? "closing" : "open"} role="dialog" data-app-overlay={modal ? undefined : "floating"} aria-modal={modal || undefined} aria-labelledby={titleId}>
-      <header className="dialog-header"><div className="dialog-header-copy"><h2 id={titleId}>{titleIcon && <span className="dialog-title-icon" aria-hidden="true">{titleIcon}</span>}{title}</h2>{subtitle && <p>{subtitle}</p>}</div><div className="dialog-header-actions">{headerActions}{dismissible && <IconButton label="关闭" onClick={onClose}><Icon name="close"/></IconButton>}</div></header>
+      <header className="dialog-header"><div className="dialog-header-copy"><h2 id={titleId}>{titleIcon && <span className="dialog-title-icon" aria-hidden="true">{titleIcon}</span>}{title}{owner && <small className="dialog-environment-name">{owner}</small>}</h2>{subtitle && <p>{subtitle}</p>}</div><div className="dialog-header-actions">{headerActions}{dismissible && <IconButton label="关闭" onClick={onClose}><Icon name="close"/></IconButton>}</div></header>
       <div className="dialog-content">{children}</div>
     </section>
   </div>;

@@ -82,9 +82,13 @@ async fn fixture() -> (Arc<RemoteRuntime>, tokio::task::JoinHandle<()>) {
     let server = tokio::spawn(async move {
         axum::serve(listener, app).await.unwrap();
     });
-    let runtime = RemoteRuntime::start(&endpoint, "http://localhost:1420".into())
-        .await
-        .unwrap();
+    let runtime = RemoteRuntime::start(
+        &endpoint,
+        "http://localhost:1420".into(),
+        CancellationToken::new(),
+    )
+    .await
+    .unwrap();
     (runtime, server)
 }
 #[tokio::test]
@@ -209,7 +213,69 @@ async fn rejects_spa_fallback_instead_of_treating_html_as_a_healthy_server() {
         .await
         .unwrap();
     });
-    let result = RemoteRuntime::start(&address, "tauri://localhost".into()).await;
+    let result = RemoteRuntime::start(
+        &address,
+        "tauri://localhost".into(),
+        CancellationToken::new(),
+    )
+    .await;
     assert!(matches!(result, Err(message) if message.contains("健康检查")));
     server.abort();
+}
+
+#[tokio::test]
+async fn desktop_registry_keeps_simultaneous_upstreams_and_downloads_independent() {
+    let (a, server_a) = fixture().await;
+    let (b, server_b) = fixture().await;
+    let registry = RemoteRuntimeRegistry::default();
+    let origin = "http://localhost:1420".to_owned();
+    let (first, second) = tokio::join!(
+        registry.connect("a", a.endpoint.as_str(), origin.clone()),
+        registry.connect("b", b.endpoint.as_str(), origin.clone()),
+    );
+    let first = first.unwrap();
+    let second = second.unwrap();
+    assert_ne!(first.api_base, second.api_base);
+    assert_eq!(
+        registry
+            .connect("a", a.endpoint.as_str(), origin.clone())
+            .await
+            .unwrap()
+            .api_base,
+        first.api_base
+    );
+    assert!(
+        registry
+            .connect("a", b.endpoint.as_str(), origin)
+            .await
+            .is_err()
+    );
+    let first_runtime = registry.runtime("a").await.unwrap();
+    let second_runtime = registry.runtime("b").await.unwrap();
+    let temp = tempfile::tempdir().unwrap();
+    let id = first_runtime
+        .downloads
+        .select(temp.path().join("test"))
+        .await
+        .unwrap();
+    assert!(
+        second_runtime
+            .downloads
+            .write(&id, b"wrong server")
+            .await
+            .is_err()
+    );
+    registry.disconnect("a").await;
+    assert!(first_runtime.cancel.is_cancelled());
+    assert!(registry.runtime("a").await.is_err());
+    assert!(!second_runtime.cancel.is_cancelled());
+    assert_eq!(
+        registry.runtime("b").await.unwrap().info().api_base,
+        second.api_base
+    );
+    registry.disconnect("b").await;
+    a.cancel.cancel();
+    b.cancel.cancel();
+    server_a.abort();
+    server_b.abort();
 }

@@ -1,3 +1,4 @@
+import { framePort } from "../remoteRuntime/desktop/frame";
 import type { CSSProperties } from "react";
 import type { DropPosition } from "./layout";
 import { layoutScalarCss, type LayoutBounds } from "./layoutGeometry";
@@ -20,3 +21,6 @@ export function boundsStyle(bounds: LayoutBounds): CSSProperties {
     height: layoutScalarCss(bounds.height),
   };
 }
+
+/** Local operations execute on the server host inside a remote workbench. */
+export const workbenchHostName = () => framePort?.entry.name ?? "本机";

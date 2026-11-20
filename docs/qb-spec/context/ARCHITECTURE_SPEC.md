@@ -31,7 +31,7 @@ Frontend -> Desktop Tauri Commands / Web HTTP+WebSocket -> Application -> Domain
 
 ## Desktop Remote Runtime
 
-Desktop selects one immutable runtime per page through `src/remoteRuntime/services`. Business services use either native IPC or the existing Web adapters; clipboard, notifications, window operations and image exports remain native client capabilities. Runtime changes flush layout/guard dirty drafts, detach local surfaces and reload the page to isolate module-scoped caches. Local sessions are explicitly closed after confirmation; remote processes remain server-owned.
+Desktop aggregates workspace tabs from a persistent native local workbench and a bundled same-origin workbench document for each remote connection. Each document selects its own service graph through `src/remoteRuntime/services` and owns its authentication, sockets, revisions, drafts and workspace persistence. The host addresses tab commands by environment and workspace ID. Explicit disconnect flushes that environment, releases its access and removes its tabs. Remote processes remain server-owned.
 
 The remote desktop never loads remote HTML into the trusted main WebView. A native Rust adapter owns the fixed upstream endpoint and its in-memory Cookie jar, exposes only `/api/v1/` through an ephemeral loopback listener, and validates a random path capability plus the main UI Origin. HTTP cookies and redirects are not passed back to the WebView. The existing server admission, lock, takeover and session-ownership checks still apply; native connections do not introduce a second privileged API or bypass server ownership.
 

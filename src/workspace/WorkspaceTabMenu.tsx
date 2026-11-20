@@ -3,7 +3,7 @@ import type { Workspace } from "./model";
 import { workspaceCloseLabels, workspaceCloseTargets, type WorkspaceCloseSide } from "./workspaceClose";
 
 interface Props {
-  anchorId: string; x: number; y: number; workspaces: Workspace[];
+  anchorId: string; x: number; y: number; workspaces: Pick<Workspace, "id">[];
   onChoose: (side: WorkspaceCloseSide) => void;
   onDismiss: (restore?: boolean) => void;
 }

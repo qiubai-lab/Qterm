@@ -1,3 +1,4 @@
+import { framePort } from "../../remoteRuntime/desktop/frame";
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 /* eslint-disable react-refresh/only-export-components -- feature provider and its typed hook share a boundary. */
@@ -71,7 +72,7 @@ export function TerminalNotificationProvider({ children }: { children: ReactNode
       if (!(nativeFocused.current ?? document.hasFocus()) && limiter.allow(blockId, epoch, event)) {
         const leaf = owner && findLeaf(owner.layout, blockId);
         const profile = leaf?.type === "terminal" && leaf.profileId ? context.profiles?.find(item => item.id === leaf.profileId) : null;
-        const source = `${profile?.name ?? (leaf?.type === "terminal" && leaf.profileId ? "远程终端" : "本地终端")} · ${owner?.name ?? "工作区"}`;
+        const source = `${framePort ? framePort.entry.name + " · " : ""}${profile?.name ?? (leaf?.type === "terminal" && leaf.profileId ? "远程终端" : "本地终端")} · ${owner?.name ?? "工作区"}`;
         const body = showBodyRef.current ? [event.title, event.body].filter(Boolean).join("：") : "";
         void sendTerminalNotification(source, body).catch(reason => { if (enabledRef.current) setError(errorText(reason)); });
       }

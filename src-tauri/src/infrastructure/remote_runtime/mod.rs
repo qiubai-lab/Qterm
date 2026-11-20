@@ -2,6 +2,8 @@
 mod client_identity;
 mod download;
 mod proxy;
+mod registry;
+pub use registry::RemoteRuntimeRegistry;
 mod socket;
 #[cfg(test)]
 mod tests;
@@ -44,7 +46,11 @@ pub fn endpoint(value: &str) -> Result<Url, String> {
 }
 
 impl RemoteRuntime {
-    pub async fn start(value: &str, ui_origin: String) -> Result<Arc<Self>, String> {
+    pub async fn start(
+        value: &str,
+        ui_origin: String,
+        cancel: CancellationToken,
+    ) -> Result<Arc<Self>, String> {
         let endpoint = endpoint(value)?;
         let cookies = Arc::new(Jar::default());
         let client = Client::builder()
@@ -90,7 +96,7 @@ impl RemoteRuntime {
             downloads: download::Downloads::default(),
             client,
             cookies,
-            cancel: CancellationToken::new(),
+            cancel,
             token: uuid::Uuid::new_v4().simple().to_string(),
             ui_origin,
             address,

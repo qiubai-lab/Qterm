@@ -4,7 +4,7 @@ import { useTerminalLock, type TerminalLockBackend } from "./useTerminalLock";
 import { useTerminalAutoLock } from "./useTerminalAutoLock";
 import { useTerminalWindowFocus } from "./useTerminalWindowFocus";
 import { WorkspaceToolRail } from "./WorkspaceToolRail";
-import { WorkspaceTabs } from "./WorkspaceTabs";
+import { MemberTabs } from "../remoteRuntime/desktop/MemberTabs";
 import { createBlockCloseRequest, type CloseRequest } from "./workspaceClose";
 import { focusWorkspaceBlock } from "./workspaceFocus";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
@@ -336,7 +336,7 @@ export function WorkspaceShell({ onLogout, webActions, terminalLockBackend, term
         : "锁定终端";
   return <main data-onboarding-ready={hydrated && terminalSettingsReady && !terminalLocked} className="app-shell" data-platform={onLogout && !isRemoteDesktop ? "web" : desktopPlatform}>
     <WorkspaceChrome onLogout={onLogout} webActions={webActions}>
-      <WorkspaceTabs disabled={terminalLocked} requestClose={requestClose} onReorderSelection={order => { workspaceTransitionOrderOverrideRef.current = order; }}/>
+      <MemberTabs disabled={terminalLocked} requestClose={requestClose} onReorderSelection={order => { workspaceTransitionOrderOverrideRef.current = order; }}/>
     </WorkspaceChrome>
 
     <section className="workspace-stage">

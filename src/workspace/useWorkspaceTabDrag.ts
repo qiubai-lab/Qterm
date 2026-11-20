@@ -1,13 +1,11 @@
 import { useEffect, useRef, useState, type RefObject, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
-import { useWorkspace } from "./WorkspaceProvider";
 
 interface WorkspaceTabSlot { id: string; centerX: number }
 interface WorkspaceDragGesture { id: string; pointerId: number; x: number; y: number; active: boolean; offsetX: number; targetId: string | null; slots: WorkspaceTabSlot[] }
 interface WorkspaceDragVisual { id: string; offsetX: number; targetId: string | null }
 const WORKSPACE_DRAG_THRESHOLD_PX = 10;
 
-export function useWorkspaceTabDrag(workspaceTabRefs: RefObject<Map<string, HTMLDivElement>>, onReorderSelection: (order: string[]) => void) {
-  const { document, activeWorkspace, dispatch } = useWorkspace();
+export function useWorkspaceTabDrag(workspaceTabRefs: RefObject<Map<string, HTMLDivElement>>, group: (id: string) => { id: string }[], onDrop: (id: string, target: string, order: string[]) => void) {
   const [workspaceDragVisual, setWorkspaceDragVisual] = useState<WorkspaceDragVisual | null>(null);
   const [workspaceDropSettling, setWorkspaceDropSettling] = useState(false);
   const workspaceDragRef = useRef<WorkspaceDragGesture | null>(null);
@@ -18,7 +16,7 @@ export function useWorkspaceTabDrag(workspaceTabRefs: RefObject<Map<string, HTML
   function beginWorkspaceDrag(event: ReactPointerEvent<HTMLDivElement>, workspaceId: string) {
     if (event.button !== 0 || (event.target as HTMLElement).closest("input,.workspace-tab-close")) return;
     workspaceDragCleanupRef.current?.();
-    const slots = document.workspaces.flatMap((workspace) => {
+    const slots = group(workspaceId).flatMap((workspace) => {
       const element = workspaceTabRefs.current.get(workspace.id);
       if (!element) return [];
       const rect = element.getBoundingClientRect();
@@ -72,11 +70,7 @@ export function useWorkspaceTabDrag(workspaceTabRefs: RefObject<Map<string, HTML
               setWorkspaceDropSettling(false);
             });
           });
-          if (activeWorkspace.id !== workspaceId) {
-            onReorderSelection(moveWorkspaceInOrder(state.slots.map((slot) => slot.id), workspaceId, state.targetId));
-          }
-          dispatch({ type: "reorderWorkspace", workspaceId, targetWorkspaceId: state.targetId });
-          if (activeWorkspace.id !== workspaceId) dispatch({ type: "selectWorkspace", workspaceId });
+          onDrop(workspaceId, state.targetId, moveWorkspaceInOrder(state.slots.map(slot => slot.id), workspaceId, state.targetId));
         }
       }
       finish();

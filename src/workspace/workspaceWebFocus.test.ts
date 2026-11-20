@@ -33,3 +33,17 @@ it("does not steal the address input focus when a queued block activation runs a
   expect(document.activeElement).toBe(input);
   expect(input.value).toBe("http://localhost:5000/");
 });
+
+it("leaves the workspace rename field focused when a delayed block activation runs", () => {
+  const rename = document.createElement("div");
+  rename.className = "workspace-tab-rename";
+  const input = document.createElement("input");
+  rename.append(input);
+  const block = document.createElement("section");
+  block.dataset.layoutBlock = "terminal";
+  block.tabIndex = 0;
+  document.body.append(rename, block);
+  input.focus();
+  expect(focusWorkspaceBlock("terminal")).toBe(false);
+  expect(input).toHaveFocus();
+});

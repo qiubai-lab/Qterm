@@ -6,6 +6,7 @@ import { api, message } from "../http";
 import { selectUpload, takeUpload, type UploadEntry } from "../uploadSelection";
 import { uploadRequest } from "../uploadRequest";
 const tasks = new Map<string, { controller: AbortController; active: Set<string> }>();
+export const activeTransferCount = () => tasks.size;
 export type * from "../../lib/tauri/transfers";
 export const selectUploadFiles: typeof Desktop.selectUploadFiles = () => selectUpload(false);
 export const selectUploadFile: typeof Desktop.selectUploadFile = async () => (await selectUpload(false, false))[0] ?? null;

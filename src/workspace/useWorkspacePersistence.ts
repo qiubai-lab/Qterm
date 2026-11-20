@@ -1,3 +1,4 @@
+import { useDesktopHost } from "../remoteRuntime/desktop/context";
 import { registerRuntimeFlush } from "../remoteRuntime/switchGuard";
 import { useWorkbenchActive } from "./workbenchActivity";
 import { CONFIGURATION_MERGED } from "@qterm/services/configurationMerge";
@@ -15,8 +16,10 @@ import { createWebTabSessionStore } from "../web/webTabSessionStore";
 import { createWorkspaceSaveQueue } from "./workspaceSaveQueue";
 
 export function useWorkspacePersistence(document: WorkspaceDocument, dispatch: Dispatch<WorkspaceAction>) {
+  const host = useDesktopHost();
   const active = useWorkbenchActive();
   const [hydrated, setHydrated] = useState(() => !hasWorkspaceRuntime());
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [profiles, setProfiles] = useState<ConnectionProfile[]>([]);
   const [profileGroups, setProfileGroups] = useState<ProfileGroup[]>([]);
   const [storageNotice, setStorageNotice] = useState("");
@@ -44,6 +47,7 @@ export function useWorkspacePersistence(document: WorkspaceDocument, dispatch: D
   useEffect(() => {
     if (!active || hydrated || !hasWorkspaceRuntime()) return;
     let live = true;
+    let retry: ReturnType<typeof setTimeout> | undefined;
     const cache = loadWebTabCache().catch((error: unknown) => {
       if (live) setStorageNotice(`无法恢复浏览器标签：${workspaceErrorMessage(error)}`);
       return null;
@@ -52,6 +56,8 @@ export function useWorkspacePersistence(document: WorkspaceDocument, dispatch: D
       ([stored, items, groups, tabs]) => {
         if (!live) return;
         if (tabs) webTabSessions.restore(tabs, stored ?? documentRef.current);
+        if (loadAttempt) setStorageNotice("");
+        save.restored(stored);
         if (stored) dispatch({ type: "hydrate", document: stored });
         setProfiles(items);
         setProfileGroups(groups);
@@ -59,12 +65,17 @@ export function useWorkspacePersistence(document: WorkspaceDocument, dispatch: D
       },
       (error: unknown) => {
         if (!live) return;
-        setStorageNotice(`无法读取本地工作区：${workspaceErrorMessage(error)}`);
-        setHydrated(true);
+        if (isServer) {
+          setStorageNotice(`无法读取服务器工作区，正在重试：${workspaceErrorMessage(error)}`);
+          retry = setTimeout(() => setLoadAttempt(attempt => attempt + 1), 3000);
+        } else {
+          setStorageNotice(`无法读取本地工作区：${workspaceErrorMessage(error)}`);
+          setHydrated(true);
+        }
       },
     );
-    return () => { live = false; };
-  }, [active, hydrated, dispatch, webTabSessions]);
+    return () => { live = false; clearTimeout(retry); };
+  }, [active, hydrated, dispatch, loadAttempt, save, webTabSessions]);
 
   const flush = useCallback(async () => {
     if (!active) return;
@@ -87,7 +98,7 @@ export function useWorkspacePersistence(document: WorkspaceDocument, dispatch: D
     if (!hydrated || !hasWorkspaceRuntime()) return;
     let disposed = false;
     let stop: (() => void) | undefined;
-    void registerCurrentWindowCloseFlush(flush).then((unlisten) => {
+    void registerCurrentWindowCloseFlush(async () => { await Promise.all([flush(), host?.flushAll()]); }).then((unlisten) => {
       if (disposed) unlisten();
       else stop = unlisten;
     });
@@ -95,10 +106,14 @@ export function useWorkspacePersistence(document: WorkspaceDocument, dispatch: D
       disposed = true;
       stop?.();
     };
-  }, [hydrated, flush]);
+  }, [hydrated, flush, host]);
 
   useEffect(() => registerRuntimeFlush(async () => {
-    if (!hydrated || !active) return;
+    if (!hydrated) return;
+    if (!active) {
+      if (isServer && !save.confirmed(documentRef.current)) throw new Error("工作区布局尚未同步，请恢复连接并解锁后再试");
+      return;
+    }
     webTabSessions.reconcile(documentRef.current);
     await save(documentRef.current, webTabSessions.snapshot());
   }), [hydrated, active, save, webTabSessions]);

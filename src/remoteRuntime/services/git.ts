@@ -1,4 +1,3 @@
-import { assertRuntimeAttached } from "../switchGuard";
 // Each page has one immutable runtime; native device services stay outside this router.
 import * as local from "../../lib/tauri/git";
 import * as remote from "../../server/services/git";
@@ -34,7 +33,7 @@ export const trackGitRemoteBranch: typeof local.trackGitRemoteBranch = (...args)
 export const mergeGitBranch: typeof local.mergeGitBranch = (...args) => (selectedRuntime ? remote.mergeGitBranch : local.mergeGitBranch)(...args);
 export const continueGitMerge: typeof local.continueGitMerge = (...args) => (selectedRuntime ? remote.continueGitMerge : local.continueGitMerge)(...args);
 export const abortGitMerge: typeof local.abortGitMerge = (...args) => (selectedRuntime ? remote.abortGitMerge : local.abortGitMerge)(...args);
-export const connectGitSession: typeof local.connectGitSession = (...args) => { assertRuntimeAttached(); return (selectedRuntime ? remote.connectGitSession : local.connectGitSession)(...args) };
+export const connectGitSession: typeof local.connectGitSession = (...args) => (selectedRuntime ? remote.connectGitSession : local.connectGitSession)(...args);
 export const executeRemoteGit: typeof local.executeRemoteGit = (...args) => (selectedRuntime ? remote.executeRemoteGit : local.executeRemoteGit)(...args);
 export const loadRemoteGitCommitFiles: typeof local.loadRemoteGitCommitFiles = (...args) => (selectedRuntime ? remote.loadRemoteGitCommitFiles : local.loadRemoteGitCommitFiles)(...args);
 export const loadRemoteGitCommitFileDiff: typeof local.loadRemoteGitCommitFileDiff = (...args) => (selectedRuntime ? remote.loadRemoteGitCommitFileDiff : local.loadRemoteGitCommitFileDiff)(...args);

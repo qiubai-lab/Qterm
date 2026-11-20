@@ -245,8 +245,6 @@
 
 - `src/workspace/WorkspaceChrome.tsx`: shared workspace header; browser logout occupies the native control area.
 - `src/workspace/useWindowTitlebar.ts`: desktop drag threshold, stationary double-click maximize/restore, interactive-target exclusion and gesture cleanup, shared by workspace and remote authentication screens.
-- `src/remoteRuntime/RemoteWindowDragRegion.tsx`: transparent top drag region for startup, login, lock and connection interruption; yields to native controls and is removed when the workbench becomes active.
-- `src/remoteRuntime/useAuthenticationWindowClose.ts`: native close ownership during remote startup and authentication; releases its listener when workspace persistence takes over.
 - `crates/qterm-server/src/local_socket.rs` / `socket_io.rs`: local PTY admission and shared bounded SSH/local WebSocket transport; logout closes browser transports while retained runtime processes keep running.
 - `crates/qterm-server/src/local_files.rs` / `settings.rs` / `credential_management.rs`: service-account files, persistent settings and shared credential workflows exposed through narrow authenticated routes.
 - `crates/qterm-core/src/application/local_file_listing.rs`: shared desktop/server local directory listing.
@@ -304,12 +302,10 @@
 
 ### Desktop remote runtime
 
-- `src/remoteRuntime/`: right-titlebar environment menu, server manager, immutable per-page runtime selection, switch flush/detach ownership and native clipboard/drop/download adapters. Server records contain only identity/name/origin, never credentials.
-- `src/remoteRuntime/services/`: desktop service router; remote business operations reuse `src/server/services`, while clipboard, image export, notifications and native windows remain client-owned. Reload is the boundary between service graphs.
-- `src/workspace/NativeWindowControls.tsx`: window actions separated from runtime/logout controls. `RemoteDesktopApp` keeps connection identity and native controls available during login, lock and connection failure. `ServerApp` mounts this desktop chrome outside its keyed authentication/theme subtree so logout cannot unmount and cancel an environment switch; `src/remoteRuntime/remoteLogoutSwitch.test.tsx` protects that lifecycle.
-- `src-tauri/src/infrastructure/remote_runtime/`: fixed-origin native Cookie jar, private loopback HTTP/WebSocket bridge, exact UI-Origin admission, TLS validation, redirect rejection and cancellation. `client_identity.rs` supplies the same product/version/platform User-Agent to HTTP and WebSocket requests. `commands/remote_runtime.rs` owns native bootstrap/save IPC; `remote_clipboard.rs` and `remote_drop.rs` accept only OS clipboard or approved drag/drop sources.
-- `src/remoteRuntime/switchOperation.ts`: bounded environment-switch sequencing, progress stages and late-result/overlap protection; timeout stops subsequent steps without pretending pending native work was cancelled.
-- `src/remoteRuntime/switchGuard.ts`: registration boundary for workspace save, dirty file guards, native surface teardown and local runtime shutdown; never substitutes for a workspace state owner.
+- `src/remoteRuntime/desktop/` owns the desktop environment registry, scoped workspace commands, adapter for the shared workspace tabs, source-selection dialog, window-session recovery and bundled remote workbench frames. The top-level native chrome stays available during login, lock, failure and reconnection. `RemoteWorkbenchFrame.tsx` contains verification inside a terminal panel beside the disabled shared tool rail. `rememberedTabs.ts` stores display-only tab titles and navigation IDs per saved server and endpoint.
+- `src/remoteRuntime/services/` routes business operations through each document’s immutable runtime. Local operation owners stay mounted while other environments are in front.
+- `src/remoteRuntime/switchGuard.ts` registers document-scoped layout and file draft flushes. `src/files/fileDraftWriter.ts` serializes edits and retries failed draft writes before disconnect.
+- `src-tauri/src/infrastructure/remote_runtime/registry.rs` owns per-attachment upstreams, cookie jars, download sinks and cancellation. `commands/remote_runtime.rs` and `commands/remote_download.rs` route native operations by attachment ID.
 - `src-tauri/src/bootstrap_tests.rs`: composition-root path/flavor/window-state regression tests extracted from `lib.rs` to keep registration changes below its source-size limit.
 
 ### Runtime download lifecycle

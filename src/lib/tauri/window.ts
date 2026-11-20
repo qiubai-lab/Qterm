@@ -1,3 +1,4 @@
+import { framePort } from "../../remoteRuntime/desktop/frame";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { AppTheme } from "./settings";
 
@@ -37,11 +38,11 @@ export async function startDraggingCurrentWindow(): Promise<void> {
 }
 
 export async function setNativeWindowTheme(theme: AppTheme): Promise<void> {
-  if (isTauriRuntime()) await getCurrentWindow().setTheme(theme === "light" ? "light" : "dark");
+  if (!framePort && isTauriRuntime()) await getCurrentWindow().setTheme(theme === "light" ? "light" : "dark");
 }
 
 export async function registerCurrentWindowCloseFlush(flush: () => Promise<void>): Promise<() => void> {
-  if (!isTauriRuntime()) return () => undefined;
+  if (framePort || !isTauriRuntime()) return () => undefined;
   const currentWindow = getCurrentWindow();
   return currentWindow.onCloseRequested(async (event) => {
     event.preventDefault();

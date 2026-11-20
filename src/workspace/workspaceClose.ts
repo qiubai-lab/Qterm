@@ -7,7 +7,7 @@ export interface CloseRequest { title: string; detail: string; subtitle?: string
 export function createWorkspaceCloseRequest(workspace: Workspace, execute: () => void): CloseRequest {
   return { title: `关闭 ${workspace.name}？`, detail: "工作区内的布局和所有终端会话会同时关闭。", ids: blockIds(workspace.layout), execute };
 }
-export function workspaceCloseTargets(workspaces: Workspace[], anchorId: string, side: WorkspaceCloseSide): Workspace[] {
+export function workspaceCloseTargets<T extends Pick<Workspace, "id">>(workspaces: T[], anchorId: string, side: WorkspaceCloseSide): T[] {
   const index = workspaces.findIndex(item => item.id === anchorId);
   if (index < 0) return [];
   return workspaces.filter((item, position) => item.id !== anchorId && (side === "others" || (side === "left" ? position < index : position > index)));

@@ -1,3 +1,5 @@
+import { useDesktopHost } from "../remoteRuntime/desktop/context";
+import { environmentForeground } from "../remoteRuntime/desktop/foreground";
 import { useEffect, useLayoutEffect, useRef } from "react";
 
 import { resolveAppShortcut } from "../app/shortcuts";
@@ -20,6 +22,7 @@ interface WorkspaceShortcutsOptions {
 }
 
 export function useWorkspaceShortcuts({ platform, activeWorkspace, workspaces, modalOpen, terminalLocked, onCloseBlock, onSelectWorkspace }: WorkspaceShortcutsOptions) {
+  const desktop = useDesktopHost();
   const closeCurrentBlock = (source: string | null = null) => {
     if (modalOpen || terminalLocked) return;
     if (source !== null && nativeSurfaceBlockId(source) !== activeWorkspace.activeBlockId) return;
@@ -35,7 +38,8 @@ export function useWorkspaceShortcuts({ platform, activeWorkspace, workspaces, m
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const command = resolveAppShortcut(event, platform);
-      if (!command) return;
+      if (!command || !environmentForeground()) return;
+      if (command.type === "selectWorkspace" && desktop && desktop.snapshot().environments.length > 1) return;
       const closing = command.type === "closeBlock";
       // WebTabs owns Ctrl+W in browsers, regardless of listener mount order.
       // Consume the browser default even if tab controls are not ready yet.
@@ -72,7 +76,7 @@ export function useWorkspaceShortcuts({ platform, activeWorkspace, workspaces, m
     };
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [activeWorkspace, modalOpen, onCloseBlock, onSelectWorkspace, platform, terminalLocked, workspaces]);
+  }, [activeWorkspace, desktop, modalOpen, onCloseBlock, onSelectWorkspace, platform, terminalLocked, workspaces]);
 }
 
 export function isEditableOutsideTerminal(target: EventTarget | null): boolean {

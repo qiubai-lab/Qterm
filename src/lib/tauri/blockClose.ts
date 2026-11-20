@@ -1,3 +1,4 @@
+import { environmentForeground } from "../../remoteRuntime/desktop/foreground";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
 export function hasNativeBlockClose(): boolean {
@@ -13,7 +14,7 @@ function subscribeNativeClose(name: "qterm-close-block" | "qterm-close-web-tab",
   let disposed = false;
   let unlisten: (() => void) | undefined;
   void getCurrentWindow().listen<string | null>(name, event => {
-    if (!disposed && (event.payload === null || typeof event.payload === "string")) receive(event.payload);
+    if (!disposed && environmentForeground() && (event.payload === null || typeof event.payload === "string")) receive(event.payload);
   }).then(stop => {
     if (disposed) stop();
     else unlisten = stop;

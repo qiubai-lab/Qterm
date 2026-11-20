@@ -1,8 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
-export async function connectRuntime(endpoint: string): Promise<string> {
-  return (await invoke<{apiBase: string}>("remote_runtime_connect", { endpoint })).apiBase;
+export async function connectRuntime(endpoint: string, runtimeId: string): Promise<string> {
+  return (await invoke<{apiBase: string}>("remote_runtime_connect", { endpoint, runtimeId })).apiBase;
 }
-export const disconnectRuntime = () => invoke<void>("remote_runtime_disconnect");
+export const disconnectRuntime = (runtimeId: string) => invoke<void>("remote_runtime_disconnect", { runtimeId });
 export async function saveNativeDownload(response: Response, name: string, validate: () => void = () => undefined): Promise<void> {
   const data = new Uint8Array(await response.arrayBuffer());
   validate();

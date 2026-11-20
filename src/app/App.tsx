@@ -1,3 +1,4 @@
+import { DesktopRoot } from "../remoteRuntime/desktop/DesktopRoot";
 import { OnboardingProvider } from "../onboarding/OnboardingProvider";
 import { TerminalNotificationProvider } from "../terminal/notifications/TerminalNotificationProvider";
 import { WorkspaceTerminalLinkHost } from "../workspace/WorkspaceTerminalLinkHost";
@@ -10,5 +11,5 @@ import { useBrowserContextMenuGuard } from "./useBrowserContextMenuGuard";
 
 export default function App() {
   useBrowserContextMenuGuard();
-  return <AppThemeProvider><ThemedTitleTooltipProvider><WorkspaceProvider><OnboardingProvider mode="desktop"><TerminalNotificationProvider><WorkspaceShell/><WorkspaceTerminalLinkHost/></TerminalNotificationProvider></OnboardingProvider></WorkspaceProvider></ThemedTitleTooltipProvider></AppThemeProvider>;
+  return <DesktopRoot><AppThemeProvider><ThemedTitleTooltipProvider><WorkspaceProvider><OnboardingProvider mode="desktop"><TerminalNotificationProvider><WorkspaceShell/><WorkspaceTerminalLinkHost/></TerminalNotificationProvider></OnboardingProvider></WorkspaceProvider></ThemedTitleTooltipProvider></AppThemeProvider></DesktopRoot>;
 }
