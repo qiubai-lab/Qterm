@@ -123,7 +123,7 @@ pub async fn upload(
         let temp = tempfile::NamedTempFile::new_in(target.parent().ok_or_else(ApiError::invalid)?)
             .map_err(|_| ApiError::storage())?
             .into_temp_path();
-        copy(source, &temp, operation).await?;
+        copy(source, &temp, operation, None).await?;
         authorize(state, owner, session)?;
         operation.check()?;
         temp.persist(target).map_err(|_| ApiError::storage())?;
@@ -142,14 +142,20 @@ pub async fn upload(
         .await
     }
 }
-async fn copy(source: &Path, destination: &Path, operation: &Operation) -> Result<()> {
+async fn copy(
+    source: &Path,
+    destination: &Path,
+    operation: &Operation,
+    limit: Option<u64>,
+) -> Result<()> {
     let meta = tokio::fs::symlink_metadata(source)
         .await
         .map_err(|_| ApiError::storage())?;
-    if !meta.is_file() || meta.len() > MAX_TRANSFER_BYTES {
+    if !meta.is_file() || limit.is_some_and(|max| meta.len() > max) {
         return Err(ApiError::invalid());
     }
     operation
+        .progress
         .total
         .store(meta.len(), std::sync::atomic::Ordering::Relaxed);
     let mut input = tokio::fs::File::open(source)
@@ -170,7 +176,7 @@ async fn copy(source: &Path, destination: &Path, operation: &Operation) -> Resul
             break;
         }
         total += size as u64;
-        if total > MAX_TRANSFER_BYTES {
+        if limit.is_some_and(|max| total > max) {
             return Err(ApiError::invalid());
         }
         output
@@ -179,6 +185,7 @@ async fn copy(source: &Path, destination: &Path, operation: &Operation) -> Resul
             .map_err(|_| ApiError::storage())?;
         operation
             .progress
+            .transferred
             .store(total, std::sync::atomic::Ordering::Relaxed);
     }
     output.flush().await.map_err(|_| ApiError::storage())
@@ -228,7 +235,13 @@ pub async fn download(
         // Scoped blocking work retains the operation and temp directory until completion.
         tokio::task::block_in_place(|| crate::transfer_archive::pack(&root, &file, operation))?;
     } else if session == "local" {
-        copy(&local_files::path(path.into())?, &file, operation).await?;
+        copy(
+            &local_files::path(path.into())?,
+            &file,
+            operation,
+            Some(MAX_TRANSFER_BYTES),
+        )
+        .await?;
     } else {
         transfers::transfer(
             state,

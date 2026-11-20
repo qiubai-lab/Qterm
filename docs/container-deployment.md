@@ -165,7 +165,7 @@ server {
     ssl_certificate /etc/letsencrypt/live/qterm.example.com/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/qterm.example.com/privkey.pem;
     ssl_protocols TLSv1.2 TLSv1.3;
-    client_max_body_size 129m;
+    client_max_body_size 0;  # 大文件上传由 Qterm 分块接收
 
     location / {
         proxy_pass http://127.0.0.1:8080;

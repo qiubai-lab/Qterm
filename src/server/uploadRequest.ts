@@ -3,7 +3,7 @@ import { accessHeaders, accessProof } from "./accessIdentity";
 import { API, AUTH_EXPIRED, api, RequestError } from "./http";
 
 /** Both legs count equally: browser -> service, then service -> destination. */
-export function uploadRequest<T>(path: string, body: FormData, taskId: string, bytes: number, signal: AbortSignal, progress: (bytes: number) => void): Promise<T> {
+export function uploadRequest<T>(path: string, body: FormData | { token: string }, taskId: string, bytes: number, signal: AbortSignal, progress: (bytes: number) => void): Promise<T> {
   return new Promise((resolve, reject) => {
     const lease = dataLease();
     signal = AbortSignal.any([signal, lease.signal]);
@@ -21,8 +21,9 @@ export function uploadRequest<T>(path: string, body: FormData, taskId: string, b
     const abort = () => fail(lease.signal.aborted ? lease.signal.reason : new DOMException("上传已取消", "AbortError"));
     async function poll() {
       try {
-        const value = await api<{transferredBytes:number}>(`/transfers/${taskId}/progress`, "GET", undefined, polling.signal);
-        if (value.transferredBytes > 0) report(bytes / 2 + Math.min(bytes, value.transferredBytes) / 2);
+        const value = await api<{transferredBytes:number;receivedBytes?:number}>(`/transfers/${taskId}/progress`, "GET", undefined, polling.signal);
+        if ("token" in body && value.receivedBytes !== undefined) report((value.receivedBytes + value.transferredBytes) / 2);
+        else if (value.transferredBytes > 0) report(bytes / 2 + Math.min(bytes, value.transferredBytes) / 2);
       } catch (error) {
         if (error instanceof RequestError && error.status === 401) fail(error);
         // Registration can lag the first request; a progress failure must not restart an upload.
@@ -33,8 +34,6 @@ export function uploadRequest<T>(path: string, body: FormData, taskId: string, b
     xhr.withCredentials = true;
     xhr.timeout = 660000;
     for (const [key, value] of Object.entries(accessHeaders())) xhr.setRequestHeader(key, value);
-    xhr.upload.onprogress = event => { if (event.lengthComputable) report(bytes * event.loaded / event.total / 2); };
-    xhr.upload.onload = () => { report(bytes / 2); void poll(); };
     xhr.onload = () => {
       if (finished) return;
       let value: T & {code?:string;message?:string};
@@ -50,6 +49,14 @@ export function uploadRequest<T>(path: string, body: FormData, taskId: string, b
     xhr.ontimeout = () => fail(new Error("上传超时，请重试"));
     xhr.onabort = abort;
     signal.addEventListener("abort", abort, {once:true});
-    xhr.send(body);
+    if ("token" in body) {
+      xhr.setRequestHeader("X-Qterm-Drop-Source", body.token);
+      xhr.send(null);
+      void poll();
+    } else {
+      xhr.upload.onprogress = event => { if (event.lengthComputable) report(bytes * event.loaded / event.total / 2); };
+      xhr.upload.onload = () => { report(bytes / 2); void poll(); };
+      xhr.send(body);
+    }
   });
 }

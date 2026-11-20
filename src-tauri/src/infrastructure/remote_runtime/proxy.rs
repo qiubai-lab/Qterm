@@ -40,6 +40,13 @@ pub async fn forward(
     if let Ok(ws) = ws {
         return super::socket::upgrade(runtime, target, ws).await;
     }
+    let native_source = request.headers().get("x-qterm-drop-source");
+    if native_source.is_some()
+        && (request.method() != axum::http::Method::POST
+            || target.path() != "/api/v1/transfers/upload")
+    {
+        return cors(StatusCode::BAD_REQUEST.into_response(), &runtime.ui_origin);
+    }
     let mut outgoing = runtime
         .client
         .request(request.method().clone(), target)
@@ -48,15 +55,40 @@ pub async fn forward(
             runtime.endpoint.origin().ascii_serialization(),
         );
     for name in ["content-type", "x-qterm-client", "x-qterm-access"] {
+        if name == "content-type" && native_source.is_some() {
+            continue;
+        }
         if let Some(value) = request.headers().get(name) {
             outgoing = outgoing.header(name, value);
         }
     }
     let origin = runtime.ui_origin.clone();
-    let body = reqwest::Body::wrap_stream(request.into_body().into_data_stream());
+    let outgoing = if let Some(token) = native_source {
+        match runtime
+            .uploads
+            .multipart(token.to_str().unwrap_or(""))
+            .await
+        {
+            Ok(form) => outgoing.multipart(form),
+            Err(message) => {
+                return cors(
+                    (
+                        StatusCode::BAD_REQUEST,
+                        axum::Json(serde_json::json!({"code":"invalidDrop","message":message})),
+                    )
+                        .into_response(),
+                    &origin,
+                );
+            }
+        }
+    } else {
+        outgoing.body(reqwest::Body::wrap_stream(
+            request.into_body().into_data_stream(),
+        ))
+    };
     let response = tokio::select! {
         _ = runtime.cancel.cancelled() => return StatusCode::GONE.into_response(),
-        result = outgoing.body(body).send() => result,
+        result = outgoing.send() => result,
     };
     match response {
         Ok(upstream) => {
@@ -85,7 +117,7 @@ fn cors(mut response: Response, origin: &str) -> Response {
     );
     headers.insert(
         header::ACCESS_CONTROL_ALLOW_HEADERS,
-        "Content-Type, X-Qterm-Client, X-Qterm-Access"
+        "Content-Type, X-Qterm-Client, X-Qterm-Access, X-Qterm-Drop-Source"
             .parse()
             .unwrap(),
     );

@@ -4,6 +4,7 @@ import { Icon } from "../../components/Icon";
 import { WorkspaceUtilityRail } from "../../workspace/WorkspaceUtilityRail";
 import type { DesktopEnvironment, DesktopEnvironments } from "./environments";
 import type { RuntimeFrame } from "./frame";
+import { frameFileDrop } from "./frameFileDrop";
 
 export function RemoteWorkbenchFrame({ host, env, visible, shortcut }: {
   host: DesktopEnvironments; env: DesktopEnvironment; visible: boolean;
@@ -15,10 +16,12 @@ export function RemoteWorkbenchFrame({ host, env, visible, shortcut }: {
   useLayoutEffect(() => {
     const element = frame.current;
     if (!element || !apiBase) return;
-    element.qtermWorkbench = host.frame(host.find(key)!, event => shortcut(host, event));
+    const port = host.frame(host.find(key)!, event => shortcut(host, event));
+    const lifetime = new AbortController();
+    element.qtermWorkbench = Object.assign(port, { fileDrop: frameFileDrop(element, port.foreground, lifetime.signal, port.runtimeId) });
     // Keep the same bundled document attached when the rail and access panel change.
     element.src = new URL("index.html", window.location.href).href;
-    return () => { delete element.qtermWorkbench; };
+    return () => { lifetime.abort(); delete element.qtermWorkbench; };
   }, [apiBase, host, key, shortcut]);
   useEffect(() => { if (visible) frame.current?.focus(); }, [visible, apiBase]);
 

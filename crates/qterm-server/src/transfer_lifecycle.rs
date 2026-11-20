@@ -24,8 +24,13 @@ struct Entry {
     expires: Instant,
     started: bool,
     cancelled: Arc<AtomicBool>,
-    progress: Arc<AtomicU64>,
-    total: Arc<AtomicU64>,
+    progress: Arc<TransferProgress>,
+}
+#[derive(Default)]
+pub struct TransferProgress {
+    pub received: AtomicU64,
+    pub transferred: AtomicU64,
+    pub total: AtomicU64,
 }
 impl Transfers {
     fn access<T>(
@@ -51,8 +56,7 @@ impl Transfers {
             expires: Instant::now() + Duration::from_secs(660),
             started: false,
             cancelled: Arc::new(AtomicBool::new(false)),
-            progress: Arc::new(AtomicU64::new(0)),
-            total: Arc::new(AtomicU64::new(0)),
+            progress: Arc::default(),
         });
         if entry.owner != owner {
             return Err(ApiError::forbidden());
@@ -70,7 +74,7 @@ impl Transfers {
             Ok(entry.cancelled.clone())
         })
     }
-    fn progress(&self, owner: &str, id: &str) -> Result<Arc<AtomicU64>> {
+    fn progress(&self, owner: &str, id: &str) -> Result<Arc<TransferProgress>> {
         let entries = self.0.lock().unwrap();
         let entry = entries.get(id).ok_or_else(|| {
             ApiError::new(
@@ -83,14 +87,6 @@ impl Transfers {
             return Err(ApiError::forbidden());
         }
         Ok(entry.progress.clone())
-    }
-    fn total(&self, owner: &str, id: &str) -> Result<Arc<AtomicU64>> {
-        let entries = self.0.lock().unwrap();
-        let entry = entries.get(id).ok_or_else(ApiError::invalid)?;
-        if entry.owner != owner {
-            return Err(ApiError::forbidden());
-        }
-        Ok(entry.total.clone())
     }
     pub fn finish(&self, id: &str) {
         if let Some(entry) = self.0.lock().unwrap().get_mut(id) {
@@ -126,9 +122,15 @@ pub async fn progress(
     Path(id): Path<String>,
 ) -> Result<Json<serde_json::Value>> {
     let progress = state.transfer_tasks.progress(&owner.0, &id)?;
-    Ok(Json(
-        serde_json::json!({"transferredBytes": progress.load(Ordering::Relaxed), "totalBytes": state.transfer_tasks.total(&owner.0, &id)?.load(Ordering::Relaxed)}),
-    ))
+    let mut response = serde_json::json!({
+        "transferredBytes": progress.transferred.load(Ordering::Relaxed),
+        "totalBytes": progress.total.load(Ordering::Relaxed),
+    });
+    let received = progress.received.load(Ordering::Relaxed);
+    if received > 0 {
+        response["receivedBytes"] = received.into();
+    }
+    Ok(Json(response))
 }
 
 pub struct Operation {
@@ -137,8 +139,7 @@ pub struct Operation {
     id: String,
     owner: String,
     pub cancelled: Arc<AtomicBool>,
-    pub progress: Arc<AtomicU64>,
-    pub total: Arc<AtomicU64>,
+    pub progress: Arc<TransferProgress>,
 }
 impl Operation {
     pub fn start(state: &Arc<ServerState>, owner: &str, id: String) -> Result<Self> {
@@ -146,7 +147,6 @@ impl Operation {
             permit: crate::data_access::Permit::new(state, owner)?,
             cancelled: state.transfer_tasks.start(owner, &id)?,
             progress: state.transfer_tasks.progress(owner, &id)?,
-            total: state.transfer_tasks.total(owner, &id)?,
             state: state.clone(),
             id,
             owner: owner.into(),
@@ -207,12 +207,14 @@ mod tests {
         registry
             .progress("one", &id)
             .unwrap()
+            .transferred
             .store(42, Ordering::Relaxed);
         registry.finish(&id);
         assert_eq!(
             registry
                 .progress("one", &id)
                 .unwrap()
+                .transferred
                 .load(Ordering::Relaxed),
             42
         );

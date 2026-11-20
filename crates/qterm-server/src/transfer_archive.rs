@@ -26,6 +26,7 @@ impl Write for BoundedWriter<'_> {
         self.bytes += written as u64;
         self.operation
             .progress
+            .transferred
             .store(self.bytes, std::sync::atomic::Ordering::Relaxed);
         Ok(written)
     }
@@ -36,8 +37,10 @@ impl Write for BoundedWriter<'_> {
 pub fn pack(root: &Path, output: &Path, operation: &Operation) -> Result<()> {
     operation
         .progress
+        .transferred
         .store(0, std::sync::atomic::Ordering::Relaxed);
     operation
+        .progress
         .total
         .store(0, std::sync::atomic::Ordering::Relaxed);
     let writer = BoundedWriter {

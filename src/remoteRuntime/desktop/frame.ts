@@ -1,5 +1,6 @@
 import type { WorkspaceBatchActions } from "../../workspace/useWorkspaceBatchActions";
 import type { ServerEntry } from "../model";
+import type { frameFileDrop } from "./frameFileDrop";
 
 export interface EnvironmentTabs {
   activeId: string;
@@ -25,7 +26,7 @@ export interface FramePort extends WorkspacePort {
   foreground(): boolean;
   subscribe(listener: () => void): () => void;
 }
-export type RuntimeFrame = HTMLIFrameElement & { qtermWorkbench?: FramePort };
+export type RuntimeFrame = HTMLIFrameElement & { qtermWorkbench?: FramePort & { fileDrop: ReturnType<typeof frameFileDrop> } };
 
 // Only a bundled, same-origin document mounted by the desktop host receives a port.
 // The frame URL never contains an upstream URL, access proof or API capability.

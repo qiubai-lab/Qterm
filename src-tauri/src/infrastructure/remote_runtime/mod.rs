@@ -5,6 +5,10 @@ mod proxy;
 mod registry;
 pub use registry::RemoteRuntimeRegistry;
 mod socket;
+pub(crate) mod upload;
+mod upload_source;
+#[cfg(test)]
+mod upload_tests;
 #[cfg(test)]
 mod tests;
 
@@ -15,6 +19,7 @@ use tokio_util::sync::CancellationToken;
 
 pub struct RemoteRuntime {
     pub endpoint: Url,
+    pub uploads: upload::DropUploads,
     pub downloads: download::Downloads,
     pub client: Client,
     pub cookies: Arc<Jar>,
@@ -94,6 +99,7 @@ impl RemoteRuntime {
         let runtime = Arc::new(Self {
             endpoint,
             downloads: download::Downloads::default(),
+            uploads: upload::DropUploads::default(),
             client,
             cookies,
             cancel,
