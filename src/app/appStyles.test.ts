@@ -708,11 +708,6 @@ describe("application layout styles", () => {
     expect(declarations(".credential-name-editor input:focus,.credential-name-editor input:focus-visible")).toContain("outline:0");
     expect(declarations(".credential-name-action")).toContain("flex:none");
     expect(declarations(".credential-name-action.reserved")).toContain("visibility:hidden");
-    expect(declarations(".credential-security-tag")).toContain("border-radius:999px");
-    expect(declarations(".credential-security-tag")).toContain("flex:none");
-    expect(declarations(".credential-security-tooltip")).toContain("position:fixed");
-    expect(declarations(".credential-security-tooltip")).toContain("pointer-events:none");
-    expect(declarations(".credential-security-tooltip")).not.toContain("animation:");
     expect(declarations(".credential-feedback-bubble")).toContain("position:fixed");
     expect(declarations(".credential-feedback-bubble")).toContain("pointer-events:none");
     expect(declarations(".credential-feedback-bubble")).toContain("var(--navigation-accent)");

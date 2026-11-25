@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useCredentialPrivateKeyDrop } from "./credential/useCredentialPrivateKeyDrop";
 import { writeText as writeClipboardText } from "@qterm/services/textClipboard";
 import { cancelPrivateKeyCredential, clearVault, commitPrivateKeyCredential, createPasswordCredential, deleteCredential, getCredentialPublicKey, getVaultStatus, listCredentials, prepareDroppedPrivateKeyCredential, prepareGeneratedPrivateKeyCredential, preparePrivateKeyCredential, renameCredential, revealCredentialPassword, type CredentialKind, type CredentialSummary, type GeneratedPrivateKeyAlgorithm, type PrivateKeyDraft, type VaultStatus } from "@qterm/services/credentials";
@@ -10,7 +10,7 @@ import { ChangeMasterPasswordDialog } from "./ChangeMasterPasswordDialog";
 import { DialogFrame } from "./DialogFrame";
 import { MasterPasswordDialog, type MasterPasswordMode } from "./MasterPasswordDialog";
 import { RecoveryMasterPasswordDialog } from "./RecoveryMasterPasswordDialog";
-import { CredentialFeedbackBubble, CredentialSecurityTooltip, type CredentialFeedback, type CredentialFeedbackInput, type CredentialSecurityTooltipTarget, type FeedbackTone } from "./credential/CredentialDialogFeedback";
+import { CredentialFeedbackBubble, type CredentialFeedback, type CredentialFeedbackInput, type FeedbackTone } from "./credential/CredentialDialogFeedback";
 import { CredentialSelectionIndicator } from "./credential/CredentialSelectionIndicator";
 import { observeCredentialVault } from "./credential/observeCredentialVault";
 import { useCredentialManagerMotion } from "./credential/useCredentialManagerMotion";
@@ -21,10 +21,6 @@ type View =
   | { type: "create"; kind: CredentialKind };
 
 const feedbackDuration = { success: 2_600, error: 4_200 } satisfies Record<FeedbackTone, number>;
-
-function isUnsafeRsa(item: CredentialSummary): boolean {
-  return item.kind === "privateKey" && item.detail === "rsa";
-}
 
 export function CredentialDialog({ onClose }: { onClose: () => void }) {
   const [status, setStatus] = useState<VaultStatus | null>(null);
@@ -51,8 +47,6 @@ export function CredentialDialog({ onClose }: { onClose: () => void }) {
   const [revealingId, setRevealingId] = useState<string | null>(null);
   const [publicKey, setPublicKey] = useState<{ id: string; value: string } | null>(null);
   const [publicKeyBusyId, setPublicKeyBusyId] = useState<string | null>(null);
-  const [hoveredSecurityTarget, setHoveredSecurityTarget] = useState<CredentialSecurityTooltipTarget | null>(null);
-  const [focusedSecurityTarget, setFocusedSecurityTarget] = useState<CredentialSecurityTooltipTarget | null>(null);
   const revealRequestRef = useRef(0); const publicKeyRequestRef = useRef(0);
   const feedbackIdRef = useRef(0);
   const feedbackTimerRef = useRef<number | null>(null);
@@ -61,7 +55,6 @@ export function CredentialDialog({ onClose }: { onClose: () => void }) {
   const privateKeyDropRef = useRef<HTMLButtonElement>(null);
   const prepareKeyRef = useRef<(path?: string) => Promise<void>>(async () => undefined);
   const privateKeyDraftRef = useRef<PrivateKeyDraft | null>(null);
-  const securityTooltipId = useId(); const inspectedSecurityTarget = focusedSecurityTarget ?? hoveredSecurityTarget;
   const { editorTransition, indicator, listRef, selectionTargetId, showCreate, showItem, stageRef } = useCredentialManagerMotion({ items, selectedId: view.type === "detail" ? view.item.id : null });
 
   const clearFeedback = useCallback(() => {
@@ -358,8 +351,6 @@ export function CredentialDialog({ onClose }: { onClose: () => void }) {
           </div>
           <OverlayScrollArea className="credential-list-scroll-area" viewportClassName="credential-list" viewportProps={{ "aria-label": "凭证列表" }} ref={listRef}><CredentialSelectionIndicator state={indicator}/>
             {items.map((item) => {
-              const unsafeRsa = isUnsafeRsa(item);
-              const securityKey = `list-${item.id}`;
               const isSelected = selectionTargetId === item.id;
               return <button
                 ref={(element) => { if (element) itemElementsRef.current.set(item.id, element); else itemElementsRef.current.delete(item.id); }}
@@ -367,21 +358,10 @@ export function CredentialDialog({ onClose }: { onClose: () => void }) {
                 className={`credential-item${isSelected ? " selected" : ""}`}
                 key={item.id}
                 aria-pressed={isSelected} data-credential-id={item.id} data-primary-selected={isSelected || undefined}
-                aria-describedby={inspectedSecurityTarget?.key === securityKey ? securityTooltipId : undefined}
-                onFocus={(event) => {
-                  if (!unsafeRsa) return;
-                  const element = event.currentTarget.querySelector<HTMLElement>(".credential-security-tag");
-                  if (element) setFocusedSecurityTarget({ key: securityKey, element });
-                }}
-                onBlur={() => setFocusedSecurityTarget((current) => current?.key === securityKey ? null : current)}
                 onClick={() => selectCredential(item)}
               >
                 <span className="credential-kind-icon"><Icon name={item.kind === "password" ? "key" : "file"} size={13}/></span>
-                <span className="credential-item-copy"><span className="credential-name-line"><strong>{item.name}</strong>{unsafeRsa && <span
-                  className="credential-security-tag"
-                  onPointerEnter={(event) => setHoveredSecurityTarget({ key: securityKey, element: event.currentTarget })}
-                  onPointerLeave={() => setHoveredSecurityTarget((current) => current?.key === securityKey ? null : current)}
-                >不安全</span>}</span><small>{item.kind === "password" ? "密码" : `私钥${item.detail ? ` · ${item.detail}` : ""}`}</small></span>
+                <span className="credential-item-copy"><span className="credential-name-line"><strong>{item.name}</strong></span><small>{item.kind === "password" ? "密码" : `私钥${item.detail ? ` · ${item.detail}` : ""}`}</small></span>
               </button>;
             })}
             {items.length === 0 && <div className="credential-list-empty"><Icon name={unlocked ? "key" : "lock"} size={18}/><span>{unlocked ? "暂无凭证" : "凭证库已锁定"}</span></div>}
@@ -425,16 +405,7 @@ export function CredentialDialog({ onClose }: { onClose: () => void }) {
                 if (event.key === "Enter") { event.preventDefault(); if (nameEdit.value.trim()) event.currentTarget.blur(); }
                 if (event.key === "Escape") { event.preventDefault(); setNameEdit(null); }
               }}
-            /> : <strong>{view.item.name}</strong>}</span>{isUnsafeRsa(view.item) && <span
-              className="credential-security-tag"
-              role="note"
-              tabIndex={0}
-              aria-describedby={inspectedSecurityTarget?.key === `detail-${view.item.id}` ? securityTooltipId : undefined}
-              onPointerEnter={(event) => setHoveredSecurityTarget({ key: `detail-${view.item.id}`, element: event.currentTarget })}
-              onPointerLeave={() => setHoveredSecurityTarget((current) => current?.key === `detail-${view.item.id}` ? null : current)}
-              onFocus={(event) => setFocusedSecurityTarget({ key: `detail-${view.item.id}`, element: event.currentTarget })}
-              onBlur={() => setFocusedSecurityTarget((current) => current?.key === `detail-${view.item.id}` ? null : current)}
-            >不安全</span>}<IconButton label="修改凭证名称" className={`credential-name-action edit${nameEdit?.id === view.item.id ? " reserved" : ""}`} aria-hidden={nameEdit?.id === view.item.id || undefined} tabIndex={nameEdit?.id === view.item.id ? -1 : undefined} title="修改名称" disabled={busy || nameEdit?.id === view.item.id} onClick={() => { clearFeedback(); setNameEdit({ id: view.item.id, value: view.item.name }); }}><Icon name="edit" size={12}/></IconButton></span><p>此凭证可由多个连接安全引用。</p></div></div>
+            /> : <strong>{view.item.name}</strong>}</span><IconButton label="修改凭证名称" className={`credential-name-action edit${nameEdit?.id === view.item.id ? " reserved" : ""}`} aria-hidden={nameEdit?.id === view.item.id || undefined} tabIndex={nameEdit?.id === view.item.id ? -1 : undefined} title="修改名称" disabled={busy || nameEdit?.id === view.item.id} onClick={() => { clearFeedback(); setNameEdit({ id: view.item.id, value: view.item.name }); }}><Icon name="edit" size={12}/></IconButton></span><p>此凭证可由多个连接安全引用。</p></div></div>
               <div className="credential-detail-grid"><div><span>类型</span><strong>{view.item.kind === "password" ? "密码凭证" : "私钥凭证"}</strong></div>{view.item.detail && <div><span>密钥算法</span><strong>{view.item.detail}</strong></div>}<div><span>存储状态</span><strong>已加密</strong></div></div>
               {view.item.kind === "password" && <div className="password-field credential-password-field"><label>凭证密码</label><div className="password-input-shell"><input aria-label="凭证密码" readOnly type="text" value={revealedPassword?.id === view.item.id ? revealedPassword.value : "••••••••••••"}/><button type="button" className="password-visibility-button" aria-label={revealedPassword?.id === view.item.id ? "隐藏密码" : "显示密码"} aria-pressed={revealedPassword?.id === view.item.id} disabled={revealingId === view.item.id} onClick={() => void togglePasswordReveal(view.item)}><Icon name={revealedPassword?.id === view.item.id ? "eyeOff" : "eye"} size={14}/></button></div></div>}
               <div className="credential-detail-note"><Icon name="computer" size={15}/><p>删除凭证会解除连接引用，但不会删除连接本身。</p></div>
@@ -447,7 +418,6 @@ export function CredentialDialog({ onClose }: { onClose: () => void }) {
         </section>
       </div>
     </DialogFrame>
-    <CredentialSecurityTooltip id={securityTooltipId} target={inspectedSecurityTarget?.element ?? null}/>
     {masterMode && <MasterPasswordDialog mode={masterMode} onSuccess={masterSucceeded} onClose={() => setMasterMode(null)}/>}
     {changeRequested && <ChangeMasterPasswordDialog
       onClose={() => setChangeRequested(false)}

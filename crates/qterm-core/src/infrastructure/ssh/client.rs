@@ -32,7 +32,7 @@ use std::{
 use russh::{
     Channel, ChannelMsg, ChannelOpenFailure, Disconnect,
     client::{self, ChannelOpenHandle, Config, Handler, Msg},
-    keys::{HashAlg, PublicKey},
+    keys::{HashAlg, PublicKeyOrCertificate},
 };
 use russh_sftp::{client::SftpSession, protocol::FileAttributes};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};

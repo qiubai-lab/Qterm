@@ -33,11 +33,23 @@ impl Handler for ClientHandler {
         }
     }
 
-    async fn check_server_key(&mut self, public_key: &PublicKey) -> Result<bool, Self::Error> {
+    async fn check_server_key(
+        &mut self,
+        server_key: &PublicKeyOrCertificate,
+    ) -> Result<bool, Self::Error> {
+        // The known-hosts store pins raw keys and has no certificate trust policy.
+        let PublicKeyOrCertificate::PublicKey { key, .. } = server_key else {
+            self.entry.fail_at(
+                SessionFailure::HostKeyRejected,
+                self.node.clone(),
+                RouteStage::VerifyHostKey,
+            );
+            return Ok(false);
+        };
         let presented = PresentedHostKey::new(
-            public_key.algorithm().to_string(),
-            public_key.to_openssh().map_err(russh::Error::from)?,
-            public_key.fingerprint(HashAlg::Sha256).to_string(),
+            key.algorithm().to_string(),
+            key.to_openssh().map_err(russh::Error::from)?,
+            key.fingerprint(HashAlg::Sha256).to_string(),
         );
         match self.host_keys.check(&self.node.endpoint, &presented) {
             Ok(HostKeyCheck::Trusted) => Ok(true),

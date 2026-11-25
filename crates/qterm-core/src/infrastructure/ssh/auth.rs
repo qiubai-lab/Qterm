@@ -806,7 +806,7 @@ Private-MAC: 52fd00d4ef47ebc506e4e709486c0c6bc0606e24fe2c6cb1b3d168f4da238a66
         assert_eq!(
             map_auth_result(
                 AuthResult::Failure {
-                    remaining_methods: MethodSet::all(),
+                    remaining_methods: MethodSet::server_supported(),
                     partial_success: true,
                 },
                 MethodKind::Password,
