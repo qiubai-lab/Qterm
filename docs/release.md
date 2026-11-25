@@ -9,13 +9,13 @@
 
 ## 发布前检查
 
-macOS 正式构建和发布使用 **macOS SDK 26.5**。`pnpm tauri build` 会通过 `xcrun` 显式选择并校验该 SDK；缺失时直接报错，不会退回其他 SDK。本机可使用包含该 SDK 的 Command Line Tools，或通过 `DEVELOPER_DIR` 选择包含该 SDK 的 Xcode。
+macOS 正式构建（含 `make install-local`）优先使用 **SDK 27.0**，也支持 **SDK 26.5**。`pnpm tauri build` 在当前选中的工具链中按此顺序探测，核对版本和路径。可以用 `DEVELOPER_DIR` 指定要使用的 Xcode。
 
-`pnpm tauri dev` 优先使用 SDK 26.5；不可用时，通过 `xcrun --sdk macosx` 选择当前开发工具提供的 SDK，允许 26.5 或较新版本（例如 27.0），并打印实际版本、路径以及与发布版可能存在原生窗口差异的提示。旧版本、无法识别的版本或 SDK 路径缺失仍会报错。`DEVELOPER_DIR` 控制工具链选择；继承的 `SDKROOT` 不参与探测，成功后会替换为选定路径。这是开发便利策略，不表示所有较新 SDK 都已经验证兼容，也不改变应用的最低系统版本配置。
+`pnpm tauri dev` 使用相同的优先顺序。如果两个 SDK 都不可用，开发模式还可选用当前工具链的默认 SDK，要求版本至少为 26.5，并提示可能存在原生窗口差异。
 
-CI 的 macOS 构建使用 `macos-26` / `macos-26-intel`，显式选择 `/Applications/Xcode_26.5.app/Contents/Developer`，打印 Xcode 版本并隔离 SDK 缓存。发布构建还会检查最终二进制的 `LC_BUILD_VERSION`，避免缓存或工具链覆盖导致 SDK 不一致。升级 SDK 时需同步修改 `scripts/macos-sdk.mjs`、两个 workflow 和相关测试。
+CI 在 `macos-26` 和 `macos-26-intel` 上探测版本化的 Xcode 安装及当前工具链，按实际选中的 SDK 版本区分 Rust 构建缓存。发布流水线用 `xcrun vtool -show-build` 核对最终二进制记录的 SDK 版本。
 
-交通灯依赖 AppKit 的原生控件尺寸；仅校验 `trafficLightPosition` 数值无法证明视觉对齐。测试打包改动时先运行 `pnpm tauri build --bundles app`，使用 `xcrun vtool -show-build src-tauri/target/release/Qterm` 确认 `sdk 26.5`，再对照开发版检查初次打开、调整窗口大小、全屏返回后的交通灯。若开发版使用较新 SDK，涉及原生窗口的改动还需在 SDK 26.5 下复验；开发启动成功不能替代发布兼容性验证。之后可手动触发 workflow 验证两种 macOS 架构，验证完成前不要推送发布标签。
+交通灯依赖 AppKit 的原生控件尺寸。改动原生窗口时，在两个支持的 SDK 下分别运行 `pnpm tauri build --bundles app`，检查初次打开、调整窗口大小、全屏返回后的交通灯对齐。发布前可手动触发 workflow 验证两种 macOS 架构。
 
 1. `main` 分支最近一次 CI 全绿，尤其是四个平台的 Desktop build。
 2. 本地通过全部质量门：
