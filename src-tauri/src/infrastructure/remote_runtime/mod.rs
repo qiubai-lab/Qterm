@@ -5,12 +5,12 @@ mod proxy;
 mod registry;
 pub use registry::RemoteRuntimeRegistry;
 mod socket;
+#[cfg(test)]
+mod tests;
 pub(crate) mod upload;
 mod upload_source;
 #[cfg(test)]
 mod upload_tests;
-#[cfg(test)]
-mod tests;
 
 use reqwest::{Client, Url, cookie::Jar};
 use serde::Serialize;

@@ -11,8 +11,6 @@ mod credential_management;
 mod data_access;
 #[cfg(test)]
 mod download_tests;
-#[cfg(test)]
-mod upload_tests;
 mod error;
 mod files;
 mod git;
@@ -45,6 +43,8 @@ mod transfer_archive;
 mod transfer_lifecycle;
 mod transfer_storage;
 mod transfers;
+#[cfg(test)]
+mod upload_tests;
 mod vault;
 mod vault_events;
 mod verification;
