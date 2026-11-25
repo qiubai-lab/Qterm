@@ -137,7 +137,10 @@ pub async fn upload(
             .iter()
             .map(|e| local_path(&e.path))
             .collect::<Result<Vec<_>>>()?;
-        operation.progress.store(total, Ordering::Relaxed);
+        operation
+            .progress
+            .transferred
+            .store(total, Ordering::Relaxed);
         let _ = directory.keep(); // Files remain usable until server restart, like other runtime cache.
         paths
     } else {
@@ -149,7 +152,9 @@ pub async fn upload(
                 TerminalStagingEvent::Progress {
                     transferred_bytes, ..
                 } => {
-                    progress.store(transferred_bytes, Ordering::Relaxed);
+                    progress
+                        .transferred
+                        .store(transferred_bytes, Ordering::Relaxed);
                     None
                 }
                 TerminalStagingEvent::Completed { remote_paths } => Some(Ok(remote_paths

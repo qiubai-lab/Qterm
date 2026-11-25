@@ -13,6 +13,8 @@ import { ServerRuntimeRestore } from "./ServerRuntimeRestore";
 import { serverTerminalLock } from "./terminalLock";
 import { dataPaused, subscribeDataAccess } from "./dataAccess";
 
+const renderWorkspaceRuntime = (workspaceId: string, visible: boolean) => <ServerRuntimeRestore workspaceId={workspaceId} visible={visible}/>;
+
 /** Check admission before mounting readers; preserve drafts and runtime owners on later locks. */
 export function ServerWorkbench({ onLogout }: { onLogout: () => Promise<void> }) {
   const { commitTheme } = useAppTheme();
@@ -27,8 +29,7 @@ export function ServerWorkbench({ onLogout }: { onLogout: () => Promise<void> })
     <WorkbenchActivity value={active}>
       <div className="server-workbench-content" hidden={!active} inert={!active} aria-hidden={!active || undefined}>
         {(mounted || active) && <WorkspaceProvider><OnboardingProvider mode="desktop"><TerminalNotificationProvider>
-          <WorkspaceShell webActions={<AccessLogControl/>} onLogout={onLogout} terminalLockState={lock} onThemeRestored={commitTheme}/>
-          <ServerRuntimeRestore/>
+          <WorkspaceShell webActions={<AccessLogControl/>} onLogout={onLogout} terminalLockState={lock} onThemeRestored={commitTheme} renderWorkspaceRuntime={renderWorkspaceRuntime}/>
           <WorkspaceTerminalLinkHost/>
         </TerminalNotificationProvider></OnboardingProvider></WorkspaceProvider>}
       </div>

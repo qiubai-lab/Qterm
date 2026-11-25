@@ -52,6 +52,7 @@
 
 - `src/components/ThemedTooltipButton.tsx`、`useThemedTooltip.tsx`、`ThemedTitleTooltipProvider.tsx`、`themedTooltip.css`：跨终端、Git、文件和网络窗口共享的主题提示触发、原生 DOM `title` 代理、溢出过滤、视口定位、退出生命周期与浮层样式；按钮和被截断的操作标识复用同一视觉契约，该层不拥有操作业务逻辑。`src/workspace/BlockHeaderClose.tsx` 组合窗口头部关闭入口。
 
+- `src/terminal/terminalFontSize.ts` 管理当前工作台已保存的终端字号；`useTerminalViewport.ts` 在可见时同步 xterm 字号并请求布局测量。
 - `src/terminal/terminalLayout.ts`：终端尺寸测量与布局同步 owner；Windows ConPTY 在拖动停稳并处理已接收输出后提交尺寸，其余终端即时适配；`resizeScheduler.ts` 继续负责有序 IPC 与去重。`scripts/conpty-resize-probe.mjs` 和 `src-tauri/examples/conpty_resize_probe.rs` 提供真实 Windows PTY 回归检查。
 
 - `src/terminal/notifications/`：实验性终端通知的有界流解析、epoch 隔离、未读派生状态、限流与设置 provider；`TerminalProtocolTag.tsx` 展示统一协议标签与提示，`workspaceNotice.ts` 管理前台瞬时气泡，`WorkspaceNotificationBubble.tsx` 负责定位、暂停倒计时与交互；只观察实时输出，不修改渲染字节、不拥有 session 或持久化 Workspace。
@@ -72,6 +73,8 @@
 - `src/workspace/workspaceClose.ts`：Block 关闭资格和按类型确认文案的纯规则，供 reducer 与关闭编排共用；不操作会话或存储。`src/web/surface/nativeSurfaceCoordinator.ts` 同时从现有 surface 登记解析可见 guest 的 Block 归属；`web/windows_shortcuts.rs` 与 `web/macos/native/BlockCloseShortcut.swift` 转发可信原生关闭按键，不向客体页面开放 IPC。
 - `src-tauri/src/infrastructure/macos_menu.rs`、`src/lib/tauri/blockClose.ts`：macOS 原生菜单与主窗口定向 block/tab-close 事件的 transport/订阅生命周期；不直接断开会话或修改布局，关闭规则委托工作区快捷键 controller。`macos_menu/select_all.rs` 将主 WebView 中的终端全选交给可取消 DOM 事件，其余焦点回落 AppKit 响应链。
 - `src/workspace/useWorkspaceShortcuts.ts`：应用快捷键的捕获、弹窗/锁屏门禁和所有活动 Block 的关闭路由；复用 Shell 关闭确认与现有会话清理，不持有会话或持久化状态。
+- `src/workspace/WorkspaceStages.tsx`、`workspaceBlockContext.ts`：前台画布立即挂载、已访问画布保活及后台分批预热。面板订阅运行时和历史记录，标签选择由外层 Shell 管理。
+- `src/server/ServerRuntimeRestore.tsx`、`sessionInventory.ts`、`sessionStartQueue.ts`：按已挂载工作区恢复原有会话，同轮读取共享清单，锁定撤销旧读取，后台握手为当前工作区保留容量。
 - `src/workspace/WorkspaceShell.tsx`：组合顶部 Workspace 导航、工具轨、Terminal/Files/Network/Git 认证路由、route 凭证库解锁、关闭编排、快捷键与一次性启动更新提示入口；不请求任意更新地址、解析跳板图、布局树或 SSH 协议。
 - `src/workspace/model.ts`、`layout.ts`、`reducer.ts`、`gitRepositoryHistory.ts`：schema v10 可持久化工作区契约、Git `Unbound | Local | Remote` target、按本机或 profile 隔离的有界 Git 仓库 MRU、使用调用方提供稳定 ID 的纯布局树变换与低频结构状态；不持有 session、xterm、Git 快照、远程命令、一次性启动目录或凭据。
 - `src/workspace/WorkspaceProvider.tsx`、`useWorkspacePersistence.ts`：兼容的单一 Workspace Context façade，以及 hydration、debounced save、close flush 和 profile refresh owner；Git target retarget 可在同 profile 的已连接 Git session 上只切换路径，Provider 不直接实现会话事件或连接生命周期，运行时状态不持久化。
@@ -148,7 +151,7 @@
 - `src-tauri/src/infrastructure/browser/`：共享 SOCKS5 greeting、固定 Chromium 参数和机器本地隔离 Profile，并以 Windows、macOS、Linux adapter 受限探测和无 Shell 启动 Chrome/Edge；不修改系统代理、支持沙箱化 Linux 浏览器、复用日常 Profile 或管理浏览器退出。
 - `crates/qterm-core/src/infrastructure/persistence/json_network_repository.rs`：`network-forwards.json` schema v1 的严格、无敏感字段、原子持久化适配器。
 - `crates/qterm-core/src/infrastructure/persistence/json_workspace_repository.rs`：`workspaces.json` schema v10 的严格、无敏感字段、原子持久化与受支持旧版本显式迁移适配器；不保存 session、Git snapshot、仓库内容或连接凭据。
-- `crates/qterm-core/src/ports/settings_repository.rs`、`crates/qterm-core/src/infrastructure/persistence/json_{appearance,update,terminal}_settings_repository.rs`：设备外观/更新/终端集成偏好 ports 与独立 JSON 适配器；外观/更新使用 schema v1，终端兼容 v1–v5、保存 v6，保留目录跟踪、历史策略与旧 passive 字段，读取但不再写入旧 applicationTitleEnabled/commandMarkersEnabled 字段；只保存封闭预设或布尔偏好，不覆盖损坏/未来文件，也不修改 security settings。
+- `crates/qterm-core/src/ports/settings_repository.rs`、`crates/qterm-core/src/infrastructure/persistence/json_{appearance,update,terminal}_settings_repository.rs`：设备外观/更新/终端集成偏好 ports 与独立 JSON 适配器；外观读取 v1/v2、保存 v2（主题和终端字号），更新使用 v1，终端兼容 v1–v5、保存 v6，保留目录跟踪、历史策略与旧 passive 字段，读取但不再写入旧 applicationTitleEnabled/commandMarkersEnabled 字段；不覆盖损坏/未来文件，也不修改 security settings。
 - `crates/qterm-core/src/infrastructure/persistence/json_remote_shell_cache.rs`：`cache/remote-shells.json` 的严格、原子、可丢弃适配器；只保存目标签名和 Shell 枚举，不保存探测输出、Hook、终端内容或凭据。
 - `crates/qterm-core/src/infrastructure/ssh/forwarding.rs`：本地 listener、SOCKS5 CONNECT、Remote target 路由、有界转发任务与 TCP/SSH 双向数据泵；第三方 channel 类型不得离开 infrastructure。
 - `crates/qterm-core/src/ports/profile_repository.rs`：应用层拥有的连接配置 repository 契约；不规定文件格式。
@@ -245,8 +248,6 @@
 
 - `src/workspace/WorkspaceChrome.tsx`: shared workspace header; browser logout occupies the native control area.
 - `src/workspace/useWindowTitlebar.ts`: desktop drag threshold, stationary double-click maximize/restore, interactive-target exclusion and gesture cleanup, shared by workspace and remote authentication screens.
-- `src/remoteRuntime/RemoteWindowDragRegion.tsx`: transparent top drag region for startup, login, lock and connection interruption; yields to native controls and is removed when the workbench becomes active.
-- `src/remoteRuntime/useAuthenticationWindowClose.ts`: native close ownership during remote startup and authentication; releases its listener when workspace persistence takes over.
 - `crates/qterm-server/src/local_socket.rs` / `socket_io.rs`: local PTY admission and shared bounded SSH/local WebSocket transport; logout closes browser transports while retained runtime processes keep running.
 - `crates/qterm-server/src/local_files.rs` / `settings.rs` / `credential_management.rs`: service-account files, persistent settings and shared credential workflows exposed through narrow authenticated routes.
 - `crates/qterm-core/src/application/local_file_listing.rs`: shared desktop/server local directory listing.
@@ -282,7 +283,7 @@
 - `crates/qterm-server/src/network.rs`：网络规则 CRUD、运行时启动/停止与活动规则保护；配置复用核心 NetworkService，服务状态负责保留会话和运行标记。
 - `crates/qterm-server/src/transfer_storage.rs`、`transfer_archive.rs`：本地/SFTP 上传目的路径、目录暂存与有界 tar 归档；`transfers.rs` 保留 HTTP 准入/票据，`transfer_lifecycle.rs` 保留取消与重放控制。
 - `src/server/uploadSelection.ts`、`services/fileDrop.ts`、`services/transfers.ts`：浏览器文件选择与目录拖放句柄、批次上传、下载和取消；复用 Files 面板。
-- `src/remoteRuntime/droppedUpload.ts`：桌面连接远程服务时，由接收拖放的 Files 面板触发本机读取，消费主 WebView 本次拖入路径的一次性授权，再通过远程上传接口发送相对路径和文件内容。
+- `src/remoteRuntime/droppedUpload.ts`：桌面连接远程服务时，由接收拖放的 Files 面板触发本机读取，消费主 WebView 本次拖入路径的一次性授权，按运行环境领取一次性文件引用。`src-tauri/src/infrastructure/remote_runtime/upload.rs` 负责拖放清单和流式 multipart 转发，文件内容从本机磁盘发送至已连接服务器。
 - `scripts/test-server-blocks.py`、`test-server-blocks-ssh.py`：原生/容器本地目录传输与 Git，真实 SSH 的 SFTP 目录、Git、三类 TCP 转发及重新登录后的原会话恢复验收。
 
 ### Web 上传进度与终端剪贴板
@@ -304,12 +305,10 @@
 
 ### Desktop remote runtime
 
-- `src/remoteRuntime/`: right-titlebar environment menu, server manager, immutable per-page runtime selection, switch flush/detach ownership and native clipboard/drop/download adapters. Server records contain only identity/name/origin, never credentials.
-- `src/remoteRuntime/services/`: desktop service router; remote business operations reuse `src/server/services`, while clipboard, image export, notifications and native windows remain client-owned. Reload is the boundary between service graphs.
-- `src/workspace/NativeWindowControls.tsx`: window actions separated from runtime/logout controls. `RemoteDesktopApp` keeps connection identity and native controls available during login, lock and connection failure. `ServerApp` mounts this desktop chrome outside its keyed authentication/theme subtree so logout cannot unmount and cancel an environment switch; `src/remoteRuntime/remoteLogoutSwitch.test.tsx` protects that lifecycle.
-- `src-tauri/src/infrastructure/remote_runtime/`: fixed-origin native Cookie jar, private loopback HTTP/WebSocket bridge, exact UI-Origin admission, TLS validation, redirect rejection and cancellation. `client_identity.rs` supplies the same product/version/platform User-Agent to HTTP and WebSocket requests. `commands/remote_runtime.rs` owns native bootstrap/save IPC; `remote_clipboard.rs` and `remote_drop.rs` accept only OS clipboard or approved drag/drop sources.
-- `src/remoteRuntime/switchOperation.ts`: bounded environment-switch sequencing, progress stages and late-result/overlap protection; timeout stops subsequent steps without pretending pending native work was cancelled.
-- `src/remoteRuntime/switchGuard.ts`: registration boundary for workspace save, dirty file guards, native surface teardown and local runtime shutdown; never substitutes for a workspace state owner.
+- `src/remoteRuntime/desktop/` owns the desktop environment registry, scoped workspace commands, adapter for the shared workspace tabs, source-selection dialog, window-session recovery and bundled remote workbench frames. The top-level native chrome stays available during login, lock, failure and reconnection. `RemoteWorkbenchFrame.tsx` contains verification inside a terminal panel beside the disabled shared tool rail. `rememberedTabs.ts` stores display-only tab titles and navigation IDs per saved server and endpoint.
+- `src/remoteRuntime/services/` routes business operations through each document’s immutable runtime. Local operation owners stay mounted while other environments are in front.
+- `src/remoteRuntime/switchGuard.ts` registers document-scoped layout and file draft flushes. `src/files/fileDraftWriter.ts` serializes edits and retries failed draft writes before disconnect.
+- `src-tauri/src/infrastructure/remote_runtime/registry.rs` owns per-attachment upstreams, cookie jars, download sinks and cancellation. `commands/remote_runtime.rs` and `commands/remote_download.rs` route native operations by attachment ID.
 - `src-tauri/src/bootstrap_tests.rs`: composition-root path/flavor/window-state regression tests extracted from `lib.rs` to keep registration changes below its source-size limit.
 
 ### Runtime download lifecycle

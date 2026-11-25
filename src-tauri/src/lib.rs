@@ -286,6 +286,7 @@ pub fn run() {
             commands::remote_runtime::remote_runtime_connect,
             commands::remote_clipboard::remote_runtime_clipboard,
             commands::remote_drop::remote_runtime_drop,
+            commands::remote_drop::remote_drop_release,
             commands::remote_runtime::remote_runtime_disconnect,
             commands::remote_runtime::remote_runtime_save,
             commands::remote_download::remote_download_select,

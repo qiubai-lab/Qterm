@@ -1,5 +1,5 @@
 import { randomId } from "../lib/randomId";
-export interface ServerEntry { id: string; name: string; endpoint: string }
+export interface ServerEntry { id: string; name: string; endpoint: string; tabColor?: string | null }
 export function normalizeEndpoint(input: string): string {
   let url: URL;
   try { url = new URL(input.trim()); } catch { throw new Error("请输入完整的 HTTP 或 HTTPS 地址"); }

@@ -1,6 +1,7 @@
+import { framePort } from "../remoteRuntime/desktop/frame";
 import { randomId } from "../lib/randomId";
 /** Cookie authenticates the browser; this separate proof binds access to one page. */
-const STORAGE_KEY = "qterm:access-key";
+const STORAGE_KEY = framePort ? `qterm:access-key:${framePort.runtimeId}` : "qterm:access-key";
 const clientId = randomId();
 let accessKey = "";
 try { accessKey = sessionStorage.getItem(STORAGE_KEY) ?? ""; } catch { /* Login still works without storage. */ }

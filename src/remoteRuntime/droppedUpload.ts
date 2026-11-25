@@ -1,27 +1,32 @@
-import { invoke } from "@tauri-apps/api/core";
+import { framePort } from "./desktop/frame";
+import type { DropSelection } from "../lib/tauri/fileDrop";
 import type * as Desktop from "../lib/tauri/transfers";
 import { dataLease } from "../server/dataAccess";
 import { uploadSelectedEntries } from "../server/services/transfers";
 import { registerUpload } from "../server/uploadSelection";
 
-interface DroppedEntry { path: string; data: string | null }
-
 export const uploadRemoteDrop: typeof Desktop.uploadDroppedEntries = async (session, paths, directory, onEvent) => {
   // Only the pane accepting the drop may consume the one-time native authorization.
   const lease = dataLease();
-  let entries: DroppedEntry[];
+  const source = framePort!.fileDrop;
+  let selection: DropSelection;
   try {
-    entries = await invoke<DroppedEntry[]>("remote_runtime_drop", { paths });
+    selection = await source.prepare(paths);
   } catch (reason) {
     throw typeof reason === "string" ? new Error(reason) : reason;
   }
-  lease.check();
-  const selection = registerUpload(entries.map(({ path, data }) => {
-    if (data === null) return { path };
-    const decoded = atob(data);
-    const bytes = new Uint8Array(decoded.length);
-    for (let i = 0; i < decoded.length; i++) bytes[i] = decoded.charCodeAt(i);
-    return { path, file: new File([bytes], path.split("/").pop()!) };
-  }));
-  return uploadSelectedEntries(session, [selection], directory, onEvent);
+  try {
+    lease.check();
+    const id = registerUpload(selection.entries.map(({ path, size, token }) =>
+      token === null ? { path } : { path, native: { size, token } }));
+    return await uploadSelectedEntries(session, [id], directory, event => {
+      if (event.type === "completed" || event.type === "failed" || event.type === "cancelled") {
+        void source.release(selection.id);
+      }
+      onEvent(event);
+    });
+  } catch (error) {
+    await source.release(selection.id);
+    throw error;
+  }
 };

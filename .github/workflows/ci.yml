@@ -99,19 +99,6 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v7
 
-      - name: Select macOS build SDK
-        if: runner.os == 'macOS'
-        shell: bash
-        run: |
-          set -euo pipefail
-          developer_dir="/Applications/Xcode_26.5.app/Contents/Developer"
-          test -d "$developer_dir"
-          export DEVELOPER_DIR="$developer_dir"
-          xcodebuild -version
-          test "$(xcrun --sdk macosx26.5 --show-sdk-version)" = "26.5"
-          echo "DEVELOPER_DIR=$developer_dir" >> "$GITHUB_ENV"
-          echo "SDKROOT=$(xcrun --sdk macosx26.5 --show-sdk-path)" >> "$GITHUB_ENV"
-
       - name: Install Linux system dependencies
         if: runner.os == 'Linux'
         run: |
@@ -135,6 +122,10 @@ jobs:
           node-version: 22.22.2
           cache: pnpm
 
+      - name: Select macOS build SDK
+        if: runner.os == 'macOS'
+        run: node scripts/select-ci-macos-sdk.mjs
+
       - name: Set up Rust
         shell: bash
         run: |
@@ -145,7 +136,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
-          key: ${{ runner.os == 'macOS' && 'macos-sdk-26.5' || 'default' }}
+          key: ${{ runner.os == 'macOS' && format('macos-sdk-{0}', env.QTERM_BUILD_SDK) || 'default' }}
 
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile

@@ -6,6 +6,7 @@ use serde_json::{Value, json};
 async fn settings_are_validated_and_survive_reopening_the_repository() {
     let (_dir, state, token) = fixture();
     for (path, input) in [
+        ("appearance", json!({"theme":"light","terminalFontSize":22})),
         ("appearance", json!({"theme":"cyberpunk"})),
         (
             "security",
@@ -41,6 +42,17 @@ async fn settings_are_validated_and_survive_reopening_the_repository() {
         .0,
         StatusCode::BAD_REQUEST
     );
+    for size in [json!(9), json!(33), json!(12.5), json!("large")] {
+        let (status, _) = call(
+            state.clone(),
+            &token,
+            "PUT",
+            "/api/v1/settings/appearance",
+            json!({"theme":"light","terminalFontSize":size}),
+        )
+        .await;
+        assert!(status.is_client_error());
+    }
     let (_, snapshot) = call(
         state.clone(),
         &token,
@@ -49,7 +61,10 @@ async fn settings_are_validated_and_survive_reopening_the_repository() {
         Value::Null,
     )
     .await;
-    assert_eq!(snapshot["appearance"]["theme"], "cyberpunk");
+    assert_eq!(
+        snapshot["appearance"],
+        json!({"theme":"cyberpunk","terminalFontSize":22})
+    );
     assert_eq!(snapshot["security"]["credentialAutoLockAfterSeconds"], 300);
     let reloaded = crate::settings::ServerSettings::new(&state.config.data);
     assert_eq!(

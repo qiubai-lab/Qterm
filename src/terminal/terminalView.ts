@@ -1,3 +1,4 @@
+import { currentTerminalFontSize } from "./terminalFontSize";
 import { bindTerminalInput } from "./terminalInput";
 import { bindServerScreen } from "./serverScreenBinding";
 import { Terminal } from "@xterm/xterm";
@@ -24,13 +25,13 @@ export interface TerminalView extends TerminalSearchHost {
   inputScheduler: TerminalInputScheduler;
   resize: { send: (columns: number, rows: number) => Promise<void> };
   layout: TerminalLayout;
+  applyFontSize: (size: number) => void;
   themeBinding: { dispose: () => void };
-  serverScreen?: { dispose: () => void };
+  serverScreen?: ReturnType<typeof bindServerScreen>;
   disposeTimer: number | null;
 }
 const terminalViews = new Map<string, TerminalView>();
 const FALLBACK_TERMINAL_FONT_FAMILY = "SFMono-Regular, Menlo, Monaco, Consolas, monospace";
-const FALLBACK_TERMINAL_FONT_SIZE = 13;
 const FALLBACK_TERMINAL_LINE_HEIGHT = 1.22;
 
 export function acquireTerminalView(sessionKey: string, container: HTMLElement, windowsPty: { backend: "conpty"; buildNumber: number } | undefined, resizeDelayMs: number): TerminalView {
@@ -89,6 +90,9 @@ export function acquireTerminalView(sessionKey: string, container: HTMLElement, 
     inputScheduler,
     resize,
     layout,
+    applyFontSize(size) {
+      if (terminal.options.fontSize !== size) terminal.options.fontSize = size;
+    },
     themeBinding,
     serverScreen,
     disposeTimer: null,
@@ -114,7 +118,7 @@ function terminalTypography(): { fontFamily: string; fontSize: number; lineHeigh
   };
   return {
     fontFamily: style.getPropertyValue("--terminal-font-family").trim() || FALLBACK_TERMINAL_FONT_FAMILY,
-    fontSize: number("--terminal-font-size", FALLBACK_TERMINAL_FONT_SIZE),
+    fontSize: currentTerminalFontSize(),
     lineHeight: number("--terminal-line-height", FALLBACK_TERMINAL_LINE_HEIGHT),
   };
 }

@@ -25,6 +25,22 @@ it("reports live upload and target progress, reserving completion for the HTTP a
   xhr.onload();expect(await promise).toEqual({ok:true});expect(progress).toHaveBeenLastCalledWith(100);
   expect(vi.getTimerCount()).toBe(0);
 });
+it("reports native disk uploads from server byte counts and keeps the local token in the proxy request", async () => {
+  const progress = vi.fn();
+  api.mockResolvedValue({ receivedBytes: 40, transferredBytes: 0 });
+  const upload = uploadRequest("/transfers/upload", { token: "batch/0" }, "task", 100, new AbortController().signal, progress);
+  const xhr = Xhr.last;
+  expect(xhr.setRequestHeader).toHaveBeenCalledWith("X-Qterm-Drop-Source", "batch/0");
+  expect(xhr.send).toHaveBeenCalledWith(null);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(progress).toHaveBeenLastCalledWith(20);
+  api.mockResolvedValue({ receivedBytes: 100, transferredBytes: 70 });
+  await vi.advanceTimersByTimeAsync(250);
+  expect(progress).toHaveBeenLastCalledWith(85);
+  xhr.onload();
+  await upload;
+  expect(progress).toHaveBeenLastCalledWith(100);
+});
 it("cancels transport and polling without delivering a late success",async()=>{
   const controller=new AbortController(),progress=vi.fn();
   const promise=uploadRequest("/upload",new FormData(),"task",100,controller.signal,progress);

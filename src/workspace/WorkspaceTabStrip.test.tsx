@@ -3,11 +3,13 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { createWorkspace, createWorkspaceDocument } from "./model";
 import { blockIds } from "./layout";
 import { WorkspaceTabStrip } from "./WorkspaceTabStrip";
+import { useWorkspaceBatchActions } from "./useWorkspaceBatchActions";
 const mocks = vi.hoisted(() => ({ close: vi.fn(), dispatch: vi.fn(), count: vi.fn() }));
 let state = createWorkspaceDocument();
 vi.mock("./WorkspaceProvider", () => ({ useWorkspace: () => ({ document: state, dispatch: mocks.dispatch, closeSessions: mocks.close, blocksForWorkspace: (workspace: typeof state.workspaces[number]) => blockIds(workspace.layout), connectedCount: mocks.count }) }));
 function Harness({ disabled = false }: { disabled?: boolean }) {
-  return <WorkspaceTabStrip disabled={disabled} className="workspace-tab-strip">{state.workspaces.map(item => <div className="workspace-tab" data-workspace-id={item.id} key={item.id}><button className="workspace-tab-select">{item.name}</button></div>)}</WorkspaceTabStrip>;
+  const actions = useWorkspaceBatchActions();
+  return <WorkspaceTabStrip scope={() => ({ items: state.workspaces, ...actions })} disabled={disabled} className="workspace-tab-strip">{state.workspaces.map(item => <div className="workspace-tab" data-workspace-id={item.id} key={item.id}><button className="workspace-tab-select">{item.name}</button></div>)}</WorkspaceTabStrip>;
 }
 const open = (name = "B") => fireEvent.contextMenu(screen.getByRole("button", { name }), { clientX: 40, clientY: 30 });
 beforeEach(() => {

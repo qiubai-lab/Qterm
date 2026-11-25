@@ -2,7 +2,13 @@
 mod client_identity;
 mod download;
 mod proxy;
+mod registry;
+pub use registry::RemoteRuntimeRegistry;
 mod socket;
+pub(crate) mod upload;
+mod upload_source;
+#[cfg(test)]
+mod upload_tests;
 #[cfg(test)]
 mod tests;
 
@@ -13,6 +19,7 @@ use tokio_util::sync::CancellationToken;
 
 pub struct RemoteRuntime {
     pub endpoint: Url,
+    pub uploads: upload::DropUploads,
     pub downloads: download::Downloads,
     pub client: Client,
     pub cookies: Arc<Jar>,
@@ -44,7 +51,11 @@ pub fn endpoint(value: &str) -> Result<Url, String> {
 }
 
 impl RemoteRuntime {
-    pub async fn start(value: &str, ui_origin: String) -> Result<Arc<Self>, String> {
+    pub async fn start(
+        value: &str,
+        ui_origin: String,
+        cancel: CancellationToken,
+    ) -> Result<Arc<Self>, String> {
         let endpoint = endpoint(value)?;
         let cookies = Arc::new(Jar::default());
         let client = Client::builder()
@@ -88,9 +99,10 @@ impl RemoteRuntime {
         let runtime = Arc::new(Self {
             endpoint,
             downloads: download::Downloads::default(),
+            uploads: upload::DropUploads::default(),
             client,
             cookies,
-            cancel: CancellationToken::new(),
+            cancel,
             token: uuid::Uuid::new_v4().simple().to_string(),
             ui_origin,
             address,

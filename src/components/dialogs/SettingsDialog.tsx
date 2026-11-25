@@ -19,6 +19,8 @@ import { Icon } from "../Icon";
 import { OverlayScrollArea } from "../scrollbars/OverlayScrollArea";
 import { ConfigurationDirectorySetting } from "./ConfigurationDirectorySetting";
 import { ConfigurationPaths } from "./ConfigurationPaths";
+import { TerminalFontSizeSetting } from "./TerminalFontSizeSetting";
+import { commitTerminalFontSize, currentTerminalFontSize, validTerminalFontSize } from "../../terminal/terminalFontSize";
 import { TerminalNotificationSetting } from "./TerminalNotificationSetting";
 import { DialogFrame } from "./DialogFrame";
 
@@ -39,6 +41,8 @@ export function SettingsDialog({ onClose, onSecuritySettingsChanged, onTerminalS
   const [configurationDirectory, setConfigurationDirectory] = useState("");
   const [security, setSecurity] = useState<SecuritySettings | null>(null);
   const [appearance, setAppearance] = useState<AppearanceSettings | null>(null);
+  const [fontSizeDraft, setFontSizeDraft] = useState("");
+  const fontSizeValid = validTerminalFontSize(Number(fontSizeDraft));
   const [terminal, setTerminal] = useState<TerminalSettings | null>(null);
   const [confirmRemoteIntegration, setConfirmRemoteIntegration] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -53,6 +57,8 @@ export function SettingsDialog({ onClose, onSecuritySettingsChanged, onTerminalS
     setTerminal(snapshot.terminal);
     if (!preserveAppearanceDraft) {
       setAppearance(snapshot.appearance);
+      commitTerminalFontSize(snapshot.appearance.terminalFontSize);
+      setFontSizeDraft(String(currentTerminalFontSize()));
       commitTheme(snapshot.appearance.theme);
     }
   }, [commitTheme]);
@@ -67,13 +73,16 @@ export function SettingsDialog({ onClose, onSecuritySettingsChanged, onTerminalS
 
   async function save() {
     if (!security || !general || !appearance || busy || category === "advanced") return;
+    if (category === "appearance" && !fontSizeValid) return;
     setBusy(true); setSaved(false); setError("");
     try {
       const snapshot = category === "general"
         ? await updateConfigurationDirectory({ path: configurationDirectory })
         : category === "security"
           ? await updateSecuritySettings(security)
-          : await updateAppearanceSettings(appearance);
+          : await updateAppearanceSettings(Number(fontSizeDraft) === currentTerminalFontSize()
+            ? { theme: appearance.theme }
+            : { theme: appearance.theme, terminalFontSize: Number(fontSizeDraft) });
       applySnapshot(snapshot, category === "security" || category === "appearance", category !== "appearance");
       if (category === "security") onSecuritySettingsChanged?.(snapshot.security);
       setSaved(true);
@@ -81,7 +90,8 @@ export function SettingsDialog({ onClose, onSecuritySettingsChanged, onTerminalS
     } catch (reason) {
       if (category === "appearance") {
         restoreTheme();
-        setAppearance({ theme: persistedTheme });
+        setAppearance({ theme: persistedTheme, terminalFontSize: currentTerminalFontSize() });
+        setFontSizeDraft(String(currentTerminalFontSize()));
       }
       setError(errorMessage(reason));
     }
@@ -102,7 +112,9 @@ export function SettingsDialog({ onClose, onSecuritySettingsChanged, onTerminalS
   }
 
   function chooseTheme(theme: AppearanceSettings["theme"]) {
-    setAppearance({ theme });
+    if (!appearance || busy) return;
+    setAppearance({ ...appearance, theme });
+    setSaved(false);
     previewTheme(theme);
   }
 
@@ -145,7 +157,7 @@ export function SettingsDialog({ onClose, onSecuritySettingsChanged, onTerminalS
         <div className="settings-nav-list" data-active={category}>
           <span className="settings-nav-indicator" aria-hidden="true"/>
           <SettingsNavItem category="general" current={category} icon="settings" title="通用" subtitle="数据与存储" onSelect={selectCategory}/>
-          <SettingsNavItem category="appearance" current={category} icon="eye" title="外观" subtitle="界面主题" onSelect={selectCategory}/>
+          <SettingsNavItem category="appearance" current={category} icon="eye" title="外观" subtitle="主题与终端字号" onSelect={selectCategory}/>
           <SettingsNavItem category="security" current={category} icon="lock" title="安全" subtitle="凭证与终端锁定" onSelect={selectCategory}/>
           <SettingsNavItem category="advanced" current={category} icon="terminal" title="高级" subtitle="终端集成" onSelect={selectCategory}/>
         </div>
@@ -168,13 +180,15 @@ export function SettingsDialog({ onClose, onSecuritySettingsChanged, onTerminalS
               <ConfigurationPaths rootDirectory={configurationDirectory || general.defaultRootDirectory}/>
             </div> : <p className="dialog-note">正在读取设置…</p>}
           </div> : category === "appearance" ? <div className="settings-appearance-view">
-            <div className="settings-section-heading"><h3 id="appearance-settings-title">外观</h3><p>选择 Qterm 的内置界面主题。</p></div>
-            {appearance ? <fieldset className="settings-theme-picker" role="radiogroup" aria-label="界面主题">
+            <div className="settings-section-heading"><h3 id="appearance-settings-title">外观</h3></div>
+            {appearance ? <><fieldset className="settings-theme-picker" role="radiogroup" aria-label="界面主题">
               <legend>主题预设</legend>
-              <ThemeOption theme="dark" current={appearance.theme} title="深色" description="当前默认的深色工作台" onSelect={chooseTheme}/>
-              <ThemeOption theme="light" current={appearance.theme} title="亮色" description="适合明亮环境的浅色工作台" onSelect={chooseTheme}/>
-              <ThemeOption theme="cyberpunk" current={appearance.theme} title="赛博霓虹" description="亮黄重点与青色状态的夜间工作台" onSelect={chooseTheme}/>
-            </fieldset> : <p className="dialog-note">正在读取设置…</p>}
+              <ThemeOption theme="dark" current={appearance.theme} title="深色" disabled={busy} onSelect={chooseTheme}/>
+              <ThemeOption theme="light" current={appearance.theme} title="亮色" disabled={busy} onSelect={chooseTheme}/>
+              <ThemeOption theme="cyberpunk" current={appearance.theme} title="赛博霓虹" disabled={busy} onSelect={chooseTheme}/>
+            </fieldset>
+              <TerminalFontSizeSetting value={fontSizeDraft} disabled={busy} onChange={value => { setFontSizeDraft(value); setSaved(false); }}/>
+            </> : <p className="dialog-note">正在读取设置…</p>}
           </div> : category === "security" ? <>
             <div className="settings-section-heading"><h3 id="security-settings-title">安全</h3><p>管理凭证库有效期与终端空闲锁定策略。</p></div>
             {security ? <div className="settings-rows">
@@ -205,7 +219,7 @@ export function SettingsDialog({ onClose, onSecuritySettingsChanged, onTerminalS
               : category === "advanced" && saved ? <p className="inline-message settings-message" role="status">高级设置已保存。</p>
                 : category === "general" && general?.restartRequired ? <p className="inline-message settings-message" role="status">Qterm 配置目录已保存，重启 Qterm 后生效。</p> : null}
           </div>
-          {category !== "advanced" && <Button variant="primary" className={`save-state-button${saved ? " saved" : ""}`} loading={busy} disabled={!security || !general || !appearance || !terminal || (isServer && category === "general")} onClick={() => void save()}>{busy ? "保存中…" : saved ? "✓ 已保存" : "保存设置"}</Button>}
+          {category !== "advanced" && <Button variant="primary" className={`save-state-button${saved ? " saved" : ""}`} loading={busy} disabled={!security || !general || !appearance || !terminal || (category === "appearance" && !fontSizeValid) || (isServer && category === "general")} onClick={() => void save()}>{busy ? "保存中…" : saved ? "✓ 已保存" : "保存设置"}</Button>}
         </footer>
       </section>
     </div>
@@ -243,19 +257,24 @@ function SettingsNavItem({ category, current, icon, title, subtitle, onSelect }:
   </button>;
 }
 
-function ThemeOption({ theme, current, title, description, onSelect }: {
+function ThemeOption({ theme, current, title, disabled, onSelect }: {
   theme: AppearanceSettings["theme"];
   current: AppearanceSettings["theme"];
   title: string;
-  description: string;
+  disabled: boolean;
   onSelect: (theme: AppearanceSettings["theme"]) => void;
 }) {
   const selected = theme === current;
   return <label className="settings-theme-option" data-selected={selected || undefined}>
-    <input type="radio" name="app-theme" value={theme} checked={selected} onChange={() => onSelect(theme)}/>
-    <span className={`settings-theme-preview ${theme}`} aria-hidden="true"><span/><span/><span/></span>
-    <span className="settings-theme-copy"><strong>{title}</strong><small>{description}</small></span>
-    {selected && <span className="settings-theme-check" aria-hidden="true">✓</span>}
+    <input type="radio" name="app-theme" value={theme} checked={selected} disabled={disabled} onChange={() => onSelect(theme)}/>
+    <span className={`settings-theme-preview ${theme}`} data-demo-theme={theme} aria-hidden="true">
+      <span className="settings-mini-titlebar"><i/><i/><i/></span>
+      <span className="settings-mini-screen"><b>›</b><i/><i/><i/><b>›</b><i/></span>
+      <span className="settings-mini-rail"><Icon name="terminal" size={9}/><Icon name="files" size={9}/></span>
+    </span>
+    <span className="settings-theme-caption"><strong>{title}</strong>
+      {selected && <span className="settings-theme-check" aria-hidden="true">✓</span>}
+    </span>
   </label>;
 }
 

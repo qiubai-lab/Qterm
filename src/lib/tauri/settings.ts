@@ -9,6 +9,7 @@ export type AppTheme = "dark" | "light" | "cyberpunk";
 
 export interface AppearanceSettings {
   theme: AppTheme;
+  terminalFontSize?: number;
 }
 
 export interface UpdateSettings {

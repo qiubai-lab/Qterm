@@ -14,10 +14,10 @@ vi.mock("../onboarding/OnboardingProvider",()=>({OnboardingProvider:Pass}));
 vi.mock("../terminal/notifications/TerminalNotificationProvider",()=>({TerminalNotificationProvider:Pass}));
 vi.mock("../workspace/WorkspaceTerminalLinkHost",()=>({WorkspaceTerminalLinkHost:()=>null}));
 vi.mock("./ServerRuntimeRestore",()=>({ServerRuntimeRestore:function Restore(){useEffect(()=>{mocks.restore();},[]);return null;}}));
-vi.mock("../workspace/WorkspaceShell",()=>({WorkspaceShell:function Shell({terminalLockState:lock}:{terminalLockState:ReturnType<typeof useTerminalLock>}){
+vi.mock("../workspace/WorkspaceShell",()=>({WorkspaceShell:function Shell({terminalLockState:lock,renderWorkspaceRuntime}:{renderWorkspaceRuntime:(id:string)=>ReactNode;terminalLockState:ReturnType<typeof useTerminalLock>}){
   const [draft,setDraft]=useState("");
   useEffect(()=>{mocks.mount();return mocks.unmount;},[]);
-  return <><input aria-label="文件草稿" value={draft} onChange={e=>setDraft(e.target.value)}/><button onClick={()=>void lock.lock(true)}>锁定测试工作区</button></>;
+  return <>{renderWorkspaceRuntime("test")}<input aria-label="文件草稿" value={draft} onChange={e=>setDraft(e.target.value)}/><button onClick={()=>void lock.lock(true)}>锁定测试工作区</button></>;
 }}));
 beforeEach(()=>{vi.resetAllMocks();pauseData();});
 afterEach(()=>{cleanup();resumeData();});

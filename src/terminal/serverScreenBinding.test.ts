@@ -17,11 +17,13 @@ it("holds the server grid through restoration then fits the exclusive controller
   const binding=bindServerScreen(terminal as unknown as Terminal,()=>"block",fit,cwd);
   const send=(value:object)=>window.dispatchEvent(new CustomEvent("qterm:server-screen",{detail:{runtimeKey:"block",...value}}));
   send({phase:"start",columns:80,rows:24,cwd:"/work",readOnly:true});
+  expect(binding.isRestoring()).toBe(true);
   expect(cwd).toHaveBeenCalledWith("/work");
   terminal.resize(120,40);expect([terminal.cols,terminal.rows]).toEqual([80,24]);
   expect(fit).not.toHaveBeenCalled();
   send({phase:"geometry",columns:90,rows:30});expect([terminal.cols,terminal.rows]).toEqual([90,30]);
   send({phase:"end"});expect(fit).toHaveBeenCalledOnce();
+  expect(binding.isRestoring()).toBe(false);
   terminal.resize(120,40);expect(terminal.cols).toBe(120);
   binding.dispose();expect(disposal).toHaveBeenCalledTimes(7);
   send({phase:"start",columns:80,rows:24});expect(terminal.cols).toBe(120);

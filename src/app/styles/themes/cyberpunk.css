@@ -142,11 +142,3 @@
   --workspace-tab-hover-border:rgba(0,221,235,.46);
   --workspace-tab-hover-background:rgba(0,221,235,.09);
 }
-
-.settings-theme-preview.cyberpunk {
-  --theme-preview-chrome:#fcee0a;
-  --theme-preview-canvas:#07090d;
-  --theme-preview-sidebar:#10151c;
-  --theme-preview-surface:#07383f;
-  --theme-preview-border:#00ddeb;
-}

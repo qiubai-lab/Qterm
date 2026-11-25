@@ -1,5 +1,5 @@
-import { useFileAutoConnect } from "./useFileAutoConnect";
-import { boundsStyle } from "./layoutPresentation";
+import { useBlockAutoConnect } from "./useBlockAutoConnect";
+import { boundsStyle, workbenchHostName } from "./layoutPresentation";
 import { WebBlock } from "../web/WebBlock";
 import { supportsWebBlocks } from "../web/webModel";
 import { TerminalHeaderActions } from "../terminal/TerminalHeaderActions";
@@ -29,7 +29,7 @@ import { useWorkspace, type FileRuntime } from "./WorkspaceProvider";
 export type ConnectionOwner = "terminal" | "files" | "network" | "git";
 import { BlockNotice } from "./BlockNotice";
 export function WorkspaceCanvas({ workspace, visible, localTerminalAttention = false, remoteShellIntegrationEnabled = false, terminalSettingsReady = true, onRequestClose, onRequestDisconnect, onRequestAuthConnection, onOpenConnectionManager }: { workspace: Workspace; visible: boolean; localTerminalAttention?: boolean; remoteShellIntegrationEnabled?: boolean; terminalSettingsReady?: boolean; onRequestClose: (blockId: string) => void; onRequestDisconnect?: (owner: ConnectionOwner, blockId: string, name: string, local: boolean) => void; onRequestAuthConnection: (owner: ConnectionOwner, blockId: string, profile: ConnectionProfile) => void; onOpenConnectionManager?: () => void }) {
-  const { dispatch } = useWorkspace();
+  const { dispatch } = useWorkspace("blocks");
   const { drag, geometry, layoutSurfaceRef, beginDrag, startResize } = useLayoutInteractions(workspace, visible, dispatch);
   const activeBounds = geometry.leaves.find(({ node }) => node.blockId === workspace.activeBlockId)?.bounds ?? null;
 
@@ -88,14 +88,14 @@ function BlockView(props: BlockRenderProps & { node: LayoutLeaf }) {
 }
 
 function TerminalBlock(props: BlockRenderProps & { blockId: string; profileId: string | null }) {
-  const { document, dispatch, runtimes, profiles, profileGroups = [], splitTerminalBlock, selectBlockTarget, clearBlockBuffer, disconnectBlock, restartLocalBlock } = useWorkspace();
+  const { document, dispatch, runtimes, profiles, profileGroups = [], splitTerminalBlock, selectBlockTarget, clearBlockBuffer, disconnectBlock, restartLocalBlock } = useWorkspace("blocks");
   const requestConnection = props.onRequestAuthConnection;
   const runtime = runtimes[props.blockId];
   const active = props.workspace.activeBlockId === props.blockId;
   const profile = profiles.find((item) => item.id === props.profileId);
   const status = runtime?.status ?? "closed";
   const endpoint = profile && status === "connected" ? `${profile.username}@${profile.host}` : null;
-  const detail = endpoint ?? (profile ? status : status === "connected" ? "本机" : status);
+  const detail = endpoint ?? (profile ? status : status === "connected" ? workbenchHostName() : status);
   const requestedProfileRef = useRef<string | null>(null);
   const autoOsc7AttentionSessionRef = useRef<string | null>(null);
   const osc7StartupTimerRef = useRef<number | null>(null);
@@ -225,11 +225,7 @@ function TerminalBlock(props: BlockRenderProps & { blockId: string; profileId: s
     if (osc7AttentionTimerRef.current !== null) window.clearTimeout(osc7AttentionTimerRef.current);
   }, []);
 
-  useEffect(() => {
-    if (!profile || status !== "closed" || requestedProfileRef.current === profile.id) return;
-    requestedProfileRef.current = profile.id;
-    requestConnection("terminal", props.blockId, profile);
-  }, [profile, props.blockId, requestConnection, status]);
+  useBlockAutoConnect("terminal", profile, status, props.blockId, requestedProfileRef, requestConnection);
 
   return <section
     className={`terminal-block${active ? " active" : ""}`}
@@ -264,14 +260,14 @@ function TerminalBlock(props: BlockRenderProps & { blockId: string; profileId: s
 }
 
 function FilesBlock(props: BlockRenderProps & { blockId: string; profileId: string | null; path: string }) {
-  const { document, dispatch, fileRuntimes, profiles, profileGroups = [], selectFileTarget, disconnectFileBlock } = useWorkspace();
+  const { document, dispatch, fileRuntimes, profiles, profileGroups = [], selectFileTarget, disconnectFileBlock } = useWorkspace("blocks");
   const requestConnection = props.onRequestAuthConnection;
   const runtime: FileRuntime = fileRuntimes[props.blockId] ?? (props.profileId === null
     ? { sessionId: null, kind: "local", status: "connected", hostKeyPrompt: null, notice: "", connectionProgress: null }
     : { sessionId: null, kind: "sftp", status: "closed", hostKeyPrompt: null, notice: "", connectionProgress: null });
   const profile = profiles.find((item) => item.id === props.profileId);
   const endpoint = profile && runtime.status === "connected" ? `${profile.username}@${profile.host}` : null;
-  const detail = endpoint ?? (profile ? runtime.status : "本机");
+  const detail = endpoint ?? (profile ? runtime.status : workbenchHostName());
   const active = props.workspace.activeBlockId === props.blockId;
   const requestedProfileRef = useRef<string | null>(null);
   const sessionActive = runtime.status !== "closed" && runtime.status !== "failed";
@@ -297,7 +293,7 @@ function FilesBlock(props: BlockRenderProps & { blockId: string; profileId: stri
     requestedProfileRef.current = target?.id ?? null;
     if (target) requestConnection("files", props.blockId, target);
   }
-  useFileAutoConnect(profile, runtime.status, props.blockId, requestedProfileRef, requestConnection);
+  useBlockAutoConnect("files", profile, runtime.status, props.blockId, requestedProfileRef, requestConnection);
   return <section
     className={`terminal-block file-browser-block${active ? " active" : ""}`}
     data-layout-block={props.blockId}
@@ -307,7 +303,7 @@ function FilesBlock(props: BlockRenderProps & { blockId: string; profileId: stri
     aria-label={`文件窗口 ${props.path}`}
   >
     <header className="terminal-block-header" onPointerDown={(event) => props.beginDrag(event, props.blockId)}>
-      <TerminalTargetPicker profiles={profiles} groups={profileGroups} recentProfileIds={document?.recentProfileIds ?? []} selectedProfileId={props.profileId} status={runtime.status} detail={detail} hideDetail={Boolean(runtime.connectionProgress)} onSelect={(profileId) => void chooseTarget(profileId)} onManageConnections={props.onOpenConnectionManager} icon="files" localName={"本机文件"} localDetail={"本地文件系统"} ariaContext="文件连接" onRequestDisconnect={runtime.status === "connected" && profile ? requestDisconnect : undefined} statusAction={statusAction}/>
+      <TerminalTargetPicker profiles={profiles} groups={profileGroups} recentProfileIds={document?.recentProfileIds ?? []} selectedProfileId={props.profileId} status={runtime.status} detail={detail} hideDetail={Boolean(runtime.connectionProgress)} onSelect={(profileId) => void chooseTarget(profileId)} onManageConnections={props.onOpenConnectionManager} icon="files" localName={workbenchHostName() + "文件"} localDetail={workbenchHostName() + "文件系统"} ariaContext="文件连接" onRequestDisconnect={runtime.status === "connected" && profile ? requestDisconnect : undefined} statusAction={statusAction}/>
       <ConnectionRouteProgress progress={runtime.connectionProgress} endpoint={endpoint} profile={profile} onRequestDisconnect={runtime.status === "connected" && profile ? requestDisconnect : undefined} statusAction={runtime.connectionProgress ? statusAction : undefined}/>
       <BlockHeaderClose label="关闭文件窗口" onClose={() => props.onRequestClose(props.blockId)}/>
     </header>
@@ -317,7 +313,7 @@ function FilesBlock(props: BlockRenderProps & { blockId: string; profileId: stri
 }
 
 function NetworkBlock(props: BlockRenderProps & { blockId: string; profileId: string | null }) {
-  const { document, dispatch, profiles, profileGroups = [], networkRuntimes, selectNetworkTarget, disconnectNetworkBlock, startNetworkBlockRule, stopNetworkBlockRule } = useWorkspace();
+  const { document, dispatch, profiles, profileGroups = [], networkRuntimes, selectNetworkTarget, disconnectNetworkBlock, startNetworkBlockRule, stopNetworkBlockRule } = useWorkspace("blocks");
   const profile = profiles.find((item) => item.id === props.profileId);
   const runtime = networkRuntimes[props.blockId];
   const active = props.workspace.activeBlockId === props.blockId;
@@ -383,7 +379,7 @@ function NetworkBlock(props: BlockRenderProps & { blockId: string; profileId: st
 }
 
 function GitBlock(props: BlockRenderProps & { blockId: string; target: GitTarget }) {
-  const { document, dispatch, profiles, profileGroups = [], gitRuntimes, selectGitTarget, stageGitRemoteTarget, cancelStagedGitTarget, disconnectGitBlock } = useWorkspace();
+  const { document, dispatch, profiles, profileGroups = [], gitRuntimes, selectGitTarget, stageGitRemoteTarget, cancelStagedGitTarget, disconnectGitBlock } = useWorkspace("blocks");
   const { blockId, onRequestAuthConnection, target, workspace } = props;
   const workspaceId = workspace.id;
   const active = props.workspace.activeBlockId === props.blockId;
@@ -408,7 +404,7 @@ function GitBlock(props: BlockRenderProps & { blockId: string; target: GitTarget
   const endpoint = profile && status === "connected" ? `${profile.username}@${profile.host}:${profile.port}` : null;
   const detail = props.target.type === "remote"
     ? endpoint ?? (profile ? status : "连接配置不存在")
-    : props.target.type === "local" ? "本机仓库" : "选择本机或 SSH 工作区";
+    : props.target.type === "local" ? workbenchHostName() + "仓库" : `选择${workbenchHostName()}或 SSH 工作区`;
   const requestDisconnect = () => props.onRequestDisconnect?.("git", props.blockId, profile?.name ?? "远程 Git", false);
   const statusAction = profile && props.target.type === "remote" && status !== "connected" ? {
     label: status === "closing" ? "正在断开" : sessionActive ? "取消 Git 连接" : "重新连接 Git",
@@ -463,11 +459,7 @@ function GitBlock(props: BlockRenderProps & { blockId: string; target: GitTarget
     if (status !== "connected" || !runtime?.sessionId) onRequestAuthConnection("git", blockId, profile);
   }, [blockId, onRequestAuthConnection, pendingRemote, profile, runtime?.sessionId, status, target.type]);
 
-  useEffect(() => {
-    if (target.type !== "remote" || !profile || status !== "closed" || requestedProfileRef.current === profile.id) return;
-    requestedProfileRef.current = profile.id;
-    onRequestAuthConnection("git", blockId, profile);
-  }, [blockId, onRequestAuthConnection, profile, status, target.type]);
+  useBlockAutoConnect("git", target.type === "remote" ? profile : undefined, status, blockId, requestedProfileRef, onRequestAuthConnection);
 
   const repositoryPickerOpen = target.type === "remote"
     && typeof repositoryPickerRequest === "object"
@@ -484,13 +476,13 @@ function GitBlock(props: BlockRenderProps & { blockId: string; target: GitTarget
     aria-label={`Git 管理 ${name}`}
   >
     <header className="terminal-block-header" onPointerDown={(event) => props.beginDrag(event, props.blockId)}>
-      <TerminalTargetPicker profiles={profiles} groups={profileGroups} recentProfileIds={document?.recentProfileIds ?? []} selectedProfileId={pendingRemote?.profileId ?? profileId} status={status} detail={detail} hideDetail={Boolean(runtime?.connectionProgress)} onSelect={(nextProfileId) => void chooseTarget(nextProfileId)} onManageConnections={props.onOpenConnectionManager} icon="git" localName="本机仓库" localDetail="管理本机 Git 工作区" ariaContext="Git 连接" onRequestDisconnect={status === "connected" && profile ? requestDisconnect : undefined} statusAction={statusAction}/>
+      <TerminalTargetPicker profiles={profiles} groups={profileGroups} recentProfileIds={document?.recentProfileIds ?? []} selectedProfileId={pendingRemote?.profileId ?? profileId} status={status} detail={detail} hideDetail={Boolean(runtime?.connectionProgress)} onSelect={(nextProfileId) => void chooseTarget(nextProfileId)} onManageConnections={props.onOpenConnectionManager} icon="git" localName={workbenchHostName() + "仓库"} localDetail={`管理${workbenchHostName()} Git 工作区`} ariaContext="Git 连接" onRequestDisconnect={status === "connected" && profile ? requestDisconnect : undefined} statusAction={statusAction}/>
       <ConnectionRouteProgress progress={runtime?.connectionProgress} endpoint={endpoint} profile={profile} onRequestDisconnect={status === "connected" && profile ? requestDisconnect : undefined} statusAction={runtime?.connectionProgress ? statusAction : undefined}/>
       <BlockHeaderClose label="关闭 Git 窗口" onClose={() => props.onRequestClose(props.blockId)}>
         <GitRepositoryHistoryPopover
           repositories={visibleRepositoryHistory}
           currentRepository={currentRepository}
-          triggerLabel={props.target.type === "remote" ? "打开远程仓库" : "打开本机仓库"}
+          triggerLabel={props.target.type === "remote" ? "打开远程仓库" : `打开${workbenchHostName()}仓库`}
           disabled={Boolean(pendingRemote) || (props.target.type === "remote" && !profile)}
           onSelect={(repository) => {
             if (currentRepository && isSameGitRepository(currentRepository, repository)) return;

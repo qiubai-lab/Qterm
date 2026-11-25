@@ -67,3 +67,27 @@ it.each([1070, 600])("keeps title motion continuous and bounded at strip width %
   expect(inset()).toBe(0);
   expect(width()).toBe(initialWidth);
 });
+
+it("commits a new selection before paint without replaying the deck spring", () => {
+  vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(600);
+  vi.stubGlobal("requestAnimationFrame", vi.fn(() => 1));
+  vi.stubGlobal("cancelAnimationFrame", vi.fn());
+  function Harness({selected}: { selected: string }) {
+    const strip = useRef<HTMLDivElement>(null);
+    const tabs = useRef(new Map<string, HTMLDivElement>());
+    const deck = useWorkspaceTabDeck({ ids, selectedId: selected, lockedId: null, dragging: false, strip, tabs });
+    return <div {...deck.events}><div ref={strip}>{ids.map(id => <div key={id} data-testid={id} className="workspace-tab" data-workspace-id={id}
+      ref={node => { if (node) tabs.current.set(id, node); }}>{id}</div>)}</div></div>;
+  }
+  const view = render(<Harness selected={ids[0]}/>);
+  const first = screen.getByTestId(ids[0]);
+  const last = screen.getByTestId(ids[7]);
+  const collapsed = last.style.getPropertyValue("--workspace-visible-width");
+  fireEvent.pointerMove(screen.getByTestId(ids[3]), {clientX: 200, clientY: 15, pointerType:"mouse"});
+  vi.mocked(requestAnimationFrame).mockClear();
+  view.rerender(<Harness selected={ids[7]}/>);
+  expect(screen.getByTestId(ids[7])).toBe(last);
+  expect(first.style.getPropertyValue("--workspace-visible-width")).toBe(collapsed);
+  expect(last.style.getPropertyValue("--workspace-visible-width")).toBe("128px");
+  expect(requestAnimationFrame).not.toHaveBeenCalled();
+});

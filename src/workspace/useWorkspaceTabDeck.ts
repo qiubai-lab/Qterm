@@ -14,6 +14,13 @@ export function useWorkspaceTabDeck({ ids, selectedId, lockedId, dragging, strip
   const [focused, setFocused] = useState<string | null>(null);
   const pointer = useRef({ x: -1, y: -1 });
   const motion = useRef(new Map<string, MotionCard>());
+  const [previewSelection, setPreviewSelection] = useState(selectedId);
+  if (previewSelection !== selectedId) {
+    setPreviewSelection(selectedId);
+    setHovered(null);
+    setFocused(null);
+  }
+  const paintedSelection = useRef(selectedId);
   const previewId = lockedId ?? (dragging ? hovered : focused ?? hovered);
   const naturalLayout = useMemo(() => layoutWorkspaceDeck(ids, selectedId, previewId, available), [ids, selectedId, previewId, available]);
   // Reserve navigation for the largest ordinary preview, independent of the hovered id.
@@ -47,6 +54,8 @@ export function useWorkspaceTabDeck({ ids, selectedId, lockedId, dragging, strip
     const node = strip.current;
     if (!node) return;
     let frame = 0;
+    const selectionChanged = paintedSelection.current !== selectedId;
+    paintedSelection.current = selectedId;
     const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)");
     // Measure intrinsic text once per layout, never during the animation frame.
     const titleInsets = new Map(layout.cards.map(card => {
@@ -70,13 +79,18 @@ export function useWorkspaceTabDeck({ ids, selectedId, lockedId, dragging, strip
     const alive = new Set(layout.cards.map(card => card.id));
     for (const id of motion.current.keys()) if (!alive.has(id)) motion.current.delete(id);
     for (const card of layout.cards) {
-      if (!motion.current.has(card.id)) motion.current.set(card.id, { x: card.x, width: paintedWidth(card), expansion: Number(card.expanded), vx: 0, vw: 0, ve: 0 });
+      if (selectionChanged || !motion.current.has(card.id)) motion.current.set(card.id, { x: card.x, width: paintedWidth(card), expansion: Number(card.expanded), vx: 0, vw: 0, ve: 0 });
       apply(card, motion.current.get(card.id)!);
+    }
+    // A selection commits final geometry before paint. Only hover previews spring between slots.
+    if (selectionChanged) {
+      node.dispatchEvent(new Event("workspace-tab-layout"));
+      return;
     }
     if (dragging) return;
     let previous = performance.now();
     const step = (now: number) => {
-      const dt = Math.min((now - previous) / 1000, 1 / 30);
+      const dt = Math.max(0, Math.min((now - previous) / 1000, 1 / 30));
       previous = now;
       let unsettled = false;
       for (const card of layout.cards) {

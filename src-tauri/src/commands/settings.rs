@@ -8,7 +8,7 @@ use crate::{
     application::settings_service::{SettingsService, SettingsSnapshot, SettingsWarning},
     commands::{error::IpcError, native_dialog},
     domain::settings::{
-        AppTheme, AppearanceSettings, ConfigurationDirectory, SecuritySettings, TerminalSettings,
+        AppTheme, ConfigurationDirectory, SecuritySettings, TerminalFontSize, TerminalSettings,
         UpdateSettings,
     },
     infrastructure::persistence::json_appearance_settings_repository::JsonAppearanceSettingsRepository,
@@ -77,6 +77,7 @@ pub struct SecuritySettingsDto {
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct AppearanceSettingsDto {
     theme: AppThemeDto,
+    terminal_font_size: Option<TerminalFontSize>,
 }
 
 #[derive(Clone, Copy, Deserialize)]
@@ -140,6 +141,7 @@ struct SecuritySettingsOutputDto {
 #[serde(rename_all = "camelCase")]
 struct AppearanceSettingsOutputDto {
     theme: AppThemeDto,
+    terminal_font_size: TerminalFontSize,
 }
 
 #[derive(Serialize)]
@@ -219,9 +221,7 @@ pub fn settings_update_appearance(
 ) -> Result<SettingsSnapshotDto, IpcError> {
     let snapshot = state
         .service
-        .update_appearance(AppearanceSettings {
-            theme: input.theme.into(),
-        })
+        .update_appearance(input.theme.into(), input.terminal_font_size)
         .map_err(IpcError::from)?;
     Ok(SettingsSnapshotDto::new(snapshot))
 }
@@ -282,6 +282,7 @@ impl SettingsSnapshotDto {
             },
             appearance: AppearanceSettingsOutputDto {
                 theme: value.appearance.theme.into(),
+                terminal_font_size: value.appearance.terminal_font_size,
             },
             updates: UpdateSettingsOutputDto {
                 auto_check_on_startup: value.updates.auto_check_on_startup,
@@ -341,6 +342,25 @@ mod tests {
     };
     use serde_json::json;
     use tempfile::tempdir;
+
+    #[test]
+    fn desktop_appearance_accepts_optional_integer_font_sizes_in_range() {
+        for size in [10, 13, 32] {
+            let dto: AppearanceSettingsDto = serde_json::from_value(json!({
+                "theme": "dark", "terminalFontSize": size
+            }))
+            .unwrap();
+            assert_eq!(json!(dto.terminal_font_size), size);
+        }
+        for invalid in [json!(9), json!(33), json!(11.5), json!("14")] {
+            assert!(
+                serde_json::from_value::<AppearanceSettingsDto>(json!({
+                    "theme": "dark", "terminalFontSize": invalid
+                }))
+                .is_err()
+            );
+        }
+    }
 
     #[test]
     fn history_free_setting_is_a_boolean_patch_not_a_shell_command() {
@@ -492,7 +512,10 @@ mod tests {
             json!(display(&custom_root.path().join("device")))
         );
         assert_eq!(updated["general"]["restartRequired"], true);
-        assert_eq!(updated["appearance"]["theme"], "dark");
+        assert_eq!(
+            updated["appearance"],
+            json!({"theme":"dark","terminalFontSize":13})
+        );
         assert_eq!(updated["updates"]["autoCheckOnStartup"], false);
         assert_eq!(updated["terminal"]["remoteShellIntegrationEnabled"], true);
         assert_eq!(updated["terminal"]["historyFreeBashEnabled"], false);

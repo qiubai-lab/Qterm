@@ -1,4 +1,3 @@
-import { assertRuntimeAttached } from "../switchGuard";
 // Each page has one immutable runtime; native device services stay outside this router.
 import * as local from "../../lib/tauri/files";
 import * as remote from "../../server/services/files";
@@ -14,4 +13,4 @@ export const copyFile: typeof local.copyFile = (...args) => (selectedRuntime ? r
 export const createEntry: typeof local.createEntry = (...args) => (selectedRuntime ? remote.createEntry : local.createEntry)(...args);
 export const renameEntry: typeof local.renameEntry = (...args) => (selectedRuntime ? remote.renameEntry : local.renameEntry)(...args);
 export const deleteEntry: typeof local.deleteEntry = (...args) => (selectedRuntime ? remote.deleteEntry : local.deleteEntry)(...args);
-export const connectFileSession: typeof local.connectFileSession = (...args) => { assertRuntimeAttached(); return (selectedRuntime ? remote.connectFileSession : local.connectFileSession)(...args) };
+export const connectFileSession: typeof local.connectFileSession = (...args) => (selectedRuntime ? remote.connectFileSession : local.connectFileSession)(...args);

@@ -1,9 +1,12 @@
 import { dataLease, dataPaused, subscribeDataAccess } from "./dataAccess";
+import { sessionStartQueue } from "./sessionStartQueue";
+import { sessionInventory } from "./sessionInventory";
 import { accessProof } from "./accessIdentity";
 import type { SessionConnectInput, SessionEvent, TerminalSessionConnectInput } from "../lib/tauri/sessions";
 import { API, api } from "./http";
 
 interface Connection {
+  cancelOpen(): void;
   socket: WebSocket; id?: string; stopped: boolean; restoring: boolean;
   unsubscribe?: () => void;
   retry?: number; timer?: number; runtimeKey?: string;
@@ -25,9 +28,10 @@ export function openSession(purpose: "terminal" | "files" | "git" | "network", i
 }
 export function openSocket(endpoint: string, handshake: unknown, onEvent: (event: SessionEvent) => void, onData: (data: Uint8Array, consumed?: () => void) => void): Promise<{sessionId:string;cwd?:string}> {
   if (dataPaused()) return Promise.reject(new Error("终端已锁定，连接已暂停"));
-  return new Promise((resolve,reject)=>{
-    const runtimeKey=(handshake as {runtimeKey?:string}).runtimeKey;
-    const connection:Connection={socket:null as unknown as WebSocket,stopped:false,restoring:true,event:onEvent,data:onData,runtimeKey};
+  const runtimeKey = (handshake as {runtimeKey?: string}).runtimeKey;
+  return sessionStartQueue.schedule(runtimeKey, dataLease().signal, () => new Promise((resolve,reject)=>{
+    const connection:Connection={socket:null as unknown as WebSocket,stopped:false,restoring:true,cancelOpen:()=>reject(new Error("连接已断开")),event:onEvent,data:onData,runtimeKey};
+    if (endpoint !== "/runtime/attach") sessionInventory.changed(runtimeKey);
     connections.add(connection);
     connection.unsubscribe = subscribeDataAccess(() => {
       window.clearTimeout(connection.timer); window.clearTimeout(connection.retry);
@@ -40,7 +44,7 @@ export function openSocket(endpoint: string, handshake: unknown, onEvent: (event
     function reconnect() {
       if (connection.stopped || dataPaused()) return;
       const lease = dataLease();
-      void api<Array<{sessionId:string}>>("/runtime/sessions").then(list => {
+      void sessionInventory.list().then(list => {
         if (connection.stopped || dataPaused()) return;
         if (!list.some(s => s.sessionId === connection.id)) { stopError("后台会话已结束或服务已重启，请重新打开终端"); return; }
         connect("/runtime/attach", {version:2,sessionId:connection.id});
@@ -66,6 +70,7 @@ export function openSocket(endpoint: string, handshake: unknown, onEvent: (event
           const value=JSON.parse(String(event.data));
           if(value.type==="ready" && value.sessionId){
             window.clearTimeout(connection.timer);
+            sessionInventory.changed(runtimeKey);
             connection.id=value.sessionId;connection.restoring=true;
             const previous=sessions.get(value.sessionId);if(previous && previous!==connection)detach(previous);
             sessions.set(value.sessionId,connection);
@@ -94,7 +99,7 @@ export function openSocket(endpoint: string, handshake: unknown, onEvent: (event
       };
     }
     connect(endpoint,handshake);handshake=undefined;
-  });
+  }));
 }
 function detach(connection:Connection){
   connection.unsubscribe?.();
@@ -110,8 +115,12 @@ export function control(id:string,value:unknown):void {
   if(value instanceof Uint8Array)c.socket.send(value);else c.socket.send(JSON.stringify(value));
 }
 export async function closeSession(id:string):Promise<void>{
+  sessionInventory.changed(sessions.get(id)?.runtimeKey);
   await api(`/runtime/sessions/${encodeURIComponent(id)}`,"DELETE");
-  const c=sessions.get(id);if(c)detach(c);
+  const c=sessions.get(id); sessionInventory.changed(c?.runtimeKey); if(c)detach(c);
 }
 /** Page teardown and authentication changes detach views, never stop server processes. */
-export function closeAllSessions():void {for(const connection of [...connections])detach(connection);}
+export function closeAllSessions():void {
+  sessionStartQueue.cancelWaiting();
+  for (const connection of [...connections]) { connection.cancelOpen(); detach(connection); }
+}

@@ -15,6 +15,29 @@ pub enum AppTheme {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct AppearanceSettings {
     pub theme: AppTheme,
+    pub terminal_font_size: TerminalFontSize,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
+#[serde(try_from = "u8")]
+pub struct TerminalFontSize(u8);
+
+impl TryFrom<u8> for TerminalFontSize {
+    type Error = &'static str;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        if (10..=32).contains(&value) {
+            Ok(Self(value))
+        } else {
+            Err("terminal font size must be between 10 and 32 pixels")
+        }
+    }
+}
+
+impl Default for TerminalFontSize {
+    fn default() -> Self {
+        Self(13)
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

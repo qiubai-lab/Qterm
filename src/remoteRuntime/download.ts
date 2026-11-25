@@ -1,6 +1,8 @@
+import { framePort } from "./desktop/frame";
 import { invoke } from "@tauri-apps/api/core";
-export const selectNativeDownload = (name: string) => invoke<string | null>("remote_download_select", {name});
-export const cancelNativeDownload = (id: string) => invoke<void>("remote_download_cancel", {id});
+const owner = () => framePort ? { runtimeId: framePort.runtimeId } : {};
+export const selectNativeDownload = (name: string) => invoke<string | null>("remote_download_select", {name, ...owner()});
+export const cancelNativeDownload = (id: string) => invoke<void>("remote_download_cancel", {id, ...owner()});
 /** Backpressure spans network reads and bounded native writes; never buffer a file. */
 export async function streamNativeDownload(response: Response, id: string, signal: AbortSignal, progress: (bytes: number, total: number) => void) {
   const reader = response.body?.getReader();
@@ -19,14 +21,14 @@ export async function streamNativeDownload(response: Response, id: string, signa
       for (let offset = 0; offset < value.length; offset += 64 * 1024) {
         signal.throwIfAborted();
         const chunk = value.subarray(offset, offset + 64 * 1024);
-        await invoke<void>("remote_download_write", chunk, {headers:{"x-download-id":id}});
+        await invoke<void>("remote_download_write", chunk, {headers:{"x-download-id":id, "x-runtime-id":framePort?.runtimeId ?? ""}});
         signal.throwIfAborted();
         bytes += chunk.length; progress(bytes, total);
       }
     }
     if (total && total !== bytes) throw new Error("下载连接中断，文件不完整");
     signal.throwIfAborted();
-    await invoke<void>("remote_download_finish", {id});
+    await invoke<void>("remote_download_finish", {id, ...owner()});
   } catch (error) {
     await reader?.cancel().catch(() => undefined);
     await cancelNativeDownload(id).catch(() => undefined);

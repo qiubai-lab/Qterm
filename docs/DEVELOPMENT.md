@@ -186,7 +186,7 @@ pnpm package:desktop --platform windows # 显式校验平台
 
 macOS/Linux 对应的 `--platform` 值为 `macos`、`linux`。`make package` 保留 Tauri 原生参数透传，例如 `make package ARGS='--target aarch64-apple-darwin'`；显式 target 的产物位于 `target/<target>/release/bundle/`，需要先安装对应 Rust target 与平台构建依赖。平台命名入口和本地安装入口只支持本机默认架构，不支持 `CARGO_BUILD_TARGET`；自定义 `CARGO_TARGET_DIR` 时以构建输出为准。
 
-版本号由用户维护 `src-tauri/Cargo.toml` 中的 `[package].version`，修改后运行 `cargo check --manifest-path src-tauri/Cargo.toml` 同步 `Cargo.lock`。构建命令不会修改版本、生成时间戳、改名或额外生成开发版。macOS 标准构建仍要求 SDK 26.5，详见[发布流程](release.md)。底层参数和平台包格式见 [Tauri CLI](https://v2.tauri.app/reference/cli/) 与 [Windows 安装器说明](https://v2.tauri.app/distribute/windows-installer/)。
+版本号由用户维护 `src-tauri/Cargo.toml` 中的 `[package].version`，修改后运行 `cargo check --manifest-path src-tauri/Cargo.toml` 同步 `Cargo.lock`。构建命令不会修改版本、生成时间戳、改名或额外生成开发版。macOS 标准构建优先使用 SDK 27.0，也支持 SDK 26.5，详见[发布流程](release.md)。底层参数和平台包格式见 [Tauri CLI](https://v2.tauri.app/reference/cli/) 与 [Windows 安装器说明](https://v2.tauri.app/distribute/windows-installer/)。
 
 ### 从本地源码安装和更新
 

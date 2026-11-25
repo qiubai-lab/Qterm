@@ -1,12 +1,16 @@
 import { useCallback, useEffect, useRef, useState, type ComponentPropsWithRef } from "react";
-import { useWorkspace } from "./WorkspaceProvider";
 import { WorkspaceTabMenu } from "./WorkspaceTabMenu";
 import { WorkspaceBatchCloseDialog } from "./WorkspaceBatchCloseDialog";
 import { workspaceCloseLabels, workspaceCloseTargets, type WorkspaceCloseSide } from "./workspaceClose";
+import type { WorkspaceBatchActions } from "./useWorkspaceBatchActions";
 
+export interface WorkspaceTabScope extends WorkspaceBatchActions {
+  items: { id: string }[];
+  environment?: string;
+}
 interface CloseBatch { anchorId: string; ids: string[]; side: WorkspaceCloseSide }
-export function WorkspaceTabStrip({ disabled, onInteractionAnchorChange, ...props }: ComponentPropsWithRef<"nav"> & { disabled: boolean; onInteractionAnchorChange?: (id: string | null) => void }) {
-  const { document: state, dispatch, blocksForWorkspace, closeSessions, connectedCount } = useWorkspace();
+type StripProps = ComponentPropsWithRef<"nav"> & { disabled: boolean; onInteractionAnchorChange?: (id: string | null) => void };
+export function WorkspaceTabStrip({ disabled, scope, onInteractionAnchorChange, ...props }: StripProps & { scope(id: string): WorkspaceTabScope | undefined }) {
   const [menu, setMenu] = useState<{ anchorId: string; x: number; y: number } | null>(null);
   const [request, setRequest] = useState<CloseBatch | null>(null);
   const [busy, setBusy] = useState(false);
@@ -16,10 +20,11 @@ export function WorkspaceTabStrip({ disabled, onInteractionAnchorChange, ...prop
   const busyRef = useRef(false);
   const anchor = useRef<HTMLButtonElement | null>(null);
   const closeMenu = useCallback((restore = true) => { setMenu(null); if (restore) anchor.current?.focus(); }, []);
-  const exists = (id: string) => state.workspaces.some(item => item.id === id);
+  const exists = (id: string) => scope(id)?.items.some(item => item.id === id);
   if (menu && (disabled || !exists(menu.anchorId))) setMenu(null);
   if (request && !busy && (disabled || !exists(request.anchorId))) setRequest(null);
-  const targets = request ? state.workspaces.filter(item => request.ids.includes(item.id) && item.id !== request.anchorId) : [];
+  const owner = request ? scope(request.anchorId) : undefined;
+  const targets = request && owner ? owner.items.filter(item => request.ids.includes(item.id) && item.id !== request.anchorId) : [];
   const open = (target: EventTarget, x: number, y: number) => {
     if (disabled || request || document.querySelector('[aria-modal="true"]')) return;
     if (!(target instanceof Element) || target.closest("input")) return;
@@ -30,18 +35,17 @@ export function WorkspaceTabStrip({ disabled, onInteractionAnchorChange, ...prop
   };
   const choose = (side: WorkspaceCloseSide) => {
     if (!menu) return;
-    const ids = workspaceCloseTargets(state.workspaces, menu.anchorId, side).map(item => item.id);
+    const ids = workspaceCloseTargets(scope(menu.anchorId)?.items ?? [], menu.anchorId, side).map(item => item.id);
     if (!ids.length) return;
     closeMenu(); setError(""); setRequest({ anchorId: menu.anchorId, ids, side });
   };
   const confirm = async () => {
-    if (!request || busyRef.current || !exists(request.anchorId) || !targets.length) return;
+    if (!request || !owner || busyRef.current || !exists(request.anchorId) || !targets.length) return;
     busyRef.current = true; setBusy(true); setError("");
     try {
-      const ids = Array.from(new Set(targets.flatMap(blocksForWorkspace)));
-      await closeSessions(ids);
+      const finish = await owner.prepareClose(request.anchorId, targets.map(item => item.id));
       return () => {
-        dispatch({ type: "closeWorkspaces", workspaceIds: targets.map(item => item.id), anchorId: request.anchorId });
+        finish();
         setRequest(null);
       };
     } catch (reason) {
@@ -56,7 +60,7 @@ export function WorkspaceTabStrip({ disabled, onInteractionAnchorChange, ...prop
       open(event.target, rect.left, rect.bottom + 4);
     }}>
     {props.children}
-    {menu && <WorkspaceTabMenu {...menu} workspaces={state.workspaces} onChoose={choose} onDismiss={closeMenu}/>}
-    {request && <WorkspaceBatchCloseDialog title={workspaceCloseLabels[request.side]} targets={targets} sessions={connectedCount(targets.flatMap(blocksForWorkspace))} busy={busy} error={error} onCancel={() => { if (!busyRef.current) setRequest(null); }} onConfirm={confirm}/>}
+    {menu && <WorkspaceTabMenu {...menu} workspaces={scope(menu.anchorId)?.items ?? []} onChoose={choose} onDismiss={closeMenu}/>}
+    {request && owner && <WorkspaceBatchCloseDialog environment={owner.environment} title={workspaceCloseLabels[request.side]} count={targets.length} sessions={owner.countSessions(targets.map(item => item.id))} busy={busy} error={error} onCancel={() => { if (!busyRef.current) setRequest(null); }} onConfirm={confirm}/>}
   </nav>;
 }

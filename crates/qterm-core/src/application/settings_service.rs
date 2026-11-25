@@ -2,8 +2,8 @@ use std::path::Path;
 
 use crate::{
     domain::settings::{
-        AppearanceSettings, ConfigurationDirectory, SecuritySettings, SettingsError,
-        TerminalSettings, UpdateSettings,
+        AppTheme, AppearanceSettings, ConfigurationDirectory, SecuritySettings, SettingsError,
+        TerminalFontSize, TerminalSettings, UpdateSettings,
     },
     ports::settings_repository::{
         AppearanceSettingsRepository, ConfigurationDirectoryRepository, SettingsRepository,
@@ -140,9 +140,10 @@ impl<
 
     pub fn update_appearance(
         &self,
-        settings: AppearanceSettings,
+        theme: AppTheme,
+        terminal_font_size: Option<TerminalFontSize>,
     ) -> Result<SettingsSnapshot, SettingsError> {
-        self.appearance_repository.save(settings)?;
+        self.appearance_repository.save(theme, terminal_font_size)?;
         Ok(self.snapshot())
     }
 

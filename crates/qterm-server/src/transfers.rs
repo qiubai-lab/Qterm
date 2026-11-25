@@ -53,31 +53,43 @@ pub(crate) async fn transfer(
     let (tx, rx) = tokio::sync::oneshot::channel();
     let tx = Mutex::new(Some(tx));
     let progress = operation.progress.clone();
-    let total = operation.total.clone();
+    let download = matches!(
+        request,
+        TransferRequest::Download { .. } | TransferRequest::DownloadDirectory { .. }
+    );
+    let failure_message = if download {
+        "传输失败或文件超过 128 MiB 限制"
+    } else {
+        "上传失败"
+    };
     let sink = Arc::new(move |event| {
         if let TransferEvent::Started { total_bytes }
         | TransferEvent::Progress { total_bytes, .. } = &event
         {
-            total.store(*total_bytes, std::sync::atomic::Ordering::Relaxed);
+            progress
+                .total
+                .store(*total_bytes, std::sync::atomic::Ordering::Relaxed);
         }
         if let TransferEvent::Progress {
             transferred_bytes, ..
         } = &event
         {
-            progress.store(*transferred_bytes, std::sync::atomic::Ordering::Relaxed);
+            progress
+                .transferred
+                .store(*transferred_bytes, std::sync::atomic::Ordering::Relaxed);
         }
         let result = match event {
             TransferEvent::Completed => Some(true),
             TransferEvent::Cancelled | TransferEvent::Failed => Some(false),
             TransferEvent::Started { total_bytes }
             | TransferEvent::Progress { total_bytes, .. }
-                if total_bytes > MAX_TRANSFER_BYTES =>
+                if download && total_bytes > MAX_TRANSFER_BYTES =>
             {
                 Some(false)
             }
             TransferEvent::Progress {
                 transferred_bytes, ..
-            } if transferred_bytes > MAX_TRANSFER_BYTES => Some(false),
+            } if download && transferred_bytes > MAX_TRANSFER_BYTES => Some(false),
             _ => None,
         };
         if let Some(result) = result
@@ -98,7 +110,7 @@ pub(crate) async fn transfer(
     let mut check = tokio::time::interval(Duration::from_secs(2));
     loop {
         tokio::select! {
-            value=&mut rx=>return if value==Ok(true){Ok(())}else{Err(ApiError::new(axum::http::StatusCode::BAD_REQUEST,"transferFailed","传输失败或文件超过 128 MiB 限制"))},
+            value=&mut rx=>return if value==Ok(true){Ok(())}else{Err(ApiError::new(axum::http::StatusCode::BAD_REQUEST,"transferFailed",failure_message))},
             _=&mut deadline=>return Err(ApiError::new(axum::http::StatusCode::REQUEST_TIMEOUT,"transferTimeout","传输超时")),
             _=check.tick()=>{state.authorize(owner,session)?;operation.check()?;},
         }
@@ -157,13 +169,10 @@ pub async fn upload(
     {
         operation.check()?;
         bytes += chunk.len() as u64;
-        if bytes > MAX_TRANSFER_BYTES {
-            return Err(ApiError::new(
-                axum::http::StatusCode::PAYLOAD_TOO_LARGE,
-                "fileTooLarge",
-                "单文件上限为 128 MiB",
-            ));
-        }
+        operation
+            .progress
+            .received
+            .store(bytes, std::sync::atomic::Ordering::Relaxed);
         crate::transfer_storage::authorize(&state, &owner.0, &input.session_id)?;
         file.write_all(&chunk)
             .await

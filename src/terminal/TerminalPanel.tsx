@@ -3,6 +3,7 @@ import { acquireTerminalView, scheduleTerminalViewDisposal, type TerminalView } 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from "react";
 import { createPortal } from "react-dom";
 import type { ISearchOptions } from "@xterm/addon-search";
+import { useTerminalViewport } from "./useTerminalViewport";
 import { useTerminalCopy } from "./useTerminalCopy";
 import "@xterm/xterm/css/xterm.css";
 import { DialogFrame } from "../components/dialogs/DialogFrame";
@@ -57,7 +58,7 @@ export function TerminalPanel({ blockId, sessionKey, visible, local, osc7Enabled
   const [stagingSessionId, setStagingSessionId] = useState<string | null>(null);
   const [stagingClosing, setStagingClosing] = useState(false);
   const [activeStagingTask, setActiveStagingTask] = useState<ActiveStagingTask | null>(null);
-  const { hydrated = true, localTerminalCapabilities, registerWriter, setBlockCwd, startLocalBlock, writeBlock, resizeBlock, clearBlockBuffer, runtimes } = useWorkspace();
+  const { hydrated = true, localTerminalCapabilities, registerWriter, setBlockCwd, startLocalBlock, writeBlock, resizeBlock, clearBlockBuffer, runtimes } = useWorkspace("blocks");
   const windowsPty = local ? localTerminalCapabilities?.windowsPty ?? undefined : undefined;
   const inputEnabled = runtimes[blockId]?.status === "connected";
   const connectedSessionId = runtimes[blockId]?.sessionId ?? null;
@@ -330,13 +331,7 @@ export function TerminalPanel({ blockId, sessionKey, visible, local, osc7Enabled
         return { columns: view.terminal.cols, rows: view.terminal.rows };
       },
     );
-    const observer = new ResizeObserver(() => {
-      if (!container.offsetParent) return;
-      view.layout.restore();
-    });
-    observer.observe(container);
     return () => {
-      observer.disconnect();
       unregisterWriter();
       view.write = async () => undefined;
       view.resize.send = async () => undefined;
@@ -368,41 +363,7 @@ export function TerminalPanel({ blockId, sessionKey, visible, local, osc7Enabled
     if (view) void startLocalRef.current(blockId, view.terminal.cols, view.terminal.rows, osc7EnabledRef.current);
   }, [blockId, hydrated, local, terminalSettingsReady]);
 
-  useEffect(() => {
-    if (!visible) return;
-    let frame = 0;
-    let cancelled = false;
-    let attempts = 0;
-    const restore = () => {
-      if (cancelled) return;
-      const view = viewRef.current;
-      if (!view || !view.layout.restore()) {
-        attempts += 1;
-        if (attempts < 12) frame = requestAnimationFrame(restore);
-        return;
-      }
-    };
-    frame = requestAnimationFrame(restore);
-    return () => { cancelled = true; cancelAnimationFrame(frame); };
-  }, [blockId, local, visible]);
-
-  useEffect(() => {
-    if (!visible || !inputEnabled || !connectedSessionId) return;
-    let frame = 0;
-    let cancelled = false;
-    let attempts = 0;
-    const synchronize = () => {
-      if (cancelled) return;
-      const view = viewRef.current;
-      if (!view || !view.layout.restore(true)) {
-        attempts += 1;
-        if (attempts < 12) frame = requestAnimationFrame(synchronize);
-        return;
-      }
-    };
-    frame = requestAnimationFrame(synchronize);
-    return () => { cancelled = true; cancelAnimationFrame(frame); };
-  }, [blockId, connectedSessionId, inputEnabled, local, visible]);
+  useTerminalViewport(viewRef, containerRef, sessionKey, visible, inputEnabled ? connectedSessionId : null);
 
   useEffect(() => {
     if (!contextMenu) return;

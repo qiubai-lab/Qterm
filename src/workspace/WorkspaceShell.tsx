@@ -4,7 +4,7 @@ import { useTerminalLock, type TerminalLockBackend } from "./useTerminalLock";
 import { useTerminalAutoLock } from "./useTerminalAutoLock";
 import { useTerminalWindowFocus } from "./useTerminalWindowFocus";
 import { WorkspaceToolRail } from "./WorkspaceToolRail";
-import { WorkspaceTabs } from "./WorkspaceTabs";
+import { MemberTabs } from "../remoteRuntime/desktop/MemberTabs";
 import { createBlockCloseRequest, type CloseRequest } from "./workspaceClose";
 import { focusWorkspaceBlock } from "./workspaceFocus";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
@@ -21,12 +21,14 @@ import { MasterPasswordDialog, type MasterPasswordMode } from "../components/dia
 import { TerminalLockChoiceDialog, TerminalLockScreen, TerminalLockRestore } from "../components/dialogs/TerminalLockDialogs";
 import { getVaultStatus, lockVault, onVaultStatusChanged, type VaultStatus } from "@qterm/services/credentials";
 import { getProfileRouteRequirements, type ConnectionProfile } from "@qterm/services/profiles";
+import { commitTerminalFontSize } from "../terminal/terminalFontSize";
 import { getSettings, updateUpdateSettings, type AppTheme, type SecuritySettings, type TerminalSettings, type UpdateSettings } from "@qterm/services/settings";
 import { checkForUpdateOnStartupOnce } from "../lib/updateCheck";
 import { currentDesktopPlatform } from "../lib/tauri/window";
 import { WorkspaceChrome } from "./WorkspaceChrome";
 import { TERMINAL_ATTENTION_MS } from "../terminal/terminalAttention";
-import { WorkspaceCanvas, type ConnectionOwner } from "./LayoutView";
+import { WorkspaceStages } from "./WorkspaceStages";
+import type { ConnectionOwner } from "./LayoutView";
 import { resolveConfiguredAuth } from "./configuredAuth";
 import type { LayoutNode } from "./model";
 import { useWorkspace } from "./WorkspaceProvider";
@@ -37,7 +39,7 @@ interface DisconnectRequest { owner: ConnectionOwner; blockId: string; name: str
 
 const TITLEBAR_DOUBLE_CLICK_MS = 350;
 
-export function WorkspaceShell({ onLogout, webActions, terminalLockBackend, terminalLockState, onThemeRestored }: { webActions?: import("react").ReactNode; onLogout?: () => Promise<void>; terminalLockBackend?: TerminalLockBackend; terminalLockState?: ReturnType<typeof useTerminalLock>; onThemeRestored?: (theme: AppTheme) => void } = {}) {
+export function WorkspaceShell({ onLogout, webActions, terminalLockBackend, terminalLockState, onThemeRestored, renderWorkspaceRuntime }: { renderWorkspaceRuntime?: (id: string, visible: boolean) => import("react").ReactNode; webActions?: import("react").ReactNode; onLogout?: () => Promise<void>; terminalLockBackend?: TerminalLockBackend; terminalLockState?: ReturnType<typeof useTerminalLock>; onThemeRestored?: (theme: AppTheme) => void } = {}) {
   const desktopPlatform = currentDesktopPlatform();
   const { hydrated, document, activeWorkspace, dispatch, runtimes, fileRuntimes, networkRuntimes, gitRuntimes, clearTerminalOsc7State, connectBlock, connectFileBlock, connectNetworkBlock, connectGitBlock, disconnectBlock, disconnectFileBlock, disconnectNetworkBlock, disconnectGitBlock, isConnectionTargetCurrent, connectedCount, closeSessions, acceptBlockHostKey, rejectBlockHostKey, acceptFileHostKey, rejectFileHostKey, acceptNetworkHostKey, rejectNetworkHostKey, acceptGitHostKey, rejectGitHostKey, storageNotice, dismissStorageNotice } = useWorkspace();
   const [tool, setTool] = useState<Tool | null>(null);
@@ -182,6 +184,7 @@ export function WorkspaceShell({ onLogout, webActions, terminalLockBackend, term
     let disposed = false;
     void getSettings().then(async (snapshot) => {
       if (disposed) return;
+      commitTerminalFontSize(snapshot.appearance?.terminalFontSize);
       onThemeRestored?.(snapshot.appearance.theme);
       setSecuritySettings(snapshot.security);
       setRemoteShellIntegrationEnabled(snapshot.terminal?.remoteShellIntegrationEnabled ?? false);
@@ -336,18 +339,17 @@ export function WorkspaceShell({ onLogout, webActions, terminalLockBackend, term
         : "锁定终端";
   return <main data-onboarding-ready={hydrated && terminalSettingsReady && !terminalLocked} className="app-shell" data-platform={onLogout && !isRemoteDesktop ? "web" : desktopPlatform}>
     <WorkspaceChrome onLogout={onLogout} webActions={webActions}>
-      <WorkspaceTabs disabled={terminalLocked} requestClose={requestClose} onReorderSelection={order => { workspaceTransitionOrderOverrideRef.current = order; }}/>
+      <MemberTabs disabled={terminalLocked} requestClose={requestClose} onReorderSelection={order => { workspaceTransitionOrderOverrideRef.current = order; }}/>
     </WorkspaceChrome>
 
     <section className="workspace-stage">
       <div className="workspace-stage-content" data-lock-covered={Boolean(terminalLockBackend && terminalLocked) || undefined} inert={terminalLocked ? true : undefined} aria-hidden={terminalLocked || undefined}>
-        <div className="workspace-canvases">
-          {document.workspaces.map((workspace) => {
-            const visible = workspace.id === activeWorkspace.id;
-            const transitionDirection = visible && workspaceTransition.workspaceId === workspace.id ? workspaceTransition.direction : null;
-            return <div key={workspace.id} className={`workspace-canvas-stage${visible ? " visible" : ""}${transitionDirection ? ` workspace-transition-${transitionDirection}` : ""}`} aria-hidden={!visible}><WorkspaceCanvas workspace={workspace} visible={visible && !(terminalLockState && terminalLocked)} localTerminalAttention={localTerminalAttentionWorkspaceId === workspace.id} remoteShellIntegrationEnabled={remoteShellIntegrationEnabled} terminalSettingsReady={terminalSettingsReady && workbenchActive} onRequestClose={closeBlock} onRequestDisconnect={(owner, blockId, name, local) => setDisconnectRequest({ owner, blockId, name, local })} onRequestAuthConnection={(owner, blockId, profile) => void requestConfiguredConnection(owner, blockId, profile)} onOpenConnectionManager={() => setTool("connections")}/></div>;
-          })}
-        </div>
+        <WorkspaceStages workspaces={document.workspaces} activeId={activeWorkspace.id} hydrated={hydrated}
+          transition={workspaceTransition} covered={terminalLocked || !workbenchActive}
+          attentionId={localTerminalAttentionWorkspaceId} remoteShellIntegrationEnabled={remoteShellIntegrationEnabled}
+          terminalSettingsReady={terminalSettingsReady && workbenchActive} renderRuntime={renderWorkspaceRuntime}
+          onRequestClose={closeBlock} onRequestDisconnect={(owner, blockId, name, local) => setDisconnectRequest({ owner, blockId, name, local })}
+          onRequestAuthConnection={requestConfiguredConnection} onOpenConnectionManager={() => setTool("connections")}/>
         <WorkspaceToolRail remoteShellIntegrationEnabled={remoteShellIntegrationEnabled} controls={{
           connections: { active: tool === "connections", onClick: () => setTool(tool === "connections" ? null : "connections") },
           credentials: { active: tool === "credentials", onClick: () => setTool(tool === "credentials" ? null : "credentials") },

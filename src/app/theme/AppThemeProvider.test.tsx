@@ -7,6 +7,7 @@ vi.mock("../../lib/tauri/window", () => ({ setNativeWindowTheme: mocks.setNative
 vi.mock("../../terminal/terminalTheme", () => ({ refreshTerminalThemes: mocks.refreshTerminalThemes }));
 vi.mock("../../lib/tauri/settings", () => ({ getSettings: mocks.getSettings }));
 
+import { currentTerminalFontSize } from "../../terminal/terminalFontSize";
 import { AppThemeProvider, applyAppTheme, bootstrapAppTheme, useAppTheme } from "./AppThemeProvider";
 
 afterEach(() => {
@@ -50,9 +51,11 @@ describe("application theme owner", () => {
 
   it("loads the saved preset before render and falls back to dark on failure", async () => {
     Object.defineProperty(window, "__TAURI_INTERNALS__", { configurable: true, value: {} });
-    mocks.getSettings.mockResolvedValue({ appearance: { theme: "cyberpunk" } });
+    mocks.getSettings.mockResolvedValue({ appearance: { theme: "cyberpunk", terminalFontSize: 18 } });
     await expect(bootstrapAppTheme()).resolves.toBe("cyberpunk");
+    expect(currentTerminalFontSize()).toBe(18);
     mocks.getSettings.mockRejectedValue(new Error("unavailable"));
     await expect(bootstrapAppTheme()).resolves.toBe("dark");
+    expect(currentTerminalFontSize()).toBe(13);
   });
 });

@@ -6,6 +6,7 @@ import { api, message } from "../http";
 import { selectUpload, takeUpload, type UploadEntry } from "../uploadSelection";
 import { uploadRequest } from "../uploadRequest";
 const tasks = new Map<string, { controller: AbortController; active: Set<string> }>();
+export const activeTransferCount = () => tasks.size;
 export type * from "../../lib/tauri/transfers";
 export const selectUploadFiles: typeof Desktop.selectUploadFiles = () => selectUpload(false);
 export const selectUploadFile: typeof Desktop.selectUploadFile = async () => (await selectUpload(false, false))[0] ?? null;
@@ -19,13 +20,16 @@ function start(onEvent: (event: Desktop.TransferEvent) => void, operation: (sign
   void operation(AbortSignal.any([controller.signal, lease.signal]), active).then(completed => { if (completed !== false) onEvent({ type: "completed" }); }, error => onEvent(controller.signal.aborted ? { type: "cancelled" } : { type: "failed", message: message(error) })).finally(() => tasks.delete(id));
   return id;
 }
+const entrySize = (entry: UploadEntry) => entry.file?.size ?? entry.native?.size ?? 0;
+
 async function upload(sessionId: string, entry: UploadEntry, path: string, relative: boolean, signal: AbortSignal, active: Set<string>, progress: (bytes: number) => void) {
-  const body = new FormData(); body.append("file", entry.file ?? new Blob([]));
+  const body = entry.native ?? new FormData();
+  if (body instanceof FormData) body.append("file", entry.file ?? new Blob([]));
   const taskId = randomId(); active.add(taskId);
   const query = new URLSearchParams({ sessionId, path, taskId });
   if (relative) query.set("relativePath", entry.path);
-  if (!entry.file) query.set("directory", "true");
-  try { await uploadRequest(`/transfers/upload?${query}`, body, taskId, entry.file?.size ?? 0, signal, progress); } finally { active.delete(taskId); }
+  if (!entry.file && !entry.native) query.set("directory", "true");
+  try { await uploadRequest(`/transfers/upload?${query}`, body, taskId, entrySize(entry), signal, progress); } finally { active.delete(taskId); }
 }
 export const uploadFile: typeof Desktop.uploadFile = async (session, id, path, onEvent) => {
   const entries = takeUpload(id);
@@ -33,12 +37,12 @@ export const uploadFile: typeof Desktop.uploadFile = async (session, id, path, o
   return start(onEvent, (signal, active) => upload(session, entries[0], path, false, signal, active, bytes => onEvent({type:"progress",transferredBytes:bytes,totalBytes:entries[0].file!.size})), entries[0].file.size);
 };
 export const uploadSelectedEntries: typeof Desktop.uploadSelectedEntries = async (session, ids, directory, onEvent) => {
-  const entries = ids.flatMap(takeUpload), totalBytes = entries.reduce((sum,e)=>sum+(e.file?.size ?? 0),0);
+  const entries = ids.flatMap(takeUpload), totalBytes = entries.reduce((sum,e)=>sum + entrySize(e),0);
   return start(onEvent, async (signal, active) => {
     let transferredBytes = 0;
     for (const entry of entries) {
       signal.throwIfAborted(); await upload(session, entry, directory, true, signal, active, bytes => onEvent({type:"progress",transferredBytes:transferredBytes+bytes,totalBytes}));
-      transferredBytes += entry.file?.size ?? 0; onEvent({type:"progress", transferredBytes, totalBytes});
+      transferredBytes += entrySize(entry); onEvent({type:"progress", transferredBytes, totalBytes});
     }
   }, totalBytes);
 };

@@ -15,10 +15,11 @@ export function useWebOpenController(document: WorkspaceDocument, profiles: Conn
   useLayoutEffect(() => { current.current = { document, profiles }; }, [document, profiles]);
   const browsers = useRef(new Map<string, RegisteredBrowser>());
   const pending = useRef(new Map<string, { profileId: string | null; url: string }>());
+  const workspaces = document.workspaces;
   useEffect(() => {
-    const ids = new Set(document.workspaces.flatMap(workspace => blockIds(workspace.layout)));
+    const ids = new Set(workspaces.flatMap(workspace => blockIds(workspace.layout)));
     for (const id of pending.current.keys()) if (!ids.has(id)) pending.current.delete(id);
-  }, [document]);
+  }, [workspaces]);
 
   const registerWebOpener = useCallback((blockId: string, profileId: string | null, open: PageOpener) => {
     const entry = { profileId, open };

@@ -1,13 +1,15 @@
+import { environmentForeground } from "../../remoteRuntime/desktop/foreground";
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
 export function subscribeWindowActivation(activate: () => void): () => void {
-  window.addEventListener("focus", activate);
+  const focus = () => { if (environmentForeground()) activate(); };
+  window.addEventListener("focus", focus);
   let disposed = false;
   let unlisten: (() => void) | undefined;
   if (isTauri()) {
     void getCurrentWindow().onFocusChanged(({ payload }) => {
-      if (payload && !disposed) activate();
+      if (payload && !disposed) focus();
     }).then(stop => {
       if (disposed) stop();
       else unlisten = stop;
@@ -15,7 +17,7 @@ export function subscribeWindowActivation(activate: () => void): () => void {
   }
   return () => {
     disposed = true;
-    window.removeEventListener("focus", activate);
+    window.removeEventListener("focus", focus);
     unlisten?.();
   };
 }

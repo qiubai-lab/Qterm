@@ -32,3 +32,6 @@
 @keyframes runtime-dot-breathe { 0%,100% { opacity:.1; transform:scale(.8); } 50% { opacity:.25; transform:scale(1.15); } }
 @media (max-width:800px) { .runtime-status-tag { max-width:140px; } }
 @media (prefers-reduced-motion:reduce) { .runtime-status-tag[data-status]::before,.runtime-status-tag[data-status] .runtime-status-dot::after { animation:none; } }
+
+/* Reserve the same tab width in every attached environment. */
+.runtime-log-trigger:disabled { visibility:hidden; }

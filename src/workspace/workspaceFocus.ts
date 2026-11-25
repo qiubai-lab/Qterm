@@ -1,7 +1,13 @@
+import { framePort } from "../remoteRuntime/desktop/frame";
+import { environmentForeground } from "../remoteRuntime/desktop/foreground";
 import { focusTerminalBlock } from "../terminal/terminalViewRegistry";
 import type { Workspace } from "./model";
 
 export function focusWorkspaceBlock(blockId: string): boolean {
+  if (!environmentForeground()) return false;
+  // A remote terminal can receive a delayed selection callback during a titlebar double click.
+  const chromeDocument = framePort ? window.parent.document : document;
+  if (chromeDocument.activeElement?.matches(".workspace-tab-rename input")) return false;
   if (focusTerminalBlock(blockId)) return true;
   const block = Array.from(globalThis.document.querySelectorAll<HTMLElement>("[data-layout-block]"))
     .find((element) => element.dataset.layoutBlock === blockId);

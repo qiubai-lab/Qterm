@@ -1,0 +1,53 @@
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { afterEach, expect, it, vi } from "vitest";
+import { DesktopControl } from "./DesktopControl";
+import { DesktopEnvironments, serverKey } from "./environments";
+afterEach(cleanup);
+
+it("keeps the environment switcher at the window-controls end when access history is unavailable", async () => {
+  const host = new DesktopEnvironments({ connect: async url => url, disconnect: vi.fn() });
+  render(<DesktopControl host={host}/>);
+  const controls = screen.getByRole("group", { name: "运行环境" });
+  const switcher = within(controls).getByRole("button", { name: /运行环境/ });
+  expect(controls.lastElementChild).toBe(switcher);
+  await act(() => host.connect({ id: "a", name: "开发服", endpoint: "https://a.test" }));
+  const key = serverKey("a");
+  const showLog = vi.fn();
+  const port = host.frame(host.find(key)!, vi.fn());
+  act(() => port.status("已连接", vi.fn(), vi.fn(), () => 0, showLog));
+  const history = within(controls).getByRole("button", { name: "访问记录" });
+  expect(history.nextElementSibling).toBe(switcher);
+  fireEvent.click(history);
+  expect(showLog).toHaveBeenCalledOnce();
+  act(() => host.focus("local"));
+  expect(history).toBeDisabled();
+  expect(controls.lastElementChild).toBe(switcher);
+});
+
+it("releases the desktop while a background server flushes, and lets the user retry a failed save", async () => {
+  const disconnect = vi.fn(async () => {});
+  const host = new DesktopEnvironments({ connect: async url => url, disconnect });
+  await host.connect({ id: "a", name: "开发服", endpoint: "https://a.test" });
+  const key = serverKey("a");
+  const port = host.frame(host.find(key)!, vi.fn());
+  const leave = vi.fn(async () => {});
+  let fail!: (reason: Error) => void;
+  const flush = vi.fn(async () => {}).mockImplementationOnce(() => new Promise((_, reject) => { fail = reject; }));
+  port.status("已连接", leave, flush, () => 2);
+  host.focus("local");
+  render(<DesktopControl host={host}/>);
+  fireEvent.click(screen.getByRole("button", {name: /运行环境/}));
+  fireEvent.click(screen.getByRole("menuitem", {name: "断开 开发服"}));
+  expect(screen.getByRole("dialog")).toHaveTextContent("2 个进行中的文件传输将取消");
+  fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", {name: "断开连接"}));
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  expect(host.snapshot().active).toBe("local");
+  await act(async () => fail(new Error("草稿保存失败")));
+  expect(screen.getByRole("alert")).toHaveTextContent("开发服：草稿保存失败");
+  expect(leave).not.toHaveBeenCalled();
+  expect(disconnect).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", {name: "重试"}));
+  await act(async () => { fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", {name: "断开连接"})); });
+  expect(host.find(key)).toBeUndefined();
+  expect(leave).toHaveBeenCalledOnce();
+});

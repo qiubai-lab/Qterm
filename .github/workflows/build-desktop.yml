@@ -85,19 +85,6 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Select macOS build SDK
-        if: runner.os == 'macOS'
-        shell: bash
-        run: |
-          set -euo pipefail
-          developer_dir="/Applications/Xcode_26.5.app/Contents/Developer"
-          test -d "$developer_dir"
-          export DEVELOPER_DIR="$developer_dir"
-          xcodebuild -version
-          test "$(xcrun --sdk macosx26.5 --show-sdk-version)" = "26.5"
-          echo "DEVELOPER_DIR=$developer_dir" >> "$GITHUB_ENV"
-          echo "SDKROOT=$(xcrun --sdk macosx26.5 --show-sdk-path)" >> "$GITHUB_ENV"
-
       - name: Verify runner architecture
         shell: bash
         run: |
@@ -143,6 +130,10 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
 
+      - name: Select macOS build SDK
+        if: runner.os == 'macOS'
+        run: node scripts/select-ci-macos-sdk.mjs
+
       - name: Set up Rust target
         shell: bash
         run: |
@@ -155,7 +146,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
-          key: ${{ runner.os == 'macOS' && 'macos-sdk-26.5' || 'default' }}
+          key: ${{ runner.os == 'macOS' && format('macos-sdk-{0}', env.QTERM_BUILD_SDK) || 'default' }}
 
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
@@ -170,7 +161,7 @@ jobs:
           set -euo pipefail
           executable="src-tauri/target/${{ matrix.target }}/release/Qterm"
           xcrun vtool -show-build "$executable"
-          test "$(xcrun vtool -show-build "$executable" | awk '$1 == "sdk" { print $2 }')" = "26.5"
+          test "$(xcrun vtool -show-build "$executable" | awk '$1 == "sdk" { print $2 }')" = "$QTERM_BUILD_SDK"
 
       - name: Upload desktop artifacts
         uses: actions/upload-artifact@v7

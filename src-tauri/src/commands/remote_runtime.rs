@@ -1,18 +1,16 @@
 //! Desktop connection bootstrap and native save boundary; protocol forwarding is infrastructure-owned.
-use crate::infrastructure::remote_runtime::{ConnectionInfo, RemoteRuntime};
+use crate::infrastructure::remote_runtime::ConnectionInfo;
+pub use crate::infrastructure::remote_runtime::RemoteRuntimeRegistry as RemoteRuntimeState;
 use base64::{Engine, engine::general_purpose::STANDARD};
-use std::sync::Arc;
 use tauri::{AppHandle, State};
 use tauri_plugin_dialog::DialogExt;
-
-#[derive(Default)]
-pub struct RemoteRuntimeState(pub tokio::sync::Mutex<Option<Arc<RemoteRuntime>>>);
 
 #[tauri::command]
 pub async fn remote_runtime_connect(
     webview: tauri::Webview,
     state: State<'_, RemoteRuntimeState>,
     endpoint: String,
+    runtime_id: String,
 ) -> Result<ConnectionInfo, String> {
     let url = webview.url().map_err(|_| "无法读取客户端地址")?;
     let origin = if url.scheme() == "tauri" {
@@ -20,29 +18,15 @@ pub async fn remote_runtime_connect(
     } else {
         url.origin().ascii_serialization()
     };
-    let mut current = state.0.lock().await;
-    let target = crate::infrastructure::remote_runtime::endpoint(&endpoint)?;
-    if let Some(runtime) = current
-        .as_ref()
-        .filter(|r| r.endpoint == target && !r.cancel.is_cancelled())
-    {
-        return Ok(runtime.info());
-    }
-    let runtime = RemoteRuntime::start(&endpoint, origin).await?;
-    let info = runtime.info();
-    if let Some(previous) = current.replace(runtime) {
-        previous.cancel.cancel();
-        previous.downloads.clear().await;
-    }
-    Ok(info)
+    state.connect(&runtime_id, &endpoint, origin).await
 }
 
 #[tauri::command]
-pub async fn remote_runtime_disconnect(state: State<'_, RemoteRuntimeState>) -> Result<(), String> {
-    if let Some(runtime) = state.0.lock().await.take() {
-        runtime.cancel.cancel();
-        runtime.downloads.clear().await;
-    }
+pub async fn remote_runtime_disconnect(
+    state: State<'_, RemoteRuntimeState>,
+    runtime_id: String,
+) -> Result<(), String> {
+    state.disconnect(&runtime_id).await;
     Ok(())
 }
 

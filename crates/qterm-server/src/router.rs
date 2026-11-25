@@ -110,7 +110,7 @@ pub fn router(state: Arc<ServerState>) -> Router {
         .route("/files/binary",post(files::binary)).route("/files/write",post(files::write))
         .route("/files/create",post(files::create)).route("/files/copy",post(files::copy))
         .route("/files/rename",post(files::rename)).route("/files/delete",post(files::delete))
-        .route("/transfers/upload",post(transfers::upload).layer(DefaultBodyLimit::max(transfers::MAX_TRANSFER_BYTES as usize+1024*1024)))
+        .route("/transfers/upload",post(transfers::upload).layer(DefaultBodyLimit::disable()))
         .route("/transfers/download",post(transfers::prepare_download))
         .route("/transfers/{id}/progress",get(crate::transfer_lifecycle::progress))
         .route("/terminal/clipboard",post(crate::terminal_clipboard::upload).layer(DefaultBodyLimit::max(transfers::MAX_TRANSFER_BYTES as usize+1024*1024)))

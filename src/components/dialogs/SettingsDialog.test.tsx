@@ -1,8 +1,9 @@
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SettingsDialog } from "./SettingsDialog";
+import { currentTerminalFontSize } from "../../terminal/terminalFontSize";
 import { AppThemeProvider } from "../../app/theme/AppThemeProvider";
 
 const mocks = vi.hoisted(() => ({
@@ -256,6 +257,36 @@ describe("SettingsDialog", () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
+  it("previews valid sizes, preserves the draft across theme changes and commits only on save", async () => {
+    const user = userEvent.setup();
+    renderSettings();
+    await user.click(await screen.findByRole("button", { name: /外观/ }));
+    const input = screen.getByRole("spinbutton", { name: "终端字号" });
+    const save = screen.getByRole("button", { name: "保存设置" });
+    expect(input).toHaveValue(13);
+    for (const value of ["", "9", "33", "12.5"]) {
+      fireEvent.change(input, { target: { value } });
+      expect(input).toHaveAttribute("aria-invalid", "true");
+      expect(save).toBeDisabled();
+    }
+    fireEvent.change(input, { target: { value: "32" } });
+    expect(screen.getByRole("figure", { name: "终端预览" }).querySelector("samp")).toHaveStyle({ fontSize: "32px" });
+    expect(screen.getByRole("button", { name: "增大终端字号" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "减小终端字号" }));
+    expect(input).toHaveValue(31);
+    await user.click(screen.getByRole("button", { name: "增大终端字号" }));
+    expect(currentTerminalFontSize()).toBe(13);
+    await user.click(screen.getByRole("radio", { name: /亮色/ }));
+    expect(input).toHaveValue(32);
+    await user.click(save);
+    await waitFor(() => expect(currentTerminalFontSize()).toBe(32));
+    expect(mocks.updateAppearanceSettings).toHaveBeenCalledWith({ theme: "light", terminalFontSize: 32 });
+    await user.click(screen.getByRole("button", { name: "恢复默认终端字号" }));
+    expect(input).toHaveValue(13);
+    await user.click(screen.getByRole("button", { name: "关闭" }));
+    expect(currentTerminalFontSize()).toBe(32);
+  });
+
   it("persists the previewed preset and keeps it after closing", async () => {
     const user = userEvent.setup();
     renderSettings();
@@ -275,6 +306,8 @@ describe("SettingsDialog", () => {
     await user.click(screen.getByRole("radio", { name: /亮色/ }));
     await user.click(screen.getByRole("button", { name: "保存设置" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("save failed");
+    expect(screen.getByRole("spinbutton", { name: "终端字号" })).toHaveValue(13);
+    expect(currentTerminalFontSize()).toBe(13);
     expect(document.documentElement).toHaveAttribute("data-theme", "dark");
   });
 

@@ -7,6 +7,14 @@ const styles = readFileSync("src/components/dialogs/settingsDialog.css", "utf8")
 const lightOverrides = readFileSync("src/app/styles/themes/lightOverrides.css", "utf8");
 
 describe("settings category navigation motion", () => {
+  it("fills the appearance pane with both setting groups and aligns the font label with its range", () => {
+    expect(styles).toMatch(/\.settings-category-panel\[data-category="appearance"\]\s*\{[^}]*min-height:100%/);
+    expect(styles).toMatch(/\.settings-theme-picker\s*\{[^}]*flex:[1-9]\d* 0 auto/);
+    expect(styles).toMatch(/\.settings-terminal-font\s*\{[^}]*flex:[1-9]\d* 0 auto/);
+    expect(styles).toMatch(/\.settings-font-label\s*\{[^}]*align-items:baseline/);
+    expect(styles).toMatch(/\.settings-font-label label\s*\{[^}]*margin:0/);
+  });
+
   it("constrains advanced scrolling to the options below the fixed heading", () => {
     expect(styles).toContain(".settings-content-scroll.settings-content-fixed{display:flex;overflow:hidden}");
     expect(styles).toContain(".settings-content-fixed>.settings-category-panel{display:flex;min-height:0;flex:1}");

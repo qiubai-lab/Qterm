@@ -28,3 +28,19 @@ it("does not save tabs after a failed workspace save and permits the next retry"
   await save(doc, null); expect(tabs).not.toHaveBeenCalled();
   await save(doc, { blocks: [] }); expect(tabs).toHaveBeenCalledOnce();
 });
+
+it("flushes only the latest snapshot queued behind an in-flight save", async () => {
+  let finish!: () => void;
+  const saveWorkspace = vi.fn().mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve; })).mockResolvedValue(undefined);
+  const save = createWorkspaceSaveQueue(saveWorkspace, vi.fn());
+  const doc = createWorkspaceDocument();
+  const first = save(doc, null);
+  await Promise.resolve();
+  const queued = save({ ...doc, activeWorkspaceId: "intermediate" }, null);
+  const last = { ...doc, activeWorkspaceId: "final" };
+  const closing = save(last, null);
+  finish();
+  await Promise.all([first, queued, closing]);
+  expect(saveWorkspace.mock.calls.map(([snapshot]) => snapshot)).toEqual([doc, last]);
+  expect(save.confirmed(last)).toBe(true);
+});

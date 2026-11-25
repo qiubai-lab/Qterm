@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { mocks, ResizeObserverMock } from "./terminalPanelTestFixture";
 
+import { commitTerminalFontSize } from "./terminalFontSize";
 import { TerminalPanel } from "./TerminalPanel";
 import { parseOsc7Cwd } from "./osc7";
 import { ensureTerminalSearch } from "./terminalSearch";
@@ -39,6 +40,38 @@ describe("TerminalPanel view lifetime", () => {
     vi.runOnlyPendingTimers();
     vi.useRealTimers();
     vi.unstubAllGlobals();
+  });
+
+  it("refits visible terminals in place and applies the saved font when a background tab returns", async () => {
+    mocks.runtimes = { front: { status: "connected", sessionId: "s1" }, back: { status: "connected", sessionId: "s2" } };
+    const panels = (reveal: boolean) => <>
+      <TerminalPanel blockId="front" sessionKey="front:ssh" local={false} visible/>
+      <TerminalPanel blockId="back" sessionKey="back:ssh" local={false} visible={reveal}/>
+    </>;
+    const view = render(panels(false));
+    try {
+      const [front, back] = mocks.terminals;
+      const [frontFit, backFit] = mocks.fits;
+      await act(() => vi.runAllTimersAsync());
+      frontFit.proposeDimensions.mockReturnValue({ cols: 60, rows: 12 });
+      frontFit.fit.mockImplementation(() => { front.cols = 60; front.rows = 12; });
+      backFit.proposeDimensions.mockClear();
+      act(() => commitTerminalFontSize(22));
+      await act(() => vi.runAllTimersAsync());
+      expect(front.options.fontSize).toBe(22);
+      expect(mocks.resizeBlock).toHaveBeenCalledWith("front", 60, 12);
+      expect(backFit.proposeDimensions).not.toHaveBeenCalled();
+      view.rerender(panels(true));
+      await act(() => vi.runAllTimersAsync());
+      expect(back.options.fontSize).toBe(22);
+      expect(backFit.proposeDimensions).toHaveBeenCalled();
+      expect(mocks.terminals).toEqual([front, back]);
+      expect(front.reset).not.toHaveBeenCalled();
+      expect(front.dispose).not.toHaveBeenCalled();
+    } finally {
+      view.unmount();
+      commitTerminalFontSize(13);
+    }
   });
 
   it("preserves the xterm instance and scrollback when a split reparents the same session", () => {
@@ -263,6 +296,44 @@ describe("TerminalPanel view lifetime", () => {
     expect(readSize?.()).toEqual({ columns: 93, rows: 31 });
     expect(fit.fit.mock.calls.length).toBeGreaterThan(fitsBeforeRead);
     view.unmount();
+  });
+
+  it("coalesces resize observations with the first visible frame and cancels hidden work", () => {
+    let resize!: () => void;
+    vi.stubGlobal("ResizeObserver", class extends ResizeObserverMock {
+      constructor(callback: () => void) { super(); resize = callback; }
+    });
+    const panel = (visible: boolean) => <TerminalPanel blockId="coalesce" sessionKey="coalesce" local={false} visible={visible}/>;
+    const view = render(panel(true));
+    // The observer and the initial reveal both request a measurement before this frame.
+    resize(); resize();
+    act(() => vi.runAllTimers());
+    expect(mocks.fits[0].proposeDimensions).toHaveBeenCalledOnce();
+    resize();
+    view.rerender(panel(false));
+    act(() => vi.runAllTimers());
+    expect(mocks.fits[0].proposeDimensions).toHaveBeenCalledOnce();
+  });
+
+  it("reuses the fitted grid on a warm reveal and resynchronizes after reconnect", async () => {
+    const id = "block-warm";
+    mocks.runtimes = { [id]: { status: "connected", sessionId: "ssh-1" } };
+    const panel = (visible: boolean) => <TerminalPanel blockId={id} sessionKey={id} local={false} visible={visible}/>;
+    const view = render(panel(true));
+    await act(async () => vi.runAllTimersAsync());
+    const terminal = mocks.terminals[mocks.terminals.length - 1];
+    terminal.refresh.mockClear();
+    mocks.resizeBlock.mockClear();
+    view.rerender(panel(false)); view.rerender(panel(true));
+    await act(async () => vi.runAllTimersAsync());
+    expect(terminal.refresh).not.toHaveBeenCalled();
+    expect(mocks.resizeBlock).not.toHaveBeenCalled();
+    mocks.runtimes[id] = { status: "connecting", sessionId: "ssh-1" };
+    view.rerender(panel(false));
+    mocks.runtimes[id] = { status: "connected", sessionId: "ssh-1" };
+    view.rerender(panel(true));
+    await act(async () => vi.runAllTimersAsync());
+    expect(mocks.resizeBlock).toHaveBeenCalledExactlyOnceWith(id, 80, 24);
   });
 
   it.each([false, true])("force-synchronizes dimensions when a session becomes available (local=%s)", async local => {
