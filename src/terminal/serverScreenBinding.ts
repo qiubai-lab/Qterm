@@ -3,7 +3,7 @@ import { isServer } from "../lib/runtime/environment";
 
 /** The server owns terminal responses and snapshot sizing; desktop parsing is unchanged. */
 export function bindServerScreen(terminal: Terminal, blockId: () => string | undefined, fit: () => void, restoreCwd: (cwd:string) => void) {
-  if (!isServer) return {dispose: () => undefined};
+  if (!isServer) return {isRestoring: () => false, dispose: () => undefined};
   let locked = false;
   let columns = terminal.cols, rows = terminal.rows;
   const handlers = [
@@ -33,5 +33,5 @@ export function bindServerScreen(terminal: Terminal, blockId: () => string | und
     }
   };
   window.addEventListener("qterm:server-screen",listener);
-  return {dispose: () => {window.removeEventListener("qterm:server-screen",listener);for (const handler of handlers) handler.dispose();}};
+  return {isRestoring: () => locked, dispose: () => {window.removeEventListener("qterm:server-screen",listener);for (const handler of handlers) handler.dispose();}};
 }

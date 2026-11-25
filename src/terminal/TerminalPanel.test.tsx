@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { mocks, ResizeObserverMock } from "./terminalPanelTestFixture";
 
+import { commitTerminalFontSize } from "./terminalFontSize";
 import { TerminalPanel } from "./TerminalPanel";
 import { parseOsc7Cwd } from "./osc7";
 import { ensureTerminalSearch } from "./terminalSearch";
@@ -39,6 +40,38 @@ describe("TerminalPanel view lifetime", () => {
     vi.runOnlyPendingTimers();
     vi.useRealTimers();
     vi.unstubAllGlobals();
+  });
+
+  it("refits visible terminals in place and applies the saved font when a background tab returns", async () => {
+    mocks.runtimes = { front: { status: "connected", sessionId: "s1" }, back: { status: "connected", sessionId: "s2" } };
+    const panels = (reveal: boolean) => <>
+      <TerminalPanel blockId="front" sessionKey="front:ssh" local={false} visible/>
+      <TerminalPanel blockId="back" sessionKey="back:ssh" local={false} visible={reveal}/>
+    </>;
+    const view = render(panels(false));
+    try {
+      const [front, back] = mocks.terminals;
+      const [frontFit, backFit] = mocks.fits;
+      await act(() => vi.runAllTimersAsync());
+      frontFit.proposeDimensions.mockReturnValue({ cols: 60, rows: 12 });
+      frontFit.fit.mockImplementation(() => { front.cols = 60; front.rows = 12; });
+      backFit.proposeDimensions.mockClear();
+      act(() => commitTerminalFontSize(22));
+      await act(() => vi.runAllTimersAsync());
+      expect(front.options.fontSize).toBe(22);
+      expect(mocks.resizeBlock).toHaveBeenCalledWith("front", 60, 12);
+      expect(backFit.proposeDimensions).not.toHaveBeenCalled();
+      view.rerender(panels(true));
+      await act(() => vi.runAllTimersAsync());
+      expect(back.options.fontSize).toBe(22);
+      expect(backFit.proposeDimensions).toHaveBeenCalled();
+      expect(mocks.terminals).toEqual([front, back]);
+      expect(front.reset).not.toHaveBeenCalled();
+      expect(front.dispose).not.toHaveBeenCalled();
+    } finally {
+      view.unmount();
+      commitTerminalFontSize(13);
+    }
   });
 
   it("preserves the xterm instance and scrollback when a split reparents the same session", () => {

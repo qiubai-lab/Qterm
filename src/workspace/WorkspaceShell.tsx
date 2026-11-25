@@ -21,6 +21,7 @@ import { MasterPasswordDialog, type MasterPasswordMode } from "../components/dia
 import { TerminalLockChoiceDialog, TerminalLockScreen, TerminalLockRestore } from "../components/dialogs/TerminalLockDialogs";
 import { getVaultStatus, lockVault, onVaultStatusChanged, type VaultStatus } from "@qterm/services/credentials";
 import { getProfileRouteRequirements, type ConnectionProfile } from "@qterm/services/profiles";
+import { commitTerminalFontSize } from "../terminal/terminalFontSize";
 import { getSettings, updateUpdateSettings, type AppTheme, type SecuritySettings, type TerminalSettings, type UpdateSettings } from "@qterm/services/settings";
 import { checkForUpdateOnStartupOnce } from "../lib/updateCheck";
 import { currentDesktopPlatform } from "../lib/tauri/window";
@@ -183,6 +184,7 @@ export function WorkspaceShell({ onLogout, webActions, terminalLockBackend, term
     let disposed = false;
     void getSettings().then(async (snapshot) => {
       if (disposed) return;
+      commitTerminalFontSize(snapshot.appearance?.terminalFontSize);
       onThemeRestored?.(snapshot.appearance.theme);
       setSecuritySettings(snapshot.security);
       setRemoteShellIntegrationEnabled(snapshot.terminal?.remoteShellIntegrationEnabled ?? false);

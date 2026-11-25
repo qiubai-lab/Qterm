@@ -6,7 +6,7 @@ use crate::{
 use axum::{Extension, Json, extract::State};
 use qterm_core::{
     application::credential_lifecycle::{LockReason, Reschedule},
-    domain::settings::{AppTheme, AppearanceSettings, SecuritySettings, TerminalSettings},
+    domain::settings::{AppTheme, SecuritySettings, TerminalFontSize, TerminalSettings},
     infrastructure::persistence::{
         json_appearance_settings_repository::JsonAppearanceSettingsRepository,
         json_settings_repository::JsonSettingsRepository,
@@ -46,7 +46,7 @@ impl ServerSettings {
         let warning = self.security.load().is_err()
             || self.appearance.load().is_err()
             || self.terminal.load().is_err();
-        json!({"general":{"rootDirectory":root,"defaultRootDirectory":root,"activeRootDirectory":root,"dataDirectory":root.join("data"),"deviceDirectory":root.join("device"),"cacheDirectory":root.join("cache"),"restartRequired":false},"security":{"credentialAutoLockAfterSeconds":security.credential_auto_lock_after_seconds,"terminalAutoLockAfterSeconds":security.terminal_auto_lock_after_seconds},"appearance":{"theme":match appearance.theme{AppTheme::Dark=>"dark",AppTheme::Light=>"light",AppTheme::Cyberpunk=>"cyberpunk"}},"updates":{"autoCheckOnStartup":false},"terminal":{"remoteShellIntegrationEnabled":terminal.remote_shell_integration_enabled,"historyFreeBashEnabled":terminal.history_free_bash_enabled},"warning":if warning{Some("storageUnavailable")}else{None}})
+        json!({"general":{"rootDirectory":root,"defaultRootDirectory":root,"activeRootDirectory":root,"dataDirectory":root.join("data"),"deviceDirectory":root.join("device"),"cacheDirectory":root.join("cache"),"restartRequired":false},"security":{"credentialAutoLockAfterSeconds":security.credential_auto_lock_after_seconds,"terminalAutoLockAfterSeconds":security.terminal_auto_lock_after_seconds},"appearance":{"theme":match appearance.theme{AppTheme::Dark=>"dark",AppTheme::Light=>"light",AppTheme::Cyberpunk=>"cyberpunk"},"terminalFontSize":appearance.terminal_font_size},"updates":{"autoCheckOnStartup":false},"terminal":{"remoteShellIntegrationEnabled":terminal.remote_shell_integration_enabled,"historyFreeBashEnabled":terminal.history_free_bash_enabled},"warning":if warning{Some("storageUnavailable")}else{None}})
     }
 }
 pub async fn get(State(state): State<Arc<ServerState>>) -> Json<Value> {
@@ -87,9 +87,10 @@ pub async fn security(
     Ok(Json(state.settings.snapshot(&state.config.data)))
 }
 #[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct Appearance {
     theme: String,
+    terminal_font_size: Option<TerminalFontSize>,
 }
 pub async fn appearance(
     State(state): State<Arc<ServerState>>,
@@ -109,7 +110,7 @@ pub async fn appearance(
     state
         .settings
         .appearance
-        .save(AppearanceSettings { theme })
+        .save(theme, input.terminal_font_size)
         .map_err(|_| ApiError::storage())?;
     Ok(Json(state.settings.snapshot(&state.config.data)))
 }

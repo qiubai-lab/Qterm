@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useMemo, useState, type ReactNo
 
 import { getSettings, type AppTheme } from "@qterm/services/settings";
 import { setNativeWindowTheme } from "../../lib/tauri/window";
+import { commitTerminalFontSize } from "../../terminal/terminalFontSize";
 import { refreshTerminalThemes } from "../../terminal/terminalTheme";
 
 interface AppThemeContextValue {
@@ -29,13 +30,17 @@ export function applyAppTheme(theme: AppTheme): void {
 
 export async function bootstrapAppTheme(): Promise<AppTheme> {
   let theme: AppTheme = "dark";
+  let fontSize: number | undefined;
   if (hasWorkspaceRuntime()) {
     try {
-      theme = (await getSettings()).appearance.theme;
+      const appearance = (await getSettings()).appearance;
+      theme = appearance.theme;
+      fontSize = appearance.terminalFontSize;
     } catch {
       theme = "dark";
     }
   }
+  commitTerminalFontSize(fontSize);
   applyAppTheme(theme);
   return theme;
 }

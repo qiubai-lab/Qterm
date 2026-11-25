@@ -1,11 +1,15 @@
 use crate::domain::settings::{
-    AppearanceSettings, ConfigurationDirectory, SecuritySettings, SettingsError, TerminalSettings,
-    UpdateSettings,
+    AppTheme, AppearanceSettings, ConfigurationDirectory, SecuritySettings, SettingsError,
+    TerminalFontSize, TerminalSettings, UpdateSettings,
 };
 
 pub trait AppearanceSettingsRepository: Send + Sync {
     fn load(&self) -> Result<Option<AppearanceSettings>, SettingsError>;
-    fn save(&self, settings: AppearanceSettings) -> Result<(), SettingsError>;
+    fn save(
+        &self,
+        theme: AppTheme,
+        terminal_font_size: Option<TerminalFontSize>,
+    ) -> Result<(), SettingsError>;
 }
 
 pub trait UpdateSettingsRepository: Send + Sync {

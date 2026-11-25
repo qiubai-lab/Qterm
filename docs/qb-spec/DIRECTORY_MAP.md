@@ -52,6 +52,7 @@
 
 - `src/components/ThemedTooltipButton.tsx`、`useThemedTooltip.tsx`、`ThemedTitleTooltipProvider.tsx`、`themedTooltip.css`：跨终端、Git、文件和网络窗口共享的主题提示触发、原生 DOM `title` 代理、溢出过滤、视口定位、退出生命周期与浮层样式；按钮和被截断的操作标识复用同一视觉契约，该层不拥有操作业务逻辑。`src/workspace/BlockHeaderClose.tsx` 组合窗口头部关闭入口。
 
+- `src/terminal/terminalFontSize.ts` 管理当前工作台已保存的终端字号；`useTerminalViewport.ts` 在可见时同步 xterm 字号并请求布局测量。
 - `src/terminal/terminalLayout.ts`：终端尺寸测量与布局同步 owner；Windows ConPTY 在拖动停稳并处理已接收输出后提交尺寸，其余终端即时适配；`resizeScheduler.ts` 继续负责有序 IPC 与去重。`scripts/conpty-resize-probe.mjs` 和 `src-tauri/examples/conpty_resize_probe.rs` 提供真实 Windows PTY 回归检查。
 
 - `src/terminal/notifications/`：实验性终端通知的有界流解析、epoch 隔离、未读派生状态、限流与设置 provider；`TerminalProtocolTag.tsx` 展示统一协议标签与提示，`workspaceNotice.ts` 管理前台瞬时气泡，`WorkspaceNotificationBubble.tsx` 负责定位、暂停倒计时与交互；只观察实时输出，不修改渲染字节、不拥有 session 或持久化 Workspace。
@@ -150,7 +151,7 @@
 - `src-tauri/src/infrastructure/browser/`：共享 SOCKS5 greeting、固定 Chromium 参数和机器本地隔离 Profile，并以 Windows、macOS、Linux adapter 受限探测和无 Shell 启动 Chrome/Edge；不修改系统代理、支持沙箱化 Linux 浏览器、复用日常 Profile 或管理浏览器退出。
 - `crates/qterm-core/src/infrastructure/persistence/json_network_repository.rs`：`network-forwards.json` schema v1 的严格、无敏感字段、原子持久化适配器。
 - `crates/qterm-core/src/infrastructure/persistence/json_workspace_repository.rs`：`workspaces.json` schema v10 的严格、无敏感字段、原子持久化与受支持旧版本显式迁移适配器；不保存 session、Git snapshot、仓库内容或连接凭据。
-- `crates/qterm-core/src/ports/settings_repository.rs`、`crates/qterm-core/src/infrastructure/persistence/json_{appearance,update,terminal}_settings_repository.rs`：设备外观/更新/终端集成偏好 ports 与独立 JSON 适配器；外观/更新使用 schema v1，终端兼容 v1–v5、保存 v6，保留目录跟踪、历史策略与旧 passive 字段，读取但不再写入旧 applicationTitleEnabled/commandMarkersEnabled 字段；只保存封闭预设或布尔偏好，不覆盖损坏/未来文件，也不修改 security settings。
+- `crates/qterm-core/src/ports/settings_repository.rs`、`crates/qterm-core/src/infrastructure/persistence/json_{appearance,update,terminal}_settings_repository.rs`：设备外观/更新/终端集成偏好 ports 与独立 JSON 适配器；外观读取 v1/v2、保存 v2（主题和终端字号），更新使用 v1，终端兼容 v1–v5、保存 v6，保留目录跟踪、历史策略与旧 passive 字段，读取但不再写入旧 applicationTitleEnabled/commandMarkersEnabled 字段；不覆盖损坏/未来文件，也不修改 security settings。
 - `crates/qterm-core/src/infrastructure/persistence/json_remote_shell_cache.rs`：`cache/remote-shells.json` 的严格、原子、可丢弃适配器；只保存目标签名和 Shell 枚举，不保存探测输出、Hook、终端内容或凭据。
 - `crates/qterm-core/src/infrastructure/ssh/forwarding.rs`：本地 listener、SOCKS5 CONNECT、Remote target 路由、有界转发任务与 TCP/SSH 双向数据泵；第三方 channel 类型不得离开 infrastructure。
 - `crates/qterm-core/src/ports/profile_repository.rs`：应用层拥有的连接配置 repository 契约；不规定文件格式。
